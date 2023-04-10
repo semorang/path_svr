@@ -185,7 +185,7 @@ void MultiByteToUTF8(const char* strMultibyte, char* strUTF8)
 
 #else //#if defined(_WIN32)
 
-char * encoding(char *text_input, char *source, char *target)
+char * encoding(const char *text_input, char *source, char *target)
 {
    iconv_t it;
 
@@ -198,7 +198,7 @@ char * encoding(char *text_input, char *source, char *target)
    char *output = (char *)malloc(output_len);
 
    char *output_buf = output;
-   char *input_buf = text_input;
+   char *input_buf = const_cast<char*>(text_input);
 
    it = iconv_open(target, source); 
    int ret = iconv(it, &input_buf, &in_size, &output_buf, &out_size);
@@ -935,7 +935,7 @@ void GetMultiRouteResultForiNavi(const FunctionCallbackInfo<Value>& args) {
                MultiByteToUTF8(m_pDataMgr.GetNameDataByIdx(pLink->name_idx), szUTF8);
                cJSON_AddStringToObject(p2p, "road_code", szUTF8);
 #else
-               cJSON_AddStringToObject(p2p, "road_code", encoding(m_pDataMgr.GetNameDataByIdx(pLink->name_idx), "euc-kr", "utf-8");
+               cJSON_AddStringToObject(p2p, "road_code", encoding(m_pDataMgr.GetNameDataByIdx(pLink->name_idx), "euc-kr", "utf-8"));
 #endif // #if defined(_WIN32)
             }
          }

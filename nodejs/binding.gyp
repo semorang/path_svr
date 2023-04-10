@@ -9,6 +9,7 @@
                 "../ext/utils/GeoTools.cpp",
 
                 "../ext/libjson/cjson/cJSON.c",
+
                 "../ext/shp/ShpObj.cpp",
                 "../ext/shp/ShpReader.cpp",
                 "../ext/shp/ShpWriter.cpp",

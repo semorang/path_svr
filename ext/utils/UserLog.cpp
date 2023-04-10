@@ -192,7 +192,9 @@ void LOG_TRACE(LOG_LEVEL lvl, const char *fmt, ...)
 		}
 		else {
 			g_szMsg[0] = '\0';
+#if defined(_WIN32)
 			szBuff[0] = '\0';
+#endif
 		}
 	} else {
 		if (g_bUseFileLog && g_fpFileLog) {
