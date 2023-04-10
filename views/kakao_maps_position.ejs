@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>최적지점 표시하기</title>
+</head>
+
+<body>
+<div class="map_wrap">
+
+    <div id="map" style="width:100%;height:100%;position:relative;overflow:hidden;"></div>
+
+    <div class="custom_topposition">
+        <!-- 입구점 범례 입니다 -->
+        <div class="custom_regendcontrol">
+            <div class="circle_ent"><span>입구점</span></div>
+            <div class="circle_cpx"><span>단지내도로</span></div>
+            <div class="circle_road"><span>최근접도로</span></div>
+        </div>
+
+        <!-- 클릭 입구점 정보 -->
+        <div class="custom_regendcontrol">
+            <span id="clicked_position"></span>
+            <button onclick="getCurrentPosition()">좌표복사</button>
+        </div>
+    </div>
+
+
+    <!-- 지도타입 컨트롤 div 입니다 -->
+    <div class="custom_typecontrol radius_border">
+        <span id="btnRoadmap" class="selected_btn" onclick="setMapType('roadmap')">지도</span>
+        <span id="btnSkyview" class="btn" onclick="setMapType('skyview')">스카이뷰</span>
+    </div>
+
+    <!-- 지도 확대, 축소 컨트롤 div 입니다 -->
+    <div class="custom_zoomcontrol radius_border">
+        <span onclick="zoomIn()"><img src="https://t1.daumcdn.net/localimg/localimages/07/mapapidoc/ico_plus.png" alt="확대"></span>
+        <span onclick="zoomOut()"><img src="https://t1.daumcdn.net/localimg/localimages/07/mapapidoc/ico_minus.png" alt="축소"></span>
+    </div>
+
+    <div id="menu_wrap" class="bg_white">
+        <div style="text-align:center"><P>입구점 목록</P></div>
+        <hr>
+        <div style="font-size:12px;font-family:'Malgun Gothic', '맑은 고딕', sans-serif;">
+            <div id="clicked_type" style="text-align:left">클릭지점 타입 : </div>
+            <div id="clicked_name" style="text-align:left"></div>
+        </div>
+        <hr>        
+        <ul id="placesList"></ul>
+    </div>
+    
+
+
+    <!-- 지도 스타일 컨트롤 div 입니다 -->
+    <div class="custom_optioncontrol radius_border">
+            <input type="checkbox" id="chkUseDistrict" onclick="setOverlayMapTypeId()" /> 지적편집도 정보 보기
+            <input type="checkbox" id="chkTerrain" onclick="setOverlayMapTypeId()" /> 지형정보 보기
+            <input type="checkbox" id="chkTraffic" onclick="setOverlayMapTypeId()" /> 교통정보 보기
+            <input type="checkbox" id="chkBicycle" onclick="setOverlayMapTypeId()" /> 자전거도로 정보 보기
+    </div>
+</div>
+
+<!-- <p>
+    <input type="checkbox" id="chkUseDistrict" onclick="setOverlayMapTypeId()" /> 지적편집도 정보 보기
+    <input type="checkbox" id="chkTerrain" onclick="setOverlayMapTypeId()" /> 지형정보 보기
+    <input type="checkbox" id="chkTraffic" onclick="setOverlayMapTypeId()" /> 교통정보 보기
+    <input type="checkbox" id="chkBicycle" onclick="setOverlayMapTypeId()" /> 자전거도로 정보 보기
+</p> -->
+
+<script type="text/javascript" src="//dapi.kakao.com/v2/maps/sdk.js?appkey=<%=javascriptkey%>"></script>
+
+<link rel="stylesheet" href="css/maps_kakao.css"/>
+<script type="text/javascript" src="script/boundarys.js"></script>
+<script type="text/javascript" src="script/typenames.js"></script>
+<script type="text/javascript" src="http://code.jquery.com/jquery-1.10.2.js"></script>
+
+<script>
+    let result_dat = JSON.parse('<%- JSON.stringify(result.data) %>');
+    let result_exp = JSON.parse('<%- JSON.stringify(result.expand) %>');
+    let user_pos = new kakao.maps.LatLng(result_exp.y, result_exp.x);
+
+
+    var mapContainer = document.getElementById('map'), // 지도를 표시할 div
+        mapOption = {
+            center: user_pos, // 지도의 중심좌표
+            // level: 0 // 지도의 확대 레벨
+        };
+
+    var map = new kakao.maps.Map(mapContainer, mapOption); // 지도를 생성합니다
+
+
+    // 지도 타입 정보를 가지고 있을 객체입니다
+    // map.addOverlayMapTypeId 함수로 추가된 지도 타입은
+    // 가장 나중에 추가된 지도 타입이 가장 앞에 표시됩니다
+    // 이 예제에서는 지도 타입을 추가할 때 지적편집도, 지형정보, 교통정보, 자전거도로 정보 순으로 추가하므로
+    // 자전거 도로 정보가 가장 앞에 표시됩니다
+    var mapTypes = {
+        terrain : kakao.maps.MapTypeId.TERRAIN,
+        traffic :  kakao.maps.MapTypeId.TRAFFIC,
+        bicycle : kakao.maps.MapTypeId.BICYCLE,
+        useDistrict : kakao.maps.MapTypeId.USE_DISTRICT
+    };
+
+
+    let markers;
+    let circles = new Array();
+    let lines = new Array();
+    let labels = new Array();
+    let polygon;
+
+
+    function initMap() {
+
+        console.log('initmap.....');
+
+    }
+
+    // 체크 박스를 선택하면 호출되는 함수입니다
+    function setOverlayMapTypeId() {
+        var chkTerrain = document.getElementById('chkTerrain'),
+            chkTraffic = document.getElementById('chkTraffic'),
+            chkBicycle = document.getElementById('chkBicycle'),
+            chkUseDistrict = document.getElementById('chkUseDistrict');
+
+        // 지도 타입을 제거합니다
+        for (var type in mapTypes) {
+            map.removeOverlayMapTypeId(mapTypes[type]);
+        }
+
+        // 지적편집도정보 체크박스가 체크되어있으면 지도에 지적편집도정보 지도타입을 추가합니다
+        if (chkUseDistrict.checked) {
+            map.addOverlayMapTypeId(mapTypes.useDistrict);
+        }
+
+        // 지형정보 체크박스가 체크되어있으면 지도에 지형정보 지도타입을 추가합니다
+        if (chkTerrain.checked) {
+            map.addOverlayMapTypeId(mapTypes.terrain);
+        }
+
+        // 교통정보 체크박스가 체크되어있으면 지도에 교통정보 지도타입을 추가합니다
+        if (chkTraffic.checked) {
+            map.addOverlayMapTypeId(mapTypes.traffic);
+        }
+
+        // 자전거도로정보 체크박스가 체크되어있으면 지도에 자전거도로정보 지도타입을 추가합니다
+        if (chkBicycle.checked) {
+            map.addOverlayMapTypeId(mapTypes.bicycle);
+        }
+    }
+
+
+    // 지도타입 컨트롤의 지도 또는 스카이뷰 버튼을 클릭하면 호출되어 지도타입을 바꾸는 함수입니다
+    function setMapType(maptype) {
+        var roadmapControl = document.getElementById('btnRoadmap');
+        var skyviewControl = document.getElementById('btnSkyview');
+        if (maptype === 'roadmap') {
+            map.setMapTypeId(kakao.maps.MapTypeId.ROADMAP);
+            roadmapControl.className = 'selected_btn';
+            skyviewControl.className = 'btn';
+        } else {
+            map.setMapTypeId(kakao.maps.MapTypeId.HYBRID);
+            skyviewControl.className = 'selected_btn';
+            roadmapControl.className = 'btn';
+        }
+    }
+
+    // 지도 확대, 축소 컨트롤에서 확대 버튼을 누르면 호출되어 지도를 확대하는 함수입니다
+    function zoomIn() {
+        map.setLevel(map.getLevel() - 1);
+    }
+
+    // 지도 확대, 축소 컨트롤에서 축소 버튼을 누르면 호출되어 지도를 확대하는 함수입니다
+    function zoomOut() {
+        map.setLevel(map.getLevel() + 1);
+    }
+
+
+
+
+
+
+
+
+
+
+var mouseoverOption = {
+    fillColor: '#75B8FA',
+    radius: 3
+};
+
+var mouseoutOption = {
+    fillColor: '#CFE7FF',
+    radius: 1
+};
+
+
+// 마커
+var MARKER_WIDTH = 33, // 기본, 클릭 마커의 너비
+    MARKER_HEIGHT = 36, // 기본, 클릭 마커의 높이
+    OFFSET_X = 12, // 기본, 클릭 마커의 기준 X좌표
+    OFFSET_Y = MARKER_HEIGHT, // 기본, 클릭 마커의 기준 Y좌표
+    OVER_MARKER_WIDTH = 40, // 오버 마커의 너비
+    OVER_MARKER_HEIGHT = 42, // 오버 마커의 높이
+    OVER_OFFSET_X = 13, // 오버 마커의 기준 X좌표
+    OVER_OFFSET_Y = OVER_MARKER_HEIGHT, // 오버 마커의 기준 Y좌표
+    // SPRITE_MARKER_URL = 'https://http://t1.daumcdn.net/localimg/localimages/07/2012/img/marker_normal.png', // 스프라이트 마커 이미지 URL
+    SPRITE_MARKER_URL = 'https://t1.daumcdn.net/localimg/localimages/07/mapapidoc/markers_sprites2.png',
+    SPRITE_WIDTH = 126, // 스프라이트 이미지 너비
+    SPRITE_HEIGHT = 146, // 스프라이트 이미지 높이
+    SPRITE_GAP = 10; // 스프라이트 이미지에서 마커간 간격
+
+var markerSize = new kakao.maps.Size(MARKER_WIDTH, MARKER_HEIGHT), // 기본, 클릭 마커의 크기
+    markerOffset = new kakao.maps.Point(OFFSET_X, OFFSET_Y), // 기본, 클릭 마커의 기준좌표
+    overMarkerSize = new kakao.maps.Size(OVER_MARKER_WIDTH, OVER_MARKER_HEIGHT), // 오버 마커의 크기
+    overMarkerOffset = new kakao.maps.Point(OVER_OFFSET_X, OVER_OFFSET_Y), // 오버 마커의 기준 좌표
+    spriteImageSize = new kakao.maps.Size(SPRITE_WIDTH, SPRITE_HEIGHT); // 스프라이트 이미지의 크기
+
+var normalOrigin = new kakao.maps.Point(0, MARKER_HEIGHT + SPRITE_GAP); // 스프라이트 이미지에서 기본 마커로 사용할 영역의 좌상단 좌표
+
+// 마커 이미지의 이미지 주소입니다
+var imageSrcRed = "https://t1.daumcdn.net/localimg/localimages/07/mapapidoc/marker_red.png";
+var imageSrcBlue = "https://t1.daumcdn.net/localimg/localimages/07/mapapidoc/marker_blue.png";
+var imageSrc = "http://t1.daumcdn.net/localimg/localimages/07/2018/pc/img/marker_spot.png";
+
+// 마커 이미지의 이미지 크기 입니다
+// var imageSize = new kakao.maps.Size(24, 35);
+var imageSize = new kakao.maps.Size(MARKER_WIDTH, MARKER_HEIGHT);
+
+    // 인포윈도우
+    var customOverlay = new kakao.maps.CustomOverlay({});
+    // var infoWindow = new kakao.maps.InfoWindow({removable: false});
+    var infoWindow = new kakao.maps.InfoWindow({
+        zIndex: 1,
+        altitude: 10,
+    });
+
+
+    // 성남시 도로링크 유효 범위
+    var paths = []
+    var bondarys = getSeungnamBoundary();
+    for (ii=bondarys.length - 1; ii >= 0; --ii) {
+        paths.push(new kakao.maps.LatLng(bondarys[ii][1], bondarys[ii][0]));
+    }
+
+    // 지도에 표시할 폴리라인 생성합니다
+    var polyline = new kakao.maps.Polyline({
+        map: map,
+        path: paths, // 선을 구성하는 좌표배열 입니다
+        strokeWeight: 5, // 선의 두께 입니다
+        strokeColor: '#FF00FF', // 선의 색깔입니다
+        strokeOpacity: 0.7, // 선의 불투명도 입니다 1에서 0 사이의 값이며 0에 가까울수록 투명합니다
+        strokeStyle: 'dashed' // 선의 스타일입니다
+    });
+
+
+    // 창원시 도로링크 유효 범위
+    paths = []
+    bondarys = getChangwonBoundary();
+    for (ii=bondarys.length - 1; ii >= 0; --ii) {
+        paths.push(new kakao.maps.LatLng(bondarys[ii][1], bondarys[ii][0]));
+    }
+
+    // 지도에 표시할 폴리라인 생성합니다
+    polyline = new kakao.maps.Polyline({
+        map: map,
+        path: paths, // 선을 구성하는 좌표배열 입니다
+        strokeWeight: 5, // 선의 두께 입니다
+        strokeColor: '#FF00FF', // 선의 색깔입니다
+        strokeOpacity: 0.7, // 선의 불투명도 입니다 1에서 0 사이의 값이며 0에 가까울수록 투명합니다
+        strokeStyle: 'dashed' // 선의 스타일입니다
+    });
+
+
+
+    //
+    // 클릭 지점 정보
+    setClickInfo(result_exp);
+
+    // 최적 지점 정보 
+    setEntranceInfo(result_dat, result_exp, map);
+
+    // 입구점 결과 목록
+    displayEntranceList(result_dat, result_exp);
+
+
+    // 지도 클릭 이벤트 등록
+    kakao.maps.event.addListener(map, 'click', function(mouseEvent) {
+        var latlng = mouseEvent.latLng;
+        var params = new URLSearchParams(window.location.search);
+        params.set('lat', latlng.getLat());
+        params.set('lng', latlng.getLng());
+        params.set('expand', true);
+        var pathname = '/optimalposition'; // window.location.pathname;
+        var move2url = pathname + '?' + params.toString();
+        // var move2url = pathname + '?lng=' + latlng.getLng() + '&lat=' + latlng.getLat() + '&type=0&near=true&expand=true&api=kakao';
+        // window.open(move2url, '_self');
+
+        user_pos = new kakao.maps.LatLng(latlng.getLat(), latlng.getLng());
+
+        $.ajax({
+            type: 'get',         // 타입 (get, post, put 등등)
+            url: move2url,       // 요청할 서버 url
+            // async: true,         // 비동기화 여부 (default : true)
+            // headers : {              // Http header
+            //     "Content-Type" : "application/json",
+            //     "X-HTTP-Method-Override" : "POST"
+            // },
+            // dataType: 'json',    // 데이터 타입 (html, xml, json, text 등등)
+            // data : JSON.stringify({  // 보낼 데이터 (Object , String, Array)
+            //     "no" : no,
+            //     "name" : name,
+            //     "nick" : nick
+            // }),
+            success: function(result) {
+                var header = result.header;
+                if (header.isSuccessful == true) {                        
+                    setClickInfo(result.expand)
+                    setEntranceInfo(result.data, result.expand, map)
+                    displayEntranceList(result.data, result.expand)
+                } else {
+                    alert('err code: ' + header.resultCode + '\nerr msg: ' + header.resultMessage)
+                }
+                
+                
+            },
+            error: function(request, status, error) {
+                alert('요청 실패')
+            },
+            complete: function(xhr, status) {
+                ;
+            }
+        });                
+    });
+    //-- 지도 클릭 이벤트 등록
+
+
+    // 좌표복사
+    function getCurrentPosition() {
+        const tmpPosition = document.createElement("textarea");
+        document.body.appendChild(tmpPosition);
+        tmpPosition.value = user_pos.getLng() + ", " + user_pos.getLat();
+        tmpPosition.select();
+        document.execCommand('copy');
+        document.body.removeChild(tmpPosition);
+    }
+
+
+    // 인포윈도우 표출 함수
+    function displayInfowindow(position, title) {
+        var content = '<div style="padding:5px;z-index:1;text-align:center">' + title + '</div>';
+
+        infoWindow.setContent(content);
+        infoWindow.setPosition(position);
+        infoWindow.open(map);
+        // infoWindow.setVisible(true);
+    }
+
+
+    // 결과 목록 표출 함수
+    function displayEntranceList(result_dat, result_exp) {
+        var listEl = document.getElementById('placesList'),
+        menuEl = document.getElementById('menu_wrap'),
+        fragment = document.createDocumentFragment(),
+        listStr = '';
+
+
+        // 기존 목록 삭제
+        while (listEl.hasChildNodes()) {
+            listEl.removeChild(listEl.lastChild)
+        }
+
+
+        for (var ii=0; ii<result_dat.count; ii++) {
+            var position = new kakao.maps.LatLng(result_dat.entrypoints[ii].y, result_dat.entrypoints[ii].x);
+            var itemEl = getListItem(ii, result_exp.type, result_dat.entrypoints[ii]);
+            var title;
+            if (result_exp.type == 2 && result_dat.entrypoints[ii].type <= 0) {
+                title = getPolygonType(3); // 단지내 도로
+            } else {
+                title = getEntranceType(result_dat.entrypoints[ii].type);
+            }
+
+            (function(position, title) {
+                itemEl.onmouseover = function() {
+                    displayInfowindow(position, title);
+                };
+
+                itemEl.onmouseout = function() {
+                    infoWindow.close();
+                    // infoWindow.setVisible();
+                };
+            })(position, title);
+
+            fragment.appendChild(itemEl);
+        }
+
+        listEl.appendChild(fragment);
+        menuEl.scrollTop = 0;
+    }    
+
+    // 클릭 지점 정보
+    function setClickInfo(result_exp) {        
+        var message = 'POI Lat: ' + result_exp.y + ', Lng: ' + result_exp.x;
+        var resultDiv = document.getElementById('clicked_position');
+        resultDiv.innerHTML = message;
+
+        message = '클릭지점 타입 : ' + getPolygonType(result_exp.type);
+        resultDiv = document.getElementById('clicked_type');
+        resultDiv.innerHTML = message;
+
+        if (result_exp.name !== undefined) {
+            message = '클릭지점 명칭 : ' + result_exp.name;
+            resultDiv = document.getElementById('clicked_name');
+            resultDiv.innerHTML = message;
+        }
+    }
+    
+
+    // 최적 입구점 정보
+    function setEntranceInfo(result_dat, result_exp, map) {   
+        // 초기화
+        if (circles != undefined && circles.length) {
+            circles.forEach(element => element.setMap());
+            circles.splice(0);
+        } 
+
+        if (lines != undefined && lines.length) {
+            lines.forEach(element => element.setMap());
+            lines.splice(0);
+        } 
+
+        if (labels != undefined && labels.length) {
+            labels.forEach(element => element.setMap());
+            labels.splice(0);
+        }
+        
+        if (polygon != undefined) {
+            polygon.setMap();
+        }
+
+        if (markers != undefined) {
+            markers.setMap();
+        } 
+
+
+        // 사용자 설정 위치
+        // 마커가 지도 위에 표시되도록 설정합니다
+        markers = new kakao.maps.Marker({
+                map: map,
+                title: 'Center',
+                position: user_pos, // 마커를 표시할 위치
+                // image: new kakao.maps.MarkerImage(imageSrc, imageSize)
+                // image: new kakao.maps.MarkerImage(
+                // 	SPRITE_MARKER_URL, // 스프라이트 마커 이미지 URL
+                // 	markerSize, // 마커의 크기
+                // 	{
+                // 		offset: markerOffset, // 마커 이미지에서의 기준 좌표
+                // 		spriteOrigin: normalOrigin, // 스트라이프 이미지 중 사용할 영역의 좌상단 좌표
+                // 		spriteSize: spriteImageSize // 스프라이트 이미지의 크기
+                // 	}
+                // )
+        });
+        //-- 사용자 설정 위치
+
+        // 지도를 재설정할 범위정보를 가지고 있을 LatLngBounds 객체를 생성합니다
+        var bounds = new kakao.maps.LatLngBounds();     
+
+        // LatLngBounds 객체에 좌표를 추가합니다
+        bounds.extend(user_pos);
+        
+
+        // 선택지점 폴리곤
+        if (result_exp.vertices.length > 0) {
+            var polygonPath = new Array()
+            for( var ii=result_exp.vertices.length - 1; ii >= 0; --ii ) {
+                polygonPath.push(new kakao.maps.LatLng(result_exp.vertices[ii][1], result_exp.vertices[ii][0] ))
+            }
+                
+            polygon = new kakao.maps.Polygon({
+                map: map,
+                path:polygonPath, // 그려질 다각형의 좌표 배열입니다
+                strokeWeight: 2, // 선의 두께입니다
+                strokeColor: '#55FF55', // 선의 색깔입니다
+                strokeOpacity: 1, // 선의 불투명도 입니다 1에서 0 사이의 값이며 0에 가까울수록 투명합니다
+                strokeStyle: 'longdash', // 선의 스타일입니다
+                fillColor: '#55DD55', // 채우기 색깔입니다
+                fillOpacity: 0.2 // 채우기 불투명도 입니다
+            });
+        }
+
+
+        // 최적 지점
+        for (var ii = result_dat.count - 1; ii>= 0; --ii) {
+            // 최적 지점 표시선 생성
+            var linePath = [
+                user_pos,
+                new kakao.maps.LatLng(result_dat.entrypoints[ii].y, result_dat.entrypoints[ii].x)
+            ];
+
+            // 지도에 표시할 선을 생성합니다
+            lines.push(
+                new kakao.maps.Polyline({
+                map: map,
+                path: linePath, // 선을 구성하는 좌표배열 입니다
+                strokeWeight: 3, // 선의 두께 입니다
+                strokeColor: '#FF0000', // 선의 색깔입니다
+                strokeOpacity: 0.7, // 선의 불투명도 입니다 1에서 0 사이의 값이며 0에 가까울수록 투명합니다
+                strokeStyle: 'dashed' // 선의 스타일입니다
+            }));
+
+
+            // 최적지점 표시 원 생성
+            var fillCol;
+            var fillOutlineCol; // 선의 색깔입니다
+                if (result_exp.type == 1 || (result_exp.type == 2 && result_dat.entrypoints[ii].type != 0)) {
+                // 입구점
+                fillCol = '#FF0000';
+                fillOutlineCol = '#75B8FA';
+            } else if (result_exp.type == 2) {
+                // 단지내도로
+                fillCol = '#CFE7FF';
+                fillOutlineCol = '#71ABE6';
+            } else {
+                // 최근접도로
+                fillCol = '#6666FF';
+                fillOutlineCol = '#6666FF';
+            }         
+
+            circles.push(
+                new kakao.maps.Circle({
+                map: map,
+                center : new kakao.maps.LatLng(result_dat.entrypoints[ii].y, result_dat.entrypoints[ii].x), // 원 중심 좌표
+                strokeWeight: 1, // 선의 두께입니다
+                radius : 5, // 미터단위 원 반지름
+                fillColor: fillCol,
+                strokeColor: fillOutlineCol, // 선의 색깔입니다
+                // strokeOpacity: 1, // 선의 불투명도 입니다 1에서 0 사이의 값이며 0에 가까울수록 투명합니다
+                // strokeStyle: 'dashed', // 선의 스타일 입니다
+                fillOpacity: 0.8,  // 채우기 불투명도 입니다
+            }));
+
+            // 입구점 타입
+            if (result_exp.type <= 2) {
+                // 커스텀 오버레이에 표시할 내용입니다     
+                // HTML 문자열 또는 Dom Element 입니다 
+                // var content_ent = '<div class="lb_ent"><span class="left"></span><span class="center">' + result.type + '</span><span class="right"></span></div>';
+                var content_ent = '<div style="font-weight:bold; font-size:16px; margin-bottom:2px">' + ii.toString() + '</div>';
+                // <div id="map" style="width:100%;height:100%;position:relative;overflow:hidden;"></div>font-weight: bold; cursor: default;color:#777;
+                // 커스텀 오버레이를 생성합니다
+                labels.push(
+                    new kakao.maps.CustomOverlay({
+                    map: map,
+                    position: new kakao.maps.LatLng(result_dat.entrypoints[ii].y, result_dat.entrypoints[ii].x), // 원 중심 좌표,
+                    content: content_ent
+                }));
+            }
+
+            // LatLngBounds 객체에 좌표를 추가합니다
+            bounds.extend(new kakao.maps.LatLng(result_dat.entrypoints[ii].y, result_dat.entrypoints[ii].x));
+
+        } // for
+        //-- // 최적 지점
+        
+
+        // LatLngBounds 객체에 추가된 좌표들을 기준으로 지도의 범위를 재설정합니다
+        // 이때 지도의 중심좌표와 레벨이 변경될 수 있습니다
+        map.setBounds(bounds);
+    }
+
+
+</script>
+
+</body>
+</html>

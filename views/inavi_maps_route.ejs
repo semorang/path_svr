@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <title>경로선 표시하기</title>
+  </head>
+  <body>
+    <div class="map_wrap">
+
+    <!-- <div id="map"></div> -->
+    <div id="map" style="width:100%;height:100px;position:relative;overflow:hidden;"></div>
+
+    <!-- 지도타입 컨트롤 div 입니다 -->
+    <div class="custom_typecontrol radius_border">
+        <span id="btnRoadmap" class="selected_btn" onclick="setMapType('roadmap')">지도</span>
+        <span id="btnSkyview" class="btn" onclick="setMapType('skyview')">스카이뷰</span>
+    </div>
+    
+    
+    <link rel="stylesheet" href="css/maps_inavi.css"/>
+    <script type="text/javascript" src="script/boundarys.js"></script>
+    <script type="text/javascript" src="script/typenames.js"></script>
+
+    <script>
+
+        let map;
+        <% var cntGuide = result.guide.links.length; %>
+        <% var cntObj = result.routes.coords.length; %>
+        <% var resultObj = JSON.parse(JSON.stringify(result)); %>
+        <% var centerObj = [ resultObj.routes.coords[~~(cntObj/2) ].x, resultObj.routes.coords[~~(cntObj/2) ].y]; %>
+        
+        let user_pos = [ <%= [ resultObj.routes.coords[~~(cntObj/2) ].x, resultObj.routes.coords[~~(cntObj/2) ].y] %> ];
+        // let result_obj = JSON.parse('<%- JSON.stringify(result.data) %>');
+
+
+        
+        // map 사이즈 조절
+        var screenHeight = window.innerHeight - 18;
+        document.getElementById("map").style.height = screenHeight + "px";
+
+
+        function initMap() {
+
+            map = new inavi.maps.Map({
+                center: user_pos,
+                container: "map",
+                zoom: 17
+            });
+
+
+
+            // 인포윈도우
+            infoWindow = new inavi.maps.InfoWindow({map:map,zIndex:1,opacity:0,offset:[0, -10], closeButton:false});
+
+            // 성남시 도로링크 유효 범위
+            var boundarys = new inavi.maps.Polyline({
+                map: map,
+                path: getSeungnamBoundary(),
+                style: {
+                    lineColor: "#FF00FF",
+                    lineWidth: 5,
+                    lineDasharray: [1, 1],
+                },
+            });
+
+
+            // 창원시 도로링크 유효 범위
+            boundarys = new inavi.maps.Polyline({
+                map: map,
+                path: getChangwonBoundary(),
+                style: {
+                    lineColor: "#FF00FF",
+                    lineWidth: 5,
+                    lineDasharray: [1, 1],
+                },
+            });
+
+
+            // 경로선 생성
+            var routes = new inavi.maps.Polyline({
+                map: map,
+                path: [
+                    <% for( var ii=0; ii<cntObj; ii++ ) { %>
+                    [<%= resultObj.routes.coords[ii].x %>, <%= resultObj.routes.coords[ii].y %>],
+                    <% } %>
+                ],
+                style: {
+                    lineColor: "#FF0000",
+                    lineWidth: 5,
+                },
+            });
+            //-- 경로선 생성  
+
+
+
+            // 노드 생성
+            // 경로에 노드를 생성합니다
+            var nodes = [
+            <% for( var ii=0; ii<cntGuide; ii++ ) { %>
+                <% var off = resultObj.guide.links[ii].vertex_offset; %>
+                {lng:<%= resultObj.routes.coords[off].x %>, lat:<%= resultObj.routes.coords[off].y %>},
+            <% } %> 
+            ];
+
+            var circles = nodes.map(function(point) {
+                return new inavi.maps.Circle({
+                    map: map,
+                    position: point,
+                    radius: 0.002,
+                    style: {
+                        fillOpacity: 0.8,
+                        fillColor: "#CFE7FF",
+                        fillOutlineColor: "#DB4455",
+                    },
+                });
+            });
+
+
+
+
+
+
+            // onmouseover
+
+            // outmouseover
+
+            //-- 노드 생성
+
+
+
+            // 마커가 표시될 위치입니다
+            var markers = [
+                // 시작점
+                new inavi.maps.Marker({
+                    map: map,
+                    icon: "https://www.fivepin.co.kr/resources/images/PoiMarker/marker_1_on.png",
+                    position: [<%= resultObj.summary.start.x %>, <%= resultObj.summary.start.y %>]
+                }), 
+                // 종료점
+                new inavi.maps.Marker({
+                    map: map,
+                    icon: "https://www.fivepin.co.kr/resources/images/PoiMarker/marker_3_on.png",
+                    position: [<%= resultObj.summary.end.x %>, <%= resultObj.summary.end.y %>]
+                })
+            ];
+            //-- 마커가 표시될 위치입니다
+
+
+            // 커스텀 오버레이를 생성하고 지도에 표시합니다
+            var distanceOverlay = new inavi.maps.CustomInfoWindow({
+                        map: map, // 커스텀오버레이를 표시할 지도입니다
+                        content: getResultHtmlContent(<%= resultObj.summary.distance %>, <%= resultObj.summary.time %>),  // 커스텀오버레이에 표시할 내용입니다
+                        position: markers[markers.length-1].getPosition(), // 커스텀오버레이를 표시할 위치입니다.
+                        // xAnchor: 0,
+                        // yAnchor: 0,
+                        anchor: 'top-right',
+                        zIndex: 3,
+                        opacity: 0.8,
+                        closeButton: true
+            });
+
+
+
+
+
+            // 지도 클릭 이벤트 등록
+            map.on("click", function(mouseEvent) {
+                // var lnglat = mouseEvent.lngLat;
+                // var pathname = window.location.pathname;
+                // var move2url = pathname + '?lng=' + lnglat.lng + '&lat=' + lnglat.lat + '&type=0&api=inavi';
+                // window.open(move2url, '_self');
+
+                alert('클릭 기능 아직 미적용')
+            });
+            //-- 지도 클릭 이벤트 등록
+
+            
+
+            // 지도 영역 재설정정            
+            var coord = [
+                { lng:<%= resultObj.summary.start.x %>, lat:<%= resultObj.summary.start.y %> },
+                { lng:<%= resultObj.summary.end.x %>, lat:<%= resultObj.summary.end.y %> },
+            ];
+            map.fitCoordinates(coord, {
+                padding: 90,
+                // heading: 90,
+                // tilt: 30,
+                // duration: 1000
+            });
+
+
+      } // initMap
+
+
+        // 인포윈도우 표출 함수
+        function displayInfowindow(position, title) {
+            var content = '<div style="padding:5px;z-index:1;text-align:center">' + title + '</div>';
+
+            infoWindow.setContent(content);
+            infoWindow.setPosition(position);
+            // infoWindow.open(map);
+            infoWindow.setVisible(true);
+        }
+
+
+        // 결과 목록 표출 함수
+        function displayEntranceList(entrance) {
+            var listEl = document.getElementById('placesList'),
+            menuEl = document.getElementById('menu_wrap'),
+            fragment = document.createDocumentFragment(),
+            listStr = '';
+
+            for (var ii=0; ii<entrance.length; ii++) {
+                var position = new inavi.maps.LngLat(entrances[ii].x, entrances[ii].y);
+                var type = result_obj.type;
+                if (type == 2 && entrances[ii].attr <= 0) {
+                    type = 3;
+                }
+                var itemEl = getListItem(ii, type, entrances[ii]);
+
+                var title;
+                if (result_obj.type <= 2) {
+                    title = getEntranceType(entrances[ii].attr);
+                } else {
+                    title = getPolygonType(result_obj.type);
+                }
+
+                (function(position, title) {
+                    itemEl.onmouseover = function() {
+                        displayInfowindow(position, title);
+                    };
+
+                    itemEl.onmouseout = function() {
+                        // infoWindow.close();
+                        infoWindow.setVisible();
+                    };
+                })(position, title);
+
+                fragment.appendChild(itemEl);
+            }
+
+            listEl.appendChild(fragment);
+            menuEl.scrollTop = 0;
+        }
+
+        // 결과 항목을 Element로 반환하는 함수
+        function getListItem(index, type, entrance) {
+            var el = document.createElement('li'),
+            itemStr = '<div class="circle_' + type + '" background:"blue"> <span>' + index + '</span></div>' +
+                '<div class="info">' +
+                '   <span class="type"> <h5> 입구점 속성 : ' +
+                '       ' + getEntranceType(entrance.attr) + '</h5> </span>' +
+                '   <span class="coord"> 좌표 : ' +
+                '       ' + entrance.y.toFixed(6) + ', ' + entrance.x.toFixed(6) + ' </span>' +
+                '</div>';
+
+            el.innerHTML = itemStr;
+            el.className = 'item';
+
+            return el;
+        }
+
+
+
+        // 지도타입 컨트롤의 지도 또는 스카이뷰 버튼을 클릭하면 호출되어 지도타입을 바꾸는 함수입니다
+        function setMapType(maptype) { 
+            var roadmapControl = document.getElementById('btnRoadmap');
+            var skyviewControl = document.getElementById('btnSkyview'); 
+            if (maptype === 'roadmap') {
+                map.setType('NORMAL');
+                roadmapControl.className = 'selected_btn';
+                skyviewControl.className = 'btn';
+            } else {
+                map.setType('SATELLITE');
+                skyviewControl.className = 'selected_btn';
+                roadmapControl.className = 'btn';
+            }
+
+            // if(map.getType() !== "SATELLITE") {
+            //     // 지도 타입 설정
+            //     let isShowTraffic = $("#trafficBtn").hasClass("on");
+
+            //     map.once("render", () => {
+            //     map.call("get","_").map.getStyle().layers.filter(layer => layer.id.startsWith("user_")).forEach(layer => {
+            //     map.call("get","_").map.setLayoutProperty(layer.id, 'visibility', 'visible');
+            //     })
+            //     if(isShowTraffic) {
+            //         map.call("get","_").map.setLayoutProperty("satellite_traffic", 'visibility', 'visible');
+            //     } else {
+            //         map.call("get","_").map.setLayoutProperty("satellite_traffic", 'visibility', 'none');
+            //     }
+            //     });
+            // }
+        }
+
+        
+
+    </script>
+    <script type="text/javascript" src="https://api-maps.cloud.toast.com/maps/v3.0/appkeys/<%=javascriptkey%>/maps?callback=initMap"></script>
+    <!-- <script src="/script/position.js"></script> -->
+</div>
+  </body>
+</html>

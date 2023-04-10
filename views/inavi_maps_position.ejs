@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <title>최적지점 표시하기</title>
+  </head>
+  <body>
+    <div class="map_wrap">
+
+    <!-- <div id="map"></div> -->
+    <div id="map" style="width:100%;height:100px;position:relative;overflow:hidden;"></div>
+
+    <!-- 지도타입 컨트롤 div 입니다 -->
+    <div class="custom_typecontrol radius_border">
+        <span id="btnRoadmap" class="selected_btn" onclick="setMapType('roadmap')">지도</span>
+        <span id="btnSkyview" class="btn" onclick="setMapType('skyview')">스카이뷰</span>
+    </div>
+
+    <div class="custom_topposition">
+        <!-- 입구점 범례 입니다 -->
+        <div class="custom_regendcontrol">
+            <div class="circle_ent"><span>입구점</span></div>
+            <div class="circle_cpx"><span>단지내도로</span></div>
+            <div class="circle_road"><span>최근접도로</span></div>
+        </div>
+
+        <!-- 클릭 입구점 정보 -->
+        <div class="custom_regendcontrol">
+            <span id="clicked_position"></span>
+            <button onclick="getCurrentPosition()">좌표복사</button>
+        </div>
+    </div>
+
+    <!-- 검색 div -->
+    <div style="position:absolute;left:10px;top:80px;width:250px;padding:5px;background:rgba(255, 255, 255, 0.8);z-index: 1;font-size:13px;border-radius: 5px;">
+        <form onsubmit="searchKeyword(); return false;">
+            키워드 : <input type="text" value="아이나비시스템즈" id="keyword" size="15">
+            <button type="submit">검색</button>
+        </form>
+    </div>
+    
+    <!-- 메뉴 생성 -->
+    <div id="menu_wrap" class="bg_white" style="top:120px">
+        <div id="menu_title" style="text-align:center"><P>입구점 목록</P></div>
+        <hr>
+        <div style="font-size:12px;font-family:'Malgun Gothic', '맑은 고딕', sans-serif;">
+            <div id="clicked_type" style="text-align:left">클릭지점 타입 : </div>
+            <div id="clicked_name" style="text-align:left"></div>
+        </div>
+        <hr>
+        <ul id="placesList"></ul>
+    </div>
+
+    <link rel="stylesheet" href="css/maps_inavi.css"/>
+    <script type="text/javascript" src="script/inavimaps.js"></script>
+    <script type="text/javascript" src="script/boundarys.js"></script>
+    <script type="text/javascript" src="script/typenames.js"></script>
+    <script type="text/javascript" src="script/search.js"></script>
+    <script type="text/javascript" src="script/entrance.js"></script>
+    <script type="text/javascript" src="http://code.jquery.com/jquery-1.10.2.js"></script>
+
+    <script>
+        let result_obj = JSON.parse('<%- JSON.stringify(result.data) %>');
+        let result_exp = JSON.parse('<%- JSON.stringify(result.expand) %>');
+        let user_pos;
+
+
+        // map 사이즈 조절
+        var screenHeight = window.innerHeight - 18;
+        document.getElementById("map").style.height = screenHeight + "px";
+
+
+        let circles = new Array();
+        let lines = new Array();
+        let labels = new Array();
+        let polygon;
+
+        function initMap() {
+
+            user_pos = new inavi.maps.LngLat(result_exp.x, result_exp.y);
+
+            map = new inavi.maps.Map({
+                center: user_pos,
+                container: "map",
+                zoom: 17
+            });
+
+            marker = new inavi.maps.Marker({
+                map: map,
+                center: user_pos,
+            });
+            marker.setVisible(false);
+
+            // 인포윈도우
+            entranceinfoWindow = new inavi.maps.InfoWindow({map:map,zIndex:1,opacity:0,offset:[0, -10], closeButton:false});
+            searchinfoWindow = new inavi.maps.InfoWindow({map:map,zIndex:1,opacity:0,offset:[0, -45], closeButton:false});
+
+            // 성남시 도로링크 유효 범위
+            var boundarys = new inavi.maps.Polyline({
+                map: map,
+                path: getSeungnamBoundary(),
+                style: {
+                    lineColor: "#FF00FF",
+                    lineWidth: 5,
+                    lineDasharray: [1, 1],
+                },
+            });
+
+
+            // 창원시 도로링크 유효 범위
+            boundarys = new inavi.maps.Polyline({
+                map: map,
+                path: getChangwonBoundary(),
+                style: {
+                    lineColor: "#FF00FF",
+                    lineWidth: 5,
+                    lineDasharray: [1, 1],
+                },
+            });
+
+
+            // 초기화
+            initEntranceInfo();
+
+            // 클릭 지점 정보
+            setClickInfo(result_exp);
+
+            // 최적 지점 정보 
+            setEntranceInfo(result_obj, result_exp, map);
+
+            // 입구점 결과 목록
+            displayEntranceList(result_obj, result_exp);
+
+
+            // 지도 클릭 이벤트 등록
+            map.on("click", function(mouseEvent) {
+                var latlng = mouseEvent.lngLat;
+
+                user_pos.lng = latlng.lng;
+                user_pos.lat = latlng.lat;
+                
+                // 초기화
+                initEntranceInfo();
+
+
+                // call pig api
+                // callFnPig(user_pos)
+
+                // call optimal api
+                callFnOptimal(user_pos)
+
+            });
+            //-- 지도 클릭 이벤트 등록
+
+        } // initMap
+
+
+        function callFnOptimal(pos) {
+            var params = new URLSearchParams(window.location.search);
+            params.set('lat', pos.lat);
+            params.set('lng', pos.lng);
+            params.set('expand', 1);
+            var pathname = '/optimalposition'; // window.location.pathname;
+            var move2url = pathname + '?' + params.toString();
+            // var move2url = pathname + '?lng=' + latlng.lng + '&lat=' + latlng.lat + '&type=0&near=true&expand=true&api=inavi';
+            // window.open(move2url, '_self');
+
+            console.log("request, optimal data: " + pos.lng + ', ' + pos.lat)
+
+            $.ajax({
+                type: 'get',         // 타입 (get, post, put 등등)
+                url: move2url,       // 요청할 서버 url
+                // async: false,         // 비동기화 여부 (default : true)
+                // async: true,         // 비동기화 여부 (default : true)
+                // headers : {              // Http header
+                //     "Content-Type" : "application/json",
+                //     "X-HTTP-Method-Override" : "POST"
+                // },
+                // dataType: 'json',    // 데이터 타입 (html, xml, json, text 등등)
+                // data : JSON.stringify({  // 보낼 데이터 (Object , String, Array)
+                //     "no" : no,
+                //     "name" : name,
+                //     "nick" : nick
+                // }),
+                success: function(result) {
+                    var header = result.header;
+                    if (header.isSuccessful == true) {      
+                        console.log("response, optimal data: " + result.data.count)
+
+                        // set result
+                        setClickInfo(result.expand)
+                        setEntranceInfo(result.data, result.expand, map)
+                        displayEntranceList(result.data, result.expand)
+                    } else {
+                        alert('err code: ' + header.resultCode + '\nerr msg: ' + header.resultMessage)
+                    }
+                },
+                error: function(request, status, error) {
+                    alert('최적지점 요청 실패')
+                },
+                complete: function(xhr, status) {
+                }
+            });
+        }
+
+
+        function callFnPig(pos) {
+            var params = new URLSearchParams("?coordtype=1&type=0&posX=127.107541919303&posY=37.368174660271");
+            params.set('posX', pos.lng)
+            params.set('posY', pos.lat)
+            // var pathname = 'https://api-maps.cloud.toast.com/maps/v3.0/appkeys/<%=javascriptkey%>/searchEntryPoint';
+            var pathname = 'https://maps.inavi.com/maps/v3.0/appkeys/<%=javascriptkey%>/searchEntryPoint';
+            var move2url = pathname + '?' + params.toString();
+
+            console.log("request pig datas")
+
+            $.ajax({
+                type: 'get',         // 타입 (get, post, put 등등)
+                url: move2url,       // 요청할 서버 url
+                // async: false,         // 비동기화 여부 (default : true)
+                success: function(result) {
+                    console.log("success get pig datas")
+
+                    var header = result.header;
+                    if (header.isSuccessful == true) {      
+
+                        // set pig result
+                        setPigInfo(result.data, map)
+                    } else {
+                        alert('err code: ' + header.resultCode + '\nerr msg: ' + header.resultMessage)
+                    }
+                },
+                error: function(request, status, error) {
+                    alert('PIG 요청 실패')
+                },
+                complete: function(xhr, status) {
+                }
+            });    
+        }
+
+
+        // 좌표복사
+        function getCurrentPosition() {
+            const tmpPosition = document.createElement("textarea");
+            document.body.appendChild(tmpPosition);
+            tmpPosition.value = user_pos.lng + ", " + user_pos.lat;
+            tmpPosition.select();
+            document.execCommand('copy');
+            document.body.removeChild(tmpPosition);
+        }
+
+
+        // 인포윈도우 표출 함수
+        function displayEntranceInfowindow(position, title) {
+            if (position == null || position == undefined) {
+                entranceinfoWindow.setVisible(false);
+            } else {
+                var content = '<div style="padding:5px;z-index:1;text-align:center">' + title + '</div>';
+
+                entranceinfoWindow.setContent(content);
+                entranceinfoWindow.setPosition(position);
+                // infoWindow.open(map);
+                entranceinfoWindow.setVisible(true);
+            }
+        }
+
+
+
+        // 클릭 지점 정보
+        function setClickInfo(result_exp) {
+            var message = '좌표: ' + result_exp.x.toFixed(6) + ', ' + result_exp.y.toFixed(6);
+            var resultDiv = document.getElementById('clicked_position');
+            resultDiv.innerHTML = message;
+
+            message = '클릭지점 타입 : ' + getPolygonType(result_exp.type);
+            resultDiv = document.getElementById('clicked_type');
+            resultDiv.innerHTML = message;
+
+            if (result_exp.name !== undefined) {
+                message = '클릭지점 명칭 : ' + result_exp.name;
+                resultDiv = document.getElementById('clicked_name');
+                resultDiv.innerHTML = message;
+            }
+        }
+        
+
+        function initEntranceInfo() {
+            // 초기화
+            if (circles != undefined && circles.length) {
+                circles.forEach(element => element.setMap());
+                circles.splice(0);
+            } 
+
+            if (lines != undefined && lines.length) {
+                lines.forEach(element => element.setMap());
+                lines.splice(0);
+            } 
+
+            if (labels != undefined && labels.length) {
+                labels.forEach(element => element.setMap());
+                labels.splice(0);
+            }
+            
+            if (polygon != undefined) {
+                polygon.setMap();
+            }
+
+            // 사용자 설정 위치            
+            marker.setPosition(user_pos);
+        }
+
+        // 최적 입구점 정보
+        function setEntranceInfo(result_dat, result_exp, map) {                     
+            // 선택지점 폴리곤
+            if (result_exp.vertices.length > 0) {
+                polygon = new inavi.maps.Polygon({
+                    map: map,
+                    path: result_exp.vertices,
+                    style: {
+                        fillOpacity: 0.3,
+                        fillColor: "#55DD55",
+                        fillOutlineColor: "#55FF55",
+                    }
+                });
+            }
+
+            // 최적 지점
+            for (var ii = result_dat.count - 1; ii>= 0; --ii) {
+                // 최적 지점 표시선 생성
+                lines.push(new inavi.maps.Polyline({
+                    map: map,
+                    path: [
+                        user_pos,
+                        [result_dat.entrypoints[ii].x, result_dat.entrypoints[ii].y],
+                    ],
+                    style: {
+                        lineColor: "#FF0000",
+                        lineWidth: 2,
+                        lineDasharray: [1, 1], // (1픽셀 x lineWidth) 라인, (1픽셀 x lineWidth) 공백 표시 반복.
+                    },
+                }));
+                //-- 최적 지점 표시선 생성
+
+                // 최적지점 표시 원 생성
+                var fillCol;
+                var fillOutlineCol; // 선의 색깔입니다
+                 if (result_exp.type == 1 || (result_exp.type == 2 && result_dat.entrypoints[ii].type != 0)) {
+                    // 입구점
+                    fillCol = '#FF0000';
+                    fillOutlineCol = '#75B8FA';
+                } else if (result_exp.type == 2) {
+                    // 단지내도로
+                    fillCol = '#CFE7FF';
+                    fillOutlineCol = '#71ABE6';
+                } else {
+                    // 최근접도로
+                    fillCol = '#6666FF';
+                    fillOutlineCol = '#6666FF';
+                }
+
+                circles.push(
+                    new inavi.maps.Circle({
+                    map: map,
+                    position : [result_dat.entrypoints[ii].x, result_dat.entrypoints[ii].y], // 원 중심 좌표
+                    radius : 0.005, // 원 반지름 킬로미터 단위
+                    style: {
+                        fillOpacity: 0.7,  // 채우기 불투명도 입니다
+                        fillColor: fillCol,
+                        fillOutlineColor: fillOutlineCol,
+                    },
+                }));
+                //-- 최적지점 표시 원 생성
+                
+                // 최적지점 속성 생성
+                labels.push(new inavi.maps.Label({
+                    map: map,
+                    position: [result_dat.entrypoints[ii].x, result_dat.entrypoints[ii].y], // 원 중심 좌표
+                    text: ii.toString(),
+                    style: {textOpacity: 0.6}
+                }));
+                //-- // 최적지점 속성 생성
+            }
+            //-- 최적 지점
+        }
+
+
+
+        // PIG 입구점 정보
+        function setPigInfo(result_dat, map) {         
+            // 최적 지점
+            for (var ii = result_dat.count - 1; ii>= 0; --ii) {
+                // 최적 지점 표시선 생성
+                lines.push(new inavi.maps.Polyline({
+                    map: map,
+                    path: [
+                        user_pos,
+                        [result_dat.entrypoints[ii].x, result_dat.entrypoints[ii].y],
+                    ],
+                    style: {
+                        lineColor: "#0000FF",
+                        lineWidth: 3,
+                        lineDasharray: [2, 1],
+                        lineOpacity: 0.5,
+                        lineOffset: 2,
+                    },
+                }));
+                //-- 최적 지점 표시선 생성
+
+                // 최적지점 표시 원 생성
+                var fillCol;
+                var fillOutlineCol; // 선의 색깔입니다
+                if (result_exp.type == 1) {
+                    // 단지내도로
+                    fillCol = '#001C7D';
+                    fillOutlineCol = '#001CFF';
+                } else {
+                    // 최근접도로
+                    // fillCol = '#0D1BFF';
+                    // fillOutlineCol = '#0DFFFF';
+                    fillCol = '#001C7D';
+                    fillOutlineCol = '#001CFF';
+                }
+
+                circles.push(
+                    new inavi.maps.Circle({
+                    map: map,
+                    position : [result_dat.entrypoints[ii].x, result_dat.entrypoints[ii].y], // 원 중심 좌표
+                    radius : 0.01, // 원 반지름 킬로미터 단위
+                    style: {
+                        fillOpacity: 0.2,  // 채우기 불투명도 입니다
+                        fillColor: fillCol,
+                        fillOutlineColor: fillOutlineCol,
+                    },
+                }));
+                //-- 최적지점 표시 원 생성
+            }
+            //-- 최적 지점
+        }
+
+
+        // 키워드 검색 
+        function searchKeyword() {
+            var keyword = document.getElementById('keyword').value;
+
+            if (!keyword.replace(/^\s+|\s+$/g, '')) {
+                alert('키워드를 입력해주세요');
+                return false;
+            }
+
+            // var pathname = 'https://api-maps.cloud.toast.com/maps/v3.0/appkeys/uuLPV7fHLk6NIVfCPnBv/searches';
+            var pathname = 'https://maps.inavi.com/maps/v3.0/appkeys/<%=javascriptkey%>/searches'
+            var search2url = pathname + '?&query=' + keyword.toString() + '&reqcount=' + 10;
+
+            console.log("request, search data: " + keyword)
+
+            $.ajax({
+                type: 'get',         // 타입 (get, post, put 등등)
+                url: search2url,       // 요청할 서버 url
+                // async: false,         // 비동기화 여부 (default : true)
+                success: function(result) {                
+                    var header = result.header;
+                    if (header.isSuccessful == true) {      
+                        console.log("response, search data: " + result.search.totalcount)
+
+                        // set search result
+                        displaySearchList(result.search);
+                    } else {
+                        alert('err code: ' + header.resultCode + '\nerr msg: ' + header.resultMessage)
+                    }
+                },
+                error: function(request, status, error) {
+                    alert('통합 검색 요청 실패')
+                },
+                complete: function(xhr, status) {
+                }
+            });    
+        }
+
+    </script>
+    <script type="text/javascript" src="https://maps.inavi.com/maps/v3.0/appkeys/<%=javascriptkey%>/maps?callback=initMap"></script>
+    <!-- <script src="/script/position.js"></script> -->
+</div>
+  </body>
+</html>

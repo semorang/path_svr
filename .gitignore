@@ -1,0 +1,10 @@
+## 파일 무시
+package-lock.json
+*.bak
+.env
+ecosystem.config.js
+path_svr.node
+
+## 폴더 무시
+build
+node_modules

@@ -1,0 +1,219 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="소스 파일">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="헤더 파일">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hh;hpp;hxx;hm;inl;inc;xsd</Extensions>
+    </Filter>
+    <Filter Include="리소스 파일">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+    <Filter Include="소스 파일\libdsp">
+      <UniqueIdentifier>{79a3bcaa-3800-4a42-8fe4-2c3589ad5153}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="소스 파일\utils">
+      <UniqueIdentifier>{baa7e8c7-72de-4d0c-b333-6fc4371306ca}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="소스 파일\shp">
+      <UniqueIdentifier>{0e5587e4-128d-409f-abaa-c1ca7aba322e}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="소스 파일\route">
+      <UniqueIdentifier>{27fecc81-e736-4e7a-b978-43d4f283fa8c}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <Text Include="ReadMe.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="stdafx.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="targetver.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="MainFrm.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="Resource.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="MainView.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="libdsp\FontHandler.h">
+      <Filter>소스 파일\libdsp</Filter>
+    </ClInclude>
+    <ClInclude Include="libdsp\GnOSMCoord.h">
+      <Filter>소스 파일\libdsp</Filter>
+    </ClInclude>
+    <ClInclude Include="libdsp\GnType.h">
+      <Filter>소스 파일\libdsp</Filter>
+    </ClInclude>
+    <ClInclude Include="libdsp\ImageHandler.h">
+      <Filter>소스 파일\libdsp</Filter>
+    </ClInclude>
+    <ClInclude Include="libdsp\stb_image.h">
+      <Filter>소스 파일\libdsp</Filter>
+    </ClInclude>
+    <ClInclude Include="libdsp\stb_truetype.h">
+      <Filter>소스 파일\libdsp</Filter>
+    </ClInclude>
+    <ClInclude Include="libdsp\UniDib32.h">
+      <Filter>소스 파일\libdsp</Filter>
+    </ClInclude>
+    <ClInclude Include="utils\UserLog.h">
+      <Filter>소스 파일\utils</Filter>
+    </ClInclude>
+    <ClInclude Include="shp\shpio.h">
+      <Filter>소스 파일\shp</Filter>
+    </ClInclude>
+    <ClInclude Include="route\FileManager.h">
+      <Filter>소스 파일\route</Filter>
+    </ClInclude>
+    <ClInclude Include="route\MapDef.h">
+      <Filter>소스 파일\route</Filter>
+    </ClInclude>
+    <ClInclude Include="route\MapLink.h">
+      <Filter>소스 파일\route</Filter>
+    </ClInclude>
+    <ClInclude Include="route\MapMesh.h">
+      <Filter>소스 파일\route</Filter>
+    </ClInclude>
+    <ClInclude Include="route\MapNode.h">
+      <Filter>소스 파일\route</Filter>
+    </ClInclude>
+    <ClInclude Include="route\MMPoint.hpp">
+      <Filter>소스 파일\route</Filter>
+    </ClInclude>
+    <ClInclude Include="route\netWorkData.h">
+      <Filter>소스 파일\route</Filter>
+    </ClInclude>
+    <ClInclude Include="route\RouteManager.h">
+      <Filter>소스 파일\route</Filter>
+    </ClInclude>
+    <ClInclude Include="route\RoutePlan.h">
+      <Filter>소스 파일\route</Filter>
+    </ClInclude>
+    <ClInclude Include="route\FilePedestrian.h">
+      <Filter>소스 파일\route</Filter>
+    </ClInclude>
+    <ClInclude Include="Trecking.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="TreckingDoc.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="TreckingView.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="route\FileTrecking.h">
+      <Filter>소스 파일\route</Filter>
+    </ClInclude>
+    <ClInclude Include="Drawing.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="stdafx.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="MainFrm.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="MainView.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="libdsp\FontHandler.cpp">
+      <Filter>소스 파일\libdsp</Filter>
+    </ClCompile>
+    <ClCompile Include="libdsp\GnOSMCoord.cpp">
+      <Filter>소스 파일\libdsp</Filter>
+    </ClCompile>
+    <ClCompile Include="libdsp\ImageHandler.cpp">
+      <Filter>소스 파일\libdsp</Filter>
+    </ClCompile>
+    <ClCompile Include="libdsp\UniDib32.cpp">
+      <Filter>소스 파일\libdsp</Filter>
+    </ClCompile>
+    <ClCompile Include="utils\UserLog.cpp">
+      <Filter>소스 파일\utils</Filter>
+    </ClCompile>
+    <ClCompile Include="shp\ShpObj.cpp">
+      <Filter>소스 파일\shp</Filter>
+    </ClCompile>
+    <ClCompile Include="shp\ShpReader.cpp">
+      <Filter>소스 파일\shp</Filter>
+    </ClCompile>
+    <ClCompile Include="shp\ShpWriter.cpp">
+      <Filter>소스 파일\shp</Filter>
+    </ClCompile>
+    <ClCompile Include="route\FileManager.cpp">
+      <Filter>소스 파일\route</Filter>
+    </ClCompile>
+    <ClCompile Include="route\MapLink.cpp">
+      <Filter>소스 파일\route</Filter>
+    </ClCompile>
+    <ClCompile Include="route\MapMesh.cpp">
+      <Filter>소스 파일\route</Filter>
+    </ClCompile>
+    <ClCompile Include="route\MapNode.cpp">
+      <Filter>소스 파일\route</Filter>
+    </ClCompile>
+    <ClCompile Include="route\RouteManager.cpp">
+      <Filter>소스 파일\route</Filter>
+    </ClCompile>
+    <ClCompile Include="route\RoutePlan.cpp">
+      <Filter>소스 파일\route</Filter>
+    </ClCompile>
+    <ClCompile Include="route\FilePedestrian.cpp">
+      <Filter>소스 파일\route</Filter>
+    </ClCompile>
+    <ClCompile Include="Trecking.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="TreckingDoc.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="TreckingView.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="route\FileTrecking.cpp">
+      <Filter>소스 파일\route</Filter>
+    </ClCompile>
+    <ClCompile Include="Drawing.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="UserImages.bmp">
+      <Filter>리소스 파일</Filter>
+    </Image>
+    <Image Include="res\Toolbar.bmp">
+      <Filter>리소스 파일</Filter>
+    </Image>
+    <Image Include="res\Toolbar256.bmp">
+      <Filter>리소스 파일</Filter>
+    </Image>
+    <Image Include="res\Trecking.ico">
+      <Filter>리소스 파일</Filter>
+    </Image>
+    <Image Include="res\TreckingDoc.ico">
+      <Filter>리소스 파일</Filter>
+    </Image>
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="Trecking.rc">
+      <Filter>리소스 파일</Filter>
+    </ResourceCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="res\Trecking.rc2">
+      <Filter>리소스 파일</Filter>
+    </None>
+  </ItemGroup>
+</Project>
