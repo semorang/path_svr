@@ -330,7 +330,7 @@ exports.domultiroute = function(req, option) {
     // let route_void = [0, 0]; // bridge
 
     const route_cnt = 1;
-    let route_opt = [2];
+    let route_opt = [8]; // ROUTE_OPT_AUTOMATION, // 자율주행 전용
     let route_void = [0];
 
     logout("total route info, cnt : " + route_cnt + ", opt : " + route_opt + ", avoid : " + route_void);
