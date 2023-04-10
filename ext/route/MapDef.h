@@ -36,8 +36,8 @@ using namespace std;
 #define USE_ROUTE_TABLE_LEVEL	8 // 8 레벨보다 낮아지면 도로 확장이 어려워짐.
 //#define __USE_TEMPLETE // 템플릿 사용
 
-#define USE_OPTIMAL_POINT_API // 최적 지점 API
-// #define USE_TREKKING_POINT_API // 경로 탐색 API
+// #define USE_OPTIMAL_POINT_API // 최적 지점 API
+#define USE_TREKKING_POINT_API // 경로 탐색 API
 
 #if defined(USE_OPTIMAL_POINT_API)
 //#define USE_TREKKING_DATA // 숲길 데이터
@@ -46,11 +46,11 @@ using namespace std;
 #define USE_BUILDING_DATA // 건물 데이터
 #define USE_COMPLEX_DATA // 단지 데이터
 #elif defined(USE_TREKKING_POINT_API)
-#define USE_TREKKING_DATA // 숲길 데이터
+// #define USE_TREKKING_DATA // 숲길 데이터
 // #define USE_PEDESTRIAN_DATA // 보행자/자전거 데이터
-// #define USE_VEHICLE_DATA // 차량 데이터
-// #define USE_P2P_DATA // P2P 데이터
-#define TARGET_FOR_KAKAO_VX // 카카오VX제공 
+#define USE_VEHICLE_DATA // 차량 데이터
+#define USE_P2P_DATA // P2P 데이터
+// #define TARGET_FOR_KAKAO_VX // 카카오VX제공 
 #endif
 
 

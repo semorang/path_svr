@@ -65,7 +65,8 @@ app.get('/summary', function(req, res) {
         res.send(ret);
     }
     else{
-        res.send('경탐 실패, 코드 : ' + ret.result_code + ', 오류 : ' + ret.msg);
+        // res.send('경탐 실패, 코드 : ' + ret.result_code + ', 오류 : ' + ret.msg);
+        res.send(ret);
     }
 
     logout("end route summary request");
@@ -81,12 +82,13 @@ app.get('/route', function(req, res) {
 
     var ret = route.doroute(req);
 
-    if (ret.result_code == 0) {
+    if (ret.header.isSuccessful == true) {
         // logout(JSON.stringify(ret));
         res.send(ret);
     }
     else{
-        res.send('경탐 실패, 코드 : ' + ret.result_code + ', 오류 : ' + ret.msg);
+        // res.send('경탐 실패, 코드 : ' + ret.header.resultCode + ', 오류 : ' + ret.header.resultMessage);
+        res.send(ret);
     }
 
     logout("end route request");
@@ -99,14 +101,15 @@ app.get('/multiroute', function(req, res) {
     logout("client IP : " + request_ip.getClientIp(req));
     logout("client req : " + JSON.stringify(req.query));
 
-    var ret = route.domultiroute(req, "", "kakaovx");
+    var ret = route.domultiroute(req, "");
 
     if (ret.header.isSuccessful == true) {
         // logout(JSON.stringify(ret));
         res.send(ret);
     }
     else{
-        res.send('다중 경탐 실패, 코드 : ' + ret.header.resultCode + ', 오류 : ' + ret.header.resultMessage);
+        // res.send('다중 경탐 실패, 코드 : ' + ret.header.resultCode + ', 오류 : ' + ret.header.resultMessage);
+        res.send(ret);
     }
 
     logout("end multiroute request");
@@ -119,15 +122,16 @@ app.get('/kakaovx', function(req, res) {
     logout("client IP : " + request_ip.getClientIp(req));
     logout("client req : " + JSON.stringify(req.query));
 
-    var ret = route.domultiroute(req, "", "kakaovx");
+    req.query.target = "kakaovx";
+
+    var ret = route.domultiroute(req, "");
 
     if (ret.header.isSuccessful == true) {
         // logout(JSON.stringify(ret));
         res.send(ret);
     }
     else{
-        // res.send('다중 경탐 실패, 코드 : ' + ret.header.resultCode + ', 오류 : ' + ret.header.resultMessage);
-        res.send(ret);
+        res.send('다중 경탐 실패, 코드 : ' + ret.header.resultCode + ', 오류 : ' + ret.header.resultMessage);
     }
 
     logout("end kakaovx route request");
@@ -174,7 +178,7 @@ app.get('/multirouteview', function(req, res) {
 
     const api = req.query.api;
     
-    var ret = route.domultiroute(req, "view", "kakaovx");
+    var ret = route.domultiroute(req, "view");
 
     if (ret.header.isSuccessful == true) {
         if (api === "kakao") {
@@ -184,10 +188,98 @@ app.get('/multirouteview', function(req, res) {
         }
     }
     else{
-        res.send('경탐 실패, 코드 : ' + ret.result_code + ', 오류 : ' + ret.msg);
+        res.send('다중 경탐 실패, 코드 : ' + ret.header.resultCode + ', 오류 : ' + ret.header.resultMessage);
     }
 
     logout("end multirouteview request");
+});
+
+
+// p2p path result view
+app.get('/pathview', function(req, res) {
+    logout("start pathview request");
+
+    logout("client IP : " + request_ip.getClientIp(req));
+    logout("client req : " + JSON.stringify(req.query));
+
+    const api = req.query.api;
+    
+    var ret = route.domultiroute(req, "view");
+
+    if (ret.header.isSuccessful == true) {
+        if (api === "kakao") {
+            res.render(__dirname + "/../views/kakao_maps_route", {javascriptkey:apikey.KAKAOMAPAPIKEY, result:ret});
+        } else {
+            res.render(__dirname + "/../views/inavi_maps_path", {javascriptkey:apikey.INAVIMAPAPIKEY, result:ret});
+        }
+    }
+    else{
+        res.send('PATH 실패, 코드 : ' + ret.header.resultCode + ', 오류 : ' + ret.header.resultMessage);
+    }
+
+    logout("end pathview request");
+});
+
+
+app.get('/optimalposition', function(req, res) {
+    logout("start optimalposition request");
+
+    logout("client IP : " + request_ip.getClientIp(req));
+    logout("client req : " + JSON.stringify(req.query));
+
+    // if (req.query.type == undefined || req.query.type == 0) {
+    if (req.query.type == undefined) {
+        // 택시승하차 - 차량출입구 만 선택
+        // 2,1,0,0; 
+        req.query.type = 0x00000102; // 바이트 거꾸로
+        // req.query.type = parseInt(subtype, 16);
+    }
+
+    var ret = route.optimalposition(req);
+
+    logout("result : " + ((ret.header.resultCode == 0) ? "success" : "failed") + ", code : " + ret.header.resultCode);
+    if (ret.header.resultCode != 0) {
+        logout('최적지점 검색 실패 : ' + ret.header.resultMessage);
+    }
+
+    res.send(ret);
+
+    logout("end optimalposition request");
+});
+
+
+app.get('/optimalview', function(req, res) {
+    logout("start optimalview request");
+
+    logout("client IP : " + request_ip.getClientIp(req));
+    logout("client req : " + JSON.stringify(req.query));
+
+    // if (req.query.type == undefined || req.query.type == 0) {
+    if (req.query.type == undefined) {
+        // 택시승하차 - 차량출입구 만 선택
+        // 2,1,0,0; 
+        req.query.type = 0x00000102; // 바이트 거꾸로
+        // req.query.type = parseInt(subtype, 16);
+    }
+
+    const api = req.query.api;
+
+    var ret = route.optimalview(req);
+
+    logout("result : " + ((ret.header.resultCode == 0) ? "success" : "failed") + ", code : " + ret.header.resultCode);
+    if (ret.header.resultCode != 0) {
+        logout('최적지점 검색 실패 : ' + ret.header.resultMessage);
+        res.send(ret);
+    }
+    else { //if (ret.header.resultCode == 0) {
+        if (api === "kakao") {
+            res.render(__dirname + "/../views/kakao_maps_position", {javascriptkey:apikey.KAKAOMAPAPIKEY, result:ret});
+        } else {
+            res.render(__dirname + "/../views/inavi_maps_position", {javascriptkey:apikey.INAVIMAPAPIKEY, result:ret});
+        }
+    }
+
+    logout("end optimalview request");
 });
 
 

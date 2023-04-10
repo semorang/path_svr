@@ -1,13 +1,14 @@
 {
     "targets":[
         {
-            "target_name":"optimal_svr", 
+            "target_name":"path_svr", 
             "sources":[
                 "../src/apis.cc", 
 
                 "../ext/utils/UserLog.cpp",
                 "../ext/utils/GeoTools.cpp",
 
+                "../ext/libjson/cjson/cJSON.c",
                 "../ext/shp/ShpObj.cpp",
                 "../ext/shp/ShpReader.cpp",
                 "../ext/shp/ShpWriter.cpp",
