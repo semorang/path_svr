@@ -42,12 +42,24 @@ var changwonBoundary = [
     [128.5603, 35.4197],
 ]
 
+var daeguBoundary = [
+    [128.43529, 35.71135],
+    [128.43529, 35.66969],
+    [128.49778, 35.66969],
+    [128.49778, 35.71135],
+    [128.43529, 35.71135],
+]
+
 function getSeungnamBoundary() {
     return seungnamBoundary;
 }
 
 function getChangwonBoundary() {
     return changwonBoundary;
+}
+
+function getDaeguBoundary() {
+    return daeguBoundary;
 }
 
 function getChangwonBoundarySize() {

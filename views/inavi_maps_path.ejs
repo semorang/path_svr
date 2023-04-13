@@ -119,6 +119,18 @@
                 searchinfoWindow = new inavi.maps.InfoWindow({ map: map, zIndex: 1, opacity: 0, offset: [0, -45], closeButton: false });
 
 
+                // 대구 테크노폴리스 도로링크 유효 범위
+                var boundarys = new inavi.maps.Polyline({
+                    map: map,
+                    path: getDaeguBoundary(),
+                    style: {
+                        lineColor: "#808080",
+                        lineWidth: 3,
+                        lineDasharray: [1, 1],
+                    },
+                });
+                
+
                 // 경로 그리기
                 for (var ii = cnt_route - 1; ii >= 0; --ii) {
                     drawRoute(result_obj.route.data[ii], map, route_offset[ii], route_color[ii]);
@@ -331,7 +343,7 @@
                     type: 'get',         // 타입 (get, post, put 등등)
                     url: route2url,       // 요청할 서버 url
                     // async: false,         // 비동기화 여부 (default : true)
-                    success: function(result) {                
+                    success: function(result) {
                         var header = result.header;
                         if (header.isSuccessful == true) {      
                             console.log("response, route data: " + result.route.data.length)
@@ -388,9 +400,9 @@
                     } else if (params.has('via')) {
                         params.delete('via');
                     }
-                    params.set('opt', 8);
-                    params.set('target', 'inavi');
-                    var pathname = '/multiroute'; // window.location.pathname;
+                    // params.set('opt', 8);
+                    // params.set('target', 'inavi');
+                    var pathname = '/path'; // window.location.pathname;
                     var route2url = pathname + '?' + params.toString();
                     // var route2url = window.location.pathname + '?' + params.toString();
 

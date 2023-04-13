@@ -116,6 +116,32 @@ app.get('/multiroute', function(req, res) {
 });
 
 
+// 2p2 path 전용
+app.get('/path', function(req, res) {
+    logout("start multiroute request");
+
+    // 2p2 path 전용 옵션
+    req.query.target = "inavi";
+    req.query.opt = 8;
+
+    logout("client IP : " + request_ip.getClientIp(req));
+    logout("client req : " + JSON.stringify(req.query));
+
+    var ret = route.domultiroute(req, "");
+
+    if (ret.header.isSuccessful == true) {
+        // logout(JSON.stringify(ret));
+        res.send(ret);
+    }
+    else{
+        // res.send('다중 경탐 실패, 코드 : ' + ret.header.resultCode + ', 오류 : ' + ret.header.resultMessage);
+        res.send(ret);
+    }
+
+    logout("end multiroute request");
+});
+
+
 app.get('/kakaovx', function(req, res) {
     logout("start kakaovx route request");
 
@@ -198,6 +224,8 @@ app.get('/multirouteview', function(req, res) {
 // p2p path result view
 app.get('/pathview', function(req, res) {
     logout("start pathview request");
+
+    req.query.opt = 8;
 
     logout("client IP : " + request_ip.getClientIp(req));
     logout("client req : " + JSON.stringify(req.query));
