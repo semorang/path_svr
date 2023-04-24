@@ -915,9 +915,9 @@ void GetMultiRouteResultForiNavi(const FunctionCallbackInfo<Value>& args) {
 #if defined(_WIN32)
             char szUTF8[MAX_PATH] = {0,};
             MultiByteToUTF8(m_pDataMgr.GetNameDataByIdx(pLink->name_idx), szUTF8);
-            cJSON_AddStringToObject(p2p, "road_name", szUTF8);
+            cJSON_AddStringToObject(path, "road_name", szUTF8);
 #else
-             cJSON_AddStringToObject(p2p, "road_name", encoding(m_pDataMgr.GetNameDataByIdx(pLink->name_idx), "euc-kr", "utf-8"));
+             cJSON_AddStringToObject(path, "road_name", encoding(m_pDataMgr.GetNameDataByIdx(pLink->name_idx), "euc-kr", "utf-8"));
 #endif // #if defined(_WIN32)
          }
          
