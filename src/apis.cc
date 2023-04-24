@@ -906,20 +906,21 @@ void GetMultiRouteResultForiNavi(const FunctionCallbackInfo<Value>& args) {
          // road_code
          cJSON_AddNumberToObject(path, "road_code", vehInfo.road_type);
 
-         // road_name
-         if (pLink->name_idx > 0) {
-#if defined(_WIN32)
-               char szUTF8[MAX_PATH] = {0,};
-               MultiByteToUTF8(m_pDataMgr.GetNameDataByIdx(pLink->name_idx), szUTF8);
-               cJSON_AddStringToObject(p2p, "road_name", szUTF8);
-#else
-               cJSON_AddStringToObject(p2p, "road_name", encoding(m_pDataMgr.GetNameDataByIdx(pLink->name_idx), "euc-kr", "utf-8"));
-#endif // #if defined(_WIN32)
-
          // traffic_color
          cJSON_AddStringToObject(path, "traffic_color", "green");
 
 #if defined(USE_P2P_DATA) // P2P HD 매칭을 위한 SD 링크 ID 정보
+         // road_name
+         if (pLink->name_idx > 0) {
+#if defined(_WIN32)
+            char szUTF8[MAX_PATH] = {0,};
+            MultiByteToUTF8(m_pDataMgr.GetNameDataByIdx(pLink->name_idx), szUTF8);
+            cJSON_AddStringToObject(p2p, "road_name", szUTF8);
+#else
+             cJSON_AddStringToObject(p2p, "road_name", encoding(m_pDataMgr.GetNameDataByIdx(pLink->name_idx), "euc-kr", "utf-8"));
+#endif // #if defined(_WIN32)
+         }
+         
          // p2p 추가정보
          cJSON* p2p = cJSON_CreateObject();
 
@@ -937,7 +938,6 @@ void GetMultiRouteResultForiNavi(const FunctionCallbackInfo<Value>& args) {
             
             // dir, 0:정방향, 1:역방향
             cJSON_AddNumberToObject(p2p, "dir", link.dir);
-            }
          }
 
          // add p2p to path
