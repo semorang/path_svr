@@ -859,7 +859,7 @@ void GetMultiRouteResultForiNavi(const FunctionCallbackInfo<Value>& args) {
       cJSON* data = cJSON_CreateObject();
       
       cJSON_AddItemToObject(data, "option", cJSON_CreateNumber(pResult->RouteOption));
-      cJSON_AddItemToObject(data, "spend_tiem", cJSON_CreateNumber(pResult->TotalLinkTime));
+      cJSON_AddItemToObject(data, "spend_time", cJSON_CreateNumber(pResult->TotalLinkTime));
       cJSON_AddItemToObject(data, "distance", cJSON_CreateNumber(pResult->TotalLinkDist));
       cJSON_AddItemToObject(data, "toll_fee", cJSON_CreateNumber(0));
       cJSON_AddItemToObject(data, "taxiFare", cJSON_CreateNumber(0));
