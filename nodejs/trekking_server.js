@@ -14,12 +14,19 @@ const app = express();
 const apikey = require('../views/script/key.js');
 const timeout = require('connect-timeout');
 const publicPath = path.join(__dirname, '../public') // web에서 공유할 path
+const cors = require('cors');
+
+let corsOptions = {
+    origin: '*',
+    credential: true,
+}
+
 
 // app.set('views', __dirname + '/openApi/views');
 app.set('view engine', 'ejs');
 app.engine('html', require('ejs').renderFile);
 app.use(express.static(publicPath)); 
-
+app.use(cors(corsOptions));
 
 app.get('/', function(req, res) {
     logout("client IP : " + request_ip.getClientIp(req));
