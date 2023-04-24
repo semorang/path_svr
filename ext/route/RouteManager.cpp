@@ -155,13 +155,13 @@ KeyID CRouteManager::SetWaypoint(IN const double lng, IN const double lat, IN co
 					if (ii > 0) {
 						LOG_TRACE(LOG_DEBUG, "waypoint projection, link id:%d, idx:%d, range level:%d, dist:%d", keyWaypoint.nid, keyWaypoints.size(), ii, retDist);
 					}
-					
-					keyWaypoints.emplace_back(keyWaypoint);
-					m_ptNewWaypoints.emplace_back(waypoint);
 
 					break;
 				}
 			} // for
+
+			keyWaypoints.emplace_back(keyWaypoint);
+			m_ptNewWaypoints.emplace_back(waypoint);
 		}
 	}
 
@@ -326,7 +326,7 @@ const size_t CRouteManager::GetRouteProbablePath(OUT vector<RouteProbablePath*>&
 
 		if (pJctNode == nullptr) {
 			LOG_TRACE(LOG_WARNING, "failed, can't find junction node info, fore link:%d, next link:%d", pLinkBefore->link_id.nid, pLinkNext->link_id.nid);
-			return 0;
+			continue;
 		}
 		
 		RouteProbablePath* pJctInfo = new RouteProbablePath;
@@ -600,6 +600,15 @@ int CRouteManager::DoRouting(/*Packet*/)
 		reqInfo.vtIdLinks.emplace_back(keyDestination);
 
 
+		if (!m_vtRouteInfo.empty()) {
+			m_vtRouteInfo.clear();
+			vector<RouteInfo>().swap(m_vtRouteInfo);
+		}
+
+		if (!m_vtRouteResult.empty()) {
+			m_vtRouteResult.clear();
+			vector<RouteResultInfo>().swap(m_vtRouteResult);
+		}
 
 		if ((ret = m_pRoutePlan->DoRoutes(&reqInfo, &m_vtRouteInfo, &m_vtRouteResult)) == 0)
 		{

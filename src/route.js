@@ -11,6 +11,7 @@ if (os.platform() == 'linux') {
 
 const logout = require('./logs');
 const err_code = require('./errors');
+const opt_code = require('./option.js');
 // const { getMsg } = require("./errors");
 // import getMsg from "./errors";
 
@@ -186,6 +187,8 @@ exports.doroute = function(req, option) {
             logout("call function getmultiroute_for_inavi");
             res = addon.getmultiroute_for_inavi();
             res = JSON.parse(res);
+        } else if (target === "kakaovx") {
+            res = addon.getroute(2); // 2:for kakaovx
         } else if (is_view) {
             res = addon.getview();
         } else {
@@ -321,17 +324,32 @@ exports.domultiroute = function(req, option) {
 
 
     // const route_cnt = 3;
-    // let route_opt = [1, 2, 2];
-    // let route_void = [0, 0, 8]; // bridge
+    // let route_opt = [opt_code.ROUTE_OPT_SHORTEST, opt_code.ROUTE_OPT_RECOMMENDED, opt_code.ROUTE_OPT_TRAIL];
+    // let route_void = [opt_code.ROUTE_AVOID_NONE, opt_code.ROUTE_AVOID_PALM, opt_code.ROUTE_AVOID_BRIDGE];
 
     // 트레킹
     // const route_cnt = 2;
     // let route_opt = [2, 7]; // 보행자, 자전거
     // let route_void = [0, 0]; // bridge
 
-    const route_cnt = 1;
-    let route_opt = [8]; // ROUTE_OPT_AUTOMATION, // 자율주행 전용
-    let route_void = [0];
+    // const route_cnt = 1;
+    // let route_opt = [2];
+    // let route_void = [0];
+    
+    var route_cnt = 2;
+    var route_opt = [opt_code.ROUTE_OPT_SHORTEST, opt_code.ROUTE_OPT_TRAIL];
+    var route_void = [opt_code.ROUTE_AVOID_NONE, opt_code.ROUTE_AVOID_BRIDGE];
+
+    if (target === "kakaovx") {
+        route_cnt = opt;
+        if (route_cnt <= 0) {
+            route_cnt = 1;
+        } else if (route_cnt > 3) {
+            route_cnt = 3;
+        }
+        route_opt = [opt_code.ROUTE_OPT_SHORTEST, opt_code.ROUTE_OPT_COMFORTABLE, opt_code.ROUTE_OPT_COMFORTABLE];
+        route_void = [opt_code.ROUTE_AVOID_NONE, opt_code.ROUTE_AVOID_PALM, opt_code.ROUTE_AVOID_BRIDGE];
+    }
 
     logout("total route info, cnt : " + route_cnt + ", opt : " + route_opt + ", avoid : " + route_void);
 
@@ -349,6 +367,8 @@ exports.domultiroute = function(req, option) {
                 res = JSON.parse(res);
             // } else if (is_view) {
             //     res = addon.getview();
+            } else if (target === "kakaovx") {
+                res = addon.getmultiroute(2); // 2:for kakaovx
             } else { // if (target === "kakaovx") {
                 logout("call function getmultiroute");
                 res = addon.getmultiroute();

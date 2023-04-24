@@ -906,6 +906,16 @@ void GetMultiRouteResultForiNavi(const FunctionCallbackInfo<Value>& args) {
          // road_code
          cJSON_AddNumberToObject(path, "road_code", vehInfo.road_type);
 
+         // road_name
+         if (pLink->name_idx > 0) {
+#if defined(_WIN32)
+               char szUTF8[MAX_PATH] = {0,};
+               MultiByteToUTF8(m_pDataMgr.GetNameDataByIdx(pLink->name_idx), szUTF8);
+               cJSON_AddStringToObject(p2p, "road_name", szUTF8);
+#else
+               cJSON_AddStringToObject(p2p, "road_name", encoding(m_pDataMgr.GetNameDataByIdx(pLink->name_idx), "euc-kr", "utf-8"));
+#endif // #if defined(_WIN32)
+
          // traffic_color
          cJSON_AddStringToObject(path, "traffic_color", "green");
 
@@ -927,16 +937,6 @@ void GetMultiRouteResultForiNavi(const FunctionCallbackInfo<Value>& args) {
             
             // dir, 0:정방향, 1:역방향
             cJSON_AddNumberToObject(p2p, "dir", link.dir);
-
-            // 링크 명칭
-            if (pLink->name_idx > 0) {
-#if defined(_WIN32)
-               char szUTF8[MAX_PATH] = {0,};
-               MultiByteToUTF8(m_pDataMgr.GetNameDataByIdx(pLink->name_idx), szUTF8);
-               cJSON_AddStringToObject(p2p, "road_code", szUTF8);
-#else
-               cJSON_AddStringToObject(p2p, "road_code", encoding(m_pDataMgr.GetNameDataByIdx(pLink->name_idx), "euc-kr", "utf-8"));
-#endif // #if defined(_WIN32)
             }
          }
 
@@ -1011,9 +1011,18 @@ void GetMultiRouteResult(const FunctionCallbackInfo<Value>& args) {
    Local<Context> context = isolate->GetCurrentContext();
    Local<Object> mainobj = Object::New(isolate);
 
+   int target = 0;
    int cnt = 0;
    const RouteResultInfo* pResult = m_pRouteMgr.GetRouteResult();
 
+ if (args.Length() >= 1) {
+      cnt = args.Length();
+      // LOG_TRACE(LOG_DEBUG, "arg length : %d", cnt);
+
+      target = args[0].As<Number>()->Value();
+
+      LOG_TRACE(LOG_DEBUG, "Route target:%d", target);
+   }
 
    if (pResult == nullptr) {
       LOG_TRACE(LOG_ERROR, "Error, Route result pointer null");
@@ -1030,7 +1039,6 @@ void GetMultiRouteResult(const FunctionCallbackInfo<Value>& args) {
 
       // routes
       Local<Array> routes = Array::New(isolate);
-      Local<Object> route = Object::New(isolate);
       
       int cntRoutes = 1;
       for(int ii=0; ii<cntRoutes; ii++) {
@@ -1053,6 +1061,7 @@ void GetMultiRouteResult(const FunctionCallbackInfo<Value>& args) {
          summary->Set(context, String::NewFromUtf8(isolate, "eta").ToLocalChecked(), String::NewFromUtf8(isolate, strVal.c_str()).ToLocalChecked());
          
          // add routes - summary
+         Local<Object> route = Object::New(isolate);
          route->Set(context, String::NewFromUtf8(isolate, "summary").ToLocalChecked(), summary);
 
 
@@ -1113,42 +1122,42 @@ void GetMultiRouteResult(const FunctionCallbackInfo<Value>& args) {
          route->Set(context, String::NewFromUtf8(isolate, "vertex_info").ToLocalChecked(), vertices);
 
 
-#if defined(TARGET_FOR_KAKAO_VX)
-         // junction_info
-         Local<Array> junctions = Array::New(isolate);
-         vector<RouteProbablePath*> vtRpp;
-         int cntRpp = m_pRouteMgr.GetRouteProbablePath(vtRpp);
-         for(auto jj=0; jj<cntRpp; jj++) {
-            Local<Object> link_info = Object::New(isolate);
-            Local<Array> links = Array::New(isolate);
-            RouteProbablePath* pRpp = vtRpp[jj];
-            for(auto kk=0; kk<pRpp->JctLinks.size(); kk++) {
-               Local<Object> jct_info = Object::New(isolate);
-               Local<Array> link_vtx = Array::New(isolate);
-               stLinkInfo* pLink = pRpp->JctLinks[kk];
-               for (auto ll=0; ll<pLink->getVertexCount()  ; ll++) {
-                  Local<Object> lnglat = Object::New(isolate);
-                  lnglat->Set(context, String::NewFromUtf8(isolate, "x").ToLocalChecked(), Number::New(isolate, pLink->getVertexX(ll)));
-                  lnglat->Set(context, String::NewFromUtf8(isolate, "y").ToLocalChecked(), Number::New(isolate, pLink->getVertexY(ll)));
-                  link_vtx->Set(context, ll, lnglat);
-               } // for vtx
-               jct_info->Set(context, String::NewFromUtf8(isolate, "id").ToLocalChecked(), Number::New(isolate, pLink->link_id.nid));
-               jct_info->Set(context, String::NewFromUtf8(isolate, "vertices").ToLocalChecked(), link_vtx);
-               links->Set(context, kk, jct_info);  
-            } // for links
-            link_info->Set(context, String::NewFromUtf8(isolate, "id").ToLocalChecked(), Number::New(isolate, pRpp->LinkId.nid));
-            link_info->Set(context, String::NewFromUtf8(isolate, "node_id").ToLocalChecked(), Number::New(isolate, pRpp->NodeId.nid));
-            link_info->Set(context, String::NewFromUtf8(isolate, "junction").ToLocalChecked(), links);
-            junctions->Set(context, jj, link_info);
+         if (target == ROUTE_TARGET_KAKAOVX) {
+            // junction_info
+            Local<Array> junctions = Array::New(isolate);
+            vector<RouteProbablePath*> vtRpp;
+            int cntRpp = m_pRouteMgr.GetRouteProbablePath(vtRpp);
+            for(auto jj=0; jj<cntRpp; jj++) {
+               Local<Object> link_info = Object::New(isolate);
+               Local<Array> links = Array::New(isolate);
+               RouteProbablePath* pRpp = vtRpp[jj];
+               for(auto kk=0; kk<pRpp->JctLinks.size(); kk++) {
+                  Local<Object> jct_info = Object::New(isolate);
+                  Local<Array> link_vtx = Array::New(isolate);
+                  stLinkInfo* pLink = pRpp->JctLinks[kk];
+                  for (auto ll=0; ll<pLink->getVertexCount()  ; ll++) {
+                     Local<Object> lnglat = Object::New(isolate);
+                     lnglat->Set(context, String::NewFromUtf8(isolate, "x").ToLocalChecked(), Number::New(isolate, pLink->getVertexX(ll)));
+                     lnglat->Set(context, String::NewFromUtf8(isolate, "y").ToLocalChecked(), Number::New(isolate, pLink->getVertexY(ll)));
+                     link_vtx->Set(context, ll, lnglat);
+                  } // for vtx
+                  jct_info->Set(context, String::NewFromUtf8(isolate, "id").ToLocalChecked(), Number::New(isolate, pLink->link_id.nid));
+                  jct_info->Set(context, String::NewFromUtf8(isolate, "vertices").ToLocalChecked(), link_vtx);
+                  links->Set(context, kk, jct_info);  
+               } // for links
+               link_info->Set(context, String::NewFromUtf8(isolate, "id").ToLocalChecked(), Number::New(isolate, pRpp->LinkId.nid));
+               link_info->Set(context, String::NewFromUtf8(isolate, "node_id").ToLocalChecked(), Number::New(isolate, pRpp->NodeId.nid));
+               link_info->Set(context, String::NewFromUtf8(isolate, "junction").ToLocalChecked(), links);
+               junctions->Set(context, jj, link_info);
 
-            //release
-            SAFE_DELETE(pRpp);          
-         } // for junctions
+               //release
+               SAFE_DELETE(pRpp);          
+            } // for junctions
 
 
-         // add routes - junction_info
-         route->Set(context, String::NewFromUtf8(isolate, "junction_info").ToLocalChecked(), junctions);
-#endif // TARGET_FOR_KAKAO_VX
+            // add routes - junction_info
+            route->Set(context, String::NewFromUtf8(isolate, "junction_info").ToLocalChecked(), junctions);
+         }
 
 
          // increse route

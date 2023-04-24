@@ -1684,11 +1684,22 @@ const int CRoutePlan::DoRoutes(IN const RequestRouteInfo* pReqInfo, OUT vector<R
 
 	Initialize();
 
-	
+#if defined(USE_MULTIPROCESS)
+	pRouteInfos->resize(cntPoints);
+	pRouteResults->resize(cntPoints);
+#endif
+
+#pragma omp parallel for
 	for (int ii = 0; ii < cntPoints - 1; ii++)
 	{
+#if defined(USE_MULTIPROCESS)
+		RouteInfo& routeInfo = pRouteInfos->at(ii);
+		RouteResultInfo& routeResult = pRouteResults->at(ii);
+#else
 		RouteInfo routeInfo;
 		RouteResultInfo routeResult;
+#endif
+
 		double retDist = MAX_SEARCH_DIST;
 
 		// 경탐 옵션 
@@ -1706,7 +1717,7 @@ const int CRoutePlan::DoRoutes(IN const RequestRouteInfo* pReqInfo, OUT vector<R
 			LOG_TRACE(LOG_ERROR, "Failed, max request route distance(%d) over than %d", retDist, MAX_SEARCH_DIST);
 
 			routeResult.ResultCode = ROUTE_RESULT_FAILED_DIST_OVER;
-			return routeResult.ResultCode;
+			//return routeResult.ResultCode;
 		}
 
 		// 시작점 정보
@@ -1719,7 +1730,7 @@ const int CRoutePlan::DoRoutes(IN const RequestRouteInfo* pReqInfo, OUT vector<R
 			else {
 				routeResult.ResultCode = ROUTE_RESULT_FAILED_SET_VIA;
 			}
-			return routeResult.ResultCode;
+			//return routeResult.ResultCode;
 		}
 
 		// 종료점 정보
@@ -1733,14 +1744,20 @@ const int CRoutePlan::DoRoutes(IN const RequestRouteInfo* pReqInfo, OUT vector<R
 				routeResult.ResultCode = ROUTE_RESULT_FAILED_SET_VIA;
 			}
 
-			return routeResult.ResultCode;
+			//return routeResult.ResultCode;
 		}
 
 
+#if defined(USE_MULTIPROCESS)
+		int ret = MakeRoute(&routeInfo, &routeResult);
+
+		if (ret != ROUTE_RESULT_SUCCESS) {
+			//return routeResult.ResultCode;
+		}
+#else
 		if (pRouteInfos) {
 			pRouteInfos->emplace_back(routeInfo);
 		}
-
 
 		int ret = MakeRoute(&routeInfo, &routeResult);
 
@@ -1751,6 +1768,8 @@ const int CRoutePlan::DoRoutes(IN const RequestRouteInfo* pReqInfo, OUT vector<R
 		if (pRouteResults) {
 			pRouteResults->emplace_back(routeResult);
 		}
+#endif
+
 	} // for
 	
 
@@ -2243,7 +2262,6 @@ const int CRoutePlan::MakeRoute(IN RouteInfo* pRouteInfo, OUT RouteResultInfo* p
 }
 
 
-
 // 출발지 링크의 매칭 정보
 uint32_t CheckStartDirectionMaching(IN const stLinkInfo* pLink, IN const RouteLinkInfo* pRoutLinkInfo, IN const int32_t routeOpt, OUT vector<CandidateLink>& vtCandidateInfo)
 {
@@ -2716,7 +2734,7 @@ const int CRoutePlan::MakeTabulate(IN const vector<RouteLinkInfo>& linkInfos, OU
 	}
 	else {
 		// print result table
-		
+
 		// 경로 탐색 성공
 		// print table rows
 		static const int width = 8;

@@ -1188,6 +1188,14 @@ struct stLinkContent {
 	std::vector<_VEG> vVEG;
 };
 
+
+typedef enum {
+	ROUTE_TARGET_DEFAULT = 0, // default
+	ROUTE_TARGET_INAVI, // for inavi
+	ROUTE_TARGET_KAKAOVX, // for kakaovx
+} ROUTE_TARGET;
+
+
 typedef enum {
 	ROUTE_RESULT_SUCCESS = 0,				//0		성공
 

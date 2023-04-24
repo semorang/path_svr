@@ -157,7 +157,8 @@ app.get('/kakaovx', function(req, res) {
         res.send(ret);
     }
     else{
-        res.send('다중 경탐 실패, 코드 : ' + ret.header.resultCode + ', 오류 : ' + ret.header.resultMessage);
+        // res.send('다중 경탐 실패, 코드 : ' + ret.header.resultCode + ', 오류 : ' + ret.header.resultMessage);
+        res.send(ret);
     }
 
     logout("end kakaovx route request");
