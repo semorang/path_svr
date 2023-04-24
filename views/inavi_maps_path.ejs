@@ -332,6 +332,8 @@
                     } else if (params.has('via')) {
                         params.delete('via');
                     }
+                    params.set('opt', 8);
+
                     var pathname = '/multiroute'; // window.location.pathname;
                     var route2url = pathname + '?' + params.toString();
                     // var route2url = window.location.pathname + '?' + params.toString();

@@ -910,22 +910,21 @@ void GetMultiRouteResultForiNavi(const FunctionCallbackInfo<Value>& args) {
          cJSON_AddStringToObject(path, "traffic_color", "green");
 
 #if defined(USE_P2P_DATA) // P2P HD 매칭을 위한 SD 링크 ID 정보
-         // road_name
-         if (pLink->name_idx > 0) {
-#if defined(_WIN32)
-            char szUTF8[MAX_PATH] = {0,};
-            MultiByteToUTF8(m_pDataMgr.GetNameDataByIdx(pLink->name_idx), szUTF8);
-            cJSON_AddStringToObject(path, "road_name", szUTF8);
-#else
-             cJSON_AddStringToObject(path, "road_name", encoding(m_pDataMgr.GetNameDataByIdx(pLink->name_idx), "euc-kr", "utf-8"));
-#endif // #if defined(_WIN32)
-         }
-         
-         // p2p 추가정보
-         cJSON* p2p = cJSON_CreateObject();
-
          pLink = m_pDataMgr.GetVLinkDataById(link.link_id);
          if (pLink != nullptr && link.link_id.llid != NULL_VALUE) {
+            // road_name
+            if (pLink->name_idx > 0) {
+#if defined(_WIN32)
+               char szUTF8[MAX_PATH] = {0,};
+               MultiByteToUTF8(m_pDataMgr.GetNameDataByIdx(pLink->name_idx), szUTF8);
+               cJSON_AddStringToObject(path, "road_name", szUTF8);
+#else
+               cJSON_AddStringToObject(path, "road_name", encoding(m_pDataMgr.GetNameDataByIdx(pLink->name_idx), "euc-kr", "utf-8"));
+#endif // #if defined(_WIN32)
+            }
+
+            // p2p 추가정보
+            cJSON* p2p = cJSON_CreateObject();
 
             // speed 재설정
             cJSON_SetNumberHelper(cJSON_GetObjectItem(path, "speed"), pLink->veh.speed);
@@ -938,10 +937,10 @@ void GetMultiRouteResultForiNavi(const FunctionCallbackInfo<Value>& args) {
             
             // dir, 0:정방향, 1:역방향
             cJSON_AddNumberToObject(p2p, "dir", link.dir);
-         }
 
-         // add p2p to path
-         cJSON_AddItemToObject(path, "p2p_extend", p2p);
+            // add p2p to path
+            cJSON_AddItemToObject(path, "p2p_extend", p2p);
+         }
 #endif // #if 1 defined(USE_P2P_DATA)
 
          // add path to paths

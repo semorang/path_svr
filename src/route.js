@@ -332,13 +332,13 @@ exports.domultiroute = function(req, option) {
     // let route_opt = [2, 7]; // 보행자, 자전거
     // let route_void = [0, 0]; // bridge
 
-    // const route_cnt = 1;
-    // let route_opt = [2];
-    // let route_void = [0];
+    const route_cnt = 1;
+    let route_opt = [parseInt(opt, 10)];
+    let route_void = [0];
     
-    var route_cnt = 2;
-    var route_opt = [opt_code.ROUTE_OPT_SHORTEST, opt_code.ROUTE_OPT_TRAIL];
-    var route_void = [opt_code.ROUTE_AVOID_NONE, opt_code.ROUTE_AVOID_BRIDGE];
+    // var route_cnt = 2;
+    // var route_opt = [opt_code.ROUTE_OPT_SHORTEST, opt_code.ROUTE_OPT_TRAIL];
+    // var route_void = [opt_code.ROUTE_AVOID_NONE, opt_code.ROUTE_AVOID_BRIDGE];
 
     if (target === "kakaovx") {
         route_cnt = opt;

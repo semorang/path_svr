@@ -11,7 +11,7 @@
 #define MAX_SEARCH_RANGE 5
 const int searchRange[MAX_SEARCH_RANGE] = {100, 200, 500, 7000, 1000}; // 
 #elif defined(USE_TREKKING_DATA)
-#define MAX_SEARCH_DIST 15000 // 직선 최대 15km
+#define MAX_SEARCH_DIST 30000 // 직선 최대 30km
 #define MAX_SEARCH_RANGE 5
 const int searchRange[MAX_SEARCH_RANGE] = {100, 500, 1000, 2000, 3000}; // 
 #else
@@ -275,6 +275,14 @@ typedef struct _tagTableBaseInfo {
 		}
 	}
 }TableBaseInfo;
+
+
+typedef struct _tagTspOptions {
+	uint32_t algorityhmType;
+	uint32_t geneSize;
+	uint32_t individualSize;
+	uint32_t loopCount;
+}TspOptions;
 
 
 class CRoutePlan

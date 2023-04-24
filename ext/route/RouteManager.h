@@ -35,7 +35,7 @@ public:
 	SPoint* GetDestination(void);
 
 	int Route(/*packet*/);
-	int Table(int32_t opt, IN RouteTable** ppResultTables = nullptr);
+	int Table(TspOptions* pOpt, IN RouteTable** ppResultTables = nullptr);
 
 	const RouteResultInfo* GetRouteResult(void) const;
 
@@ -60,7 +60,7 @@ public:
 
 	// for TSP
 #if defined(USE_TSP_MODULE)
-	bool GetBestWaypointResult(IN const RouteTable** ppResultTables, IN const int32_t opt = 0);
+	bool GetBestWaypointResult(TspOptions* pOpt, IN const RouteTable** ppResultTables);
 #endif
 
 
@@ -69,7 +69,7 @@ private:
 
 	int DoRouting(/*Packet*/);
 	// int setNode(/*FLAG, Packet*/);
-	int DoTabulate(int32_t opt, IN RouteTable** ppResultTables = nullptr);
+	int DoTabulate(TspOptions* pOpt, IN RouteTable** ppResultTables = nullptr);
 
 	SBox m_rtRouteBox;
 

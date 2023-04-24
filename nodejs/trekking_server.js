@@ -233,6 +233,7 @@ app.get('/multirouteview', function(req, res) {
 app.get('/pathview', function(req, res) {
     logout("start pathview request");
 
+    // 2p2 path 전용 옵션
     req.query.opt = 8;
 
     logout("client IP : " + request_ip.getClientIp(req));

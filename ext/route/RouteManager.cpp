@@ -423,10 +423,10 @@ const size_t CRouteManager::GetRouteProbablePath(OUT vector<RouteProbablePath*>&
 
 
 #if defined(USE_TSP_MODULE)
-bool CRouteManager::GetBestWaypointResult(IN const RouteTable** ppResultTables, IN const int32_t opt)
+bool CRouteManager::GetBestWaypointResult(TspOptions* pOpt, IN const RouteTable** ppResultTables)
 {
 	vector<stCity> vtRawData;
-	int idx = 0;
+	int32_t idx = 0;
 
 	if (m_ptDeparture.has()) {
 		vtRawData.push_back({ idx++, m_ptDeparture.x, m_ptDeparture.y });
@@ -446,15 +446,15 @@ bool CRouteManager::GetBestWaypointResult(IN const RouteTable** ppResultTables, 
 	vector<int32_t> vtViaResult;
 	vtViaResult.reserve(vtRawData.size());
 
-	if (opt == 1) {
+	if (pOpt->algorityhmType == 1) {
 		auto result = mst_manhattan_branch_and_bound(ppResultTables, vtRawData.size(), 0);
 		vtViaResult.assign(result.path.begin(), result.path.end());
 	}
-	else if (opt == 2) {
+	else if (pOpt->algorityhmType == 2) {
 		auto result = mst_manhattan_branch_and_bound2(ppResultTables, vtRawData.size(), 0);
 		vtViaResult.assign(result.path.begin(), result.path.end());
 	}
-	else {
+	else if (pOpt->algorityhmType == 3) {
 		InitURandom();
 		TEnvironment env;
 
@@ -472,6 +472,41 @@ bool CRouteManager::GetBestWaypointResult(IN const RouteTable** ppResultTables, 
 
 		env.getBest(vtViaResult);
 	}
+	else {
+		Environment newWorld;
+
+		// 최대 세대 
+		const int32_t maxGeneration = pOpt->loopCount;
+		// 세대당 최대 개체수
+		const int32_t maxPopulation = pOpt->individualSize;
+		// 염색체당 최대 유전자수
+		const int32_t maxGene = pOpt->geneSize;
+
+		newWorld.SetOption(pOpt);
+
+		newWorld.SetCostTable(ppResultTables, vtRawData.size());
+		
+		// 신세계
+		newWorld.Genesis(maxGene, maxPopulation);
+
+		// 반복횟수
+		for (int ii = 0; ii < maxGeneration; ii++) {
+			// 평가
+			newWorld.Evaluation();
+			//newWorld.Print();
+
+			// 부모 선택
+			vector<Parents> pairs;
+			newWorld.Selection(pairs);
+			//newWorld.Print();
+
+			// 자식 생성
+			newWorld.Crossover(pairs);
+			//newWorld.Print();
+		}
+
+		newWorld.GetBest(vtViaResult);
+	}
 	
 	LOG_TRACE(LOG_DEBUG, "rusult cnt: %d", vtViaResult.size());
 	if (vtRawData.size() != vtViaResult.size()) {
@@ -479,12 +514,26 @@ bool CRouteManager::GetBestWaypointResult(IN const RouteTable** ppResultTables, 
 		return false;
 	}
 
-	LOG_TRACE(LOG_DEBUG_LINE, "rusult idx: ");
+	LOG_TRACE(LOG_DEBUG_LINE, "rusult id: ");
+	uint32_t totalDist = 0;
+	uint32_t idxFirst = 0;
+	uint32_t idxPrev = 0;
+	idx = 0;
 	for (const auto& item : vtViaResult)
 	{
-		LOG_TRACE(LOG_DEBUG_CONTINUE, "%d →", item);
+		LOG_TRACE(LOG_DEBUG_CONTINUE, "%2d→", item);
+		if (idx >= 1) {
+			totalDist += ppResultTables[idxPrev][item].nTotalDist;
+		}
+		else {
+			idxFirst = idx;
+		}
+
+		idxPrev = item;
+		idx++;
 	}
-	LOG_TRACE(LOG_DEBUG_CONTINUE, "\n");
+	totalDist += ppResultTables[idxPrev][idxFirst].nTotalDist;
+	LOG_TRACE(LOG_DEBUG_CONTINUE, "%d => %d\n", idxFirst, totalDist);
 
 	// 기존 포인터 삭제
 	InitPoints();
@@ -552,12 +601,12 @@ int CRouteManager::SingleRoute()
 	return ret;
 }
 
-int CRouteManager::Table(int32_t opt, IN RouteTable** ppResultTables)
+int CRouteManager::Table(TspOptions* pOpt, IN RouteTable** ppResultTables)
 {
 	int ret = -1;
 
 #if defined(USE_TSP_MODULE)
-	ret = DoTabulate(opt, ppResultTables);
+	ret = DoTabulate(pOpt, ppResultTables);
 #endif 
 
 	return ret;
@@ -647,7 +696,7 @@ int CRouteManager::DoRouting(/*Packet*/)
 }
 
 
-int CRouteManager::DoTabulate(int32_t opt, IN RouteTable** ppResultTables)
+int CRouteManager::DoTabulate(TspOptions* pOpt, IN RouteTable** ppResultTables)
 {
 	int ret = -1;
 
@@ -705,7 +754,7 @@ int CRouteManager::DoTabulate(int32_t opt, IN RouteTable** ppResultTables)
 	if (ret == ROUTE_RESULT_SUCCESS)
 	{
 #if defined(USE_TSP_MODULE)
-		GetBestWaypointResult(const_cast<const RouteTable**>(resultTables), opt);
+		GetBestWaypointResult(pOpt, const_cast<const RouteTable**>(resultTables));
 #endif
 
 		if (!m_vtRouteResult.empty()) {
