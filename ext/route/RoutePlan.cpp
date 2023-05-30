@@ -1687,7 +1687,9 @@ const int CRoutePlan::DoRoutes(IN const RequestRouteInfo* pReqInfo, OUT vector<R
 	pRouteInfos->resize(cntPoints);
 	pRouteResults->resize(cntPoints);
 
+#if defined(USE_MULTIPROCESS)
 #pragma omp parallel for
+#endif
 	for (int ii = 0; ii < cntPoints - 1; ii++)
 	{
 		RouteInfo& routeInfo = pRouteInfos->at(ii);
@@ -1744,7 +1746,6 @@ const int CRoutePlan::DoRoutes(IN const RequestRouteInfo* pReqInfo, OUT vector<R
 		int ret = MakeRoute(&routeInfo, &routeResult);
 
 		if (ret != ROUTE_RESULT_SUCCESS) {
-			//return routeResult.ResultCode;
 			continue;
 		}
 
@@ -1752,13 +1753,14 @@ const int CRoutePlan::DoRoutes(IN const RequestRouteInfo* pReqInfo, OUT vector<R
 		if (ii == 0) {
 			routeResult.LinkInfo.front().type = LINK_GUIDE_TYPE_DEPARTURE; // 출발지
 		}
-
-		if (ii == cntPoints - 2) {
-			routeResult.LinkInfo.back().type = LINK_GUIDE_TYPE_DESTINATION; // 도착지
-		}
 		else {
-			routeResult.LinkInfo.back().type = LINK_GUIDE_TYPE_WAYPOINT; // 경유지
+			routeResult.LinkInfo.front().type = LINK_GUIDE_TYPE_WAYPOINT; // 경유지
 		}
+
+		// 목적지는 프론트 엔드단에서 Vertex 마지막 위치
+		// if (ii == cntPoints - 2) {
+		// 	routeResult.LinkInfo.back().type = LINK_GUIDE_TYPE_DESTINATION; // 도착지
+		// }
 
 	} // for
 	
@@ -2558,7 +2560,9 @@ const int CRoutePlan::MakeTabulate(IN const vector<RouteLinkInfo>& linkInfos, OU
 	volatile bool flag = false;
 #endif
 
+#if defined(USE_MULTIPROCESS)
 #pragma omp parallel for
+#endif
 	for (int ii = 0; ii < cntRows; ii++) 
 	{
 #if defined(USE_MULTIPROCESS)
