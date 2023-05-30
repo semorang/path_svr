@@ -512,7 +512,12 @@ void SetDeparture(const FunctionCallbackInfo<Value>& args) {
       bool useOptimalPoint = false;
       if (cnt >= 2) {
          useOptimalPoint = args[2].As<Boolean>()->Value();
-      }     
+      }
+
+      int typeLinkMatch = TYPE_LINK_MATCH_NONE;
+      if (cnt >= 3) {
+         typeLinkMatch = args[3].As<Number>()->Value();
+      }
 
       if (useOptimalPoint == true) {
          stOptimalPointInfo optInfo;
@@ -527,7 +532,7 @@ void SetDeparture(const FunctionCallbackInfo<Value>& args) {
 #if defined(USE_P2P_DATA)
       m_pRouteMgr.SetDeparture(lng, lat, TYPE_LINK_MATCH_FOR_HD);
 #else
-      m_pRouteMgr.SetDeparture(lng, lat);
+      m_pRouteMgr.SetDeparture(lng, lat, typeLinkMatch);
 #endif
    }
 }
@@ -554,6 +559,11 @@ void SetWaypoint(const FunctionCallbackInfo<Value>& args) {
          useOptimalPoint = args[2].As<Boolean>()->Value();
       }     
 
+      int typeLinkMatch = TYPE_LINK_MATCH_NONE;
+      if (cnt >= 3) {
+         typeLinkMatch = args[3].As<Number>()->Value();
+      }
+
       if (useOptimalPoint == true) {
          stOptimalPointInfo optInfo;
          if (m_pDataMgr.GetOptimalPointDataByPoint(lng, lat, &optInfo) > 0) {
@@ -567,7 +577,7 @@ void SetWaypoint(const FunctionCallbackInfo<Value>& args) {
 #if defined(USE_P2P_DATA)
       m_pRouteMgr.SetWaypoint(lng, lat, TYPE_LINK_MATCH_FOR_HD);
 #else
-      m_pRouteMgr.SetWaypoint(lng, lat);
+      m_pRouteMgr.SetWaypoint(lng, lat, typeLinkMatch);
 #endif
    }
 }
@@ -595,6 +605,11 @@ void SetDestination(const FunctionCallbackInfo<Value>& args) {
          useOptimalPoint = args[2].As<Boolean>()->Value();
       }     
 
+      int typeLinkMatch = TYPE_LINK_MATCH_NONE;
+      if (cnt >= 3) {
+         typeLinkMatch = args[3].As<Number>()->Value();
+      }
+
       if (useOptimalPoint == true) {
          stOptimalPointInfo optInfo;
          if (m_pDataMgr.GetOptimalPointDataByPoint(lng, lat, &optInfo) > 0) {
@@ -608,7 +623,7 @@ void SetDestination(const FunctionCallbackInfo<Value>& args) {
 #if defined(USE_P2P_DATA)
       m_pRouteMgr.SetDestination(lng, lat, TYPE_LINK_MATCH_FOR_HD);
 #else
-      m_pRouteMgr.SetDestination(lng, lat);
+      m_pRouteMgr.SetDestination(lng, lat, typeLinkMatch);
 #endif
    }
 }
@@ -871,21 +886,27 @@ void GetMultiRouteResultForiNavi(const FunctionCallbackInfo<Value>& args) {
       stLinkVehicleInfo vehInfo;
       char szBuff[MAX_PATH] = {0,};
 
+      int vertex_offset = 0;
+
       for(const auto& link : pResult->LinkInfo) {
          // 경로 링크 정보
          cJSON* path = cJSON_CreateObject();
 
          // 경로선 (Array)
          cJSON* coords = cJSON_CreateArray();
-         int vtxOffset = link.vtx_off;
          int vtxCount = link.vtx_cnt;
 
          memcpy(&vehInfo, &link.link_info, sizeof(vehInfo));
 
+         // 경로선 확장
          for(int ii=0; ii < vtxCount; ii++) {
+            // 남은 거리로 vertex 확인
+            
             cJSON* coord = cJSON_CreateObject();
-            cJSON_AddItemToObject(coord, "x", cJSON_CreateNumber(pResult->LinkVertex[vtxOffset + ii].x));
-            cJSON_AddItemToObject(coord, "y", cJSON_CreateNumber(pResult->LinkVertex[vtxOffset + ii].y));
+            cJSON_AddItemToObject(coord, "x", cJSON_CreateNumber(pResult->LinkVertex[vertex_offset].x));
+            cJSON_AddItemToObject(coord, "y", cJSON_CreateNumber(pResult->LinkVertex[vertex_offset].y));
+
+            vertex_offset++;
 
             // add coord to coords
             cJSON_AddItemToArray(coords, coord);
@@ -937,6 +958,9 @@ void GetMultiRouteResultForiNavi(const FunctionCallbackInfo<Value>& args) {
             
             // dir, 0:정방향, 1:역방향
             cJSON_AddNumberToObject(p2p, "dir", link.dir);
+
+            // type 링크 타입, 0:일반, 1:출발지링크, 2:도착지링크, 3:경유지링크
+            cJSON_AddNumberToObject(p2p, "type", link.type);
 
             // add p2p to path
             cJSON_AddItemToObject(path, "p2p_extend", p2p);
@@ -1402,7 +1426,6 @@ void GetOptimalPosition(const FunctionCallbackInfo<Value>& args) {
 #else
                expand->Set(context, String::NewFromUtf8(isolate, "name").ToLocalChecked(), String::NewFromUtf8(isolate, optInfo.name.c_str()).ToLocalChecked());
 #endif
-               
             }
 
             // vertices
