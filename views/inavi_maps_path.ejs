@@ -152,7 +152,7 @@
                         // icon: "https://www.fivepin.co.kr/resources/images/PoiMarker/marker_1_on.png",
                         icon: "images/flags/ico_road_flag_start.png",
                         offset: [13, -4], // 깃발 봉위치를 센터로
-                        // position: [user_obj.start.x, user_obj.start.y],
+                        position: [0, 0],
                         visibility: false,
                         title: "출발지",
                     }));
@@ -163,25 +163,31 @@
                         // icon: "https://www.fivepin.co.kr/resources/images/PoiMarker/marker_3_on.png",
                         icon: "images/flags/ico_road_flag_arrive.png",
                         offset: [13, -4], // 깃발 봉위치를 센터로
-                        // position: [user_obj.end.x, user_obj.end.y],
+                        position: [0, 0],
                         visibility: false,
                         title: "목적지",
                     }));
-                markers.push(
+                for(var ii=0; ii<100; ii++) {
+                    markers.push(
                     // 경유지
                     new inavi.maps.Marker({
                         map: map,
                         // icon: "https://www.fivepin.co.kr/resources/images/PoiMarker/marker_2_on.png",
                         icon: "images/flags/ico_road_flag_via.png",
                         offset: [13, -4], // 깃발 봉위치를 센터로
-                        // position: [user_obj.via.x, user_obj.via.y],
+                        position: [0, 0],
                         visibility: false,
-                        title: "경유지",
+                        title: "경유지"+ii,
                     }));
+                }
 
                 setDeparture(new inavi.maps.LngLat(user_obj.start.x ,user_obj.start.y));
                 setDestination(new inavi.maps.LngLat(user_obj.end.x, user_obj.end.y));
-                if (user_obj.via != undefined) {
+                if (user_obj.vias != undefined) {
+                    for(var ii=0; ii<user_obj.vias.length; ii++) {
+                        setWaypoints(ii, new inavi.maps.LngLat(user_obj.vias[ii].x, user_obj.vias[ii].y));
+                    }
+                } else if (user_obj.via != undefined) {
                     document.getElementById('btnVia').className = 'checked_btn';
                     setWaypoint(new inavi.maps.LngLat(user_obj.via.x, user_obj.via.y));
                 } else {
@@ -310,6 +316,16 @@
                 } else {
                     waypoint_pos = null;
                     markers[2].setVisible(false);
+                }
+            }
+
+            function setWaypoints(ii, pos) {
+                if (pos != undefined) {
+                    markers[2 + ii].setPosition(pos);
+                    markers[2 + ii].setVisible(true);
+                } else {
+                    waypoint_pos = null;
+                    markers[2 + ii].setVisible(false);
                 }
             }
 
