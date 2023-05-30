@@ -3,18 +3,21 @@ const http = require('http');
 const path = require('path');
 const express = require('express');
 const request_ip = require('request-ip');
+const cors = require('cors'); // CORS 오류 해소
+const timeout = require('connect-timeout');
+const app = express();
+
 const cfg = require('dotenv').config();
 // const addon = require('./build/Release/trekking_svr.node');
 // const addon = require('./core_modules/walk_route.node');
-var route = require('../src/route');
+const route = require('../src/route');
 const logout = require('../src/logs');
 // const escapeJSON = require('escape-json-noide');
 // const addon = require('bindings')('openAPI')
-const app = express();
+
 const apikey = require('../views/script/key.js');
-const timeout = require('connect-timeout');
+
 const publicPath = path.join(__dirname, '../public') // web에서 공유할 path
-const cors = require('cors');
 
 let corsOptions = {
     origin: '*',

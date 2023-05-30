@@ -2,15 +2,10 @@ const { createDiffieHellmanGroup } = require('crypto');
 const os = require('os');
 const util = require('util');
 var addon = require(process.env.USER_MODULE);
-if (os.platform() == 'linux') {
-    // addon = require('../nodejs/core_modules/optimal_svr.node');
-} else {
-    // addon = require('../nodejs_win/build/Release/optimal_svr.node');
-}
 
 
 const logout = require('./logs');
-const err_code = require('./errors');
+const codes = require('./codes');
 const opt_code = require('./option.js');
 // const { getMsg } = require("./errors");
 // import getMsg from "./errors";
@@ -98,7 +93,7 @@ exports.doroute = function(req, option) {
 
     var header = {
         isSuccessful: false,
-        resultCode: err_code.ROUTE_RESULT_FAILED,
+        resultCode: codes.ERROR_CODES.ROUTE_RESULT_FAILED,
         resultMessage: ""
     };
     
@@ -122,8 +117,8 @@ exports.doroute = function(req, option) {
         destination == undefined) {
             logout("client request query not correct" + util.inspect(req.query, false, null, true));
             ret.header.isSuccessful = false;
-            ret.header.resultCode = err_code.ROUTE_RESULT_FAILED_WRONG_PARAM;
-            ret.header.resultMessage = err_code.getMsg(ret.result_code);
+            ret.header.resultCode = codes.ERROR_CODES.ROUTE_RESULT_FAILED_WRONG_PARAM;
+            ret.header.resultMessage = codes.getErrMsg(ret.result_code);
             logout("route result : failed, msg " + ret.header.resultMessage);
             return ret;
         }
@@ -136,8 +131,8 @@ exports.doroute = function(req, option) {
     if (coordStart.length != 2) {
         logout("start location query not correct" + util.inspect(coordStart, false, null, true));
         ret.header.isSuccessful = false;
-        ret.header.resultCode = err_code.ROUTE_RESULT_FAILED_SET_START;
-        ret.header.resultMessage = err_code.getMsg(ret.result_code);
+        ret.header.resultCode = codes.ERROR_CODES.ROUTE_RESULT_FAILED_SET_START;
+        ret.header.resultMessage = codes.getErrMsg(ret.result_code);
         logout("route result : failed, msg " + ret.header.resultMessage);
         return ret;
     }
@@ -148,8 +143,8 @@ exports.doroute = function(req, option) {
     if (coordEnd.length != 2) {
         logout("end location query not correct" + util.inspect(coordEnd, false, null, true));
         ret.header.isSuccessful = false;
-        ret.header.resultCode = err_code.ROUTE_RESULT_FAILED_SET_END;
-        ret.header.resultMessage = err_code.getMsg(ret.result_code);
+        ret.header.resultCode = codes.ERROR_CODES.ROUTE_RESULT_FAILED_SET_END;
+        ret.header.resultMessage = codes.getErrMsg(ret.result_code);
         logout("route result : failed, msg " + ret.header.resultMessage);
         return ret;
     }
@@ -161,8 +156,8 @@ exports.doroute = function(req, option) {
         if (coordVia.length != 2) {
             logout("via location query not correct" + util.inspect(coordVia, false, null, true));
             ret.header.isSuccessful = false;
-            ret.header.resultCode = err_code.ROUTE_RESULT_FAILED_SET_VIA;
-            ret.header.resultMessage = err_code.getMsg(ret.result_code);
+            ret.header.resultCode = codes.ERROR_CODES.ROUTE_RESULT_FAILED_SET_VIA;
+            ret.header.resultMessage = codes.getErrMsg(ret.result_code);
             logout("route result : failed, msg " + ret.header.resultMessage);
             return ret;
         }
@@ -197,7 +192,7 @@ exports.doroute = function(req, option) {
         
         ret.header.isSuccessful = true;
         ret.header.resultCode = res.result_code;
-        ret.header.resultMessage = err_code.getMsg(ret.header.resultCode);
+        ret.header.resultMessage = codes.getErrMsg(ret.header.resultCode);
 
         if (is_sum) {
             ;
@@ -212,12 +207,12 @@ exports.doroute = function(req, option) {
 
         ret.header.isSuccessful = true;
         ret.header.resultCode = res.result_code;
-        ret.header.resultMessage = err_code.getMsg(ret.header.resultCode);
+        ret.header.resultMessage = codes.getErrMsg(ret.header.resultCode);
     }
     else {
         ret.header.isSuccessful = false;
         ret.header.resultCode = res.result;
-        ret.header.resultMessage = err_code.getMsg(ret.header.resultCode);
+        ret.header.resultMessage = codes.getErrMsg(ret.header.resultCode);
         
         logout("routing failed : " + ret.header.resultCode + ", msg : " + ret.header.resultMessage);
     }
@@ -238,6 +233,7 @@ exports.domultiroute = function(req, option) {
     const departure = req.query.start;
     const destination = req.query.end;
     const waypoint = req.query.via;
+    const waypoints = req.query.vias;
     const opt = (req.query.opt === undefined) ? 0 : req.query.opt;
     const is_sum = (option == 'summary') ? true : false;
     const is_view = (option == 'view') ? true : false;
@@ -246,7 +242,7 @@ exports.domultiroute = function(req, option) {
     
     var header = {
         isSuccessful: false,
-        resultCode: err_code.ROUTE_RESULT_FAILED,
+        resultCode: codes.ERROR_CODES.ROUTE_RESULT_FAILED,
         resultMessage: ""
     };
     
@@ -269,8 +265,8 @@ exports.domultiroute = function(req, option) {
 
     if (departure == undefined || destination == undefined) {
         logout("client request query not correct" + util.inspect(req.query, false, null, true));
-        ret.header.resultCode = err_code.ROUTE_RESULT_FAILED_WRONG_PARAM;
-        ret.header.resultMessage = err_code.getMsg(ret.header.resultCode);
+        ret.header.resultCode = codes.ERROR_CODES.ROUTE_RESULT_FAILED_WRONG_PARAM;
+        ret.header.resultMessage = codes.getErrMsg(ret.header.resultCode);
         logout("route result : failed(" + ret.result_code + "), msg : " + ret.header.resultMessage);
         return ret;
     }
@@ -282,8 +278,8 @@ exports.domultiroute = function(req, option) {
     let coordStart = departure.split(',');
     if (coordStart.length != 2) {
         logout("start location query not correct" + util.inspect(coordStart, false, null, true));
-        ret.header.result_code = err_code.ROUTE_RESULT_FAILED_SET_START;
-        ret.header.resultMessage = err_code.getMsg(ret.header.result_code);
+        ret.header.result_code = codes.ERROR_CODES.ROUTE_RESULT_FAILED_SET_START;
+        ret.header.resultMessage = codes.getErrMsg(ret.header.result_code);
         logout("route result : failed, msg " + ret.msg);
         return ret;
     }
@@ -293,39 +289,61 @@ exports.domultiroute = function(req, option) {
     let coordEnd = destination.split(',');
     if (coordEnd.length != 2) {
         logout("end location query not correct" + util.inspect(coordEnd, false, null, true));
-        ret.header.result_code = err_code.ROUTE_RESULT_FAILED_SET_END;
-        ret.header.resultMessage = err_code.getMsg(ret.header.result_code);
+        ret.header.result_code = codes.ERROR_CODES.ROUTE_RESULT_FAILED_SET_END;
+        ret.header.resultMessage = codes.getErrMsg(ret.header.result_code);
         logout("route result : failed, msg " + ret.msg);
         return ret;
     }
     addon.setdestination(parseFloat(coordEnd[0]), parseFloat(coordEnd[1]), is_optimal);
 
+
+    ret.user_info.start = { x: parseFloat(coordStart[0]), y: parseFloat(coordStart[1]) }
+    ret.user_info.end =  { x: parseFloat(coordEnd[0]), y: parseFloat(coordEnd[1]) }
+
+
     let coordVia;
-    if (waypoint != undefined) {
+    if (waypoints != undefined) {
+        ret.user_info.vias = new Array();
+        waypoints.forEach(coord => {
+            coordVia = coord.split(',');
+            if (coordVia.length != 2) {
+                logout("via location query not correct" + util.inspect(coordVia, false, null, true));
+                ret.header.result_code = codes.ERROR_CODES.ROUTE_RESULT_FAILED_SET_VIA;
+                ret.header.resultMessage = codes.getErrMsg(ret.header.result_code);
+                logout("route result : failed, msg " + ret.msg);
+                return ret;
+            }
+            addon.setwaypoint(parseFloat(coordVia[0]), parseFloat(coordVia[1]), is_optimal);
+
+            if (coordVia != undefined) {
+                ret.user_info.vias.push({ x: parseFloat(coordVia[0]), y: parseFloat(coordVia[1]) });
+            }
+        });
+    }
+    else if (waypoint != undefined) {
         coordVia = waypoint.split(',');
         if (coordVia.length != 2) {
             logout("via location query not correct" + util.inspect(coordVia, false, null, true));
-            ret.header.result_code = err_code.ROUTE_RESULT_FAILED_SET_VIA;
-            ret.header.resultMessage = err_code.getMsg(ret.header.result_code);
+            ret.header.result_code = codes.ERROR_CODES.ROUTE_RESULT_FAILED_SET_VIA;
+            ret.header.resultMessage = codes.getErrMsg(ret.header.result_code);
             logout("route result : failed, msg " + ret.msg);
             return ret;
         }
         addon.setwaypoint(parseFloat(coordVia[0]), parseFloat(coordVia[1]), is_optimal);
+
+        if (coordVia != undefined) {
+            ret.user_info.via = { x: parseFloat(coordVia[0]), y: parseFloat(coordVia[1]) }
+        }
     } 
 
-    ret.user_info.start = { x: parseFloat(coordStart[0]), y: parseFloat(coordStart[1]) }
-    ret.user_info.end =  { x: parseFloat(coordEnd[0]), y: parseFloat(coordEnd[1]) }
-    if (coordVia != undefined) {
-        ret.user_info.via = { x: parseFloat(coordVia[0]), y: parseFloat(coordVia[1]) }
-    }
     
     // addon.logout("do routing");
     logout("start routing : request, " + ret.user_info);
 
 
     // const route_cnt = 3;
-    // let route_opt = [opt_code.ROUTE_OPT_SHORTEST, opt_code.ROUTE_OPT_RECOMMENDED, opt_code.ROUTE_OPT_TRAIL];
-    // let route_void = [opt_code.ROUTE_AVOID_NONE, opt_code.ROUTE_AVOID_PALM, opt_code.ROUTE_AVOID_BRIDGE];
+    // let route_opt = [codes.ROUTE_OPTIONS.ROUTE_OPT_SHORTEST, codes.ROUTE_OPTIONS.ROUTE_OPT_RECOMMENDED, codes.ROUTE_OPTIONS.ROUTE_OPT_TRAIL];
+    // let route_void = [codes.ROUTE_AVOIDS.ROUTE_OPT_NONE, codes.ROUTE_AVOIDS.ROUTE_OPT_PALM, codes.ROUTE_AVOIDS.ROUTE_OPT_BRIDGE];
 
     // Æ®·¹Å·
     // const route_cnt = 2;
@@ -337,8 +355,8 @@ exports.domultiroute = function(req, option) {
     let route_void = [0];
     
     // var route_cnt = 2;
-    // var route_opt = [opt_code.ROUTE_OPT_SHORTEST, opt_code.ROUTE_OPT_TRAIL];
-    // var route_void = [opt_code.ROUTE_AVOID_NONE, opt_code.ROUTE_AVOID_BRIDGE];
+    // var route_opt = [codes.ROUTE_OPTIONS.ROUTE_OPT_SHORTEST, codes.ROUTE_OPTIONS.ROUTE_OPT_TRAIL];
+    // var route_void = [codes.ROUTE_AVOIDS.ROUTE_OPT_NONE, codes.ROUTE_AVOIDS.ROUTE_OPT_BRIDGE];
 
     if (target === "kakaovx") {
         route_cnt = opt;
@@ -347,8 +365,8 @@ exports.domultiroute = function(req, option) {
         } else if (route_cnt > 3) {
             route_cnt = 3;
         }
-        route_opt = [opt_code.ROUTE_OPT_SHORTEST, opt_code.ROUTE_OPT_COMFORTABLE, opt_code.ROUTE_OPT_COMFORTABLE];
-        route_void = [opt_code.ROUTE_AVOID_NONE, opt_code.ROUTE_AVOID_PALM, opt_code.ROUTE_AVOID_BRIDGE];
+        route_opt = [codes.ROUTE_OPTIONS.ROUTE_OPT_SHORTEST, codes.ROUTE_OPTIONS.ROUTE_OPT_COMFORTABLE, codes.ROUTE_OPTIONS.ROUTE_OPT_COMFORTABLE];
+        route_void = [codes.ROUTE_AVOIDS.ROUTE_OPT_NONE, codes.ROUTE_AVOIDS.ROUTE_OPT_PALM, codes.ROUTE_AVOIDS.ROUTE_OPT_BRIDGE];
     }
 
     logout("total route info, cnt : " + route_cnt + ", opt : " + route_opt + ", avoid : " + route_void);
@@ -365,8 +383,6 @@ exports.domultiroute = function(req, option) {
                 logout("call function getmultiroute_for_inavi");
                 res = addon.getmultiroute_for_inavi();
                 res = JSON.parse(res);
-            // } else if (is_view) {
-            //     res = addon.getview();
             } else if (target === "kakaovx") {
                 res = addon.getmultiroute(2); // 2:for kakaovx
             } else { // if (target === "kakaovx") {
@@ -376,15 +392,13 @@ exports.domultiroute = function(req, option) {
             
             ret.header.isSuccessful = true;
             ret.header.resultCode = res.result_code;
-            ret.header.resultMessage = err_code.getMsg(ret.header.resultCode);
+            ret.header.resultMessage = codes.getErrMsg(ret.header.resultCode);
 
             if (is_sum) {
                 ;
             } else if (target === "inavi") {
                 ret.route.data.push(res.routes[0]);
                 logout("route count : " + res.routes.length + ", paths : " + res.routes[0].paths.length);
-            // } else if (is_view) {
-            //     ret.route.data.push(res.routes);
             } else { // if (target === "kakaovx") {
                 logout("route count : " + res.routes.length);
                 ret.route.data.push(res.routes[0]);
@@ -393,7 +407,7 @@ exports.domultiroute = function(req, option) {
         else {
             ret.header.isSuccessful = false;
             ret.header.resultCode = res.result;
-            ret.header.resultMessage = err_code.getMsg(ret.header.resultCode);
+            ret.header.resultMessage = codes.getErrMsg(ret.header.resultCode);
         }        
 
         logout("end route");
