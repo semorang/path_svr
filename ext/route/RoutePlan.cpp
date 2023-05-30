@@ -1684,21 +1684,14 @@ const int CRoutePlan::DoRoutes(IN const RequestRouteInfo* pReqInfo, OUT vector<R
 
 	Initialize();
 
-#if defined(USE_MULTIPROCESS)
 	pRouteInfos->resize(cntPoints);
 	pRouteResults->resize(cntPoints);
-#endif
 
 #pragma omp parallel for
 	for (int ii = 0; ii < cntPoints - 1; ii++)
 	{
-#if defined(USE_MULTIPROCESS)
 		RouteInfo& routeInfo = pRouteInfos->at(ii);
 		RouteResultInfo& routeResult = pRouteResults->at(ii);
-#else
-		RouteInfo routeInfo;
-		RouteResultInfo routeResult;
-#endif
 
 		double retDist = MAX_SEARCH_DIST;
 
@@ -1748,27 +1741,12 @@ const int CRoutePlan::DoRoutes(IN const RequestRouteInfo* pReqInfo, OUT vector<R
 		}
 
 
-#if defined(USE_MULTIPROCESS)
 		int ret = MakeRoute(&routeInfo, &routeResult);
 
 		if (ret != ROUTE_RESULT_SUCCESS) {
 			//return routeResult.ResultCode;
+			continue;
 		}
-#else
-		if (pRouteInfos) {
-			pRouteInfos->emplace_back(routeInfo);
-		}
-
-		int ret = MakeRoute(&routeInfo, &routeResult);
-
-		if (ret != ROUTE_RESULT_SUCCESS) {
-			return routeResult.ResultCode;
-		}
-
-		if (pRouteResults) {
-			pRouteResults->emplace_back(routeResult);
-		}
-#endif
 
 
 		if (ii == 0) {
