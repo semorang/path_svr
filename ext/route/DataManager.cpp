@@ -1000,9 +1000,17 @@ stLinkInfo * CDataManager::GetLinkDataByPointAround(IN const double lng, IN cons
 	}
 #endif
 
+#if defined(USE_MULTIPROCESS)
+	volatile bool flag = false;
+#endif
+
 #pragma omp parallel for
 	for (int32_t ii = 0; ii < nMaxMesh; ii++)
 	{
+#if defined(USE_MULTIPROCESS)
+		if (flag) continue;
+#endif
+
 		stMeshInfo* pMesh = s_ppMesh[ii];
 		if (pMesh == nullptr) {
 			continue;
@@ -1064,7 +1072,12 @@ stLinkInfo * CDataManager::GetLinkDataByPointAround(IN const double lng, IN cons
 #if defined(USE_VEHICLE_DATA)
 		if (retLink != nullptr && retDist < 10) {
 			// 현재 메쉬에서 10m이내 탐색 된 결과면 현재 메쉬에서 종료
+#if defined(USE_MULTIPROCESS)
+			flag = true;
+			continue;
+#else 
 			break;
+#endif
 		}
 		else if (/*retLink == nullptr && */!pMesh->vlinks.empty())
 		{

@@ -292,17 +292,32 @@ const size_t CRouteManager::GetRouteProbablePath(OUT vector<RouteProbablePath*>&
 	// 경로선 노드의 경로선 외 링크 정보
 	const RouteResultInfo* pRouteResult = GetRouteResult();
 
+	stLinkInfo* pLinkBefore = nullptr;
+	stLinkInfo* pLinkNext = nullptr;
+
 	for (int ii = 0; ii < pRouteResult->LinkInfo.size() - 1; ii++) {
-		// get befor link
-		stLinkInfo* pLinkBefore = m_pDataMgr->GetLinkDataById(pRouteResult->LinkInfo[ii].link_id);
-		stLinkInfo* pLinkNext = m_pDataMgr->GetLinkDataById(pRouteResult->LinkInfo[ii + 1].link_id);
+#if defined(USE_TREKKING_DATA)
+		pLinkBefore = m_pDataMgr->GetLinkDataById(pRouteResult->LinkInfo[ii].link_id);
+		pLinkNext = m_pDataMgr->GetLinkDataById(pRouteResult->LinkInfo[ii + 1].link_id);
+#elif defined(USE_PEDESTRIAN_DATA)
+		pLinkBefore = m_pDataMgr->GetWLinkDataById(pRouteResult->LinkInfo[ii].link_id);
+		pLinkNext = m_pDataMgr->GetWLinkDataById(pRouteResult->LinkInfo[ii + 1].link_id);
+#elif defined(USE_VEHICLE_DATA)
+		pLinkBefore = m_pDataMgr->GetVLinkDataById(pRouteResult->LinkInfo[ii].link_id);
+		pLinkNext = m_pDataMgr->GetVLinkDataById(pRouteResult->LinkInfo[ii + 1].link_id);
+#else
+		pLinkBefore = m_pDataMgr->GetLinkDataById(pRouteResult->LinkInfo[ii].link_id);
+		pLinkNext = m_pDataMgr->GetLinkDataById(pRouteResult->LinkInfo[ii + 1].link_id);
+#endif
 
 		if (pLinkBefore == nullptr) {
 			LOG_TRACE(LOG_WARNING, "failed, can't find fore link, idx:%d, id:%d", ii, pRouteResult->LinkInfo[ii].link_id);
-			return 0;
+			// return 0;
+			continue;
 		} else if (pLinkNext == nullptr) {
 			LOG_TRACE(LOG_WARNING, "failed, can't find next link, idx:%d, id:%d", ii + 1, pRouteResult->LinkInfo[ii + 1].link_id);
-			return 0;
+			// return 0;
+			continue;
 		}
 
 		stNodeInfo* pJctNode = nullptr;
@@ -314,14 +329,30 @@ const size_t CRouteManager::GetRouteProbablePath(OUT vector<RouteProbablePath*>&
 			(pLinkBefore->getVertexY(0) == pLinkNext->getVertexY(0))) ||
 			((pLinkBefore->getVertexX(0) == pLinkNext->getVertexX(pLinkNext->getVertexCount() - 1)) &&
 				(pLinkBefore->getVertexY(0) == pLinkNext->getVertexY(pLinkNext->getVertexCount() - 1)))) {
+#if defined(USE_TREKKING_DATA)
 			pJctNode = m_pDataMgr->GetNodeDataById(pLinkBefore->snode_id);
+#elif defined(USE_PEDESTRIAN_DATA)
+			pJctNode = m_pDataMgr->GetWNodeDataById(pLinkBefore->snode_id);
+#elif defined(USE_VEHICLE_DATA)
+			pJctNode = m_pDataMgr->GetVNodeDataById(pLinkBefore->snode_id);
+#else
+			pJctNode = m_pDataMgr->GetNodeDataById(pLinkBefore->snode_id);
+#endif			
 		}
 		// ---> <--- , ---> --->
 		else if (((pLinkBefore->getVertexX(pLinkBefore->getVertexCount() - 1) == pLinkNext->getVertexX(pLinkNext->getVertexCount() - 1)) &&
 			(pLinkBefore->getVertexY(pLinkBefore->getVertexCount() - 1) == pLinkNext->getVertexY(pLinkNext->getVertexCount() - 1))) ||
 			((pLinkBefore->getVertexX(pLinkBefore->getVertexCount() - 1) == pLinkNext->getVertexX(0)) &&
 				(pLinkBefore->getVertexY(pLinkBefore->getVertexCount() - 1) == pLinkNext->getVertexY(0)))) {
+#if defined(USE_TREKKING_DATA)
 			pJctNode = m_pDataMgr->GetNodeDataById(pLinkBefore->enode_id);
+#elif defined(USE_PEDESTRIAN_DATA)
+			pJctNode = m_pDataMgr->GetWNodeDataById(pLinkBefore->enode_id);
+#elif defined(USE_VEHICLE_DATA)
+			pJctNode = m_pDataMgr->GetVNodeDataById(pLinkBefore->enode_id);
+#else
+			pJctNode = m_pDataMgr->GetNodeDataById(pLinkBefore->enode_id);
+#endif							
 		}
 
 		if (pJctNode == nullptr) {
@@ -341,7 +372,15 @@ const size_t CRouteManager::GetRouteProbablePath(OUT vector<RouteProbablePath*>&
 				}
 
 				// 경로선 외 링크
+#if defined(USE_TREKKING_DATA)
 				pJctLink = m_pDataMgr->GetLinkDataById(pJctNode->connnodes[jj]);
+#elif defined(USE_PEDESTRIAN_DATA)
+				pJctLink = m_pDataMgr->GetWLinkDataById(pJctNode->connnodes[jj]);
+#elif defined(USE_VEHICLE_DATA)
+				pJctLink = m_pDataMgr->GetVLinkDataById(pJctNode->connnodes[jj]);
+#else
+				pJctLink = m_pDataMgr->GetLinkDataById(pJctNode->connnodes[jj]);
+#endif				
 
 				stLinkInfo* pLinkInfo = new stLinkInfo;
 				pLinkInfo->link_id = pJctLink->link_id;
@@ -672,7 +711,8 @@ int CRouteManager::DoRouting(/*Packet*/)
 			m_routeResult.StartResultLink = m_vtRouteResult[m_vtRouteResult.size() - 1].StartResultLink;
 			m_routeResult.EndResultLink = m_vtRouteResult[0].EndResultLink;
 
-			for (int ii = m_vtRouteResult.size() - 1; ii >= 0; --ii) {
+			// for (int ii = m_vtRouteResult.size() - 1; ii >= 0; --ii) {
+			for (int ii = 0; ii < m_vtRouteResult.size() - 1; ii++) {
 				// 경로선
 				boxMerge(m_routeResult.RouteBox, m_vtRouteResult[ii].RouteBox);
 				linkMerge(m_routeResult.LinkVertex, m_vtRouteResult[ii].LinkVertex);
@@ -742,7 +782,7 @@ int CRouteManager::DoTabulate(TspOptions* pOpt, IN RouteTable** ppResultTables)
 		// create route table cols 
 		for (int ii = 0; ii < cntPoints; ii++) {
 			resultTables[ii] = new RouteTable[cntPoints];
-		}
+		} // for
 
 #if defined(USE_TSP_MODULE)
 		ret = m_pRoutePlan->DoTabulate(&reqInfo, resultTables);

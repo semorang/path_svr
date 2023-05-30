@@ -262,7 +262,11 @@ typedef struct _tagTableBaseInfo {
 	}
 
 	~_tagTableBaseInfo() {
-		for (; !pqDijkstra.empty(); pqDijkstra.pop());
+		//for (; !pqDijkstra.empty(); pqDijkstra.pop());
+		for (; !pqDijkstra.empty(); ) {
+			delete pqDijkstra.top();
+			pqDijkstra.pop();
+		}
 
 		if (!mRoutePass.empty()) {
 			mRoutePass.clear();
@@ -300,8 +304,7 @@ public:
 	const int DoRoutes(IN const RequestRouteInfo* pReqInfo, OUT vector<RouteInfo>* pRouteInfos, OUT vector<RouteResultInfo>* pRouteResults);
 #if defined(USE_TSP_MODULE)
 	//const int DoTabulate(IN const RequestRouteInfo* pReqInfo, OUT vector<RouteInfo>* pRouteInfos, OUT vector<RouteResultInfo>* pRouteResults);
-	const int DoTabulate(IN const RequestRouteInfo* pReqInfo, OUT RouteTable** ppResultTables);
-	
+	const int DoTabulate(IN const RequestRouteInfo* pReqInfo, OUT RouteTable** ppResultTables);	
 #endif
 
 #if defined(USE_SHOW_ROUTE_SATATUS)

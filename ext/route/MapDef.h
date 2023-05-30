@@ -1195,6 +1195,12 @@ typedef enum {
 	ROUTE_TARGET_KAKAOVX, // for kakaovx
 } ROUTE_TARGET;
 
+typedef enum {
+	LINK_GUIDE_TYPE_DEFAULT = 0, // 일반
+	LINK_GUIDE_TYPE_DEPARTURE, // 출발지
+	LINK_GUIDE_TYPE_DESTINATION, // 도착지
+	LINK_GUIDE_TYPE_WAYPOINT, // 경유지
+} LINK_GUIDE_TYPE;
 
 typedef enum {
 	ROUTE_RESULT_SUCCESS = 0,				//0		성공
@@ -1278,7 +1284,8 @@ typedef struct _tagRouteResultLinkEx {
 	uint32_t rtime : 17; // remain time // 최대 86400 > 31h
 	uint32_t angle : 9; // 진출 각도 // 360도 방식
 	uint32_t dir : 1; // 링크 방향성, 0:정방향, 1:역방향
-	uint32_t reserved : 8;
+	uint32_t type : 2; // 링크 안내 타입, 0:일반, 1:출발지링크, 2:도착지링크, 3:경유지링크
+	uint32_t reserved : 6;
 }RouteResultLinkEx;
 
 typedef struct _tagRouteResultLinkMatchInfo {

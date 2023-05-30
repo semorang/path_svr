@@ -967,7 +967,7 @@ const int CRoutePlan::AddNewLinks(IN RouteInfo* pRouteInfo, IN const CandidateLi
 			}
 
 #if defined(USE_P2P_DATA)
-			if (pLinkNext->veh.hd_flag == 0) { // HD 링크와 매칭 정보가 없으면 통행 불가
+			if (pLinkNext->veh.hd_flag != 1) { // HD 링크와 매칭 정보가 없으면 통행 불가
 				continue;
 			}
 #endif
@@ -1293,7 +1293,7 @@ const int CRoutePlan::Propagation(IN TableBaseInfo* pRouteInfo, IN const Candida
 			}
 
 #if defined(USE_P2P_DATA)
-			if (pLinkNext->veh.hd_flag == 0) { // HD 링크와 매칭 정보가 없으면 통행 불가
+			if (pLinkNext->veh.hd_flag != 1) { // HD 링크와 매칭 정보가 없으면 통행 불가
 				continue;
 			}
 #endif
@@ -1770,6 +1770,18 @@ const int CRoutePlan::DoRoutes(IN const RequestRouteInfo* pReqInfo, OUT vector<R
 		}
 #endif
 
+
+		if (ii == 0) {
+			routeResult.LinkInfo.front().type = LINK_GUIDE_TYPE_DEPARTURE; // 출발지
+		}
+
+		if (ii == cntPoints - 2) {
+			routeResult.LinkInfo.back().type = LINK_GUIDE_TYPE_DESTINATION; // 도착지
+		}
+		else {
+			routeResult.LinkInfo.back().type = LINK_GUIDE_TYPE_WAYPOINT; // 경유지
+		}
+
 	} // for
 	
 
@@ -1982,7 +1994,7 @@ const int CRoutePlan::MakeRoute(IN RouteInfo* pRouteInfo, OUT RouteResultInfo* p
 	}
 
 
-	if (pRouteInfo->StartLinkInfo.LinkDir == 0 || (((pLink->link_id.dir == 0) || (pLink->link_id.dir == 1)) && (pRouteInfo->StartLinkInfo.LinkDir == 1))) // 양방향 or 역방향
+	if (pRouteInfo->StartLinkInfo.LinkDir == 0 || (((pLink->link_id.dir == 0) || (pLink->link_id.dir == 1)) && (pRouteInfo->StartLinkInfo.LinkDir == 1))) // 양방향 or 정방향
 	{
 		//candidateId.parents_id = 1;// + e노드 정방향 정보 이력 - 최초는 부모가 없으니까 진행 방향을 값으로 주자
 		candidateId.parents_id = 1; // 시작 노드의 방향
@@ -2564,8 +2576,17 @@ const int CRoutePlan::MakeTabulate(IN const vector<RouteLinkInfo>& linkInfos, OU
 
 
 	// 테이블 각 행(rows)에 지점 정보(cols) 배치
+#if defined(USE_MULTIPROCESS)
+	volatile bool flag = false;
+#endif
+
 #pragma omp parallel for
-	for (int ii = 0; ii < cntRows; ii++) {
+	for (int ii = 0; ii < cntRows; ii++) 
+	{
+#if defined(USE_MULTIPROCESS)
+		if (flag) continue;
+#endif		
+
 		// 경로 탐색 시작
 		LOG_TRACE(LOG_DEBUG, "Start find goal table rows[%02d]", ii);
 
@@ -2711,7 +2732,12 @@ const int CRoutePlan::MakeTabulate(IN const vector<RouteLinkInfo>& linkInfos, OU
 		if (cntDestination != cntGoal) {
 			LOG_TRACE(LOG_DEBUG, "Failed, can't make table, rows[%02d], result:%d/%d, tick:%lld", ii, cntGoal, cntDestination, pBase->tickFinish - pBase->tickStart);
 			ret = ROUTE_RESULT_FAILED_EXPEND;
+#if defined(USE_MULTIPROCESS)
+			flag = true;
+			continue;
+#else
 			break;
+#endif	
 		}
 
 		// release mem
@@ -2821,7 +2847,11 @@ const int CRoutePlan::MakeTabulate(IN const vector<RouteLinkInfo>& linkInfos, OU
 			strRowsValue.append(szBuff);
 
 			// process
+#if defined(USE_MULTIPROCESS)
+			sprintf(szBuff, "%8d cores |", omp_get_max_threads() /*omp_get_num_threads()*/);
+#else
 			sprintf(szBuff, "%8d cores |", PROCESS_NUM);
+#endif
 			strRowsValue.append(szBuff);
 
 			// time
@@ -2893,15 +2923,6 @@ const int CRoutePlan::MakeRouteResult(IN RouteInfo* pRouteInfo, OUT RouteResultI
 
 	// 전체
 	pRouteResult->TotalLinkCount = cntLink;
-
-	for (size_t ii = 0; ii < cntLink; ii++)
-	{
-		remainDist += pRouteInfo->vtCandidateResult[ii]->distReal;
-		remainTime += pRouteInfo->vtCandidateResult[ii]->timeReal;
-	}
-
-	pRouteResult->TotalLinkDist = remainDist;
-	pRouteResult->TotalLinkTime = remainTime;
 
 	// 경로 옵션
 	pRouteResult->RouteOption = pRouteInfo->RouteOption;
@@ -3007,21 +3028,23 @@ const int CRoutePlan::MakeRouteResult(IN RouteInfo* pRouteInfo, OUT RouteResultI
 
 		CandidateLink* pCandidateEndLink = pRouteInfo->vtCandidateResult.at(0);
 
-
 		currentLinkInfo.link_id = pRouteResult->StartResultLink.LinkId;
 		currentLinkInfo.node_id.llid = pLink->enode_id.llid;
 		currentLinkInfo.link_info = pLink->sub_info;
 		currentLinkInfo.length = pRouteResult->StartResultLink.LinkDist;
-		currentLinkInfo.time = pCandidateEndLink->timeReal;
+		currentLinkInfo.time = min(1, pCandidateEndLink->timeReal * (pRouteResult->EndResultLink.LinkDist / pCandidateEndLink->distReal)); //currentLinkInfo.time = pCandidateEndLink->timeReal; // 종료 링크시간은 사용된 거리대비 시간만큼만 사용.
 		currentLinkInfo.vtx_off = pRouteResult->StartResultLink.LinkSplitIdx;
-		currentLinkInfo.vtx_cnt = pRouteInfo->EndLinkInfo.LinkSplitIdx - pRouteResult->StartResultLink.LinkSplitIdx + 1;
-		currentLinkInfo.rlength = currentLinkInfo.length;
-		currentLinkInfo.rtime = currentLinkInfo.time;
+		currentLinkInfo.vtx_cnt = pRouteResult->LinkVertex.size(); // pRouteInfo->EndLinkInfo.LinkSplitIdx - pRouteResult->StartResultLink.LinkSplitIdx + 1;
+		//currentLinkInfo.rlength = currentLinkInfo.length;
+		//currentLinkInfo.rtime = currentLinkInfo.time;
 		currentLinkInfo.angle = 0;
 		currentLinkInfo.dir = pCandidateEndLink->dir == 1 ? 0 : 1;
 
 
 		pRouteResult->LinkInfo.emplace_back(currentLinkInfo);
+
+		pRouteResult->TotalLinkDist += currentLinkInfo.length;
+		pRouteResult->TotalLinkTime += currentLinkInfo.time;
 	}
 	else
 	{
@@ -3080,12 +3103,12 @@ const int CRoutePlan::MakeRouteResult(IN RouteInfo* pRouteInfo, OUT RouteResultI
 		currentLinkInfo.link_id = pCandidateStartLink->linkId;
 		currentLinkInfo.node_id = pCandidateStartLink->nodeId;
 		currentLinkInfo.link_info = pLink->sub_info;
-		currentLinkInfo.length = pCandidateStartLink->distReal; pRouteResult->StartResultLink.LinkDist;
+		currentLinkInfo.length = pRouteResult->StartResultLink.LinkDist; // pCandidateStartLink->distReal; 
 		currentLinkInfo.time = pCandidateStartLink->timeReal;
 		currentLinkInfo.vtx_off += currentLinkInfo.vtx_cnt;
 		currentLinkInfo.vtx_cnt = pRouteResult->StartResultLink.LinkVtx.size();
-		currentLinkInfo.rlength = remainDist;
-		currentLinkInfo.rtime = remainTime;
+		//currentLinkInfo.rlength = remainDist;
+		//currentLinkInfo.rtime = remainTime;
 
 		// angle
 		if (pCandidateStartLink->dir == 1) { // 정 to enode
@@ -3104,19 +3127,8 @@ const int CRoutePlan::MakeRouteResult(IN RouteInfo* pRouteInfo, OUT RouteResultI
 		pRouteResult->LinkInfo.emplace_back(currentLinkInfo);
 		linkMerge(pRouteResult->LinkVertex, pRouteResult->StartResultLink.LinkVtx);
 
-		if (remainDist - currentLinkInfo.length > 0) {
-			remainDist -= currentLinkInfo.length;
-		}
-		else {
-			remainDist = 0.f;
-		}
-		if (remainTime - currentLinkInfo.time > 0) {
-			remainTime -= currentLinkInfo.time;
-		}
-		else {
-			remainTime = 0.f;
-		}
-
+		pRouteResult->TotalLinkDist += currentLinkInfo.length;
+		pRouteResult->TotalLinkTime += currentLinkInfo.time;
 
 
 		// 
@@ -3152,8 +3164,8 @@ const int CRoutePlan::MakeRouteResult(IN RouteInfo* pRouteInfo, OUT RouteResultI
 			currentLinkInfo.time = pCandidateLink->timeReal;
 			currentLinkInfo.vtx_off += currentLinkInfo.vtx_cnt;
 			currentLinkInfo.vtx_cnt = pLink->getVertexCount();
-			currentLinkInfo.rlength = remainDist;
-			currentLinkInfo.rtime = remainTime;
+			//currentLinkInfo.rlength = remainDist;
+			//currentLinkInfo.rtime = remainTime;
 
 			// angle
 			if (pCandidateLink->dir == 1) { // 정, to enode
@@ -3173,18 +3185,8 @@ const int CRoutePlan::MakeRouteResult(IN RouteInfo* pRouteInfo, OUT RouteResultI
 			pRouteResult->LinkInfo.emplace_back(currentLinkInfo);
 			linkMerge(pRouteResult->LinkVertex, pLink->getVertex(), pLink->getVertexCount());
 
-			if (remainDist - currentLinkInfo.length > 0) {
-				remainDist -= currentLinkInfo.length;
-			}
-			else {
-				remainDist = 0;
-			}
-			if (remainTime - currentLinkInfo.time > 0) {
-				remainTime -= currentLinkInfo.time;
-			}
-			else {
-				remainTime = 0;
-			}
+			pRouteResult->TotalLinkDist += currentLinkInfo.length;
+			pRouteResult->TotalLinkTime += currentLinkInfo.time;
 		}
 
 
@@ -3239,12 +3241,14 @@ const int CRoutePlan::MakeRouteResult(IN RouteInfo* pRouteInfo, OUT RouteResultI
 		currentLinkInfo.link_id = pCandidateEndLink->linkId;
 		currentLinkInfo.node_id = pCandidateEndLink->nodeId;
 		currentLinkInfo.link_info = pLink->sub_info;
-		currentLinkInfo.length = pCandidateEndLink->distReal;  pRouteResult->EndResultLink.LinkDist;
-		currentLinkInfo.time = pCandidateEndLink->timeReal;
+		currentLinkInfo.length = pRouteResult->EndResultLink.LinkDist; // pCandidateEndLink->distReal;
+		currentLinkInfo.time = min(1, pCandidateEndLink->timeReal * (pRouteResult->EndResultLink.LinkDist / pCandidateEndLink->distReal)); // currentLinkInfo.time = pCandidateEndLink->timeReal; // 종료 링크시간은 사용된 거리대비 시간만큼만 사용.
 		currentLinkInfo.vtx_off += currentLinkInfo.vtx_cnt;
 		currentLinkInfo.vtx_cnt = pRouteResult->EndResultLink.LinkVtx.size();
-		currentLinkInfo.rlength = remainDist;
-		currentLinkInfo.rtime = remainTime;
+		//currentLinkInfo.rlength = remainDist;
+		//currentLinkInfo.rtime = remainTime;
+
+		
 
 		// angle
 		if (pCandidateEndLink->dir == 1) { // 정 to enode
@@ -3262,8 +3266,30 @@ const int CRoutePlan::MakeRouteResult(IN RouteInfo* pRouteInfo, OUT RouteResultI
 
 		pRouteResult->LinkInfo.emplace_back(currentLinkInfo);
 		linkMerge(pRouteResult->LinkVertex, pRouteResult->EndResultLink.LinkVtx);
+
+		pRouteResult->TotalLinkDist += currentLinkInfo.length;
+		pRouteResult->TotalLinkTime += currentLinkInfo.time;
 	}
 
+	// 남은 거리/시간 정보
+	remainDist = pRouteResult->TotalLinkDist;
+	remainTime = pRouteResult->TotalLinkTime;
+
+	for (auto & item : pRouteResult->LinkInfo) {
+		item.rlength = remainDist;
+		item.rtime = remainTime;
+
+		remainDist -= item.length;
+		remainTime -= item.time;
+
+		if (remainDist <= 0) {
+			remainDist = 0;
+		}
+
+		if (remainTime <= 0) {
+			remainTime = 0;
+		}
+	}
 
 	// route box
 	for (vector<SPoint>::const_iterator it = pRouteResult->LinkVertex.begin(); it != pRouteResult->LinkVertex.end(); it++)

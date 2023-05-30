@@ -39,7 +39,7 @@ int32_t MapClass<T>::AddData(IN const T * pData)
 }
 
 template <typename T>
-bool DeleteData(IN const KeyID keyId)
+bool MapClass<T>::DeleteData(IN const KeyID keyId)
 {
 	//map<uint64_t, T*>::iterator it = mapData.find(keyId.llid);
 	//if (it != mapData.end()) {
