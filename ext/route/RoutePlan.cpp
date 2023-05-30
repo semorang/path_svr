@@ -3032,7 +3032,7 @@ const int CRoutePlan::MakeRouteResult(IN RouteInfo* pRouteInfo, OUT RouteResultI
 		currentLinkInfo.node_id.llid = pLink->enode_id.llid;
 		currentLinkInfo.link_info = pLink->sub_info;
 		currentLinkInfo.length = pRouteResult->StartResultLink.LinkDist;
-		currentLinkInfo.time = min(1, pCandidateEndLink->timeReal * (pRouteResult->EndResultLink.LinkDist / pCandidateEndLink->distReal)); //currentLinkInfo.time = pCandidateEndLink->timeReal; // 종료 링크시간은 사용된 거리대비 시간만큼만 사용.
+		currentLinkInfo.time = min(1, (int)(pCandidateEndLink->timeReal * (pRouteResult->EndResultLink.LinkDist / pCandidateEndLink->distReal))); //currentLinkInfo.time = pCandidateEndLink->timeReal; // 종료 링크시간은 사용된 거리대비 시간만큼만 사용.
 		currentLinkInfo.vtx_off = pRouteResult->StartResultLink.LinkSplitIdx;
 		currentLinkInfo.vtx_cnt = pRouteResult->LinkVertex.size(); // pRouteInfo->EndLinkInfo.LinkSplitIdx - pRouteResult->StartResultLink.LinkSplitIdx + 1;
 		//currentLinkInfo.rlength = currentLinkInfo.length;
@@ -3242,7 +3242,7 @@ const int CRoutePlan::MakeRouteResult(IN RouteInfo* pRouteInfo, OUT RouteResultI
 		currentLinkInfo.node_id = pCandidateEndLink->nodeId;
 		currentLinkInfo.link_info = pLink->sub_info;
 		currentLinkInfo.length = pRouteResult->EndResultLink.LinkDist; // pCandidateEndLink->distReal;
-		currentLinkInfo.time = min(1, pCandidateEndLink->timeReal * (pRouteResult->EndResultLink.LinkDist / pCandidateEndLink->distReal)); // currentLinkInfo.time = pCandidateEndLink->timeReal; // 종료 링크시간은 사용된 거리대비 시간만큼만 사용.
+		currentLinkInfo.time = min(1, (int)(pCandidateEndLink->timeReal * (pRouteResult->EndResultLink.LinkDist / pCandidateEndLink->distReal))); // currentLinkInfo.time = pCandidateEndLink->timeReal; // 종료 링크시간은 사용된 거리대비 시간만큼만 사용.
 		currentLinkInfo.vtx_off += currentLinkInfo.vtx_cnt;
 		currentLinkInfo.vtx_cnt = pRouteResult->EndResultLink.LinkVtx.size();
 		//currentLinkInfo.rlength = remainDist;
