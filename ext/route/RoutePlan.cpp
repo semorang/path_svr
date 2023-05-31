@@ -1072,7 +1072,7 @@ const int CRoutePlan::AddNewLinks(IN RouteInfo* pRouteInfo, IN const CandidateLi
 
 
 // 단순 확장
-const int CRoutePlan::Propagation(IN TableBaseInfo* pRouteInfo, IN const CandidateLink* pCurInfo, IN const int dir)
+const int CRoutePlan::Propagation(IN TableBaseInfo* pRouteInfo, IN const CandidateLink* pCurInfo, IN const int dir, IN const SPoint target)
 {
 	KeyID candidateId;
 	int cntLinks = 0;
@@ -1331,19 +1331,26 @@ const int CRoutePlan::Propagation(IN TableBaseInfo* pRouteInfo, IN const Candida
 					dirTarget = 2; // 역
 				}
 
-				toDestStraightDist = getRealWorldDistance(pRouteInfo->routeLinkInfo.Coord.x, pRouteInfo->routeLinkInfo.Coord.y,
+				toDestStraightDist = getRealWorldDistance(target.x, target.y,
 					pLinkNext->getVertexX(pLinkNext->getVertexCount() / 2), pLinkNext->getVertexY(pLinkNext->getVertexCount() / 2));
-
-#if defined(USE_OPTIMAL_POINT_API)
-#	if defined(_DEBUG)
-				static const double fFactor = 0.10f;
-				heuristicCost = toDestStraightDist * fFactor;
-#	else
+				
 				heuristicCost = toDestStraightDist * VAL_HEURISTIC_VEHICLE_FACTOR_FOR_TABLE;
-#	endif
-#else
-				heuristicCost = toDestStraightDist * VAL_HEURISTIC_PEDESTRIAN_FACTOR;
-#endif
+
+
+//				toDestStraightDist = getRealWorldDistance(pRouteInfo->routeLinkInfo.Coord.x, pRouteInfo->routeLinkInfo.Coord.y,
+//					pLinkNext->getVertexX(pLinkNext->getVertexCount() / 2), pLinkNext->getVertexY(pLinkNext->getVertexCount() / 2));
+//
+//#if defined(USE_OPTIMAL_POINT_API)
+//#	if defined(_DEBUG)
+//				static const double fFactor = 0.10f;
+//				heuristicCost = toDestStraightDist * fFactor;
+//#	else
+//				heuristicCost = toDestStraightDist * VAL_HEURISTIC_VEHICLE_FACTOR_FOR_TABLE;
+//#	endif
+//#else
+//				heuristicCost = toDestStraightDist * VAL_HEURISTIC_PEDESTRIAN_FACTOR;
+//#endif
+
 				// 링크 타입 비교를 안하면 연산에 좀더 빠르려나
 				//if (pLinkNext->base.link_type == TYPE_DATA_VEHICLE) {
 				//	heuristicCost = static_cast<int>(toDestStraightDist * VAL_HEURISTIC_VEHICLE_FACTOR);
@@ -2577,6 +2584,9 @@ const int CRoutePlan::MakeTabulate(IN const vector<RouteLinkInfo>& linkInfos, OU
 		// 시작 시각
 		pBase->tickStart = TICK_COUNT();
 
+		// 가장 가까운 지점을 우선 탐색하기 위한 hueristirc cost 우선순위
+		priority_queue<nearestDist, vector<nearestDist>, cmpDist> pqDist;
+
 		// 목적지 정보를 기본 방문지 테이블로부터 복사
 		for (int jj = 0; jj < cntCols; jj++) {
 			if (ii == jj) {
@@ -2584,6 +2594,13 @@ const int CRoutePlan::MakeTabulate(IN const vector<RouteLinkInfo>& linkInfos, OU
 			}
 			else {
 				ppResultTables[ii][jj].nUsable = 0; // 미방문
+				
+				// 다른 지점과의 직선거리
+				double dist = getRealWorldDistance(baseTablesStart[ii].routeLinkInfo.Coord.x, baseTablesStart[ii].routeLinkInfo.Coord.y,
+					baseTablesStart[jj].routeLinkInfo.Coord.x, baseTablesStart[jj].routeLinkInfo.Coord.y);
+
+				nearestDist itemDist = { jj, static_cast<int32_t>(dist) };
+				pqDist.emplace(itemDist);
 			}
 
 			ppResultTables[ii][jj].linkInfo = baseTablesEnd[jj].routeLinkInfo;
@@ -2600,7 +2617,7 @@ const int CRoutePlan::MakeTabulate(IN const vector<RouteLinkInfo>& linkInfos, OU
 		}
 
 
-		CandidateLink* pCurInfo;
+		CandidateLink* pCurInfo = nullptr;
 		static const uint32_t cntMaxExtraSearch = 100; // 목적지 추가 도달 검사 최대 허용치
 		uint32_t cntExtraSearch = 0; // 목적지 도달 후 추가 도달 검사 카운트
 
@@ -2611,8 +2628,15 @@ const int CRoutePlan::MakeTabulate(IN const vector<RouteLinkInfo>& linkInfos, OU
 		RouteTable* pCell = nullptr;
 		unordered_map<uint64_t, int32_t>::const_iterator it;
 
+		// 자신과 가장 가까운 지점을 우선 타겟팅
+		nearestDist curNearest = pqDist.top(); pqDist.pop();
+
 		while (!pBase->pqDijkstra.empty())
 		{
+			if (pCurInfo != nullptr) {
+				SAFE_DELETE(pCurInfo);
+			}
+
 			pCurInfo = pBase->pqDijkstra.top();
 			pCurInfo->visited = true;
 
@@ -2633,6 +2657,19 @@ const int CRoutePlan::MakeTabulate(IN const vector<RouteLinkInfo>& linkInfos, OU
 			if ((it = checkDestination.find(pCurInfo->linkId.llid)) != checkDestination.end())
 			{
 				pCell = &ppResultTables[ii][it->second];
+
+				// 자신을 제외한 가장 가까운 지점인지 확인
+				if (curNearest.id == it->second) {
+					// 다음 가까운 지점 확인
+					for (; !pqDist.empty(); ) {
+						curNearest = pqDist.top(); pqDist.pop();
+
+						// 미 확인된 지점이면 다음 타겟팅으로 선정
+						if (ppResultTables[ii][curNearest.id].nUsable == 0) {
+							break;
+						}
+					}
+				}
 
 				// 자기 자신은 패스
 				if (pCell->nUsable < 0) {
@@ -2655,8 +2692,8 @@ const int CRoutePlan::MakeTabulate(IN const vector<RouteLinkInfo>& linkInfos, OU
 						pCell->nTotalDist = pCurInfo->distReal;
 
 						// 경로 탐색 성공
-						LOG_TRACE(LOG_DEBUG, "Find route table item, %d/%d, table[%d][%d], time:%d, dist:%d",
-							cntGoal, cntDestination, ii, it->second, pCell->nTotalTime, pCell->nTotalDist);
+						// LOG_TRACE(LOG_DEBUG, "Find route table item, %d/%d, table[%d][%d], time:%d, dist:%d",
+						//	cntGoal, cntDestination, ii, it->second, pCell->nTotalTime, pCell->nTotalDist);
 					}
 					// 재방문
 					else { // if (pCell->nUsable <= 2) {
@@ -2668,8 +2705,8 @@ const int CRoutePlan::MakeTabulate(IN const vector<RouteLinkInfo>& linkInfos, OU
 							pCell->nTotalDist = pCurInfo->distReal;
 
 							// 경로 재 정리
-							LOG_TRACE(LOG_DEBUG, "Change route table item, %d/%d, table[%d][%d], time:%d, dist:%d",
-								cntGoal, cntDestination, ii, it->second, pCell->nTotalTime, pCell->nTotalDist);
+							// LOG_TRACE(LOG_DEBUG, "Change route table item, %d/%d, table[%d][%d], time:%d, dist:%d",
+							// 	cntGoal, cntDestination, ii, it->second, pCell->nTotalTime, pCell->nTotalDist);
 						}
 					}
 				}
@@ -2692,7 +2729,7 @@ const int CRoutePlan::MakeTabulate(IN const vector<RouteLinkInfo>& linkInfos, OU
 			}
 			else {
 				// 단순 확장
-				Propagation(pBase, pCurInfo, pCurInfo->dir);
+				Propagation(pBase, pCurInfo, pCurInfo->dir, baseTablesStart[curNearest.id].routeLinkInfo.Coord);
 			}
 
 			// 연결 노드의 링크 셋

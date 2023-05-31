@@ -736,6 +736,62 @@ int CRouteManager::DoRouting(/*Packet*/)
 }
 
 
+int CRouteManager::GetTable(OUT RouteTable** ppResultTables)
+{
+	int ret = -1;
+
+	const uint32_t uid = 12345678;
+
+	m_routeResult.Init();
+
+	RequestRouteInfo reqInfo;
+	reqInfo.RequestId = uid;
+	reqInfo.RouteOption = m_nRouteOpt;
+	reqInfo.AvoidOption = m_nAvoidOpt;
+
+	// start 
+	reqInfo.vtPoints.emplace_back(m_ptDeparture);
+	reqInfo.vtIdLinks.emplace_back(keyDeparture);
+
+	// waypoint
+	if (!m_ptWaypoints.empty()) {
+		for (int ii = 0; ii < m_ptWaypoints.size(); ii++) {
+			reqInfo.vtPoints.emplace_back(m_ptWaypoints[ii]);
+			reqInfo.vtIdLinks.emplace_back(keyWaypoints[ii]);
+		}
+	}
+
+	// end
+	reqInfo.vtPoints.emplace_back(m_ptDestination);
+	reqInfo.vtIdLinks.emplace_back(keyDestination);
+
+
+
+	// 지점 개수 만큼의 결과 테이블(n * n) 생성
+	// create route table rows
+	const int32_t cntPoints = reqInfo.vtPoints.size();
+	RouteTable** resultTables = nullptr;
+	
+	if (ppResultTables != nullptr) {
+		resultTables = const_cast<RouteTable**>(ppResultTables);
+	}
+	else {
+		resultTables = new RouteTable*[cntPoints];
+
+		// create route table cols 
+		for (int ii = 0; ii < cntPoints; ii++) {
+			resultTables[ii] = new RouteTable[cntPoints];
+		}
+	}
+	
+#if defined(USE_TSP_MODULE)	
+	ret = m_pRoutePlan->DoTabulate(&reqInfo, resultTables);
+#endif 
+
+	return ret;
+}
+
+
 int CRouteManager::DoTabulate(TspOptions* pOpt, IN RouteTable** ppResultTables)
 {
 	int ret = -1;

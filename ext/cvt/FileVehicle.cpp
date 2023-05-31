@@ -296,7 +296,7 @@ bool CFileVehicle::ParseData(IN const char* fname)
 #if defined(USE_P2P_DATA)
 			//pLink->sub_ext = (link.MeshID * 1000000000000) + (link.FromNodeID * 1000000) + link.ToNodeID; // 원본 ID 사용, (snode 6자리 + enode 6자리)
 
-			pLink->veh.speed = link.MaxSpeed;
+			pLink->veh.speed_f = pLink->veh.speed_b = link.MaxSpeed;
 			pLink->veh.weight = link.MaxW;
 			pLink->veh.height = link.MaxH;
 			pLink->veh.bridge = link.Bridge;
@@ -689,6 +689,8 @@ bool CFileVehicle::GenServiceData()
 			//	LOG_TRACE(LOG_DEBUG, "add new mesh, when mesh info not exist, mesh:%d, link:%d", pMeshExt->mesh_id.tile_id, itLink->second->link_id.nid);
 			//}
 		}
+
+		m_pDataMgr->AddTrafficLinkData(itLink->second);
 	}
 
 

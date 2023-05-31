@@ -36,6 +36,7 @@ public:
 
 	int Route(/*packet*/);
 	int Table(TspOptions* pOpt, IN RouteTable** ppResultTables = nullptr);
+	int GetTable(OUT RouteTable** ppResultTables);
 
 	const RouteResultInfo* GetRouteResult(void) const;
 

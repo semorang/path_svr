@@ -92,6 +92,7 @@ stLinkInfo * MapLink::GetLinkById(IN const KeyID keyId)
 	return nullptr;
 }
 
+
 stLinkInfo * MapLink::GetLinkBySENode(IN const KeyID idx1, IN const KeyID idx2)
 {
 	for (map<uint64_t, stLinkInfo*>::iterator it = mapData.begin(); it != mapData.end(); it++)

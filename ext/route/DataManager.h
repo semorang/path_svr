@@ -9,6 +9,7 @@
 #include "MapNode.h"
 #include "MapLink.h"
 #include "MapPolygon.h"
+#include "MapTraffic.h"
 
 #if defined(__USE_TEMPLETE)
 #include "MapBase.h"
@@ -65,6 +66,11 @@ struct FileCacheData {
 	}
 };
 
+struct stLinkMatchTable {
+	uint64_t link_id;
+	int32_t link_idx;
+};
+
 #pragma pack (pop)
 
 
@@ -108,6 +114,7 @@ protected:
 	MapLink* m_pMapVLink;
 	MapPolygon* m_pMapComplex;
 	MapPolygon* m_pMapBuilding;
+	MapTraffic* m_pMapTraffic;
 
 
 #if defined(__USE_TEMPLETE)
@@ -148,7 +155,9 @@ public:
 	bool AddBuildingData(IN const stPolygonInfo * pData);
 	bool AddEntranceData(IN const KeyID keyId, IN const stEntranceInfo* pData);
 	bool AddNameData(IN const stNameInfo * pData);
-
+	bool AddTrafficData(IN stTrafficInfo* pData);
+	bool AddTrafficMatchData(IN const stTrafficKey& key, IN const uint64_t ksId);
+	bool AddTrafficLinkData(IN const stLinkInfo* pData);
 
 	stMeshInfo * GetMeshDataById(IN const uint32_t id, IN const bool force = true);
 	stNodeInfo * GetNodeDataById(IN const KeyID keyId, IN const bool force = true);
@@ -160,6 +169,8 @@ public:
 	stPolygonInfo* GetBuildingDataById(IN const KeyID keyId, IN const bool force = true);
 	stPolygonInfo* GetComplexDataById(IN const KeyID keyId, IN const bool force = true);
 	const char* GetNameDataByIdx(IN const uint32_t idx, IN const bool force = true);
+	const unordered_map<uint32_t, stTrafficInfo*>* GetTrafficMapData(void);
+	const stTrafficInfo* GetTrafficInfo(IN const uint32_t ksId);
 
 	const int32_t GetVLinkDataCount(void);
 	const int32_t GetComplexDataCount(void);

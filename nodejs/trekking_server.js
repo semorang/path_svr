@@ -5,6 +5,7 @@ const express = require('express');
 const request_ip = require('request-ip');
 const cors = require('cors'); // CORS 오류 해소
 const timeout = require('connect-timeout');
+const url = require('url');
 const app = express();
 
 const cfg = require('dotenv').config();
@@ -12,12 +13,15 @@ const cfg = require('dotenv').config();
 // const addon = require('./core_modules/walk_route.node');
 const route = require('../src/route');
 const logout = require('../src/logs');
+const apis = require('../src/apis');
 // const escapeJSON = require('escape-json-noide');
 // const addon = require('bindings')('openAPI')
 
 const apikey = require('../views/script/key.js');
 
 const publicPath = path.join(__dirname, '../public') // web에서 공유할 path
+
+const { isContext } = require('vm');
 
 let corsOptions = {
     origin: '*',
@@ -29,6 +33,7 @@ let corsOptions = {
 app.set('view engine', 'ejs');
 app.engine('html', require('ejs').renderFile);
 app.use(express.static(publicPath)); 
+app.use(express.json());
 app.use(cors(corsOptions));
 
 app.get('/', function(req, res) {
@@ -105,7 +110,7 @@ app.get('/route', function(req, res) {
 });
 
 
-app.get('/multiroute', function(req, res) {
+app.get('/api/multiroute', function(req, res) {
     logout("start multiroute request");
 
     logout("client IP : " + request_ip.getClientIp(req));
@@ -128,6 +133,14 @@ app.get('/multiroute', function(req, res) {
 
 // 2p2 path 전용
 app.get('/path', function(req, res) {
+    res.redirect(url.format({
+        pathname: "/api/path",
+        query: req.query
+    }));
+});
+
+
+app.get('/api/path', function(req, res) {
     logout("start multiroute request");
 
     // 2p2 path 전용 옵션
@@ -152,7 +165,7 @@ app.get('/path', function(req, res) {
 });
 
 
-app.get('/kakaovx', function(req, res) {
+app.get('/api/kakaovx', function(req, res) {
     logout("start kakaovx route request");
 
     logout("client IP : " + request_ip.getClientIp(req));
@@ -175,7 +188,7 @@ app.get('/kakaovx', function(req, res) {
 });
 
 
-app.get('/routeview', function(req, res) {
+app.get('/view/route', function(req, res) {
     logout("start routeview request");
 
     logout("client IP : " + request_ip.getClientIp(req));
@@ -207,7 +220,7 @@ app.get('/routeview', function(req, res) {
 });
 
 
-app.get('/multirouteview', function(req, res) {
+app.get('/view/multiroute', function(req, res) {
     logout("start multirouteview request");
 
     logout("client IP : " + request_ip.getClientIp(req));
@@ -233,7 +246,7 @@ app.get('/multirouteview', function(req, res) {
 
 
 // p2p path result view
-app.get('/pathview', function(req, res) {
+app.get('/view/path', function(req, res) {
     logout("start pathview request");
 
     // 2p2 path 전용 옵션
@@ -261,7 +274,7 @@ app.get('/pathview', function(req, res) {
 });
 
 
-app.get('/optimalposition', function(req, res) {
+app.get('/api/optimalposition', function(req, res) {
     logout("start optimalposition request");
 
     logout("client IP : " + request_ip.getClientIp(req));
@@ -288,7 +301,7 @@ app.get('/optimalposition', function(req, res) {
 });
 
 
-app.get('/optimalview', function(req, res) {
+app.get('/view/optimalposition', function(req, res) {
     logout("start optimalview request");
 
     logout("client IP : " + request_ip.getClientIp(req));
@@ -323,6 +336,50 @@ app.get('/optimalview', function(req, res) {
 });
 
 
+app.get('/api/distancematrix/appkeys/:userkey', function(req, res) {
+    logout("start distance matrix request by GET");
+
+    const key = req.params.userkey;
+    const mode = req.query.mode;
+    const destinations = req.query.origins;
+
+    // distance matrix api 호출
+    const ret = apis.distancematrix(key, mode, destinations);
+
+    res.send(ret);
+
+    logout("end distance matrix request by GET");
+});
+
+
+app.post('/api/distancematrix', function(req, res) {
+    logout("start distance matrix request");
+
+    const key = req.headers.authorization;
+    const mode = req.body.mode;
+    const destinations = req.body.origins;
+
+    // distance matrix api 호출
+    const ret = apis.distancematrix(key, mode, destinations);
+
+    res.send(ret);
+
+    logout("end distance matrix request");
+});
+
+
+app.get('/api/createkey', function(req, res) {
+    logout("create key request");
+
+    logout("client IP : " + request_ip.getClientIp(req));
+    logout("client req : " + JSON.stringify(req.query));
+
+    // 필요시 uuid api key 생성
+    logout("created new key :" + JSON.stringify(apis.createkey()));
+
+    res.send('success, created key, ask to check your key to the administrator');
+});
+
 const cur_port = (process.env.TRK_SVR_PORT === undefined) ? 20301 : process.env.TRK_SVR_PORT;
 const server = app.listen(cur_port, function () {
     var cur_ip = require("ip");
@@ -339,6 +396,8 @@ const server = app.listen(cur_port, function () {
     logout("finished server initialize");
 
     // addon.logout("start walk routing server addr "  + cur_ip.address() + ":" + cur_port + " on " + os.type());
+
+
 });
 
 server.headersTimeout = 5 * 1000; //10s

@@ -22,7 +22,7 @@ using namespace std;
 
 // #define USE_MULTIPROCESS
 #if defined(USE_MULTIPROCESS)
-#define PROCESS_NUM 10
+#define PROCESS_NUM 8
 #include <omp.h>
 #else
 #define PROCESS_NUM 1
@@ -38,7 +38,6 @@ using namespace std;
 
 // #define USE_OPTIMAL_POINT_API // 최적 지점 API
 #define USE_TREKKING_POINT_API // 경로 탐색 API
-
 #if defined(USE_OPTIMAL_POINT_API)
 //#define USE_TREKKING_DATA // 숲길 데이터
 //#define USE_PEDESTRIAN_DATA // 보행자/자전거 데이터
@@ -299,13 +298,16 @@ typedef struct _tagstLinkVehicleInfo {
 	uint64_t safe_zone : 3; // 어린이보호구역, 노인보호구역, 0:없음, 1:어린이보호구역, 2:노인보호구역, 3:마을주민보호구역, 4:장애인보호구역
 	// 32 bit
 #if defined(USE_P2P_DATA)
-	uint64_t speed : 8; // 제한속도 0~255
+	uint64_t speed_f : 8; // 정방향 제한속도 0~255
+	uint64_t speed_b : 8; // 역방향 제한속도 0~255
+	uint64_t rtt_f : 1; // 정방향 실시간 교통정보, 0:미사용, 1:사용
+	uint64_t rtt_b : 1; // 역방향 실시간 교통정보, 0:미사용, 1:사용
 	uint64_t weight : 6; // 중량 제한 T(톤) 0~63
 	uint64_t height : 3; // 높이 제한 M(미터) 0~7
 	uint64_t bridge : 1; // 교량, 0:없음, 1:있음
 	uint64_t over_pass : 1; // 고가도로, 0:없음, 1:있음
 	uint64_t hd_flag : 2; // HD 링크 매핑, 0:없음, 1:전체, 2:부분
-	uint64_t veh_reserved : 11; // reserved 
+	uint64_t veh_reserved : 1; // reserved 
 	//p2p에서는 angle 공유하지 말자
 #else
 	uint64_t shared : 32; // link_ang 공유 공간
@@ -546,6 +548,28 @@ struct stEntranceInfo {
 	uint32_t reserved : 26;
 	double x;
 	double y;
+};
+
+
+struct stTrafficKey{
+	union {
+		uint64_t llid; // mesh(6) + snode(6) + enode(6) + dir(1)
+		struct {
+			uint64_t mesh : 20;
+			uint64_t snode : 20;
+			uint64_t enode : 20;
+			uint64_t dir : 4;
+		};
+	};
+};
+
+struct stTrafficInfo {
+	stTrafficKey key;
+	uint32_t ks_id;
+	uint32_t time_stamp; // 최종 업데이트된 시각
+	uint8_t speed; // 도로 주행 속도 0~255, 255일 경우는 통제, 주행불가
+
+	unordered_set<uint64_t> setLinks; // ks 링크에 매칭되는 link id -> 나중에는 메모리 관리를 위해 포인터로 관리하자!!
 };
 
 
@@ -888,6 +912,7 @@ typedef enum {
 	TYPE_DATA_BUILDING, // 건물
 	TYPE_DATA_COMPLEX, // 단지
 	TYPE_DATA_ENTRANCE, // 입구점
+	TYPE_DATA_TRAFFIC, // 교통정보
 	TYPE_DATA_COUNT,
 }TYPE_DATA;
 

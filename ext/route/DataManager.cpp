@@ -32,6 +32,7 @@ CDataManager::CDataManager()
 	m_pMapVLink = nullptr;
 	m_pMapComplex = nullptr;
 	m_pMapBuilding = nullptr;
+	m_pMapTraffic = nullptr;
 
 	m_pMapName = new MapName();
 	m_pMapMesh = new MapMesh();
@@ -46,6 +47,8 @@ CDataManager::CDataManager()
 #if defined(USE_VEHICLE_DATA)
 	m_pMapVNode = new MapNode();
 	m_pMapVLink = new MapLink();
+
+	m_pMapTraffic = new MapTraffic();
 #endif
 #if defined(USE_COMPLEX_DATA)
 	m_pMapComplex = new MapPolygon();
@@ -64,34 +67,40 @@ CDataManager::~CDataManager()
 	Release();
 
 	if (m_pMapName) {
-		delete m_pMapName;
+		SAFE_DELETE(m_pMapName);
 	}
 	if (m_pMapMesh) {
-		delete m_pMapMesh;
+		SAFE_DELETE(m_pMapMesh);
 	}
 	if (m_pMapNode) {
-		delete m_pMapNode;
+		SAFE_DELETE(m_pMapNode);
 	}
 	if (m_pMapLink) {
-		delete m_pMapLink;
+		SAFE_DELETE(m_pMapLink);
 	}
 	if (m_pMapWNode) {
-		delete m_pMapWNode;
+		SAFE_DELETE(m_pMapWNode);
 	}
 	if (m_pMapWLink) {
-		delete m_pMapWLink;
+		SAFE_DELETE(m_pMapWLink);
 	}
 	if (m_pMapVNode) {
-		delete m_pMapVNode;
+		SAFE_DELETE(m_pMapVNode);
 	}
 	if (m_pMapVLink) {
-		delete m_pMapVLink;
+		SAFE_DELETE(m_pMapVLink);
+	}
+	if (m_pMapTraffic) {
+		SAFE_DELETE(m_pMapTraffic);
 	}
 	if (m_pMapComplex) {
-		delete m_pMapComplex;
+		SAFE_DELETE(m_pMapComplex);
 	}
 	if (m_pMapBuilding) {
-		delete m_pMapBuilding;
+		SAFE_DELETE(m_pMapBuilding);
+	}
+	if (m_pMapTraffic) {
+		SAFE_DELETE(m_pMapTraffic);
 	}
 
 	if (!m_mapFileIndex.empty()) {
@@ -134,6 +143,9 @@ bool CDataManager::Initialize(void)
 	}
 	if (m_pMapBuilding) {
 		m_pMapBuilding->Initialize();
+	}
+	if (m_pMapTraffic) {
+		m_pMapTraffic->Initialize();
 	}
 
 	m_rtBox.Xmin = INT_MAX;
@@ -182,6 +194,9 @@ void CDataManager::Release(void)
 	}
 	if (m_pMapBuilding) {
 		m_pMapBuilding->Release();
+	}
+	if (m_pMapTraffic) {
+		m_pMapTraffic->Release();
 	}
 
 	if (!m_mapFileIndex.empty()) {
@@ -394,6 +409,8 @@ bool CDataManager::AddLinkData(IN const stLinkInfo * pData)
 		return m_pMapMesh->InsertLink(pData);
 	}
 
+	
+
 	return false;
 }
 
@@ -507,6 +524,24 @@ bool CDataManager::AddEntranceData(IN const KeyID keyId, IN const stEntranceInfo
 bool CDataManager::AddNameData(IN const stNameInfo * pData)
 {
 	return m_pMapName->AddData(pData);
+}
+
+
+bool CDataManager::AddTrafficData(IN stTrafficInfo* pData)
+{
+	return m_pMapTraffic->AddData(pData);
+}
+
+
+bool CDataManager::AddTrafficMatchData(IN const stTrafficKey& key, IN const uint64_t ksId)
+{
+	return m_pMapTraffic->AddData(key, ksId);
+}
+
+
+bool CDataManager::AddTrafficLinkData(IN const stLinkInfo* pData)
+{
+	return m_pMapTraffic->AddData(pData);
 }
 
 
@@ -658,6 +693,22 @@ const char* CDataManager::GetNameDataByIdx(IN const uint32_t idx, IN const bool 
 	}
 
 	return m_pMapName->GetNameData(idx);
+}
+
+
+const unordered_map<uint32_t, stTrafficInfo*>* CDataManager::GetTrafficMapData(void)
+{
+	if (!m_pMapTraffic) {
+		return nullptr; 
+	}
+
+	return m_pMapTraffic->GetTrafficMapData();
+}
+
+
+const stTrafficInfo* CDataManager::GetTrafficInfo(IN const uint32_t ksId)
+{
+	return m_pMapTraffic->GetTrafficInfo(ksId);
 }
 
 

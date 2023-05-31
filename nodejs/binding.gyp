@@ -21,7 +21,9 @@
                 "../ext/route/MapNode.cpp",
                 "../ext/route/MapLink.cpp",
                 "../ext/route/MapPolygon.cpp",
+                "../ext/route/MapTraffic.cpp",
                 "../ext/route/DataManager.cpp",
+                "../ext/route/TrafficManager.cpp",
                 "../ext/route/RoutePlan.cpp",
                 "../ext/route/RouteManager.cpp",
 
@@ -34,7 +36,8 @@
                 "../ext/cvt/FileVehicle.cpp",
                 "../ext/cvt/FileBuilding.cpp",
                 "../ext/cvt/FileComplex.cpp",
-                "../ext/cvt/FileEntrance.cpp"
+                "../ext/cvt/FileEntrance.cpp",
+                "../ext/cvt/FileTraffic.cpp"
             ],
             "conditions":[
                 ['OS=="linux"', {

@@ -11,21 +11,21 @@
 
 
 
-// ½Ã°è¹æÇâ. // CW
+// ì‹œê³„ë°©í–¥. // CW
 bool isRightSide(IN const SPoint* P1, IN const SPoint* P2, IN const SPoint* P3) //const
 {
 	// Is the order of (P1->P2->P3) Clock Wise?
-	// . P1->P2º¤ÅÍ¿¡ CW¹æÇâÀ¸·Î ¼öÁ÷ÀÎ º¤ÅÍ NP1P2¸¦ ±¸ÇÑ´Ù.
-	// NP1P2´Â P1->P2º¤ÅÍ(P2.x-P1.x, P2.y-P1.y,0)¿Í ZÃà(0,0,1)À» ¿ÜÀûÇÏ¸é ±¸ÇÒ ¼ö ÀÖ´Ù.
+	// . P1->P2ë²¡í„°ì— CWë°©í–¥ìœ¼ë¡œ ìˆ˜ì§ì¸ ë²¡í„° NP1P2ë¥¼ êµ¬í•œë‹¤.
+	// NP1P2ëŠ” P1->P2ë²¡í„°(P2.x-P1.x, P2.y-P1.y,0)ì™€ Zì¶•(0,0,1)ì„ ì™¸ì í•˜ë©´ êµ¬í•  ìˆ˜ ìˆë‹¤.
 	// NP1P2.x = (P2.y-P1.y)*1 - (0)*0 = P2.y-P1.y
 	// NP1P2.y = (0)*0 - (P2.x-P1.x)*1 = P1.x-P2.x
-	// . P1->P3 º¤ÅÍ P1P3¸¦ ±¸ÇÑ´Ù.
+	// . P1->P3 ë²¡í„° P1P3ë¥¼ êµ¬í•œë‹¤.
 	// P1P3.x = P3.x-P1.x
 	// P1P3.y = P3.y-P1.y
-	// . NP1P2º¤ÅÍ¿Í P1P3º¤ÅÍ¸¦ ³»ÀûÇÏ¿© ±× °ªÀÌ 0ÀÌ»óÀÌ¸é CW ¾Æ´Ï¸é CCWÀÌ´Ù.
+	// . NP1P2ë²¡í„°ì™€ P1P3ë²¡í„°ë¥¼ ë‚´ì í•˜ì—¬ ê·¸ ê°’ì´ 0ì´ìƒì´ë©´ CW ì•„ë‹ˆë©´ CCWì´ë‹¤.
 	// NP1P2 (dot) P1P3 = (P2.y-P1.y)(P3.x-P1.x) + (P1.x-P2.x)(P3.y-P1.y)
 	// = P2.y*P3.x - P2.y*P1.x - P1.y*P3.x + P1.y*P1.x + P1.x*P3.y - P1.x*P1.y - P2.x*P3.y + P2.x*P1.y
-	// = P2.y*P3.x - P2.y*P1.x - P1.y*P3.x    (¼Ò°Å)   + P1.x*P3.y    (¼Ò°Å)   - P2.x*P3.y + P2.x*P1.y
+	// = P2.y*P3.x - P2.y*P1.x - P1.y*P3.x    (ì†Œê±°)   + P1.x*P3.y    (ì†Œê±°)   - P2.x*P3.y + P2.x*P1.y
 	// = P2.y*P3.x + P1.x*P3.y + P2.x*P1.y - P2.y*P1.x - P1.y*P3.x - P2.x*P3.y
 	// = P1.y*(P2.x-P3.x) + P2.y*(P3.x-P1.x) + P3.y*(P1.x-P2.x)
 
@@ -38,7 +38,7 @@ bool isRightSide(IN const SPoint* P1, IN const SPoint* P2, IN const SPoint* P3) 
 	return false;
 }
 
-// ¹İ½Ã°è ¹æÇâ. // CCW
+// ë°˜ì‹œê³„ ë°©í–¥. // CCW
 bool isLeftSide(IN const SPoint* P1, IN const SPoint* P2, IN const SPoint* P3) //const
 {
 	if (P1 && P2 && P3) {
@@ -152,7 +152,7 @@ bool isInPitBox(IN const SBox& fromBox, IN const SBox& inBox)
 		return true;
 	}
 
-	// È­¸éÀÌ ¸Ş½¬¿¡ Æ÷ÇÔ
+	// í™”ë©´ì´ ë©”ì‰¬ì— í¬í•¨
 	if (isInBox(inBox.Xmin, inBox.Ymin, fromBox)) return true; // LT
 	if (isInBox(inBox.Xmax, inBox.Ymin, fromBox)) return true; // RT
 	if (isInBox(inBox.Xmax, inBox.Ymax, fromBox)) return true; // RB
@@ -207,7 +207,7 @@ PJ* proj_pj = nullptr;
 
 // Source CRS : UTM52N
 // Target CRS : WGS84
-// ±³Â÷ º¯È¯Àº ÀÎÀÚ Text¸¸ º¯°æÇÏ¸é µÊ
+// êµì°¨ ë³€í™˜ì€ ì¸ì Textë§Œ ë³€ê²½í•˜ë©´ ë¨
 bool initProj4()
 {
 	proj_ctxt = proj_context_create();

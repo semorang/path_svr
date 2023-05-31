@@ -38,6 +38,7 @@ static char g_szTypeName[TYPE_DATA_COUNT][4] = {
 	{ "BLD" }, //TYPE_DATA_BUILDING, // 건물
 	{ "CPX" }, //TYPE_DATA_COMPLEX, // 단지
 	{ "ENT" }, //TYPE_DATA_ENTRANCE, // 입구점
+	{ "RTT" }, //TYPE_DATA_TRAFFIC, // 교통정보
 };
 
 // 파일 명
@@ -50,6 +51,7 @@ static char g_szTypeTitle[TYPE_DATA_COUNT][16] = {
 	{ "building" }, //TYPE_DATA_BUILDING, // 건물
 	{ "complex" }, //TYPE_DATA_COMPLEX, // 단지
 	{ "entrance" }, //TYPE_DATA_ENTRANCE, // 입구점
+	{ "traffic" }, //TYPE_DATA_TRAFFIC, // 교통정보
 };
 
 // 파일 확장자
@@ -62,6 +64,7 @@ static char g_szTypeExec[TYPE_DATA_COUNT][4] = {
 	{ "gmp" }, //TYPE_DATA_BUILDING, // 건물
 	{ "gmp" }, //TYPE_DATA_COMPLEX, // 단지
 	{ "gmp" }, //TYPE_DATA_ENTRANCE, // 입구점
+	{ "gmr" }, //TYPE_DATA_TRAFFIC, // 교통정보
 };
 
 #pragma pack (push, 1)

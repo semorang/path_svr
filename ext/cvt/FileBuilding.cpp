@@ -914,6 +914,7 @@ bool CFileBuilding::LoadDataByIdx(IN const uint32_t idx)
 	}
 	else if (idx < 0 || m_vtIndex.size() <= idx) {
 		LOG_TRACE(LOG_ERROR, "Failed, request load data idx range, max:%s, req idx:%d", m_vtIndex.size(), idx);
+		fclose(fp);
 		return false;
 	}
 
@@ -1006,6 +1007,7 @@ bool CFileBuilding::LoadDataByIdx(IN const uint32_t idx)
 		if (fileBld.parts > 0 && !pBld->readAttribute(TYPE_POLYGON_DATA_ATTR_PART, fp, fileBld.parts))
 		{
 			LOG_TRACE(LOG_ERROR, "Failed, can't read parts, mesh_id:%d, buildig idx:%d", m_vtIndex[idx].idTile, ii);
+			fclose(fp);
 			return 0;
 		}
 
@@ -1024,6 +1026,7 @@ bool CFileBuilding::LoadDataByIdx(IN const uint32_t idx)
 		if (fileBld.points > 0 && !pBld->readAttribute(TYPE_POLYGON_DATA_ATTR_VTX, fp, fileBld.points))
 		{
 			LOG_TRACE(LOG_ERROR, "Failed, can't read points, mesh_id:%d, buildig idx:%d", m_vtIndex[idx].idTile, ii);
+			fclose(fp);
 			return 0;
 		}
 

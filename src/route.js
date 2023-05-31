@@ -1,14 +1,10 @@
 const { createDiffieHellmanGroup } = require('crypto');
-const os = require('os');
 const util = require('util');
 var addon = require(process.env.USER_MODULE);
 
 
 const logout = require('./logs');
 const codes = require('./codes');
-const opt_code = require('./option.js');
-// const { getMsg } = require("./errors");
-// import getMsg from "./errors";
 
 
 exports.init = function(pid, path, log) {
@@ -418,6 +414,83 @@ exports.domultiroute = function(req, option) {
 
     logout("total route count : " + ret.route.data.length);
     logout("end routing : result(" + ret.header.resultCode + '), ' + ret.header.resultMessage);
+
+    return ret;
+}
+
+exports.gettable = function(mode, destinations) {
+
+    addon.logout("start table");
+
+    const count = destinations.length;
+    
+    const is_optimal = false;
+    const type_match = 4; //TYPE_LINK_MATCH_FOR_TABLE; // 최적지점 사용
+
+    var header = {
+        isSuccessful: false,
+        resultCode: codes.ERROR_CODES.ROUTE_RESULT_FAILED,
+        resultMessage: ""
+    };
+
+    var rows = {
+        elements: new Array,
+    };
+
+    var ret = {
+        header: header,
+        origins: destinations,
+        rows: rows,
+    };
+
+
+    var cntDestinations = 0;
+    destinations.forEach(element => {
+        let coord = element.split(',');
+        if (coord.length != 2) {
+            logout("request location query not correct" + util.inspect(coord, false, null, true));
+            ret.header.isSuccessful = false;
+            ret.header.resultCode = codes.ERROR_CODES.ROUTE_RESULT_FAILED_SET_START;
+            ret.header.resultMessage = codes.getErrMsg(ret.result_code);
+            logout("route result : failed, msg " + ret.header.resultMessage);
+        } else {
+        	const type_match = 4; //TYPE_LINK_MATCH_FOR_TABLE; // 최적지점 사용
+            // departure
+            if (cntDestinations == 0) {
+                addon.setdeparture(parseFloat(coord[0]), parseFloat(coord[1]), is_optimal, type_match);
+            }
+            // destination 
+            else if (cntDestinations == 1) {
+                addon.setdestination(parseFloat(coord[0]), parseFloat(coord[1]), is_optimal, type_match);
+            }
+            // via
+            else {
+                addon.setwaypoint(parseFloat(coord[0]), parseFloat(coord[1]), is_optimal, type_match);
+            }
+
+            cntDestinations++;
+        }
+    });
+
+
+    var res = addon.gettable(cntDestinations);
+    res = JSON.parse(res);
+
+    if (res.result_code == 0) {
+        ret.header.isSuccessful = true;
+        ret.header.resultCode = res.result_code;
+        ret.header.resultMessage = codes.getErrMsg(ret.header.resultCode);
+
+        ret.rows = res.rows;
+    } else {
+        ret.header.isSuccessful = false;
+        ret.header.resultCode = res.result_code;
+        ret.header.resultMessage = codes.getErrMsg(ret.header.resultCode);
+    }
+
+    addon.releaseroute();
+    
+    addon.logout("end table");
 
     return ret;
 }

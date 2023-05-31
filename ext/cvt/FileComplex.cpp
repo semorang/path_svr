@@ -501,6 +501,7 @@ bool CFileComplex::LoadDataByIdx(IN const uint32_t idx)
 	}
 	else if (idx < 0 || m_vtIndex.size() <= idx) {
 		LOG_TRACE(LOG_ERROR, "Failed, request load data idx range, max:%s, req idx:%d", m_vtIndex.size(), idx);
+		fclose(fp);
 		return false;
 	}
 
@@ -592,6 +593,7 @@ bool CFileComplex::LoadDataByIdx(IN const uint32_t idx)
 		if (fileCpx.parts > 0 && !pCpx->readAttribute(TYPE_POLYGON_DATA_ATTR_PART, fp, fileCpx.parts))
 		{
 			LOG_TRACE(LOG_ERROR, "Failed, can't read parts, mesh_id:%d, parts idx:%d", m_vtIndex[idx].idTile, ii);
+			fclose(fp);
 			return 0;
 		}
 
@@ -610,6 +612,7 @@ bool CFileComplex::LoadDataByIdx(IN const uint32_t idx)
 		if (fileCpx.points > 0 && !pCpx->readAttribute(TYPE_POLYGON_DATA_ATTR_VTX, fp, fileCpx.points))
 		{
 			LOG_TRACE(LOG_ERROR, "Failed, can't read points, mesh_id:%d, points idx:%d", m_vtIndex[idx].idTile, ii);
+			fclose(fp);
 			return 0;
 		}
 
@@ -627,6 +630,7 @@ bool CFileComplex::LoadDataByIdx(IN const uint32_t idx)
 		if (fileCpx.links > 0 && !pCpx->readAttribute(TYPE_POLYGON_DATA_ATTR_LINK, fp, fileCpx.links))
 		{
 			LOG_TRACE(LOG_ERROR, "Failed, can't read link, mesh_id:%d, links idx:%d", m_vtIndex[idx].idTile, ii);
+			fclose(fp);
 			return 0;
 		}
 
@@ -645,6 +649,7 @@ bool CFileComplex::LoadDataByIdx(IN const uint32_t idx)
 		if (fileCpx.meshes > 0 && !pCpx->readAttribute(TYPE_POLYGON_DATA_ATTR_MESH, fp, fileCpx.meshes))
 		{
 			LOG_TRACE(LOG_ERROR, "Failed, can't read joined mesh, mesh_id:%d, joins idx:%d", m_vtIndex[idx].idTile, ii);
+			fclose(fp);
 			return 0;
 		}
 

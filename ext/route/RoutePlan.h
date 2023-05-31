@@ -4,6 +4,7 @@
 #include "DataManager.h"
 
 // #define USE_TSP_MODULE
+// #define USE_REAL_ROUTE_TSP //실제 경로 기반 거리 사용
 
 #define MAX_WAYPOINT 100
 #if defined(USE_PEDESTRIAN_DATA)
@@ -85,6 +86,18 @@ static auto CompareCanidate = [](const CandidateLink* lhs, const CandidateLink* 
 	}
 	else {
 		return false;
+	}
+};
+
+struct nearestDist {
+	nearestDist(const int32_t _id, const int32_t _dist) : id(_id), dist(_dist) {};
+	int32_t id;
+	int32_t dist;
+};
+
+struct cmpDist {
+	bool operator()(const nearestDist lhs, const nearestDist rhs) {
+		return lhs.dist > rhs.dist;
 	}
 };
 
@@ -318,7 +331,7 @@ private:
 	const bool IsVisitedLink(IN RouteInfo* pRouteInfo, IN const KeyID linkId);
 	const bool IsAddedLink(IN RouteInfo* pRouteInfo, IN const KeyID linkId);
 	const int AddNewLinks(IN RouteInfo* pRouteInfo, IN const CandidateLink* pCurInfo, IN const int dir);
-	const int Propagation(IN TableBaseInfo* pRouteInfo, IN const CandidateLink* pCurInfo, IN const int dir); // /단순 확장
+	const int Propagation(IN TableBaseInfo* pRouteInfo, IN const CandidateLink* pCurInfo, IN const int dir, IN const SPoint target); // /단순 확장
 
 	const int MakeRoute(IN RouteInfo* pRouteInfo, OUT RouteResultInfo* pRouteResult);
 #if defined(USE_TSP_MODULE)

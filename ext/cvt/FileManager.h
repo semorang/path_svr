@@ -7,6 +7,7 @@
 #include "FileTrekking.h"
 #include "FilePedestrian.h"
 #include "FileVehicle.h"
+#include "FileTraffic.h"
 #include "FileComplex.h"
 #include "FileBuilding.h"
 #include "FileEntrance.h"
@@ -35,6 +36,7 @@ private:
 	CFileTrekking m_fileTrekking;
 	CFilePedestrian m_filePedestrian;
 	CFileVehicle m_fileVehicle;
+	CFileTraffic m_fileTraffic;
 	CFileComplex m_fileComplex;
 	CFileBuilding m_fileBuilding;
 	CFileEntrance m_fileEntrance;

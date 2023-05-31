@@ -73,86 +73,6 @@ std::string string_format( const std::string& format, Args ... args )
 }
 
 
-// const char* get_result_string(const int code)
-// {
-//    static string msg;
-
-//    switch(code) {
-//    case ROUTE_RESULT_SUCCESS:
-//       msg = "성공";
-//       break;
-//    case ROUTE_RESULT_FAILED:
-//       msg = "탐색 실패(내부 오류에 의한 실패)";
-//       break;
-//    case ROUTE_RESULT_FAILED_SAME_ROUTE:
-//       msg = "스마트 재탐색 적용(기존 경로와 동일)";
-//    case ROUTE_RESULT_FAILED_WRONG_PARAM:
-//       msg = "잘못된 파라미터(필수 파라미터 체크)";
-//       break;
-//    case ROUTE_RESULT_FAILED_SET_MEMORY:
-//       msg = "탐색 확장 관련 메모리 할당 오류(탐색 초기화 관련)";
-//       break;
-//    case ROUTE_RESULT_FAILED_READ_DATA:
-//       msg = "탐색 관련 데이터(지도, 옵션 등) 파일 읽기 실패(탐색 초기화 관련)";
-//       break;
-//    case ROUTE_RESULT_FAILED_SET_START:
-//       msg = "출발지가 프로젝션이 안되거나, 잘못된 출발지";
-//       break;
-//    case ROUTE_RESULT_FAILED_SET_VIA:
-//       msg = "경유지가 프로젝션이 안되거나, 잘못된 경유지";
-//       break;
-//    case ROUTE_RESULT_FAILED_SET_END:
-//       msg = "목적지가 프로젝션이 안되거나, 잘못된 목적지";
-//       break;
-//    case ROUTE_RESULT_FAILED_DIST_OVER:
-//       msg = "탐색 가능 거리 초과(직선거리 5km 이내 허용)";
-//       break;
-//    case ROUTE_RESULT_FAILED_TIME_OVER:
-//       msg = "탐색 시간 초과(10초 이상)";
-//       break;
-//    case ROUTE_RESULT_FAILED_NODE_OVER:
-//       msg = "확장 가능 Node 개수 초과";
-//       break;
-//    case ROUTE_RESULT_FAILED_EXPEND:
-//       msg = "확장 실패";
-//       break;
-//    default:
-//       msg = "실패(알수 없는 오류)";
-//       break;
-//     }
-
-
-//    return msg.c_str();
-// }
-
-// void GetResultString(const FunctionCallbackInfo<Value>& args)
-// {
-//    Isolate* isolate = args.GetIsolate();
-//    Local<Context> context = isolate->GetCurrentContext();
-//    Local<Object> obj = Object::New(isolate);
-//    v8::MaybeLocal<v8::String> msg;
-
-//    int code = -1;
-
-//    if (args.Length() < 1) {
-//       LOG_TRACE(LOG_DEBUG, "function call argument too short : %s", args);
-
-//       msg = String::NewFromUtf8(isolate, "function call argument too short : " + args.Length());
-//    }
-//    else {
-//       code = args[0].As<Number>()->Value();
-
-//       msg = String::NewFromUtf8(isolate, get_result_string(code));
-//    }
-
-//    obj->Set(context, String::NewFromUtf8(isolate, "code").ToLocalChecked(), Number::New(isolate, code));
-//    obj->Set(context, String::NewFromUtf8(isolate, "msg").ToLocalChecked(), msg.ToLocalChecked());
-
-//    args.GetReturnValue().Set(obj);
-// }
-
-
-
 #if defined(_WIN32)
 void MultiByteToUnicode(const char* strMultibyte, wchar_t* strUnicode)
 {
@@ -948,7 +868,7 @@ void GetMultiRouteResultForiNavi(const FunctionCallbackInfo<Value>& args) {
             cJSON* p2p = cJSON_CreateObject();
 
             // speed 재설정
-            cJSON_SetNumberHelper(cJSON_GetObjectItem(path, "speed"), pLink->veh.speed);
+            cJSON_SetNumberHelper(cJSON_GetObjectItem(path, "speed"), pLink->veh.speed_f);
             
             // hd matching link id
             // LOG_TRACE(LOG_DEBUG, "tile:%d, id:%d, snode:%d, enode:%d",pLink->link_id.tile_id, pLink->link_id.nid, pLink->snode_id.nid, pLink->enode_id.nid);
@@ -1451,7 +1371,149 @@ void GetOptimalPosition(const FunctionCallbackInfo<Value>& args) {
 }
 
 
+const char* getDistanceString(IN const int32_t dist)
+{
+   static char szBuff[128];
+   if (dist <= 0) {
+      return "0 Km";
+   } else {
+      sprintf(szBuff, "%.1f km", dist / 1000.f);
+   }
+
+   return szBuff;
+}
+
+
+const char* getDurationString(IN const int32_t time)
+{
+   static char szBuff[128];
+   if (time <= 0) {
+      return "0 mins";
+   } else {
+      if (time > 60 * 60) {
+         sprintf(szBuff, "%d hours %d mins", time / 60 * 60, time / 60);
+      } else if (time > 60) {
+         sprintf(szBuff, "%d mins", time / 60);
+      } else {
+         sprintf(szBuff, "1 mins");
+      }      
+   }
+
+   return szBuff;
+}
+
+
+void GetTable(const FunctionCallbackInfo<Value>& args) {
+   Isolate* isolate = args.GetIsolate();
+   Local<Context> context = isolate->GetCurrentContext();
+   Local<Object> mainobj = Object::New(isolate);
+
+   cJSON* root = cJSON_CreateObject();
+   string strJson;
+   RouteTable** resultTables = nullptr;
+   int cntRows = 0;
+
+   if (args.Length() < 1) {
+      LOG_TRACE(LOG_WARNING, "arg length : 0");
+
+      cJSON_AddNumberToObject(root, "result_code", ROUTE_RESULT_FAILED_WRONG_PARAM);
+      cJSON_AddStringToObject(root, "msg", "input param count not enough");
+   }
+   else {
+      cntRows = args[0].As<Number>()->Value();
+
+      resultTables = new RouteTable*[cntRows];
+
+      for(int ii=0; ii<cntRows; ii++) {
+         resultTables[ii] = new RouteTable[cntRows];
+      }
+
+      int result_code = ROUTE_RESULT_FAILED;
+      string str_msg = "";
+
+      m_pRouteMgr.SetRouteOption(2, 0);
+      
+      int ret = m_pRouteMgr.GetTable(resultTables);
+      
+#if defined(USE_CJSON)
+      if (ret == ROUTE_RESULT_SUCCESS) {
+         cJSON* rows = cJSON_CreateArray();
+
+         for(int ii=0; ii<cntRows; ii++) {
+            cJSON* elements = cJSON_CreateArray();
+            cJSON* cols = cJSON_CreateObject();
+
+            for(int jj=0; jj<cntRows; jj++) {
+               cJSON* element = cJSON_CreateObject();
+               cJSON* distance = cJSON_CreateObject();
+               cJSON* duration = cJSON_CreateObject();
+               cJSON* status = cJSON_CreateObject();
+
+               cJSON_AddNumberToObject(distance, "value", resultTables[ii][jj].nTotalDist);
+               cJSON_AddStringToObject(distance, "text", getDistanceString(resultTables[ii][jj].nTotalDist));
+
+               cJSON_AddNumberToObject(duration, "value", resultTables[ii][jj].nTotalTime);
+               cJSON_AddStringToObject(duration, "text", getDurationString(resultTables[ii][jj].nTotalTime));
+
+               cJSON_AddItemToObject(element, "distance", distance);
+               cJSON_AddItemToObject(element, "duration", duration);
+               cJSON_AddStringToObject(element, "status", "OK");
+
+               cJSON_AddItemToArray(elements, element);
+            } // for
+
+            cJSON_AddItemToObject(cols, "elements", elements);
+            cJSON_AddItemToArray(rows, cols);
+         } // for
+
+         cJSON_AddItemToObject(root, "rows", rows);
+         cJSON_AddStringToObject(root, "status", "OK");
+
+         cJSON_AddNumberToObject(root, "result_code", ret);
+         cJSON_AddStringToObject(root, "msg", "success");
+      } else {
+         cJSON_AddStringToObject(root, "status", "UNKNOWN_ERROR ");
+         cJSON_AddNumberToObject(root, "result_code", ret);
+         cJSON_AddStringToObject(root, "msg", "failed");
+      }
+
+      /*
+      https://developers.google.com/maps/documentation/distance-matrix/distance-matrix?hl=ko
+
+      OK indicates the response contains a valid result.
+      INVALID_REQUEST indicates that the provided request was invalid.
+      MAX_ELEMENTS_EXCEEDED indicates that the product of origins and destinations exceeds the per-query limit.
+      MAX_DIMENSIONS_EXCEEDED indicates that the number of origins or destinations exceeds the per-query limit.
+      OVER_DAILY_LIMIT indicates any of the following:
+      The API key is missing or invalid.
+      Billing has not been enabled on your account.
+      A self-imposed usage cap has been exceeded.
+      The provided method of payment is no longer valid (for example, a credit card has expired).
+      OVER_QUERY_LIMIT indicates the service has received too many requests from your application within the allowed time period.
+      REQUEST_DENIED indicates that the service denied use of the Distance Matrix service by your application.
+      UNKNOWN_ERROR indicates a Distance Matrix request could not be processed due to a server error. The request may succeed if you try again.
+      */
+         
+      strJson = cJSON_Print(root);
+
+      cJSON_Delete(root);
+
+      	// destroyed route table
+	if (resultTables) {
+		for (int ii = 0; ii < cntRows; ii++) {
+			SAFE_DELETE_ARR(resultTables[ii]);
+		}
+		SAFE_DELETE_ARR(resultTables);
+	}
+   #endif // #if defined(USE_CJSON)
+   }
+
+   args.GetReturnValue().Set(String::NewFromUtf8(isolate, strJson.c_str()).ToLocalChecked());
+}
+
+
 void init(Local<Object> exports) {
+
    NODE_SET_METHOD(exports, "logout", LogOut);
    NODE_SET_METHOD(exports, "init", Init);
    NODE_SET_METHOD(exports, "getversion", GetVersion);
@@ -1465,9 +1527,18 @@ void init(Local<Object> exports) {
    NODE_SET_METHOD(exports, "getmultiroute", GetMultiRouteResult);
    NODE_SET_METHOD(exports, "getmultiroute_for_inavi", GetMultiRouteResultForiNavi);
    NODE_SET_METHOD(exports, "getview", GetRouteView);
+   NODE_SET_METHOD(exports, "gettable", GetTable);
 // NODE_SET_METHOD(exports, "getresultstring", GetResultString);
 
    NODE_SET_METHOD(exports, "getoptimalposition", GetOptimalPosition);
+
+#if defined(USE_MULTIPROCESS)
+	omp_set_num_threads(PROCESS_NUM);
+#pragma omp parallel
+{
+	LOG_TRACE(LOG_DEBUG, "Check OpenMP thread id %d", omp_get_thread_num());
+}
+#endif
 }
 
 

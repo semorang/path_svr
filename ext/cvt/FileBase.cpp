@@ -2385,6 +2385,7 @@ bool CFileBase::LoadDataByIdx(IN const uint32_t idx)
 	}
 	else if (idx < 0 || m_vtIndex.size() <= idx) {
 		LOG_TRACE(LOG_ERROR, "Failed, request load data idx range, max:%d, req idx:%d", m_vtIndex.size(), idx);
+		fclose(fp);
 		return false;
 	}
 
@@ -2443,6 +2444,7 @@ bool CFileBase::LoadDataByIdx(IN const uint32_t idx)
 
 	// 내용이 없으면 메쉬만 포함하자
 	if (m_vtIndex[idx].szBody <= 0) {
+		fclose(fp);
 		return true;
 	}
 

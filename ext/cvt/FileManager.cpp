@@ -66,6 +66,8 @@ void CFileManager::SetDataMgr(CDataManager* pDataMgr)
 #if defined(USE_VEHICLE_DATA)
 		m_fileVehicle.SetDataManager(pDataMgr);
 		m_fileVehicle.SetNameManager(&m_fileName);
+
+		m_fileTraffic.SetDataManager(pDataMgr);
 #endif
 #if defined(USE_COMPLEX_DATA)
 		m_fileComplex.SetDataManager(pDataMgr);
@@ -125,6 +127,10 @@ bool CFileManager::OpenFile(IN const char* pszFilePath, IN const uint32_t nFileT
 	case TYPE_DATA_VEHICLE:
 		m_fileVehicle.OpenFile(pszFilePath);
 		break;
+
+	case TYPE_DATA_TRAFFIC:
+		m_fileTraffic.OpenFile(pszFilePath);
+		break;
 #endif
 
 #if defined(USE_COMPLEX_DATA)
@@ -167,6 +173,8 @@ bool CFileManager::SaveData(IN const char* pszFilePath)
 #endif
 #if defined(USE_VEHICLE_DATA)
 	m_fileVehicle.SaveData(pszFilePath);
+
+	m_fileTraffic.SaveData(pszFilePath);
 #endif
 #if defined(USE_COMPLEX_DATA)
 	m_fileComplex.SaveData(pszFilePath);
@@ -204,6 +212,10 @@ bool CFileManager::LoadData(IN const char* pszFilePath)
 	if (m_fileVehicle.LoadData(pszFilePath) == true) {
 		memcpy(&m_rtBox, m_fileVehicle.GetMeshRegion(), sizeof(m_rtBox));
 	}
+
+	if (m_fileTraffic.LoadData(pszFilePath) == true) {
+		;
+	}
 #endif
 
 #if defined(USE_COMPLEX_DATA)
@@ -232,6 +244,8 @@ bool CFileManager::LoadDataByIdx(IN const uint32_t idx)
 #endif
 #if defined(USE_VEHICLE_DATA)
 	m_fileVehicle.LoadDataByIdx(idx);
+
+	m_fileTraffic.LoadDataByIdx(idx);	
 #endif
 #if defined(USE_COMPLEX_DATA)
 	m_fileComplex.LoadDataByIdx(idx);
@@ -263,6 +277,8 @@ bool CFileManager::GetData(IN const uint32_t idTile)
 
 #if defined(USE_VEHICLE_DATA)
 	ret |= m_fileVehicle.LoadDataByIdx(idTile);
+
+	ret |= m_fileTraffic.LoadDataByIdx(idTile);	
 #endif
 
 #if defined(USE_COMPLEX_DATA)

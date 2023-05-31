@@ -494,6 +494,7 @@ bool CFileEntrance::LoadDataByIdx(IN const uint32_t idx)
 	}
 	else if (idx < 0 || m_vtIndex.size() <= idx) {
 		LOG_TRACE(LOG_ERROR, "Failed, request load data idx range, max:%s, req idx:%d", m_vtIndex.size(), idx);
+		fclose(fp);
 		return false;
 	}
 
@@ -558,6 +559,7 @@ bool CFileEntrance::LoadDataByIdx(IN const uint32_t idx)
 		if ((retRead = fread(&fileEnt, sizeof(fileEnt), 1, fp)) != 1)
 		{
 			LOG_TRACE(LOG_ERROR, "Failed, can't read complex entrance, mesh_id:%d, idx:%d", m_vtIndex[idx].idTile, ii);
+			fclose(fp);
 			return 0;
 		}
 		
@@ -578,6 +580,7 @@ bool CFileEntrance::LoadDataByIdx(IN const uint32_t idx)
 		if (fileEnt.cntEntrance > 0 && pPoly != nullptr) {
 			if (!pPoly->readAttribute(TYPE_POLYGON_DATA_ATTR_ENT, fp, fileEnt.cntEntrance)) {
 				LOG_TRACE(LOG_ERROR, "Failed, can't read complex entrance, mesh_id:%d, complex entrance idx:%d", m_vtIndex[idx].idTile, ii);
+				fclose(fp);
 				return 0;
 			}
 		}
@@ -599,6 +602,7 @@ bool CFileEntrance::LoadDataByIdx(IN const uint32_t idx)
 		if ((retRead = fread(&fileEnt, sizeof(fileEnt), 1, fp)) != 1)
 		{
 			LOG_TRACE(LOG_ERROR, "Failed, can't read building entrance, mesh_id:%d, idx:%d", m_vtIndex[idx].idTile, ii);
+			fclose(fp);
 			return 0;
 		}
 
@@ -619,6 +623,7 @@ bool CFileEntrance::LoadDataByIdx(IN const uint32_t idx)
 		if (fileEnt.cntEntrance > 0 && pPoly != nullptr) {
 			if (!pPoly->readAttribute(TYPE_POLYGON_DATA_ATTR_ENT, fp, fileEnt.cntEntrance)) {
 				LOG_TRACE(LOG_ERROR, "Failed, can't read building entrance, mesh_id:%d, building entrance idx:%d", m_vtIndex[idx].idTile, ii);
+				fclose(fp);
 				return 0;
 			}
 		}
