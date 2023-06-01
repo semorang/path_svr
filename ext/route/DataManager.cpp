@@ -1158,6 +1158,9 @@ stLinkInfo * CDataManager::GetLinkDataByPointAround(IN const double lng, IN cons
 					(pLink->veh.link_dtype == 1 || // 차량 승하자 + 단지내도로(건물입구점 재확인시, 단지도로에 매칭된 입구점을 확인하기 위해 포함)
 					 pLink->veh.road_type == 1 || pLink->veh.road_type == 2 || pLink->veh.road_type == 4 ||
 					 pLink->veh.pass_code == 2 || pLink->veh.pass_code == 3 ||
+#if defined(USE_P2P_DATA)
+					pLink->veh.over_pass == 1 || pLink->veh.hd_flag != 1 || // 전체 링크가 HD로 구성된 링크만 사용(경유지)
+#endif
 					 pLink->veh.link_type == 3 || pLink->veh.link_type == 4 || pLink->veh.link_type == 5 || pLink->veh.link_type == 6 || pLink->veh.link_type == 8 ||
 					 pLink->veh.tunnel == 1 || pLink->veh.under_pass == 1)) ||
 

@@ -495,7 +495,7 @@ void SetWaypoint(const FunctionCallbackInfo<Value>& args) {
       }
 
 #if defined(USE_P2P_DATA)
-      m_pRouteMgr.SetWaypoint(lng, lat, TYPE_LINK_MATCH_FOR_HD);
+      m_pRouteMgr.SetWaypoint(lng, lat, TYPE_LINK_MATCH_CARSTOP_EX);
 #else
       m_pRouteMgr.SetWaypoint(lng, lat, typeLinkMatch);
 #endif
