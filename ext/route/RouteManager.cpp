@@ -201,6 +201,12 @@ void CRouteManager::SetRouteOption(IN const uint32_t route, IN const uint32_t av
 }
 
 
+void CRouteManager::SetRouteCost(IN const uint32_t type, IN const RpCost* pCost)
+{
+	m_pRoutePlan->SetRouteCost(type, pCost);
+}
+
+
 int CRouteManager::GetWayPointCount(void)
 {
 	return m_ptWaypoints.size();
@@ -462,9 +468,19 @@ const size_t CRouteManager::GetRouteProbablePath(OUT vector<RouteProbablePath*>&
 
 
 #if defined(USE_TSP_MODULE)
-bool CRouteManager::GetBestWaypointResult(TspOptions* pOpt, IN const RouteTable** ppResultTables)
+bool CRouteManager::GetBestWaypointResult(IN TspOptions* pOpt, IN const RouteTable** ppResultTables, OUT vector<uint32_t>& vtBestWaypoints)
 {
+#if !defined(USE_REAL_ROUTE_TSP)
 	vector<stCity> vtRawData;
+#else
+	struct stWaypoints {
+		int nId;
+		double x;
+		double y;
+	};
+	vector<stWaypoints> vtRawData;
+#endif
+
 	int32_t idx = 0;
 
 	if (m_ptDeparture.has()) {
@@ -486,13 +502,15 @@ bool CRouteManager::GetBestWaypointResult(TspOptions* pOpt, IN const RouteTable*
 	vtViaResult.reserve(vtRawData.size());
 
 	if (pOpt->algorityhmType == 1) {
-		auto result = mst_manhattan_branch_and_bound(ppResultTables, vtRawData.size(), 0);
-		vtViaResult.assign(result.path.begin(), result.path.end());
+		for (const auto & coord : vtRawData) {
+			vtViaResult.emplace_back(coord.nId);
+		}
 	}
 	else if (pOpt->algorityhmType == 2) {
 		auto result = mst_manhattan_branch_and_bound2(ppResultTables, vtRawData.size(), 0);
 		vtViaResult.assign(result.path.begin(), result.path.end());
 	}
+#if !defined(USE_REAL_ROUTE_TSP)
 	else if (pOpt->algorityhmType == 3) {
 		InitURandom();
 		TEnvironment env;
@@ -511,6 +529,7 @@ bool CRouteManager::GetBestWaypointResult(TspOptions* pOpt, IN const RouteTable*
 
 		env.getBest(vtViaResult);
 	}
+#endif // #if !defined(USE_REAL_ROUTE_TSP)
 	else {
 		Environment newWorld;
 
@@ -523,16 +542,44 @@ bool CRouteManager::GetBestWaypointResult(TspOptions* pOpt, IN const RouteTable*
 
 		newWorld.SetOption(pOpt);
 
-		newWorld.SetCostTable(ppResultTables, vtRawData.size());
+#if 0//defined(USE_REAL_ROUTE_TSP)
+		// 실거리 테이블의 경우, 정방향 or 역방향 결과로 통일하자 --> 2023-05-11 [ii][jj] != [jj][ii]일 경우, 순위 경쟁에서 이상한 결과를 내보낼 경우 있음, 아직 원인 못찾음
+		for (int ii = 0; ii < maxGene; ii++) {
+			for (int jj = 0; jj < maxGene; jj++) {
+				if ((ii == jj) || (ii < jj)) break;
+
+				const_cast<RouteTable**>(ppResultTables)[jj][ii].nTotalDist = ppResultTables[ii][jj].nTotalDist;
+				/*const_cast<RouteTable**>(ppResultTables)[jj][ii].nTotalTime = ppResultTables[ii][jj].nTotalTime;*/
+			} // for jj
+		} // for ii
+#endif
+		newWorld.SetCostTable(ppResultTables, maxGene);
 		
 		// 신세계
 		newWorld.Genesis(maxGene, maxPopulation);
 
+		const uint32_t MAX_SAME_RESULT = 500;// maxGeneration; // 같은 값으로 100회 이상 진행되면 최적값에 수렴하는것으로 판단하고 종료
+		uint32_t repeatGeneration = 0;
+		double topCost = DBL_MAX;
+		double bestCost = DBL_MAX;
+
 		// 반복횟수
 		for (int ii = 0; ii < maxGeneration; ii++) {
 			// 평가
-			newWorld.Evaluation();
+			topCost = newWorld.Evaluation();
 			//newWorld.Print();
+
+			if (topCost < bestCost) {
+				bestCost = topCost;
+				repeatGeneration = 0;
+			}
+			else if (topCost == bestCost) {
+				repeatGeneration++;
+				if (MAX_SAME_RESULT < repeatGeneration) {
+					LOG_TRACE(LOG_DEBUG, "best result fitness value repeating %d count, finish generation.", repeatGeneration);
+					break;
+				}
+			}
 
 			// 부모 선택
 			vector<Parents> pairs;
@@ -547,20 +594,27 @@ bool CRouteManager::GetBestWaypointResult(TspOptions* pOpt, IN const RouteTable*
 		newWorld.GetBest(vtViaResult);
 	}
 	
-	LOG_TRACE(LOG_DEBUG, "rusult cnt: %d", vtViaResult.size());
 	if (vtRawData.size() != vtViaResult.size()) {
 		LOG_TRACE(LOG_DEBUG, "result count not match with orignal count, ori:%d != ret:%d", vtRawData.size(), vtViaResult.size());
 		return false;
 	}
 
-	LOG_TRACE(LOG_DEBUG_LINE, "rusult id: ");
+	LOG_TRACE(LOG_DEBUG_LINE, "index  :", vtViaResult.size());
+	for (idx = 0; idx < vtViaResult.size(); idx++)
+	{
+		LOG_TRACE(LOG_DEBUG_CONTINUE, "%3d|", idx);
+	}
+	LOG_TRACE(LOG_DEBUG_CONTINUE, " => \n", vtViaResult.size());
+
 	uint32_t totalDist = 0;
 	uint32_t idxFirst = 0;
 	uint32_t idxPrev = 0;
 	idx = 0;
+
+	LOG_TRACE(LOG_DEBUG_LINE, "result :");
 	for (const auto& item : vtViaResult)
 	{
-		LOG_TRACE(LOG_DEBUG_CONTINUE, "%2d→", item);
+		LOG_TRACE(LOG_DEBUG_CONTINUE, "%3d%c", item, 0x1A); //→
 		if (idx >= 1) {
 			totalDist += ppResultTables[idxPrev][item].nTotalDist;
 		}
@@ -579,7 +633,18 @@ bool CRouteManager::GetBestWaypointResult(TspOptions* pOpt, IN const RouteTable*
 
 
 	int curIdx = 0;
+	int wayType = 1;// 원점 회귀:1, 아닌지:0에 따라 갯수 변경됨
 
+	vtBestWaypoints.clear();
+	
+	if (wayType) {
+		// 원점 회귀면 처음과 마지막이 같기에 전체 사이즈는 -1됨
+		vtBestWaypoints.reserve(vtRawData.size() - 1);
+	}
+	else {
+		vtBestWaypoints.reserve(vtRawData.size());
+	}
+	
 
 	// 첫번째값을 출발지로 변경
 	int newIdx = vtViaResult[curIdx];
@@ -589,11 +654,26 @@ bool CRouteManager::GetBestWaypointResult(TspOptions* pOpt, IN const RouteTable*
 		newIdx, vtRawData[newIdx].x, vtRawData[newIdx].y);
 
 	SetDeparture(vtRawData[newIdx].x, vtRawData[newIdx].y);
+
+	vtBestWaypoints.emplace_back(newIdx);
 	curIdx++;
 
 
+	// 경유지 변경
+	for (int ii = 1; ii <= vtViaResult.size() - 2; ii++) {
+		newIdx = vtViaResult[ii];
+
+		LOG_TRACE(LOG_DEBUG, "waypoint will change, idx(%d) %.5f, %.5f -> idx(%d) %.5f, %.5f",
+			ii, vtRawData[ii].x, vtRawData[ii].y,
+			newIdx, vtRawData[newIdx].x, vtRawData[newIdx].y);
+
+		SetWaypoint(vtRawData[newIdx].x, vtRawData[newIdx].y);
+
+		vtBestWaypoints.emplace_back(newIdx);
+		curIdx++;
+	}
+
 	// 마지막값을 목적지로 변경
-	curIdx = vtViaResult.size() - 1;
 	newIdx = vtViaResult[curIdx];
 
 	LOG_TRACE(LOG_DEBUG, "destination will change, idx(%d) %.5f, %.5f -> idx(%d) %.5f, %.5f",
@@ -602,19 +682,8 @@ bool CRouteManager::GetBestWaypointResult(TspOptions* pOpt, IN const RouteTable*
 
 	SetDestination(vtRawData[newIdx].x, vtRawData[newIdx].y);
 
-	curIdx--;
-
-
-	// 경유지 변경
-	for (int ii = 1; ii <= curIdx; ii++) {
-		newIdx = vtViaResult[ii];
-
-		LOG_TRACE(LOG_DEBUG, "waypoint will change, idx(%d) %.5f, %.5f -> idx(%d) %.5f, %.5f",
-			ii, vtRawData[ii].x, vtRawData[ii].y,
-			newIdx, vtRawData[newIdx].x, vtRawData[newIdx].y);
-
-		SetWaypoint(vtRawData[newIdx].x, vtRawData[newIdx].y);
-	}
+	vtBestWaypoints.emplace_back(newIdx);
+	curIdx++;
 	
 	return true;
 }
@@ -640,12 +709,12 @@ int CRouteManager::SingleRoute()
 	return ret;
 }
 
-int CRouteManager::Table(TspOptions* pOpt, IN RouteTable** ppResultTables)
+int CRouteManager::Table(TspOptions* pOpt, IN RouteTable** ppResultTables, OUT vector<uint32_t>& vtBestWaypoints)
 {
 	int ret = -1;
 
 #if defined(USE_TSP_MODULE)
-	ret = DoTabulate(pOpt, ppResultTables);
+	ret = DoTabulate(pOpt, ppResultTables, vtBestWaypoints);
 #endif 
 
 	return ret;
@@ -712,7 +781,7 @@ int CRouteManager::DoRouting(/*Packet*/)
 			m_routeResult.EndResultLink = m_vtRouteResult[0].EndResultLink;
 
 			// for (int ii = m_vtRouteResult.size() - 1; ii >= 0; --ii) {
-			for (int ii = 0; ii < m_vtRouteResult.size() - 1; ii++) {
+			for (int ii = 0; ii < m_vtRouteResult.size(); ii++) {
 				// 경로선
 				boxMerge(m_routeResult.RouteBox, m_vtRouteResult[ii].RouteBox);
 				linkMerge(m_routeResult.LinkVertex, m_vtRouteResult[ii].LinkVertex);
@@ -792,7 +861,7 @@ int CRouteManager::GetTable(OUT RouteTable** ppResultTables)
 }
 
 
-int CRouteManager::DoTabulate(TspOptions* pOpt, IN RouteTable** ppResultTables)
+int CRouteManager::DoTabulate(TspOptions* pOpt, IN RouteTable** ppResultTables, OUT vector<uint32_t>& vtBestWaypoints)
 {
 	int ret = -1;
 
@@ -850,7 +919,7 @@ int CRouteManager::DoTabulate(TspOptions* pOpt, IN RouteTable** ppResultTables)
 	if (ret == ROUTE_RESULT_SUCCESS)
 	{
 #if defined(USE_TSP_MODULE)
-		GetBestWaypointResult(pOpt, const_cast<const RouteTable**>(resultTables));
+		GetBestWaypointResult(pOpt, const_cast<const RouteTable**>(resultTables), vtBestWaypoints);
 #endif
 
 		if (!m_vtRouteResult.empty()) {

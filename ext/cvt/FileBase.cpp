@@ -186,9 +186,12 @@ size_t linkMerge(IN OUT vector<SPoint>& lhs, IN const vector<SPoint>& rhs)
 	size_t lhsCnt = lhs.size();
 	size_t rhsCnt = rhs.size();
 
-	if (lhs.empty())
+	if (lhsCnt <= 0)
 	{
 		lhs.assign(rhs.begin(), rhs.end());
+	}
+	else if (rhsCnt <= 0) {
+		// do not thing
 	}
 	// head with head
 	else if (lhs.at(0).x == rhs.at(0).x && lhs.at(0).y == rhs.at(0).y)

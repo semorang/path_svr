@@ -533,11 +533,9 @@
 
                 // 노드 생성
                 // 경로에 노드를 생성합니다
+                var off = 0;
+                // 마지막 목적지의 종료 노드까지 처리하기 위해 for를 +1해서 돌림
                 for (var ii = 0; ii < cntLink; ii++) {
-                    var off = result_dat.link_info[ii].vertex_offset;
-                    if (off >= result_dat.vertex_info.length) {
-                        continue;
-                    }
                     nodes.push(new inavi.maps.Circle({
                         map: map,
                         position: [result_dat.vertex_info[off].x, result_dat.vertex_info[off].y], // 원 중심 좌표
@@ -548,7 +546,21 @@
                             fillOutlineColor: "#DB4455",
                         },
                     }));
+
+                    off += result_dat.link_info[ii].vertex_count;
                 } // for
+
+                // 마지막 목적지의 종료 노드까지 처리하기 위해 
+                nodes.push(new inavi.maps.Circle({
+                    map: map,
+                    position: [result_dat.vertex_info[off - 1].x, result_dat.vertex_info[off - 1].y], // 원 중심 좌표
+                    radius: 0.005, // 원 반지름 킬로미터 단위
+                    style: {
+                        fillOpacity: 0.5,  // 채우기 불투명도 입니다
+                        fillColor: "#CFE7FF",
+                        fillOutlineColor: "#DB4455",
+                    },
+                }));
 
 
                 // 정션 생성
@@ -564,8 +576,8 @@
                                 map: map,
                                 path: junctions,
                                 style: {
-                                    lineColor: "#FFC90E",
-                                    lineWidth: 2,
+                                    lineColor: "#F09B59", //"#FFC90E",
+                                    lineWidth: 5,
                                     // lineOpacity: 0.7,
                                 },
                             }));

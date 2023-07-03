@@ -4,8 +4,11 @@
 #include "RoutePlan.h"
 
 #if defined(USE_TSP_MODULE)
+#if !defined(USE_REAL_ROUTE_TSP)
 #include "../tsp/environment.h"
+#endif
 #include "../mst/prim.h"
+#include "../mst/tsp_ga.h"
 #endif
 
 class CRouteManager
@@ -26,6 +29,7 @@ public:
 	KeyID SetWaypoint(IN const double lng, IN const double lat, IN const int matchType = TYPE_LINK_MATCH_NONE);
 	KeyID SetDestination(IN const double lng, IN const double lat, IN const int matchType = TYPE_LINK_MATCH_NONE);
 	void SetRouteOption(IN const uint32_t route, IN const uint32_t avoid);
+	void SetRouteCost(IN const uint32_t type, IN const RpCost* pCost);
 
 	int GetWayPointCount(void);
 
@@ -35,7 +39,7 @@ public:
 	SPoint* GetDestination(void);
 
 	int Route(/*packet*/);
-	int Table(TspOptions* pOpt, IN RouteTable** ppResultTables = nullptr);
+	int Table(TspOptions* pOpt, IN RouteTable** ppResultTables, OUT vector<uint32_t>& vtBestWaypoints);
 	int GetTable(OUT RouteTable** ppResultTables);
 
 	const RouteResultInfo* GetRouteResult(void) const;
@@ -61,7 +65,7 @@ public:
 
 	// for TSP
 #if defined(USE_TSP_MODULE)
-	bool GetBestWaypointResult(TspOptions* pOpt, IN const RouteTable** ppResultTables);
+	bool GetBestWaypointResult(IN TspOptions* pOpt, IN const RouteTable** ppResultTables, OUT vector<uint32_t>& vtBestWaypoints);
 #endif
 
 
@@ -70,7 +74,7 @@ private:
 
 	int DoRouting(/*Packet*/);
 	// int setNode(/*FLAG, Packet*/);
-	int DoTabulate(TspOptions* pOpt, IN RouteTable** ppResultTables = nullptr);
+	int DoTabulate(TspOptions* pOpt, IN RouteTable** ppResultTables, OUT vector<uint32_t>& vtBestWaypoints);
 
 	SBox m_rtRouteBox;
 

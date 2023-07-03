@@ -55,6 +55,13 @@
         .circle_3 span { text-align: center;-webkit-text-stroke: 1px #000;} 
         .circle_4 { width: 18px; height: 18px; border-radius: 50%; background: #6666FF; position:absolute; top: 28px; left: 1px;}
         .circle_4 span { text-align: center;-webkit-text-stroke: 1px #FFF;} 
+
+        .circle_start { width: 18px; height: 18px; border-radius: 50%; background: #0000ff; position:absolute; top: 28px; left: 1px;}
+        .circle_start span { text-align: center;-webkit-text-stroke: 1px #FFF;} 
+        .circle_via { width: 18px; height: 18px; border-radius: 50%; background: #ff9100; position:absolute; top: 28px; left: 1px;}
+        .circle_via span { text-align: center;-webkit-text-stroke: 1px #FFF;} 
+        .circle_end { width: 18px; height: 18px; border-radius: 50%; background: #ff0000; border: 1px solid #71abe6; position:absolute; top: 28px; left: 1px}
+        .circle_end span { text-align: center;-webkit-text-stroke: 1px #FFF;} 
         
 
         /* 리스트 스타일 */

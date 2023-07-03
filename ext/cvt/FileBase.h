@@ -11,12 +11,13 @@
 #define FILE_VERSION_MINOR	0
 #define FILE_VERSION_PATCH	0
 
-#if 1//defined(_DEBUG)
-//#define _USE_TEST_MESH
-static const array<int, 25 > g_arrTestMesh = { 
+#if !defined(USE_P2P_DATA) // && 1 // defined(_DEBUG)
+#define _USE_TEST_MESH
+static const array<int, 31 > g_arrTestMesh = { 
 	185308, 185405, 185406, 185313, 185410, 185411, 185318, 185415, 185416, 186303, 186400, 186401, 186308, 186405, 186406, // 서울
 	186410, 186411, 186415, 186416, // 하남
-	186306, 186307 , 186308, 186311, 186312, 186313, // 성남
+	186306, 186307 ,186308, 186311, 186312, 186313, // 성남
+	185311, 185312, 185316, 185317, 186301, 186302, // 과천
 	};
 #endif
 

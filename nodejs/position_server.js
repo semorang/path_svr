@@ -124,7 +124,7 @@ app.get('/route', function(req, res) {
 });
 
 
-app.get('/routeview', function(req, res) {
+app.get('/view/route', function(req, res) {
     logout("start routeview request");
 
     logout("client IP : " + request_ip.getClientIp(req));
@@ -163,7 +163,7 @@ app.get('/routeview', function(req, res) {
 });
 
 
-app.get('/optimalposition', function(req, res) {
+app.get('/api/optimalposition', function(req, res) {
     logout("start optimalposition request");
 
     logout("client IP : " + request_ip.getClientIp(req));
@@ -190,7 +190,7 @@ app.get('/optimalposition', function(req, res) {
 });
 
 
-app.get('/optimalview', function(req, res) {
+app.get('/view/optimalposition', function(req, res) {
     logout("start optimalview request");
 
     logout("client IP : " + request_ip.getClientIp(req));

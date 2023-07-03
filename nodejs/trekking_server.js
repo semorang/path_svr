@@ -38,7 +38,7 @@ app.use(cors(corsOptions));
 
 app.get('/', function(req, res) {
     logout("client IP : " + request_ip.getClientIp(req));
-    res.send("this is trecking route server.")
+    res.send("this is trekking route server.")
 });
 
 
@@ -58,12 +58,26 @@ app.get('/test', function(req, res) {
     if (ret.result_code == 0) {
         // logout(JSON.stringify(ret));
         res.send(ret);
-    }
-    else{
+    } else {
         res.send('경탐 실패, 코드 : ' + ret.result_code + ', 오류 : ' + ret.msg);
     }
 
     logout("end test route request");
+});
+
+
+app.post('/api/setrpcost', function(req, res) {
+    logout('start set route plan cost');
+
+    const key = req.headers.authorization;
+    const mode = req.body.mode;
+    const cost = req.body.cost;
+
+    const ret = route.setrpcost(key, mode, cost);
+
+    res.send(ret);
+
+    logout('end set route plan cost');
 });
 
 
@@ -78,8 +92,7 @@ app.get('/summary', function(req, res) {
     if (ret.result_code == 0) {
         // logout(JSON.stringify(ret));
         res.send(ret);
-    }
-    else{
+    } else {
         // res.send('경탐 실패, 코드 : ' + ret.result_code + ', 오류 : ' + ret.msg);
         res.send(ret);
     }
@@ -100,8 +113,7 @@ app.get('/route', function(req, res) {
     if (ret.header.isSuccessful == true) {
         // logout(JSON.stringify(ret));
         res.send(ret);
-    }
-    else{
+    } else {
         // res.send('경탐 실패, 코드 : ' + ret.header.resultCode + ', 오류 : ' + ret.header.resultMessage);
         res.send(ret);
     }
@@ -121,8 +133,7 @@ app.get('/api/multiroute', function(req, res) {
     if (ret.header.isSuccessful == true) {
         // logout(JSON.stringify(ret));
         res.send(ret);
-    }
-    else{
+    } else {
         // res.send('다중 경탐 실패, 코드 : ' + ret.header.resultCode + ', 오류 : ' + ret.header.resultMessage);
         res.send(ret);
     }
@@ -155,8 +166,7 @@ app.get('/api/path', function(req, res) {
     if (ret.header.isSuccessful == true) {
         // logout(JSON.stringify(ret));
         res.send(ret);
-    }
-    else{
+    } else {
         // res.send('다중 경탐 실패, 코드 : ' + ret.header.resultCode + ', 오류 : ' + ret.header.resultMessage);
         res.send(ret);
     }
@@ -178,8 +188,7 @@ app.get('/api/kakaovx', function(req, res) {
     if (ret.header.isSuccessful == true) {
         // logout(JSON.stringify(ret));
         res.send(ret);
-    }
-    else{
+    } else {
         // res.send('다중 경탐 실패, 코드 : ' + ret.header.resultCode + ', 오류 : ' + ret.header.resultMessage);
         res.send(ret);
     }
@@ -211,8 +220,7 @@ app.get('/view/route', function(req, res) {
         
         //res.render(__dirname + "/../views/kakao_map", {javascriptkey:kakao_key, result:ret});
         res.render(__dirname + "/../views/kakao_maps_route", {javascriptkey:apikey.KAKAOMAPAPIKEY, result:ret});
-    }
-    else{
+    } else {
         res.send('경탐 실패, 코드 : ' + ret.result_code + ', 오류 : ' + ret.msg);
     }
 
@@ -236,12 +244,36 @@ app.get('/view/multiroute', function(req, res) {
         } else {
             res.render(__dirname + "/../views/inavi_maps_multiroute", {javascriptkey:apikey.INAVIMAPAPIKEY, result:ret});
         }
-    }
-    else{
+    } else {
         res.send('다중 경탐 실패, 코드 : ' + ret.header.resultCode + ', 오류 : ' + ret.header.resultMessage);
     }
 
     logout("end multirouteview request");
+});
+
+
+app.get('/view/waypoints', function(req, res) {
+    logout("start waypoints request");
+
+    logout("client IP : " + request_ip.getClientIp(req));
+    logout("client req : " + JSON.stringify(req.query));
+
+    const api = req.query.api;
+    
+    var ret = route.domultiroute(req, "view");
+
+    if (ret.header.isSuccessful == true) {
+        if (api === "kakao") {
+            res.render(__dirname + "/../views/kakao_maps_route", {javascriptkey:apikey.KAKAOMAPAPIKEY, result:ret});
+        } else {
+            // res.render(__dirname + "/../views/inavi_maps_multiroute", {javascriptkey:apikey.INAVIMAPAPIKEY, result:ret});
+            res.render(__dirname + "/../views/inavi_maps_tsp", {javascriptkey:apikey.INAVIMAPAPIKEY, result:ret});
+        }
+    } else {
+        res.send('다중 경탐 실패, 코드 : ' + ret.header.resultCode + ', 오류 : ' + ret.header.resultMessage);
+    }
+
+    logout("end waypoints request");
 });
 
 
@@ -265,8 +297,7 @@ app.get('/view/path', function(req, res) {
         } else {
             res.render(__dirname + "/../views/inavi_maps_path", {javascriptkey:apikey.INAVIMAPAPIKEY, result:ret});
         }
-    }
-    else{
+    } else {
         res.send('PATH 실패, 코드 : ' + ret.header.resultCode + ', 오류 : ' + ret.header.resultMessage);
     }
 
@@ -368,6 +399,38 @@ app.post('/api/distancematrix', function(req, res) {
 });
 
 
+app.get('/api/bestwaypoints/appkeys/:userkey', function(req, res) {
+    logout("start bestwaypoints request");
+
+    const key = req.params.userkey;
+    const mode = req.query.mode;
+    const destinations = req.query.origins;
+
+    // distance matrix api 호출
+    const ret = apis.bestwaypoints(key, mode, destinations);
+
+    res.send(ret);
+
+    logout("end bestwaypoints request by GET");
+});
+
+
+app.post('/api/bestwaypoints', function(req, res) {
+    logout("start bestwaypoints request");
+
+    const key = req.headers.authorization;
+    const mode = req.body.mode;
+    const destinations = req.body.origins;
+
+    // distance matrix api 호출
+    const ret = apis.bestwaypoints(key, mode, destinations);
+
+    res.send(ret);
+
+    logout("end bestwaypoints request");
+});
+
+
 app.get('/api/createkey', function(req, res) {
     logout("create key request");
 
@@ -396,8 +459,6 @@ const server = app.listen(cur_port, function () {
     logout("finished server initialize");
 
     // addon.logout("start walk routing server addr "  + cur_ip.address() + ":" + cur_port + " on " + os.type());
-
-
 });
 
 server.headersTimeout = 5 * 1000; //10s

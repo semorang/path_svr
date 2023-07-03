@@ -67,7 +67,9 @@ void CFileManager::SetDataMgr(CDataManager* pDataMgr)
 		m_fileVehicle.SetDataManager(pDataMgr);
 		m_fileVehicle.SetNameManager(&m_fileName);
 
+#if defined(USE_TREKKING_POINT_API)
 		m_fileTraffic.SetDataManager(pDataMgr);
+#endif
 #endif
 #if defined(USE_COMPLEX_DATA)
 		m_fileComplex.SetDataManager(pDataMgr);
@@ -128,9 +130,11 @@ bool CFileManager::OpenFile(IN const char* pszFilePath, IN const uint32_t nFileT
 		m_fileVehicle.OpenFile(pszFilePath);
 		break;
 
+#if defined(USE_TREKKING_POINT_API)
 	case TYPE_DATA_TRAFFIC:
 		m_fileTraffic.OpenFile(pszFilePath);
 		break;
+#endif
 #endif
 
 #if defined(USE_COMPLEX_DATA)
@@ -174,7 +178,9 @@ bool CFileManager::SaveData(IN const char* pszFilePath)
 #if defined(USE_VEHICLE_DATA)
 	m_fileVehicle.SaveData(pszFilePath);
 
+#if defined(USE_TREKKING_POINT_API)
 	m_fileTraffic.SaveData(pszFilePath);
+#endif
 #endif
 #if defined(USE_COMPLEX_DATA)
 	m_fileComplex.SaveData(pszFilePath);
@@ -213,9 +219,11 @@ bool CFileManager::LoadData(IN const char* pszFilePath)
 		memcpy(&m_rtBox, m_fileVehicle.GetMeshRegion(), sizeof(m_rtBox));
 	}
 
+#if defined(USE_TREKKING_POINT_API)
 	if (m_fileTraffic.LoadData(pszFilePath) == true) {
 		;
 	}
+#endif
 #endif
 
 #if defined(USE_COMPLEX_DATA)
@@ -245,7 +253,9 @@ bool CFileManager::LoadDataByIdx(IN const uint32_t idx)
 #if defined(USE_VEHICLE_DATA)
 	m_fileVehicle.LoadDataByIdx(idx);
 
+#if defined(USE_TREKKING_POINT_API)
 	m_fileTraffic.LoadDataByIdx(idx);	
+#endif
 #endif
 #if defined(USE_COMPLEX_DATA)
 	m_fileComplex.LoadDataByIdx(idx);
@@ -278,7 +288,9 @@ bool CFileManager::GetData(IN const uint32_t idTile)
 #if defined(USE_VEHICLE_DATA)
 	ret |= m_fileVehicle.LoadDataByIdx(idTile);
 
+#if defined(USE_TREKKING_POINT_API)
 	ret |= m_fileTraffic.LoadDataByIdx(idTile);	
+#endif
 #endif
 
 #if defined(USE_COMPLEX_DATA)

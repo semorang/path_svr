@@ -160,7 +160,7 @@
             params.set('lat', pos.lat);
             params.set('lng', pos.lng);
             params.set('expand', 1);
-            var pathname = '/optimalposition'; // window.location.pathname;
+            var pathname = '/api/optimalposition'; // window.location.pathname;
             var move2url = pathname + '?' + params.toString();
             // var move2url = pathname + '?lng=' + latlng.lng + '&lat=' + latlng.lat + '&type=0&near=true&expand=true&api=inavi';
             // window.open(move2url, '_self');
@@ -307,6 +307,7 @@
 
             // 사용자 설정 위치            
             marker.setPosition(user_pos);
+            marker.setVisible(true);
         }
 
         // 최적 입구점 정보

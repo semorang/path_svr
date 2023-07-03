@@ -31,6 +31,13 @@ const ERROR_CODES = {
 }
 
 
+const ERROR_OPTIMAL_CODES = {
+    OPTIMAL_RESULT_SUCCESS : 0,				//0 성공
+    OPTIMAL_RESULT_NO_RESULT : 100,			//100	결과 없음
+    OPTIMAL_RESULT_WRONG_PARAM : 101,		//101	파라미터 오류
+    OPTIMAL_RESULT_SERVER_ERROR : 102,      //102   서버오류
+}
+
 // route options
 const ROUTE_OPTIONS = {
     ROUTE_OPT_SHORTEST : 0, // 최단거리
@@ -129,5 +136,7 @@ module.exports = {
 
     // errors
     ERROR_CODES,
+    ERROR_OPTIMAL_CODES,
+    
     getErrMsg,
 }

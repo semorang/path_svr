@@ -14,6 +14,8 @@
                 "../ext/shp/ShpReader.cpp",
                 "../ext/shp/ShpWriter.cpp",
 
+                "../ext/mst/prim.cpp",
+                "../ext/mst/tsp_ga.cpp",
                 "../ext/route/MMPoint.hpp",
                 "../ext/route/MapBase.cpp",
                 "../ext/route/MapName.cpp",
@@ -43,10 +45,19 @@
                 ['OS=="linux"', {
                     "cflags":['-fexceptions',
                         '-unused-result',
+                        '-fopenmp',
                     ],
                     "cflags_cc":['-fexceptions',
                         '-unused-result',
+                        '-fopenmp',
                     ],
+                    "ldflags": [
+#                      '-fopenmp',
+                   ],
+                   "libraries": [
+                        '-fopenmp',
+                   ],
+
                 }],
                 ['OS=="win"', {
                     'msvs_settings': {
@@ -55,6 +66,9 @@
                             'IgnoreDefaultLibraryNames': [
                                 'nafxcw.lib', 'libcmtd.lib'
                         ]},
+                        'VCCLCompilerTool': {
+                            'AdditionalOptions': ['/MT', '/openmp'],
+                        },
                     },
                     'libraries': [
                             '-lnafxcw.lib', '-llibcmtd.lib',

@@ -20,7 +20,7 @@ using namespace std;
 #include <float.h>
 #endif
 
-// #define USE_MULTIPROCESS
+#define USE_MULTIPROCESS
 #if defined(USE_MULTIPROCESS)
 #define PROCESS_NUM 8
 #include <omp.h>
@@ -956,6 +956,18 @@ typedef enum {
 	TYPE_NODE_UNDERGROUND_MALL, // 지하상가 진출입
 	TYPE_NODE_BUILDING, // 건물 진출입
 }TYPE_NODE;
+
+
+
+typedef enum {
+	ROUTE_TYPE_NONE = 0, // 미정의
+	ROUTE_TYPE_TREKKING, // 숲길
+	ROUTE_TYPE_PEDESTRIAN, // 보행자
+	ROUTE_TYPE_BIKE, // 자전거
+	ROUTE_TYPE_KICKBOARD, // 킥보드
+	ROUTE_TYPE_MOTOCYCLE, // 모터사이클
+	ROUTE_TYPE_VEHICLE, // 차량
+}ROUTE_TYPE;
 
 
 typedef enum {

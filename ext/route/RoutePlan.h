@@ -4,7 +4,8 @@
 #include "DataManager.h"
 
 // #define USE_TSP_MODULE
-// #define USE_REAL_ROUTE_TSP //실제 경로 기반 거리 사용
+// #define USE_REAL_ROUTE_TSP //실제 경로 기반 TSP
+// #define USE_REAL_ROUTE_TSP_COST // 실제 경로 코스트 기준
 
 #define MAX_WAYPOINT 100
 #if defined(USE_PEDESTRIAN_DATA)
@@ -132,6 +133,7 @@ typedef struct _tagRouteLinkInfo {
 	int32_t LinkDistToS; // s로의 거리
 	int32_t LinkDistToE; // e로의 거리
 	int32_t LinkDir; // 탐색 방향, 0:미정의, 1:정방향(S->E), 2:역방향(E->S)
+	int32_t LinkGuideType; // 링크 안내 타입, 0:일반, 1:출발지링크, 2:도착지링크, 3:경유지링크
 	vector<SPoint> LinkVtxToS; // 좌표점에서 s버텍스
 	vector<SPoint> LinkVtxToE; // 좌표점에서 e버텍스
 
@@ -142,6 +144,8 @@ typedef struct _tagRouteLinkInfo {
 		LinkSplitIdx = -1;
 		LinkDistToS = 0;
 		LinkDistToE = 0;
+		LinkDir = 0;
+		LinkGuideType = 0;
 	}
 
 	~_tagRouteLinkInfo() {
@@ -236,16 +240,23 @@ typedef struct _tagRequestRouteInfo {
 
 typedef struct _tagRouteTable {
 
+	uint32_t nOriginIdx;
+	uint32_t nBestIdx;
 	int32_t nUsable; // 요청 모드 // -1:미사용, 0:미방문, n:방문횟수
 	uint32_t nTotalDist;
 	uint32_t nTotalTime;
+	double dbTotalCost;
 
 	RouteLinkInfo linkInfo;
 
 	_tagRouteTable() {
+		nOriginIdx = 0;
+		nBestIdx = 0;
+
 		nUsable = -1;
 		nTotalDist = 0;
 		nTotalTime = 0;
+		dbTotalCost = 0;
 	}
 
 	~_tagRouteTable() {
@@ -302,6 +313,20 @@ typedef struct _tagTspOptions {
 }TspOptions;
 
 
+typedef struct _tagRpCost {
+	union {
+		int32_t base[128];
+		struct {
+			int32_t cost_lv0; int32_t cost_lv1; int32_t cost_lv2; int32_t cost_lv3; int32_t cost_lv4;
+			int32_t cost_lv5; int32_t cost_lv6; int32_t cost_lv7; int32_t cost_lv8; int32_t cost_lv9; 
+			int32_t cost_ang0; int32_t cost_ang45;int32_t cost_ang90; int32_t cost_ang135; int32_t cost_ang180;
+			int32_t cost_ang225; int32_t cost_ang270; int32_t cost_ang315;
+			// 18
+		}vehicle;
+	};
+}RpCost;
+
+
 class CRoutePlan
 {
 public:
@@ -312,6 +337,7 @@ public:
 	void Release(void);
 
 	void SetDataMgr(IN CDataManager* pDataMgr);
+	void SetRouteCost(IN const uint32_t type, IN const RpCost* pCost);
 
 	const int DoRoute(IN const uint32_t reqId, IN const SPoint ptStart, IN const SPoint ptEnd, IN const KeyID sLink, IN const KeyID eLink, IN const uint32_t routeOpt, IN const uint32_t avoidOpt, OUT RouteResultInfo* pRouteResult);
 	const int DoRoutes(IN const RequestRouteInfo* pReqInfo, OUT vector<RouteInfo>* pRouteInfos, OUT vector<RouteResultInfo>* pRouteResults);
@@ -333,11 +359,16 @@ private:
 	const int AddNewLinks(IN RouteInfo* pRouteInfo, IN const CandidateLink* pCurInfo, IN const int dir);
 	const int Propagation(IN TableBaseInfo* pRouteInfo, IN const CandidateLink* pCurInfo, IN const int dir, IN const SPoint target); // /단순 확장
 
-	const int MakeRoute(IN RouteInfo* pRouteInfo, OUT RouteResultInfo* pRouteResult);
+	const int MakeRoute(IN const int idx, IN RouteInfo* pRouteInfo, OUT RouteResultInfo* pRouteResult);
 #if defined(USE_TSP_MODULE)
-	const int MakeTabulate(IN const vector<RouteLinkInfo>& LinkInfos, OUT RouteTable** ppResultTables);
+	const int MakeTabulate(IN const RequestRouteInfo* pReqInfo, IN const vector<RouteLinkInfo>& LinkInfos, OUT RouteTable** ppResultTables);
 #endif
 	const int MakeRouteResult(IN RouteInfo* pRouteInfo, OUT RouteResultInfo* pRouteResult);
+
+	const double GetCost(IN const stLinkInfo* pLink, IN const uint32_t opt, IN const double length, IN const uint32_t spd); // type, 0:보행자, 1:자전거 
+	const double GetTravelCost(IN const stLinkInfo* pLink, IN const stLinkInfo* pLinkPrev, IN const double cost, IN const int angle, IN const uint32_t type, IN const uint32_t opt, IN const uint32_t avoid); // type, 0:보행자, 1:자전거
+	const uint32_t CheckStartDirectionMaching(IN const stLinkInfo* pLink, IN const RouteLinkInfo* pRoutLinkInfo, IN const int32_t routeOpt, OUT vector<CandidateLink>& vtCandidateInfo);
+	const uint32_t CheckEndDirectionMaching(IN const stLinkInfo* pLink, IN const stNodeInfo* pSNode, IN const stNodeInfo* pENode, IN const RouteLinkInfo* pRoutLinkInfo, IN const int32_t routeOpt, OUT vector<CandidateLink>& vtCandidateInfo);
 
 	CDataManager* m_pDataMgr;
 	MapNode* m_pMapNodeMgr;
@@ -359,6 +390,8 @@ private:
 	void* m_pHost;
 	void(*m_fpRoutingStatus)(const void* pHost, const unordered_map<uint64_t, CandidateLink*>*);
 #endif
+
+	RpCost m_rpCost;
 };
 
 

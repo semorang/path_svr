@@ -6,6 +6,7 @@ const INAVIMAPAPIKEY='3cbfd55815743b0a8cfb7d4dc6a6d11331570d2d'; // 2023-01-13 ì
 const DISTMATRIXAPIKEYS = [
     {name: 'rpteam', apiKey: '1PAWS6Y-5Z74SJ3-P613MCC-M24VCX0', uuid: '0d95cc9b-2fce-4cc8-b182-3a31a089b674'}, // for inavi rp team
     {name: 'fleetune', apiKey: '035VE7J-2EF4T7W-J9PZ6GB-9H8SVHC', uuid: '00cbb71e-139e-4d1f-926d-f3414c519dc5'}, // for fleetune
+    {name: 'geoyoung', apiKey: '2Y41Z0H-7QS4Z5X-JZJBHJQ-95BSGD6', uuid: '17881f82-3df2-4f97-97e4-b8ca49579834'}, // for geo-young
 ];
 
 module.exports = {

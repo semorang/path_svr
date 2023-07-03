@@ -152,6 +152,8 @@ void Init(const FunctionCallbackInfo<Value>& args) {
    std::string strDataPath;
    int nPid = 0;
 
+   LOG_INITIALIZE();
+
    if (args.Length() > 0) {
       nPid = args[0].As<Number>()->Value();
       LOG_SET_ID(nPid);
@@ -202,7 +204,6 @@ void Init(const FunctionCallbackInfo<Value>& args) {
    else {
       LOG_TRACE(LOG_DEBUG, "Init path : %s", strDataPath.c_str());
    }
-
 
 	m_pDataMgr.Initialize();
 	m_pFileMgr.Initialize();
@@ -427,7 +428,7 @@ void SetDeparture(const FunctionCallbackInfo<Value>& args) {
       double lng = args[0].As<Number>()->Value();
       double lat = args[1].As<Number>()->Value();
 
-      LOG_TRACE(LOG_DEBUG, "Set departure lng:%f, lat:%f", lng, lat);
+      LOG_TRACE(LOG_TEST, "Set departure lng:%f, lat:%f", lng, lat);
 
       bool useOptimalPoint = false;
       if (cnt >= 2) {
@@ -472,7 +473,7 @@ void SetWaypoint(const FunctionCallbackInfo<Value>& args) {
       double lng = args[0].As<Number>()->Value();
       double lat = args[1].As<Number>()->Value();
 
-      LOG_TRACE(LOG_DEBUG, "Set waypoint lng:%f, lat:%f", lng, lat);
+      LOG_TRACE(LOG_TEST, "Set waypoint lng:%f, lat:%f", lng, lat);
 
       bool useOptimalPoint = false;
       if (cnt >= 2) {
@@ -502,6 +503,52 @@ void SetWaypoint(const FunctionCallbackInfo<Value>& args) {
    }
 }
 
+void SetRpCost(const FunctionCallbackInfo<Value>& args) {
+   Isolate* isolate = args.GetIsolate();
+   Local<Context> context = isolate->GetCurrentContext();
+
+   int type = 0;
+   int count = 0;
+   Local<Array> costList;
+
+   Local<Object> obj = Object::New(isolate);
+   v8::MaybeLocal<v8::String> msg;
+
+   int ret = -1;
+
+   if (args.Length() < 3) {
+      LOG_TRACE(LOG_DEBUG, "set route cost argument too short : %d", args.Length());
+      msg = String::NewFromUtf8(isolate, "set route cost argument too short : " + args.Length());
+   } 
+   else {
+      type = args[0].As<Number>()->Value();//ROUTE_TYPE_VEHICLE // vevhicle
+      count = args[1].As<Number>()->Value();
+      costList = args[2].As<Array>();
+
+      RpCost cost;
+      if (count >= 128) {
+         LOG_TRACE(LOG_DEBUG, "set route cost count too big : %d", count);
+         msg = String::NewFromUtf8(isolate, "set route cost count too big : " + count);
+      } else {
+         for (int ii=0; ii<count; ii++) {
+            Local<Value> costValue =  costList->Get(context, ii).ToLocalChecked();
+            cost.base[ii] = costValue.As<Number>()->Value();
+         }
+
+         m_pRouteMgr.SetRouteCost(type, &cost);
+
+         ret = ROUTE_RESULT_SUCCESS;
+         msg = String::NewFromUtf8(isolate, "success");
+      }
+   }
+
+   obj->Set(context, String::NewFromUtf8(isolate, "result_code").ToLocalChecked(), Integer::New(isolate, ret));
+   obj->Set(context, String::NewFromUtf8(isolate, "result_message").ToLocalChecked(), msg.ToLocalChecked());
+
+   args.GetReturnValue().Set(obj);
+}
+
+
 void SetDestination(const FunctionCallbackInfo<Value>& args) {
    // Isolate* isolate = args.GetIsolate();
    // double lng = To<double>(info[0]).FromJust();//->NumberValue();
@@ -518,7 +565,7 @@ void SetDestination(const FunctionCallbackInfo<Value>& args) {
       double lat = args[1].As<Number>()->Value();
       // int opt = args[2].As<Number>()->Value();
 
-      LOG_TRACE(LOG_DEBUG, "Set destination lng:%f, lat:%f", lng, lat);
+      LOG_TRACE(LOG_TEST, "Set destination lng:%f, lat:%f", lng, lat);
 
       bool useOptimalPoint = false;
       if (cnt >= 2) {
@@ -1294,7 +1341,7 @@ void GetOptimalPosition(const FunctionCallbackInfo<Value>& args) {
          // header
          Local<Object> header = Object::New(isolate);
          header->Set(context, String::NewFromUtf8(isolate, "isSuccessful").ToLocalChecked(), Boolean::New(isolate, false));
-         header->Set(context, String::NewFromUtf8(isolate, "resultCode").ToLocalChecked(), Integer::New(isolate, 1));
+         header->Set(context, String::NewFromUtf8(isolate, "resultCode").ToLocalChecked(), Integer::New(isolate, 100));
          header->Set(context, String::NewFromUtf8(isolate, "resultMessage").ToLocalChecked(), String::NewFromUtf8(isolate, m_pDataMgr.GetErrorMessage()).ToLocalChecked());
 
          // make header only
@@ -1309,7 +1356,7 @@ void GetOptimalPosition(const FunctionCallbackInfo<Value>& args) {
 
          // data
          Local<Object> data = Object::New(isolate);
-         data->Set(context, String::NewFromUtf8(isolate, "result").ToLocalChecked(), Number::New(isolate, 0));
+         data->Set(context, String::NewFromUtf8(isolate, "result").ToLocalChecked(), Boolean::New(isolate, true));
          data->Set(context, String::NewFromUtf8(isolate, "count").ToLocalChecked(), Integer::New(isolate, optInfo.vtEntryPoint.size()));
 
          // items
@@ -1512,7 +1559,166 @@ void GetTable(const FunctionCallbackInfo<Value>& args) {
 }
 
 
+void GetWaypoints(const FunctionCallbackInfo<Value>& args) {
+   Isolate* isolate = args.GetIsolate();
+   Local<Context> context = isolate->GetCurrentContext();
+   Local<Object> mainobj = Object::New(isolate);
+
+   cJSON* root = cJSON_CreateObject();
+   string strJson;
+   RouteTable** resultTables = nullptr;
+   int cntRows = 0;
+   int tspOpt = 0;
+
+   if (args.Length() < 2) {
+      LOG_TRACE(LOG_WARNING, "GetWaypoints arg to short, length : %d", args.Length());
+
+      cJSON_AddNumberToObject(root, "result_code", ROUTE_RESULT_FAILED_WRONG_PARAM);
+      cJSON_AddStringToObject(root, "msg", "input param count not enough");
+   }
+   else {
+      tspOpt = args[0].As<Number>()->Value();
+      cntRows = args[1].As<Number>()->Value();
+
+      // resultTables = new RouteTable*[cntRows];
+
+      // for(int ii=0; ii<cntRows; ii++) {
+      //    resultTables[ii] = new RouteTable[cntRows];
+      // }
+
+      int result_code = ROUTE_RESULT_FAILED;
+      string str_msg = "";
+
+      int routOpt = 2;
+
+      uint32_t typeAlgorithm = tspOpt; // default tsp value is 0
+      uint32_t cntMaxRows = cntRows;
+      uint32_t cntMaxPopulation = 100;
+      uint32_t cntMaxLoop = 1000;
+
+      TspOptions opt = {
+			typeAlgorithm,
+			cntMaxRows,
+			cntMaxPopulation,
+			cntMaxLoop,
+		};
+
+      m_pRouteMgr.SetRouteOption(routOpt, 0);
+
+      vector<uint32_t> vtBestwaypoints;
+      int ret = m_pRouteMgr.Table(&opt, resultTables, vtBestwaypoints);
+      
+#if defined(USE_CJSON)
+      if (ret == ROUTE_RESULT_SUCCESS) {
+         cJSON* waypoints = cJSON_CreateArray();
+         int cntWaypoints = vtBestwaypoints.size();
+
+         for(int ii=0; ii<cntWaypoints; ii++) {
+            cJSON* info = cJSON_CreateObject();
+
+            cJSON_AddNumberToObject(info, "index", vtBestwaypoints[ii]);
+            cJSON_AddItemToArray(waypoints, info);
+         } // for
+
+         cJSON_AddItemToObject(root, "waypoints", waypoints);
+
+         cJSON_AddStringToObject(root, "status", "OK");
+         cJSON_AddNumberToObject(root, "result_code", ret);
+         cJSON_AddStringToObject(root, "msg", "success");
+
+#if 1 // print web view
+         // for web route view
+         ////////////////////////////////////////////////////////////////////////////////
+         // const char *szHost = "localhost";
+         // int nPort = 20301;
+         const char *szHost = "133.186.153.133";
+         int nPort = 5555;
+
+         char szBuff[256] = { 0, };
+         string strURL;
+
+         sprintf(szBuff, "http://%s:%d/view/waypoints?id=202302091420&opt=%d", szHost, nPort, routOpt);
+         strURL.append(szBuff);
+
+         // add start
+         sprintf(szBuff, "&start=%.6f,%.6f", m_pRouteMgr.GetDeparture()->x, m_pRouteMgr.GetDeparture()->y);
+         strURL.append(szBuff);
+
+         // add end
+         sprintf(szBuff, "&end=%.6f,%.6f", m_pRouteMgr.GetDestination()->x, m_pRouteMgr.GetDestination()->y);
+         strURL.append(szBuff);
+
+         const int cntVias = m_pRouteMgr.GetWayPointCount();
+         for (int ii = 0; ii < cntVias; ii++) {
+            sprintf(szBuff, "&vias=%.6f,%.6f", m_pRouteMgr.GetWaypoint(ii)->x, m_pRouteMgr.GetWaypoint(ii)->y);
+            strURL.append(szBuff);
+         }
+         // strURL.append("\n");
+
+         printf(strURL.c_str());
+         printf("\n");
+         ////////////////////////////////////////////////////////////////////////////////
+
+         cJSON_AddStringToObject(root, "url", strURL.c_str());
+#endif 
+
+      } else {
+         cJSON_AddStringToObject(root, "status", "UNKNOWN_ERROR ");
+         cJSON_AddNumberToObject(root, "result_code", ret);
+         cJSON_AddStringToObject(root, "msg", "failed");
+      }
+
+      /*
+      https://developers.google.com/maps/documentation/distance-matrix/distance-matrix?hl=ko
+
+      OK indicates the response contains a valid result.
+      INVALID_REQUEST indicates that the provided request was invalid.
+      MAX_ELEMENTS_EXCEEDED indicates that the product of origins and destinations exceeds the per-query limit.
+      MAX_DIMENSIONS_EXCEEDED indicates that the number of origins or destinations exceeds the per-query limit.
+      OVER_DAILY_LIMIT indicates any of the following:
+      The API key is missing or invalid.
+      Billing has not been enabled on your account.
+      A self-imposed usage cap has been exceeded.
+      The provided method of payment is no longer valid (for example, a credit card has expired).
+      OVER_QUERY_LIMIT indicates the service has received too many requests from your application within the allowed time period.
+      REQUEST_DENIED indicates that the service denied use of the Distance Matrix service by your application.
+      UNKNOWN_ERROR indicates a Distance Matrix request could not be processed due to a server error. The request may succeed if you try again.
+      */
+         
+      strJson = cJSON_Print(root);
+
+      cJSON_Delete(root);
+
+      // destroyed route table
+      if (resultTables) {
+         for (int ii = 0; ii < cntRows; ii++) {
+            SAFE_DELETE_ARR(resultTables[ii]);
+         }
+         SAFE_DELETE_ARR(resultTables);
+      }
+#endif // #if defined(USE_CJSON)
+
+
+   }
+
+   args.GetReturnValue().Set(String::NewFromUtf8(isolate, strJson.c_str()).ToLocalChecked());
+}
+
+
 void init(Local<Object> exports) {
+
+#if defined(USE_MULTIPROCESS)
+   if (omp_get_max_threads() > PROCESS_NUM) {
+	   omp_set_num_threads(PROCESS_NUM);
+      printf("Check OpenMP reset threads num to %d\n", omp_get_max_threads());
+   } else {
+      printf("Check OpenMP threads num : %d\n", omp_get_max_threads());
+   }
+   printf("Check OpenMP thread ids : ");
+#pragma omp parallel
+   printf("%d ", omp_get_thread_num());
+   printf("\n");
+#endif // #if defined(USE_MULTIPROCESS)
 
    NODE_SET_METHOD(exports, "logout", LogOut);
    NODE_SET_METHOD(exports, "init", Init);
@@ -1520,6 +1726,7 @@ void init(Local<Object> exports) {
    NODE_SET_METHOD(exports, "setdeparture", SetDeparture);
    NODE_SET_METHOD(exports, "setdestination", SetDestination);
    NODE_SET_METHOD(exports, "setwaypoint", SetWaypoint);
+   NODE_SET_METHOD(exports, "setrpcost", SetRpCost);
    NODE_SET_METHOD(exports, "doroute", DoRoute);
    NODE_SET_METHOD(exports, "releaseroute", ReleaseRoute);
    NODE_SET_METHOD(exports, "getsummary", GetRouteSummary);
@@ -1528,17 +1735,10 @@ void init(Local<Object> exports) {
    NODE_SET_METHOD(exports, "getmultiroute_for_inavi", GetMultiRouteResultForiNavi);
    NODE_SET_METHOD(exports, "getview", GetRouteView);
    NODE_SET_METHOD(exports, "gettable", GetTable);
+   NODE_SET_METHOD(exports, "getwaypoints", GetWaypoints);
 // NODE_SET_METHOD(exports, "getresultstring", GetResultString);
 
    NODE_SET_METHOD(exports, "getoptimalposition", GetOptimalPosition);
-
-#if defined(USE_MULTIPROCESS)
-	omp_set_num_threads(PROCESS_NUM);
-#pragma omp parallel
-{
-	LOG_TRACE(LOG_DEBUG, "Check OpenMP thread id %d", omp_get_thread_num());
-}
-#endif
 }
 
 

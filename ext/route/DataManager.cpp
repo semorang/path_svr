@@ -1165,7 +1165,8 @@ stLinkInfo * CDataManager::GetLinkDataByPointAround(IN const double lng, IN cons
 					 pLink->veh.tunnel == 1 || pLink->veh.under_pass == 1)) ||
 
 					((nMatchType == TYPE_LINK_MATCH_FOR_TABLE) &&
-					(pLink->veh.link_dtype == 1 || pLink->veh.link_dtype == 3 || pLink->veh.level >= USE_ROUTE_TABLE_LEVEL || // 2차선 이하 제외
+					(pLink->veh.link_dtype == 1 || pLink->veh.link_dtype == 3 || pLink->veh.level >= USE_ROUTE_TABLE_LEVEL || 
+					pLink->veh.lane_cnt <= 2 || // 2차선 이하 제외
 					pLink->veh.road_type == 1 || pLink->veh.road_type == 2 || pLink->veh.road_type == 4 ||
 					pLink->veh.pass_code == 2 || pLink->veh.pass_code == 3 ||
 					pLink->veh.link_type == 3 || pLink->veh.link_type == 4 || pLink->veh.link_type == 5 || pLink->veh.link_type == 6 || pLink->veh.link_type == 8 ||
