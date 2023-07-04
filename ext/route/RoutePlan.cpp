@@ -53,9 +53,9 @@ CRoutePlan::CRoutePlan()
 	m_rpCost.vehicle.cost_ang0 = 0; // 직진
 	m_rpCost.vehicle.cost_ang45 = 5; // 우측
 	m_rpCost.vehicle.cost_ang90 = 20; // 우회전 
-	m_rpCost.vehicle.cost_ang135 = 30; // 급우회전 
+	m_rpCost.vehicle.cost_ang135 = 500; // 급우회전 
 	m_rpCost.vehicle.cost_ang180 = 600; // 유턴
-	m_rpCost.vehicle.cost_ang225 = 60; // 급좌회전 
+	m_rpCost.vehicle.cost_ang225 = 500; // 급좌회전 
 	m_rpCost.vehicle.cost_ang270 = 60; // 좌회전 
 	m_rpCost.vehicle.cost_ang315 = 60; // 좌측
 #else
@@ -1114,6 +1114,9 @@ const int CRoutePlan::AddNewLinks(IN RouteInfo* pRouteInfo, IN const CandidateLi
 				// 출발지와 도착지는 HD 부분 링크를 허용, 하지만 경유지는 불허
 				continue;
 			}
+			else if (pLink->veh.link_type == 8) { // 유턴 금지
+				continue;
+			}
 #endif
 
 			candidateId.parents_id = pLink->link_id.nid;
@@ -1193,7 +1196,8 @@ const int CRoutePlan::AddNewLinks(IN RouteInfo* pRouteInfo, IN const CandidateLi
 				pItem->distReal = pLinkNext->length;	// 실 거리
 				pItem->timeReal = costReal; // 실 시간
 				pItem->costTreavel = pCurInfo->costTreavel + costTreavel;	// 계산 비용
-				pItem->costHeuristic = pCurInfo->costTreavel + heuristicCost;	// 가중치 계산 비용
+				//pItem->costHeuristic = pCurInfo->costTreavel + heuristicCost;	// 가중치 계산 비용
+				pItem->costHeuristic = pItem->costTreavel + heuristicCost;	// 가중치 계산 비용
 				pItem->depth = pCurInfo->depth + 1;	// 탐색 깊이
 				pItem->visited = false; // 방문 여부
 				pItem->dir = dirTarget; // 탐색방향
@@ -1920,19 +1924,6 @@ const int CRoutePlan::DoRoutes(IN const RequestRouteInfo* pReqInfo, OUT vector<R
 		if (ret != ROUTE_RESULT_SUCCESS) {
 			continue;
 		}
-
-
-		if (ii == 0) {
-			routeResult.LinkInfo.front().type = LINK_GUIDE_TYPE_DEPARTURE; // 출발지
-		}
-		else {
-			routeResult.LinkInfo.front().type = LINK_GUIDE_TYPE_WAYPOINT; // 경유지
-		}
-
-		// 목적지는 프론트 엔드단에서 Vertex 마지막 위치
-		// if (ii == cntPoints - 2) {
-		// 	routeResult.LinkInfo.back().type = LINK_GUIDE_TYPE_DESTINATION; // 도착지
-		// }
 	} // for
 
 	LOG_TRACE(LOG_DEBUG, "success, multi routing, routes:%d", cntPoints - 1);
@@ -3331,6 +3322,21 @@ const int CRoutePlan::MakeRouteResult(IN RouteInfo* pRouteInfo, OUT RouteResultI
 		currentLinkInfo.dir = pCandidateEndLink->dir == 1 ? 0 : 1;
 
 
+		// 링크 안내 타입, 0:일반, 1:S출발지링크, 2:V경유지링크, 3:E도착지링크, 4:SV출발지-경유지, 5:SE출발지-도착지, 6:VV경유지-경유지, 7:VE경유지-도착지
+		if ((pRouteInfo->StartLinkInfo.LinkGuideType == LINK_GUIDE_TYPE_DEPARTURE) && (pRouteInfo->EndLinkInfo.LinkGuideType == LINK_GUIDE_TYPE_WAYPOINT)) { // 출발지-경유지
+			currentLinkInfo.type = LINK_GUIDE_TYPE_DEPARTURE_WAYPOINT; //4:SV출발지-경유지
+		} else if ((pRouteInfo->StartLinkInfo.LinkGuideType == LINK_GUIDE_TYPE_DEPARTURE) && (pRouteInfo->EndLinkInfo.LinkGuideType == LINK_GUIDE_TYPE_DESTINATION)) { // 출발지-도착지
+			currentLinkInfo.type = LINK_GUIDE_TYPE_DEPARTURE_DESTINATION; //5:SE출발지-도착지
+		} else if ((pRouteInfo->StartLinkInfo.LinkGuideType == LINK_GUIDE_TYPE_WAYPOINT) && (pRouteInfo->EndLinkInfo.LinkGuideType == LINK_GUIDE_TYPE_WAYPOINT)) { // 출발지-경유지
+			currentLinkInfo.type = LINK_GUIDE_TYPE_WAYPOINT_WAYPOINT; //6:VV경유지-경유지
+		} else if ((pRouteInfo->StartLinkInfo.LinkGuideType == LINK_GUIDE_TYPE_WAYPOINT) && (pRouteInfo->EndLinkInfo.LinkGuideType == LINK_GUIDE_TYPE_DESTINATION)) { // 출발지-도착지
+			currentLinkInfo.type = LINK_GUIDE_TYPE_WAYPOINT_DESTINATION; //7:VE경유지-도착지
+		} else {
+			currentLinkInfo.type = 1; //1:S출발지링크
+			// currentLinkInfo.type = 3; //3:E도착지링크
+		}
+
+		// add link
 		pRouteResult->LinkInfo.emplace_back(currentLinkInfo);
 
 		pRouteResult->TotalLinkDist += currentLinkInfo.length;
@@ -3414,6 +3420,18 @@ const int CRoutePlan::MakeRouteResult(IN RouteInfo* pRouteInfo, OUT RouteResultI
 			prevDir = pLink->base.snode_ang;
 		}
 
+		// 링크 안내 타입, 0:일반, 1:S출발지링크, 2:V경유지링크, 3:E도착지링크, 4:SV출발지-경유지, 5:SE출발지-도착지, 6:VV경유지-경유지, 7:VE경유지-도착지
+		if (pRouteInfo->StartLinkInfo.LinkGuideType == LINK_GUIDE_TYPE_DEPARTURE) {
+			currentLinkInfo.type = LINK_GUIDE_TYPE_DEPARTURE; //1:S출발지링크
+		} else if (pRouteInfo->StartLinkInfo.LinkGuideType == LINK_GUIDE_TYPE_WAYPOINT) {
+			currentLinkInfo.type = LINK_GUIDE_TYPE_DEFAULT;// LINK_GUIDE_TYPE_WAYPOINT; //경유지부터의 출발은 표시하지 않는다
+		} else {
+			// 잘못된 링크 속성
+			LOG_TRACE(LOG_WARNING, "first link guild type not correct, %d", pRouteInfo->StartLinkInfo.LinkGuideType);
+			currentLinkInfo.type = LINK_GUIDE_TYPE_DEPARTURE; //1:S출발지링크
+		}
+		
+		// add link
 		pRouteResult->LinkInfo.emplace_back(currentLinkInfo);
 		linkMerge(pRouteResult->LinkVertex, pRouteResult->StartResultLink.LinkVtx);
 
@@ -3471,7 +3489,9 @@ const int CRoutePlan::MakeRouteResult(IN RouteInfo* pRouteInfo, OUT RouteResultI
 				prevDir = pLink->base.snode_ang;
 			}
 
+			currentLinkInfo.type = LINK_GUIDE_TYPE_DEFAULT;// 일반
 
+			// add link
 			pRouteResult->LinkInfo.emplace_back(currentLinkInfo);
 			linkMerge(pRouteResult->LinkVertex, pLink->getVertex(), pLink->getVertexCount());
 
@@ -3538,8 +3558,6 @@ const int CRoutePlan::MakeRouteResult(IN RouteInfo* pRouteInfo, OUT RouteResultI
 		//currentLinkInfo.rlength = remainDist;
 		//currentLinkInfo.rtime = remainTime;
 
-		
-
 		// angle
 		if (pCandidateEndLink->dir == 1) { // 정 to enode
 			// 주행 각도는 링크 시작값으로 주기에 최초 링크는 각도 무시.
@@ -3554,6 +3572,18 @@ const int CRoutePlan::MakeRouteResult(IN RouteInfo* pRouteInfo, OUT RouteResultI
 			prevDir = pLink->base.snode_ang;
 		}
 
+		// 링크 안내 타입, 0:일반, 1:S출발지링크, 2:V경유지링크, 3:E도착지링크, 4:SV출발지-경유지, 5:SE출발지-도착지, 6:VV경유지-경유지, 7:VE경유지-도착지
+		if (pRouteInfo->EndLinkInfo.LinkGuideType == LINK_GUIDE_TYPE_WAYPOINT) {
+			currentLinkInfo.type = LINK_GUIDE_TYPE_WAYPOINT; //2:V경유지링크
+		} else if (pRouteInfo->EndLinkInfo.LinkGuideType == LINK_GUIDE_TYPE_DESTINATION) {
+			currentLinkInfo.type = LINK_GUIDE_TYPE_DESTINATION; // 3:E도착지링크
+		} else {
+			// 잘못된 링크 속성
+			LOG_TRACE(LOG_WARNING, "first link guild type not correct, %d", pRouteInfo->EndLinkInfo.LinkGuideType);
+			currentLinkInfo.type = LINK_GUIDE_TYPE_DESTINATION; // 3:E도착지링크
+		}
+
+		// add link
 		pRouteResult->LinkInfo.emplace_back(currentLinkInfo);
 		linkMerge(pRouteResult->LinkVertex, pRouteResult->EndResultLink.LinkVtx);
 

@@ -45,7 +45,7 @@ public:
 	bool Initialize(void);
 	void Release(void);
 
-	void SetDataMgr(CDataManager* pDataMgr);
+	void SetDataMgr(IN CDataManager* pDataMgr);
 
 	size_t LoadData(IN const char* szFileName);
 	size_t Update(IN const uint64_t timestamp);

@@ -1235,8 +1235,12 @@ typedef enum {
 typedef enum {
 	LINK_GUIDE_TYPE_DEFAULT = 0, // 일반
 	LINK_GUIDE_TYPE_DEPARTURE, // 출발지
-	LINK_GUIDE_TYPE_DESTINATION, // 도착지
 	LINK_GUIDE_TYPE_WAYPOINT, // 경유지
+	LINK_GUIDE_TYPE_DESTINATION, // 도착지
+	LINK_GUIDE_TYPE_DEPARTURE_WAYPOINT, // 출발지-경유지
+	LINK_GUIDE_TYPE_DEPARTURE_DESTINATION, // 출발지-도착지
+	LINK_GUIDE_TYPE_WAYPOINT_WAYPOINT, // 경유지-경유지
+	LINK_GUIDE_TYPE_WAYPOINT_DESTINATION, // 경유지-도착지
 } LINK_GUIDE_TYPE;
 
 typedef enum {
@@ -1320,9 +1324,9 @@ typedef struct _tagRouteResultLinkEx {
 	uint32_t rlength : 21; // remain length // 최대 2097151 > 2,000km
 	uint32_t rtime : 17; // remain time // 최대 86400 > 31h
 	uint32_t angle : 9; // 진출 각도 // 360도 방식
-	uint32_t dir : 1; // 링크 방향성, 0:정방향, 1:역방향
-	uint32_t type : 2; // 링크 안내 타입, 0:일반, 1:출발지링크, 2:도착지링크, 3:경유지링크
-	uint32_t reserved : 6;
+	uint32_t dir : 1; // 링크 방향성, 0:정방향, 1:역방향 // MAP API 결과에 맞추기 위해 변경
+	uint32_t type : 4; // 링크 안내 타입, 0:일반, 1:S출발지링크, 2:E도착지링크, 3:V경유지링크, 4:SE출발지-도착지, 5:SV출발지-경유지, 6:VV경유지-경유지, 7, VE경유지-도착지
+	uint32_t reserved : 2;
 }RouteResultLinkEx;
 
 typedef struct _tagRouteResultLinkMatchInfo {
