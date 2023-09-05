@@ -415,21 +415,28 @@ exports.domultiroute = function(req, option) {
                 res = JSON.parse(res);
             }
 
-            ret.header.isSuccessful = true;
-            ret.header.resultCode = res.result_code;
-            ret.header.resultMessage = codes.getErrMsg(ret.header.resultCode);
-
-            ret.summarys = res.summarys;
-
-            if (is_sum) {
-                ;
-            } else if (target === "inavi") {
-                ret.route.data.push(res.routes[0]);
-                logout("route("+ii+") count : " + res.routes.length + ", paths : " + res.routes[0].paths.length);
-            } else { // if (target === "kakaovx") {
-                logout("route("+ii+") count : " + res.routes.length);
-                ret.route.data.push(res.routes[0]);
+            if (res.result_code == 0) {
+                ret.header.isSuccessful = true;
+                ret.header.resultCode = res.result_code;
+                ret.header.resultMessage = codes.getErrMsg(ret.header.resultCode);
+    
+                ret.summarys = res.summarys;
+    
+                if (is_sum) {
+                    ;
+                } else if (target === "inavi") {
+                    ret.route.data.push(res.routes[0]);
+                    logout("route("+ii+") count : " + res.routes.length + ", paths : " + res.routes[0].paths.length);
+                } else { // if (target === "kakaovx") {
+                    logout("route("+ii+") count : " + res.routes.length);
+                    ret.route.data.push(res.routes[0]);
+                }
             }
+            else {
+                ret.header.isSuccessful = false;
+                ret.header.resultCode = res.result_code;
+                ret.header.resultMessage = codes.getErrMsg(ret.header.resultCode);
+            }    
         }
         else {
             ret.header.isSuccessful = false;

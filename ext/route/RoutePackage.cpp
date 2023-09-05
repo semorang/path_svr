@@ -295,8 +295,6 @@ void CRoutePackage::GetMultiRouteResult(IN const RouteResultInfo* pResult, OUT s
 
 void CRoutePackage::GetMultiRouteResultForiNavi(IN const RouteResultInfo* pResult, OUT string& strJson)
 {
-	//string strJson;
-
 	int result_code = ROUTE_RESULT_FAILED;
 	string str_msg = "";
 
@@ -420,22 +418,22 @@ void CRoutePackage::GetMultiRouteResultForiNavi(IN const RouteResultInfo* pResul
 
 		} // for paths
 
-		  // add paths to data
+		// add paths to data
 		cJSON_AddItemToObject(data, "paths", paths);
 		cJSON_AddItemToArray(routes, data);
 
-
-		// add header to root
-		cJSON_AddNumberToObject(root, "user_id", pResult->RequestId);
-		cJSON_AddNumberToObject(root, "result_code", result_code);
-		cJSON_AddStringToObject(root, "error_msg", str_msg.c_str());
-
+		// add data to root
 		cJSON_AddItemToObject(root, "routes", routes);
-
-		strJson = cJSON_Print(root);
-
-		cJSON_Delete(root);
 	}
+
+	// add header to root
+	cJSON_AddNumberToObject(root, "user_id", pResult->RequestId);
+	cJSON_AddNumberToObject(root, "result_code", result_code);
+	cJSON_AddStringToObject(root, "error_msg", str_msg.c_str());
+
+	strJson = cJSON_Print(root);
+
+	cJSON_Delete(root);
 
 #elif defined(USE_TAOJSON)
 	tao::json::value root = json::empty_object;
