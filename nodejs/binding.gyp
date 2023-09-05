@@ -40,6 +40,7 @@
                 "../ext/cvt/FileMesh.cpp",
                 "../ext/cvt/FilePedestrian.cpp",
                 "../ext/cvt/FileTrekking.cpp",
+                "../ext/cvt/FileForest.cpp",
                 "../ext/cvt/FileVehicle.cpp",
                 "../ext/cvt/FileBuilding.cpp",
                 "../ext/cvt/FileComplex.cpp",

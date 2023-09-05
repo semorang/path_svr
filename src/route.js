@@ -361,7 +361,8 @@ exports.domultiroute = function(req, option) {
         addon.setwaypoint(parseFloat(coordVia[0]), parseFloat(coordVia[1]), is_optimal);
 
         if (coordVia != undefined) {
-            ret.user_info.via = { x: parseFloat(coordVia[0]), y: parseFloat(coordVia[1]) }
+            ret.user_info.vias = new Array();
+            ret.user_info.vias.push({ x: parseFloat(coordVia[0]), y: parseFloat(coordVia[1]) });
         }
     } 
 

@@ -354,6 +354,7 @@ app.get('/view/path', function(req, res) {
     logout("start pathview request");
 
     // 2p2 path 전용 옵션
+    req.query.target = "inavi";
     req.query.opt = 8;
 
     logout("client IP : " + request_ip.getClientIp(req));
