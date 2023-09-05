@@ -385,7 +385,7 @@ void CRoutePackage::GetMultiRouteResultForiNavi(IN const RouteResultInfo* pResul
 					MultiByteToUTF8(m_pDataMgr->GetNameDataByIdx(pLink->name_idx), szUTF8);
 					cJSON_AddStringToObject(path, "road_name", szUTF8);
 #else
-					cJSON_AddStringToObject(path, "road_name", encoding(m_pDataMgr.GetNameDataByIdx(pLink->name_idx), "euc-kr", "utf-8"));
+					cJSON_AddStringToObject(path, "road_name", encoding(m_pDataMgr->GetNameDataByIdx(pLink->name_idx), "euc-kr", "utf-8"));
 #endif // #if defined(_WIN32)
 				}
 
