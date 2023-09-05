@@ -7,6 +7,7 @@
 
 #include "../shp/shpio.h"
 #include "../utils/UserLog.h"
+#include "../utils/Strings.h"
 #include "../route/MMPoint.hpp"
 
 #include <algorithm>
@@ -117,8 +118,8 @@ bool CFileTrekking::ParseData(IN const char* fname)
 
 	for (int idxRec = 0; idxRec < nRecCount; idxRec++) {
 		stMesh mesh;
-		stForestLink link;
-		stForestNode node;
+		stTrekkingLink link;
+		stTrekkingNode node;
 
 		//속성가져오기
 		if (shpReader.Fetch(idxRec) == false) { //error to read..
@@ -632,7 +633,7 @@ bool CFileTrekking::LoadData(IN const char* szFilePath)
 }
 
 
-bool  CFileTrekking::SetData_Node(int idx, stForestNode &getNode_Dbf, char* colData)
+bool  CFileTrekking::SetData_Node(int idx, stTrekkingNode &getNode_Dbf, char* colData)
 {
 	// 노드 타입, 1:교차점, 2:단점, 3:더미점, 4:구획변경점, 5:속성변화점
 
@@ -665,7 +666,7 @@ bool  CFileTrekking::SetData_Node(int idx, stForestNode &getNode_Dbf, char* colD
 	return ret;
 }
 
-bool CFileTrekking::SetData_Link(int idx, stForestLink &getLink_Dbf, char* colData)
+bool CFileTrekking::SetData_Link(int idx, stTrekkingLink &getLink_Dbf, char* colData)
 {
 	// 코스타입, 0:미정의, 1:등산로, 2:둘레길, 3:자전거길, 4:종주코스
 

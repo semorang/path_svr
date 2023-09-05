@@ -5,6 +5,7 @@
 #include "FileName.h"
 
 #include "../utils/UserLog.h"
+#include "../utils/Strings.h"
 #include "../route/DataManager.h"
 
 #if defined(_WIN32) && defined(_DEBUG)

@@ -201,6 +201,30 @@ bool MapTraffic::DeleteData(IN const uint64_t keyId)
 }
 
 
+const uint32_t MapTraffic::GetSpeed(IN const KeyID link)
+{
+	uint32_t speed = SPEED_NOT_AVALABLE;
+
+	stTrafficMesh* pMesh = nullptr;
+	unordered_map<uint32_t, stTrafficMesh*>::const_iterator match = mapData.find(link.tile_id);
+	if (match != mapData.end()) {
+		pMesh = match->second;
+	}
+
+	// link에 매칭되는 traffic key 구하기
+	unordered_map<uint64_t, uint64_t>::const_iterator it_key= pMesh->mapMatch.find(link.llid);
+	if (it_key != pMesh->mapMatch.end()) {
+		unordered_map<uint32_t, stTrafficInfo*>::const_iterator it_traffic = mapTraffic.find(it_key->second);
+		
+		if (it_traffic != mapTraffic.end()) {
+			speed = it_traffic->second->speed;
+		}
+	}
+
+	return speed;
+}
+
+
 const stTrafficInfo * MapTraffic::GetTrafficInfo(IN const uint32_t ksId)
 {
 	unordered_map<uint32_t, stTrafficInfo*>::const_iterator it = mapTraffic.find(ksId);

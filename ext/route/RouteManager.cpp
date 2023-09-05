@@ -4,8 +4,11 @@
 
 #include "RouteManager.h"
 #include "MMPoint.hpp"
+#include "../tms/GnKmeansClassfy.h"
 #include "../utils/UserLog.h"
 #include "../utils/GeoTools.h"
+#include "../utils/CatmullRom.h"
+#include "../utils/convexhull.h"
 
 #define VLINK 1
 
@@ -125,7 +128,7 @@ KeyID CRouteManager::SetDeparture(IN const double lng, IN const double lat, IN c
 				keyDeparture = pLink->link_id;
 
 				if (ii > 0) {
-					LOG_TRACE(LOG_DEBUG, "departure projection, link id:%d, range level:%d, dist:%d", keyDeparture.nid, ii, retDist);
+					LOG_TRACE(LOG_DEBUG, "departure projection, link_id:%d, range_lv:%d, dist:%d", keyDeparture.nid, ii, retDist);
 				}
 				break;
 			}
@@ -153,7 +156,7 @@ KeyID CRouteManager::SetWaypoint(IN const double lng, IN const double lat, IN co
 					keyWaypoint = pLink->link_id;
 
 					if (ii > 0) {
-						LOG_TRACE(LOG_DEBUG, "waypoint projection, link id:%d, idx:%d, range level:%d, dist:%d", keyWaypoint.nid, keyWaypoints.size(), ii, retDist);
+						LOG_TRACE(LOG_DEBUG, "waypoint projection, link_id:%d, idx:%d, range_lv:%d, dist:%.1f", keyWaypoint.nid, keyWaypoints.size(), ii, retDist);
 					}
 
 					break;
@@ -183,7 +186,7 @@ KeyID CRouteManager::SetDestination(IN const double lng, IN const double lat, IN
 				keyDestination = pLink->link_id;
 
 				if (ii > 0) {
-					LOG_TRACE(LOG_DEBUG, "destination projection, link id:%d, range level:%d, dist:%d", keyDestination.nid, ii, retDist);
+					LOG_TRACE(LOG_DEBUG, "destination projection, link_id:%d, range_lv:%d, dist:%d", keyDestination.nid, ii, retDist);
 				}
 				break;
 			}
@@ -507,7 +510,8 @@ bool CRouteManager::GetBestWaypointResult(IN TspOptions* pOpt, IN const RouteTab
 		}
 	}
 	else if (pOpt->algorityhmType == 2) {
-		auto result = mst_manhattan_branch_and_bound2(ppResultTables, vtRawData.size(), 0);
+		//auto result = mst_manhattan_branch_and_bound2(ppResultTables, vtRawData.size(), 0);
+		auto result = mst_manhattan_branch_and_bound(ppResultTables, vtRawData.size(), 0);
 		vtViaResult.assign(result.path.begin(), result.path.end());
 	}
 #if !defined(USE_REAL_ROUTE_TSP)
@@ -614,7 +618,7 @@ bool CRouteManager::GetBestWaypointResult(IN TspOptions* pOpt, IN const RouteTab
 	LOG_TRACE(LOG_DEBUG_LINE, "result :");
 	for (const auto& item : vtViaResult)
 	{
-		LOG_TRACE(LOG_DEBUG_CONTINUE, "%3d%c", item, 0x1A); //→
+		LOG_TRACE(LOG_DEBUG_CONTINUE, "%3d>", item); //→
 		if (idx >= 1) {
 			totalDist += ppResultTables[idxPrev][item].nTotalDist;
 		}
@@ -633,17 +637,11 @@ bool CRouteManager::GetBestWaypointResult(IN TspOptions* pOpt, IN const RouteTab
 
 
 	int curIdx = 0;
-	int wayType = 1;// 원점 회귀:1, 아닌지:0에 따라 갯수 변경됨
+	int wayType = 1;// 원점 회귀:1, 아닌지:0 에 따라 갯수 변경됨
 
 	vtBestWaypoints.clear();
 	
-	if (wayType) {
-		// 원점 회귀면 처음과 마지막이 같기에 전체 사이즈는 -1됨
-		vtBestWaypoints.reserve(vtRawData.size() - 1);
-	}
-	else {
-		vtBestWaypoints.reserve(vtRawData.size());
-	}
+	vtBestWaypoints.reserve(vtRawData.size());
 	
 
 	// 첫번째값을 출발지로 변경
@@ -729,7 +727,7 @@ int CRouteManager::DoRouting(/*Packet*/)
 	m_routeResult.Init();
 
 	if (m_ptWaypoints.empty()) {
-		if ((ret = m_pRoutePlan->DoRoute(uid, m_ptDeparture, m_ptDestination, keyDeparture, keyDestination, m_nRouteOpt, m_nAvoidOpt, &m_routeResult)) == 0)
+		if ((ret = m_pRoutePlan->DoRoute(uid, m_ptDeparture, m_ptDestination, keyDeparture, keyDestination, m_nRouteOpt, m_nAvoidOpt, &m_routeResult)) == ROUTE_RESULT_SUCCESS)
 		{
 			;
 		}
@@ -780,8 +778,14 @@ int CRouteManager::DoRouting(/*Packet*/)
 			m_routeResult.StartResultLink = m_vtRouteResult[m_vtRouteResult.size() - 1].StartResultLink;
 			m_routeResult.EndResultLink = m_vtRouteResult[0].EndResultLink;
 
+			RouteSummary summary;
 			// for (int ii = m_vtRouteResult.size() - 1; ii >= 0; --ii) {
 			for (int ii = 0; ii < m_vtRouteResult.size(); ii++) {
+				// summarys
+				summary.TotalDist = m_vtRouteResult[ii].TotalLinkDist;
+				summary.TotalTime = m_vtRouteResult[ii].TotalLinkTime;
+				m_routeResult.RouteSummarys.emplace_back(summary);
+
 				// 경로선
 				boxMerge(m_routeResult.RouteBox, m_vtRouteResult[ii].RouteBox);
 				linkMerge(m_routeResult.LinkVertex, m_vtRouteResult[ii].LinkVertex);
@@ -799,7 +803,6 @@ int CRouteManager::DoRouting(/*Packet*/)
 			}
 		}
 	}
-
 
 	return ret;
 }
@@ -833,31 +836,411 @@ int CRouteManager::GetTable(OUT RouteTable** ppResultTables)
 	// end
 	reqInfo.vtPoints.emplace_back(m_ptDestination);
 	reqInfo.vtIdLinks.emplace_back(keyDestination);
-
-
-
-	// 지점 개수 만큼의 결과 테이블(n * n) 생성
-	// create route table rows
-	const int32_t cntPoints = reqInfo.vtPoints.size();
-	RouteTable** resultTables = nullptr;
-	
-	if (ppResultTables != nullptr) {
-		resultTables = const_cast<RouteTable**>(ppResultTables);
-	}
-	else {
-		resultTables = new RouteTable*[cntPoints];
-
-		// create route table cols 
-		for (int ii = 0; ii < cntPoints; ii++) {
-			resultTables[ii] = new RouteTable[cntPoints];
-		}
-	}
 	
 #if defined(USE_TSP_MODULE)	
-	ret = m_pRoutePlan->DoTabulate(&reqInfo, resultTables);
+	ret = m_pRoutePlan->DoTabulate(&reqInfo, ppResultTables);
 #endif 
 
 	return ret;
+}
+
+
+int CRouteManager::GetCluster_for_geoyoung(IN const int32_t cntCluster, OUT vector<stDistrict>& vtCluster)
+{
+	int ret = -1;
+
+	vector<SPoint> vtPois;
+	// 1209	
+	array<int, 19> arrClusterCnt = {
+		91, 68, 30, 57, 60, 60, 57, 64, 56, 67, 60, 65, 68, 70, 71, 77, 61, 62, 65
+	};
+
+
+	// add original coordinates
+	int cntVias = GetWayPointCount();
+	LOG_TRACE(LOG_DEBUG, "GetCluster_for_geoyoung, vias : %d", cntVias);
+
+	vector<SPoint> vtOrigins;
+	vtOrigins.reserve(cntVias + 2);
+	vtOrigins.push_back({GetDeparture()->x, GetDeparture()->y});
+	for (int ii=0; ii<cntVias; ii++) {
+		vtOrigins.push_back({GetWaypoint(ii)->x, GetWaypoint(ii)->y});
+	}
+	vtOrigins.push_back({GetDestination()->x, GetDestination()->y});
+
+
+	int cntPois = vtOrigins.size();
+	char szGroup[128] = { 0, };
+	int cntAdded = 0;
+
+	LOG_TRACE(LOG_DEBUG, "GetCluster_for_geoyoung, pois : %d", cntPois);
+
+	vtCluster.clear();
+	vtCluster.reserve(cntCluster);
+
+	LOG_TRACE(LOG_DEBUG, "GetCluster_for_geoyoung, clusters : %d", cntCluster);
+
+
+	if (cntCluster != 19 || cntPois != 1209) {
+		LOG_TRACE(LOG_WARNING, "GetCluster_for_geoyoung, req arg are not for geoyoung setting");
+		return ret;
+	}
+
+	// geoyoung cluster
+	int idCluster = 0;
+	for (auto const& items : arrClusterCnt) {
+		stDistrict tmpDistrict;
+		sprintf(szGroup, "%02d", idCluster++);
+		tmpDistrict.name = szGroup;
+
+		LOG_TRACE(LOG_DEBUG, "GetCluster_for_geoyoung, cluster id : %d", items);
+
+		// cluster pois
+		for (int jj=0; jj<items; jj++) {
+			stPoi tmpPoi;
+			tmpPoi.coord = vtOrigins[cntAdded];
+			tmpDistrict.pois.emplace_back(tmpPoi);
+
+			cntAdded++;
+		} // for
+		tmpDistrict.center.x = 0;
+		tmpDistrict.center.y = 0;
+		vtCluster.emplace_back(tmpDistrict);
+	} // for
+
+	LOG_TRACE(LOG_DEBUG, "GetCluster_for_geoyoung, added : %d", cntAdded);
+
+	// 배송처 권역
+	for (auto& cluster : vtCluster) {
+		vector<SPoint> coords;
+		vector<SPoint> border;
+		vector<SPoint> expend;
+		vector<SPoint> slice;
+		for (const auto& poi : cluster.pois) {
+			coords.emplace_back(poi.coord);
+		}
+
+		// make border
+		GetBoundary(coords, cluster.border);
+	}
+
+	ret = ROUTE_RESULT_SUCCESS;
+
+	return ret;
+}
+
+
+int CRouteManager::GetCluster(IN const int32_t cntCluster, IN RouteTable** ppTables, OUT vector<stDistrict>& vtCluster)
+{
+	int ret = -1;
+
+	vector<SPoint> vtPois;
+	vtPois.reserve(m_ptWaypoints.size() + 2);
+
+	// start 
+	vtPois.emplace_back(m_ptDeparture);
+
+	// waypoint
+	if (!m_ptWaypoints.empty()) {
+		for (int ii = 0; ii < m_ptWaypoints.size(); ii++) {
+			vtPois.emplace_back(m_ptWaypoints[ii]);
+		}
+	}
+
+	// end
+	vtPois.emplace_back(m_ptDestination);
+
+	if (vtPois.empty() || cntCluster <= 1 || ppTables == nullptr) {
+		LOG_TRACE(LOG_WARNING, "GetClustering, request failed, poi cnt:%d, cluster cnt:%d, table:%p", vtPois.size(), cntCluster, ppTables);
+		return -1;
+	} 
+
+	uint32_t cntPois = vtPois.size();
+	
+	RouteTable** ppResultTables = ppTables;
+	double** ppWeightMatrix = nullptr;
+	ret = ROUTE_RESULT_SUCCESS;
+
+	if (ret == ROUTE_RESULT_SUCCESS) {
+		// wm 생성
+		ppWeightMatrix = new double*[cntPois];
+		for (int ii = 0; ii < cntPois; ii++) {
+			ppWeightMatrix[ii] = new double[cntPois];
+
+			// copy data
+			for (int jj = 0; jj < cntPois; jj++) {
+				ppWeightMatrix[ii][jj] = ppResultTables[ii][jj].nTotalDist;
+			}
+		} // for
+	}
+
+
+	// k-means
+	CGnKmeansClassfy kmc;
+
+	// set wm
+	kmc.SetWeightMatrix(ppWeightMatrix);
+
+	SPoint centerAll = getPolygonCenter(vtPois);
+
+	// 최초 클러스터 데이터
+	kmc.SetDataCount(cntPois);
+	int ii = 0;
+	for (const auto& poi : vtPois) {
+		kmc.AddData(ii++, poi.x, poi.y);
+	}
+
+	int32_t remainedCluster = cntCluster;
+
+#if 1 // k-means 기본 분배
+	kmc.Run(remainedCluster);
+
+	// 클러스터 그룹핑
+	vtCluster.reserve(remainedCluster);
+
+	char szGroup[128] = { 0, };
+	for (int ii = 0; ii < remainedCluster; ii++) {
+		stDistrict tmpDistrict;
+
+		sprintf(szGroup, "%02d", kmc.m_vtResult[ii].group);
+
+		tmpDistrict.name = szGroup;
+		tmpDistrict.center.x = kmc.m_vtResult[ii].x;
+		tmpDistrict.center.y = kmc.m_vtResult[ii].y;
+		tmpDistrict.pois.reserve(kmc.m_vtResult[ii].idx);
+
+		vtCluster.emplace_back(tmpDistrict);
+	} // for
+
+	stDistrict* pDistrict = nullptr;
+	for (const auto& item : kmc.m_vtInput) {
+		pDistrict = &vtCluster.at(item.group);
+
+		if (pDistrict) {
+			stPoi newPoi;
+			newPoi.coord.x = item.x;
+			newPoi.coord.y = item.y;
+
+			pDistrict->pois.emplace_back(newPoi);
+		}
+		else {
+			LOG_TRACE(LOG_WARNING, "new cluster index not exist, idx:%d", item.group);
+		}
+	} // for
+#else // 밀도 균등을 위해 반복 처리
+	// 밀도 균등을 위해 반복 처리
+	// 클러스터 수만큼 반복하여, 평균치에 가까운 녀석을 순차적으로 빼면서 반복
+	const int32_t cntItemAvg = cntPois / MAX_CLUSTER_COUNT;
+	const int32_t cntItemBand = cntItemAvg * 5 / 100; // 위아래 5%까지 허용
+
+	for (; 0 < remainedCluster - 2;)
+	{
+		kmc.Run(remainedCluster);
+
+		// 클러스터 그룹핑
+		vector<stDistrict> tmpDistricts;
+		tmpDistricts.reserve(kmc.m_vtResult.size());
+
+		for (int ii = 0; ii < remainedCluster; ii++) {
+			stDistrict tmpDistrict;
+			tmpDistricts.emplace_back(tmpDistrict);
+		} // for
+
+		for (const auto& item : kmc.m_vtInput) {
+			stDistrict* pCluster = &tmpDistricts.at(item.group);
+
+			if (pCluster) {
+				stPoi newPoi;
+				newPoi.coord.x = item.x;
+				newPoi.coord.y = item.y;
+
+				pCluster->pois.emplace_back(newPoi);
+				pCluster->center.x = kmc.m_vtResult[item.group].x;
+				pCluster->center.y = kmc.m_vtResult[item.group].y;
+			}
+			else {
+				LOG_TRACE(LOG_WARNING, "new cluster index not exist, idx:%d", item.group);
+			}
+		} // for
+
+		  // 밀도 균등 클러스터 선택
+		int32_t diff = INT32_MAX;
+		int32_t cntAddedCluster = 0; // 등록된 클러스터 갯수
+		int32_t diffNearCluster = INT32_MAX; // 평균치와 가장 가까운 클러스터 아이템 갯수
+		vector<stDistrict>::iterator candidateIt = tmpDistricts.end(); // 평균치와 가장 가까운 클러스터
+		char szNum[10] = { 0, };
+		for (auto it = tmpDistricts.begin(); it != tmpDistricts.end();) {
+			// 밀도 균등 허용치에 포함되면 사용
+			diff = it->pois.size() - cntItemAvg;
+			if (abs(diff) <= cntItemBand) {
+				sprintf(&it->name[0], "%02d", m_tmsInfoNew.size());
+				vtCluster.emplace_back(*it);
+
+				cntAddedCluster++;
+
+				// 삭제
+				it = tmpDistricts.erase(it);
+				candidateIt = tmpDistricts.end();
+			}
+			else {
+				if ((cntAddedCluster <= 0) && ((0 <= diff) && (diff < diffNearCluster))) {
+					// 예비 클러스터
+					candidateIt = it;
+
+					diffNearCluster = diff;
+				}
+
+				// 삭제 안하고 증가
+				it++;
+			}
+		} // for
+
+		  // 밀도 균등 클러스터가 없으면 예비 클러스터에서 사용
+		if ((cntAddedCluster <= 0) && (candidateIt != tmpDistricts.end())) {
+			// 가까운 순으로 정렬
+			multimap<double, int>mapDist;
+			for (int ii = 0; ii < candidateIt->pois.size(); ii++) { // diffNearCluster
+				mapDist.emplace(getRealWorldDistance(candidateIt->center.x, candidateIt->center.y, candidateIt->pois[ii].coord.x, candidateIt->pois[ii].coord.y), ii);
+				//mapDist.emplace(10000000.f - getRealWorldDistance(centerAll.x, centerAll.y, candidateIt->pois[ii].coord.x, candidateIt->pois[ii].coord.y), ii);
+			} // for
+
+			  // 밀도 균등 평균치 까지만 저장
+			stDistrict tmpAddDistrict; // 저장될 아이템들
+			stDistrict tmpRemainDistrict; // 다시 재사용될 아이템들
+			sprintf(&tmpAddDistrict.name[0], "%02d", m_tmsInfoNew.size());
+			tmpAddDistrict.center = candidateIt->center;
+
+			for (const auto & dist : mapDist) {
+				// 밀도 균등 평균치 까지만 저장
+				if (tmpAddDistrict.pois.size() < cntItemAvg) {
+					tmpAddDistrict.pois.emplace_back(candidateIt->pois[dist.second]);
+				}
+				else {
+					tmpRemainDistrict.pois.emplace_back(candidateIt->pois[dist.second]);
+				}
+			} // for
+
+			  // 원본 삭제
+			tmpDistricts.erase(candidateIt);
+
+			// 클러스터 추가
+			vtCluster.emplace_back(tmpAddDistrict);
+			cntAddedCluster++;
+
+			// 재사용 추가
+			//tmpDistricts.emplace_back(tmpRemainDistrict);
+		}
+
+		// 남은 값을 다시 넣어 클러스터링 반복 진행
+		kmc.ReSet();
+		int ii = 0;
+		for (auto& district : tmpDistricts) {
+			for (auto& item : district.pois) {
+				kmc.AddData(ii++, item.coord.x, item.coord.y);
+			}
+		} // for
+
+		remainedCluster -= cntAddedCluster;
+	} // for
+
+	  // 마지막 남은 아이템들을 모아 클러스터링
+	if (remainedCluster != 1) {
+		LOG_TRACE(LOG_WARNING, "last cluster count should remained only one, now:%d", remainedCluster);
+	}
+	else //if (0) {
+		kmc.Run(remainedCluster);
+
+	// 클러스터 그룹핑
+	stDistrict tmpDistrict;
+	sprintf(&tmpDistrict.name[0], "%02d", m_tmsInfoNew.size());
+	tmpDistrict.center.x = kmc.m_vtResult[0].x;
+	tmpDistrict.center.y = kmc.m_vtResult[0].y;
+
+	for (const auto& item : kmc.m_vtInput) {
+		stPoi newPoi;
+		newPoi.coord.x = item.x;
+		newPoi.coord.y = item.y;
+		tmpDistrict.pois.emplace_back(newPoi);
+	} // for
+	vtCluster.emplace_back(tmpDistrict);
+#endif
+
+
+	// 배송처 권역
+	for (auto& cluster : vtCluster) {
+		vector<SPoint> coords;
+		vector<SPoint> border;
+		vector<SPoint> expend;
+		vector<SPoint> slice;
+		for (const auto& poi : cluster.pois) {
+			coords.emplace_back(poi.coord);
+		}
+
+		// make border
+		GetBoundary(coords, cluster.border);
+	}
+
+	// release
+	kmc.m_vtInput.clear();
+	kmc.m_vtResult.clear();
+
+	for (int ii = 0; ii < cntPois; ii++) {
+		SAFE_DELETE_ARR(ppWeightMatrix[ii]);
+	}
+	SAFE_DELETE_ARR(ppWeightMatrix);
+
+	return ret;
+}
+
+
+int CRouteManager::GetBoundary(IN const vector<SPoint>& vtPois, OUT vector<SPoint>& vtBoundary)
+{
+	if (vtPois.empty()) {
+		LOG_TRACE(LOG_WARNING, "GetClusterBoundary, request failed, poi cnt:%d", vtPois.size());
+		return -1;
+	}
+
+	vector<SPoint> coords;
+	vector<SPoint> border;
+	vector<SPoint> expend;
+	vector<SPoint> slice;
+
+	for (const auto& poi : vtPois) {
+		LOG_TRACE(LOG_TEST, "poi, x:%.5f, y:%.5f", poi.x, poi.y);
+		coords.emplace_back(poi);
+	}
+
+	// make border
+	ConvexHull(coords, border);
+
+	// make closed
+	if ((border.front().x != border.back().x) || (border.front().y != border.back().y)) {
+		border.emplace_back(border.front());
+	}
+
+	// 면적 조사
+	double area = GetPolygonArea(border);
+	if (area <= 1) {
+		vtBoundary.assign(border.begin(), border.end());
+	} else {
+		// 2023.7.26
+		// catmullline의 2DVector포함 빌드시 node 동작 안하는 이슈 발생
+
+		// 임시로 직선 바운더리 사용
+		// cluster.border = border;
+
+		
+		// expend border
+		GetBorderOfPolygon(border, -0.002, expend);
+
+		// 외곽선 일정거리로 나누기
+		GetSlicedLine(expend, 1000, slice);
+
+		// 외곽선 부드럽게
+		GetCatmullLine(slice, 0, vtBoundary);
+	}
+
+	return 0;
 }
 
 

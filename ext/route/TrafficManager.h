@@ -1,6 +1,6 @@
 #pragma once
 
-#include "MapDef.h"
+#include "../include/MapDef.h"
 
 #if defined(__USE_TEMPLETE)
 #include "MapBase.h"

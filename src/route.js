@@ -8,6 +8,26 @@ const auth = require('./auth');
 const codes = require('./codes');
 
 
+function checkcoord(lng, lat, contury)
+{
+    var ret = false;
+
+    if (lng == undefined || lat == undefined ||
+        lng == NaN || lat == NaN) {
+            ret = false;
+        }
+    else if (contury == undefined || contury == 'kor') {
+        if ((124 <= lng) && (lng <= 131) &&
+            (33 <= lat) && (lat <= 39))
+            ret = true;
+    } else { // default korea
+        ret = false;
+    }
+
+    return ret;
+} 
+
+
 exports.init = function(pid, path, log) {
 
     logout("begin engine initialize");
@@ -39,6 +59,7 @@ exports.optimalposition = function(req) {
     const lat = req.query.lat;
     let type = 0;
     let count = 0;
+    
     let expand = 0;
     if (req.query.type != undefined) {
         type = parseInt(req.query.type)
@@ -185,6 +206,7 @@ exports.doroute = function(req, option) {
             res = addon.getview();
         } else {
             res = addon.getroute();
+            res = JSON.parse(res);
         }
         
         ret.header.isSuccessful = true;
@@ -234,7 +256,7 @@ exports.domultiroute = function(req, option) {
     const opt = (req.query.opt === undefined) ? 0 : req.query.opt;
     const is_sum = (option == 'summary') ? true : false;
     const is_view = (option == 'view') ? true : false;
-    const is_optimal = false; // 최적지점 사용
+    const is_optimal = true; // 최적지점 사용
     const target = (req.query.target === undefined) ? '' : req.query.target;
     
     var header = {
@@ -252,9 +274,14 @@ exports.domultiroute = function(req, option) {
         data: new Array,
     }
 
+    var summarys = {
+        summarys: undefined,
+    }
+
     var ret = {
         header: header,
         user_info: user_info,
+        summarys: summarys,
         route: route,
     };
 
@@ -299,7 +326,7 @@ exports.domultiroute = function(req, option) {
 
 
     let coordVia;
-    if (waypoints != undefined) {
+    if (waypoints != undefined && Array.isArray(waypoints)) {
         ret.user_info.vias = new Array();
         waypoints.forEach(coord => {
             coordVia = coord.split(',');
@@ -317,8 +344,13 @@ exports.domultiroute = function(req, option) {
             }
         });
     }
-    else if (waypoint != undefined) {
-        coordVia = waypoint.split(',');
+    else if ((waypoint != undefined) || (waypoints != undefined)) {
+        if (waypoint != undefined) {
+            coordVia = waypoint.split(',');
+        } else {
+            coordVia = waypoints.split(',');
+        }
+        
         if (coordVia.length != 2) {
             logout("via location query not correct" + util.inspect(coordVia, false, null, true));
             ret.header.result_code = codes.ERROR_CODES.ROUTE_RESULT_FAILED_SET_VIA;
@@ -379,11 +411,14 @@ exports.domultiroute = function(req, option) {
             } else { // if (target === "kakaovx") {
                 // logout("call function getmultiroute");
                 res = addon.getmultiroute();
+                res = JSON.parse(res);
             }
-            
+
             ret.header.isSuccessful = true;
             ret.header.resultCode = res.result_code;
             ret.header.resultMessage = codes.getErrMsg(ret.header.resultCode);
+
+            ret.summarys = res.summarys;
 
             if (is_sum) {
                 ;
@@ -446,21 +481,26 @@ exports.gettable = function(mode, destinations) {
             ret.header.resultMessage = codes.getErrMsg(ret.result_code);
             logout("route result : failed, msg " + ret.header.resultMessage);
         } else {
-        	const type_match = 4; //TYPE_LINK_MATCH_FOR_TABLE; // 최적지점 사용
-            // departure
-            if (cntDestinations == 0) {
-                addon.setdeparture(parseFloat(coord[0]), parseFloat(coord[1]), is_optimal, type_match);
-            }
-            // destination 
-            else if (cntDestinations == 1) {
-                addon.setdestination(parseFloat(coord[0]), parseFloat(coord[1]), is_optimal, type_match);
-            }
-            // via
-            else {
-                addon.setwaypoint(parseFloat(coord[0]), parseFloat(coord[1]), is_optimal, type_match);
-            }
+            var lng = parseFloat(coord[0]);
+            var lat = parseFloat(coord[1]);
+            if (checkcoord(lng, lat) != true) {
+                logout("invalid coord, lng: " + lng + ", lat: " + lat);
+            } else {
+                // departure
+                if (cntDestinations == 0) {
+                    addon.setdeparture(lng, lat, is_optimal, type_match);
+                }
+                // destination 
+                else if (cntDestinations == count - 1) {
+                    addon.setdestination(lng, lat, is_optimal, type_match);
+                }
+                // via
+                else {
+                    addon.setwaypoint(lng, lat, is_optimal, type_match);
+                }
 
-            cntDestinations++;
+                cntDestinations++;
+            }
         }
     });
 
@@ -529,6 +569,136 @@ exports.setrpcost = function(key, mode, cost) {
 }
 
 
+exports.getcluster = function(target, destinations, clusters, file, mode) {
+
+    addon.logout("start clustering");
+
+    const cntPois = destinations.length;
+    const cntClusters = clusters;
+    
+    const is_optimal = false;
+    const type_match = 4; //TYPE_LINK_MATCH_FOR_TABLE; // 최적지점 사용
+
+    var header = {
+        isSuccessful: false,
+        resultCode: codes.ERROR_CODES.ROUTE_RESULT_FAILED,
+        resultMessage: ""
+    };
+
+    var ret = {
+        header: header,
+        origins: destinations,
+        clusters: clusters,
+    };
+
+    var cntDestinations = 0;
+    destinations.forEach(element => {
+        let coord = element.split(',');
+        if (coord.length != 2) {
+            logout("request location query not correct" + util.inspect(coord, false, null, true));
+            ret.header.isSuccessful = false;
+            ret.header.resultCode = codes.ERROR_CODES.ROUTE_RESULT_FAILED_SET_START;
+            ret.header.resultMessage = codes.getErrMsg(ret.result_code);
+            logout("route result : failed, msg " + ret.header.resultMessage);
+        } else {
+            var lng = parseFloat(coord[0]);
+            var lat = parseFloat(coord[1]);
+            if (checkcoord(lng, lat) != true) {
+                logout("invalid coord, lng: " + lng + ", lat: " + lat);
+            } else {
+                // departure
+                if (cntDestinations == 0) {
+                    addon.setdeparture(lng, lat, is_optimal, type_match);
+                }
+                // destination 
+                else if (cntDestinations == (cntPois - 1)) {
+                    addon.setdestination(lng, lat, is_optimal, type_match);
+                }
+                // via
+                else {
+                    addon.setwaypoint(lng, lat, is_optimal, type_match);
+                }
+
+                cntDestinations++;
+            }
+        }
+    });
+
+    var res = codes.ERROR_CODES.ROUTE_RESULT_FAILED;
+
+    if (target === 'geoyoung') {
+        res = addon.getcluster_for_geoyoung(cntClusters);
+    }
+    else if (file != undefined && mode != undefined && file.length > 0 && mode >= 1) {
+        res = addon.getcluster(cntClusters, cntPois, file, mode);
+    } else {
+        res = addon.getcluster(cntClusters);
+    }
+    res = JSON.parse(res);
+
+    if (res.result_code == 0) {
+        ret.header.isSuccessful = true;
+        ret.header.resultCode = res.result_code;
+        ret.header.resultMessage = codes.getErrMsg(ret.header.resultCode);
+
+        ret.clusters = res.clusters;
+    } else {
+        ret.header.isSuccessful = false;
+        ret.header.resultCode = res.result_code;
+        ret.header.resultMessage = codes.getErrMsg(ret.header.resultCode);
+    }
+
+    addon.releaseroute();
+    
+    addon.logout("end clustering");
+
+    return ret;
+}
+
+
+exports.getboundary = function(mode, destinations) {
+
+    addon.logout("start boundary");
+
+     var header = {
+        isSuccessful: false,
+        resultCode: codes.ERROR_CODES.ROUTE_RESULT_FAILED,
+        resultMessage: ""
+    };
+
+    var boundary = {
+        boundary: new Array,
+    };
+
+    var ret = {
+        header: header,
+        origins: destinations,
+        boundary: boundary,
+    };
+
+    var cntDestinations = destinations.length;
+
+    var res = addon.getboundary(cntDestinations, destinations);
+    res = JSON.parse(res);
+
+    if (res.result_code == 0) {
+        ret.header.isSuccessful = true;
+        ret.header.resultCode = res.result_code;
+        ret.header.resultMessage = codes.getErrMsg(ret.header.resultCode);
+
+        ret.boundary = res.boundary;
+    } else {
+        ret.header.isSuccessful = false;
+        ret.header.resultCode = res.result_code;
+        ret.header.resultMessage = codes.getErrMsg(ret.header.resultCode);
+    }
+    
+    addon.logout("end boundary");
+
+    return ret;
+}
+
+
 exports.getbestways = function(mode, destinations) {
 
     addon.logout("start bestways");
@@ -569,21 +739,26 @@ exports.getbestways = function(mode, destinations) {
             ret.header.resultMessage = codes.getErrMsg(ret.result_code);
             logout("route result : failed, msg " + ret.header.resultMessage);
         } else {
-        	const type_match = 4; //TYPE_LINK_MATCH_FOR_TABLE; // 최적지점 사용
-            // departure
-            if (cntDestinations == 0) {
-                addon.setdeparture(parseFloat(coord[0]), parseFloat(coord[1]), is_optimal, type_match);
-            }
-            // destination 
-            else if (cntDestinations == (count - 1)) {
-                addon.setdestination(parseFloat(coord[0]), parseFloat(coord[1]), is_optimal, type_match);
-            }
-            // via
-            else {
-                addon.setwaypoint(parseFloat(coord[0]), parseFloat(coord[1]), is_optimal, type_match);
-            }
+            var lng = parseFloat(coord[0]);
+            var lat = parseFloat(coord[1]);
+            if (checkcoord(lng, lat) != true) {
+                logout("invalid coord, lng: " + lng + ", lat: " + lat);
+            } else {
+                // departure
+                if (cntDestinations == 0) {
+                    addon.setdeparture(lng, lat, is_optimal, type_match);
+                }
+                // destination 
+                else if (cntDestinations == (count - 1)) {
+                    addon.setdestination(lng, lat, is_optimal, type_match);
+                }
+                // via
+                else {
+                    addon.setwaypoint(lng, lat, is_optimal, type_match);
+                }
 
-            cntDestinations++;
+                cntDestinations++;
+            }
         }
     });
 

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "MapDef.h"
+#include "../include/MapDef.h"
 
 template <typename T>
 class MapClass

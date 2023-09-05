@@ -106,5 +106,5 @@ const uint16_t setPassCode(const char* szPassCode);
 
 // 8자리 통행 코드에서 현재 인덱스의 통행 코드를 가져온다.
 const uint16_t getPassCode(IN const uint16_t currentLinkPassCode, IN const int32_t idxCurrentPass);
-const bool getNextPassCode(IN const KeyID currentLinkId, IN const KeyID nextLinkId, IN const stNodeInfo* pNode);
-const bool getPrevPassCode(IN const KeyID currentLinkId, IN const KeyID prevLinkId, IN const stNodeInfo* pNode);
+const bool getNextPassCode(IN const KeyID currentLinkId, IN const KeyID nextLinkId, IN const stNodeInfo* pNode, IN const int32_t processDepth = -1, IN CDataManager* pDataMgr = nullptr);
+const bool getPrevPassCode(IN const KeyID currentLinkId, IN const KeyID prevLinkId, IN const stNodeInfo* pNode, IN const int32_t processDepth = -1, IN CDataManager* pDataMgr = nullptr);

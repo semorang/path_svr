@@ -8,6 +8,7 @@
 #include "../shp/shpio.h"
 #include "../utils/GeoTools.h"
 #include "../utils/UserLog.h"
+#include "../utils/Strings.h"
 #include "../route/MMPoint.hpp"
 #include "../route/DataManager.h"
 
@@ -44,6 +45,10 @@ bool CFileVehicle::ParseData(IN const char* fname)
 		return false;
 	}
 
+#if defined(USE_PROJ4_LIB)
+	initProj4("UTM52N");
+#endif
+
 	//전체 지도영역 얻기
 	SBox mapBox;
 	shpReader.GetEnvelope(&mapBox);
@@ -54,6 +59,7 @@ bool CFileVehicle::ParseData(IN const char* fname)
 #endif
 
 	SetMeshRegion(&mapBox);
+
 
 	//전체 데이터 카운터 얻기
 	long nRecCount = shpReader.GetRecordCount();
@@ -125,6 +131,7 @@ bool CFileVehicle::ParseData(IN const char* fname)
 
 	//데이터 얻기
 	LOG_TRACE(LOG_DEBUG, "LOG, start, raw data parsing file : %s", fname);
+
 
 	for (int idxRec = 0; idxRec < nRecCount; idxRec++) {
 		stWalkMesh mesh = { 0, };
@@ -318,7 +325,11 @@ bool CFileVehicle::ParseData(IN const char* fname)
 
 		//	m_mapMesh.insert(pair<uint32_t, stMeshInfo*>((uint32_t)pMesh->mesh_id.tile_id, pMesh));
 		//}
-	}
+	} // for
+
+#if defined(USE_PROJ4_LIB)
+	releaseProj4();
+#endif
 
 	shpReader.Close();
 
@@ -591,11 +602,12 @@ bool CFileVehicle::GenServiceData()
 	}
 
 
+	int32_t cntProc = 0;
 
 	// 링크 결합
+#if !defined(USE_P2P_DATA) // p2p는 각도 필드에 링크 속성을 확장해서 사용
 	LOG_TRACE(LOG_DEBUG, "LOG, start, link merge");
 
-	int32_t cntProc = 0;
 	for (itLink = m_mapLink.begin(); itLink != m_mapLink.end(); itLink++)
 	{
 		MergeLink(itLink->second, &m_mapLink, &m_mapNode);
@@ -604,7 +616,7 @@ bool CFileVehicle::GenServiceData()
 			LOG_TRACE(LOG_DEBUG, "LOG, processing, link merge: %d/%d", cntProc, m_mapLink.size());
 		}
 	}
-
+#endif
 
 
 	// 각도 설정
@@ -890,7 +902,9 @@ const uint16_t getPassCode(IN const uint16_t currentLinkPassCode, IN const int32
 }
 
 
-const bool getNextPassCode(IN const KeyID currentLinkId, IN const KeyID nextLinkId, IN const stNodeInfo* pNode)
+static const int maxProcessDepth = 3;
+
+const bool getNextPassCode(IN const KeyID currentLinkId, IN const KeyID nextLinkId, IN const stNodeInfo* pNode, IN const int32_t processDepth, IN CDataManager* pDataMgr)
 {
 	bool retPass = false;
 
@@ -915,32 +929,75 @@ const bool getNextPassCode(IN const KeyID currentLinkId, IN const KeyID nextLink
 		}
 
 		if (idxCurrentLinkPass < 0 || idxNextLinkPass < 0) {
-			LOG_TRACE(LOG_WARNING, "can't find link matched pass, current link tile:%d, id:%d, next link tile:%d, id:%d", currentLinkId.tile_id, currentLinkId.nid, nextLinkId.tile_id, nextLinkId.nid);
-			return false;
+			LOG_TRACE(LOG_WARNING, "can't find link matched pass, current link id:%lld%(%d,%d), next link id:%lld(%d,%d)", currentLinkId.llid, currentLinkId.tile_id, currentLinkId.nid, nextLinkId.llid, nextLinkId.tile_id, nextLinkId.nid);
 		}
+		else {
+			// 통행코드는 자신의 현재 위치(링크) 다음 방향 값을 첫 인덱스를 시작해 자신을 가장 마지막 인덱스로 구성함.
+			// 그러나 요청되는 다음 인덱스는 노드 연결 구성시 정북 기준 순으로 저장되므로 요청된 인덱스의 순서 변경이 필요함
+			idxLinkPassOffset = (pNode->base.connnode_count - 1) - idxCurrentLinkPass;
 
-		// 통행코드는 자신의 현재 위치(링크) 다음 방향 값을 첫 인덱스를 시작해 자신을 가장 마지막 인덱스로 구성함.
-		// 그러나 요청되는 다음 인덱스는 노드 연결 구성시 정북 기준 순으로 저장되므로 요청된 인덱스의 순서 변경이 필요함
-		idxLinkPassOffset = (pNode->base.connnode_count - 1) - idxCurrentLinkPass;
-
-		codeLinkPass = pNode->conn_attr[idxCurrentLinkPass];
+			codeLinkPass = pNode->conn_attr[idxCurrentLinkPass];
 
 
-		// 통행 코드 확인
-		if (codeLinkPass == 0) {
-			// 전방향 통과 가능
-			retPass = true;
-		}
-		else { // if (codeLinkPass != 0) {
-			// 현재 링크 패스 인덱스로부터 다음 링크의 패스 인덱스 계산
-			int idxCurrentPass = (idxLinkPassOffset + idxNextLinkPass);
-			if (idxCurrentPass >= pNode->base.connnode_count) {
-				idxCurrentPass %= (pNode->base.connnode_count);
+			// 통행 코드 확인
+			if (codeLinkPass == 0) {
+				// 전방향 통과 가능
+				retPass = true;
+			}
+			else { // if (codeLinkPass != 0) {
+				   // 현재 링크 패스 인덱스로부터 다음 링크의 패스 인덱스 계산
+				int idxCurrentPass = (idxLinkPassOffset + idxNextLinkPass);
+				if (idxCurrentPass >= pNode->base.connnode_count) {
+					idxCurrentPass %= (pNode->base.connnode_count);
+				}
+
+				if (getPassCode(codeLinkPass, idxCurrentPass) != 2) {
+					retPass = true;
+				}
+			}
+		}		
+	}
+
+	// 지정된 depth 만큼 추적
+	if ((retPass == true) && (pDataMgr != nullptr) && (0 <= processDepth) && (processDepth < maxProcessDepth)) {
+		stLinkInfo* pNextLink = nullptr;
+		stNodeInfo* pNextNode = nullptr;
+		KeyID nextNodeId = { 0 };
+
+		pNextLink = pDataMgr->GetVLinkDataById(nextLinkId);
+		if (pNextLink != nullptr) {
+			// 양방의 경우, 현재 링크 노드의 반대 노드 구하기
+			// 일방의 경우에는 현재 링크가 다음 노드로 진입 가능한지 여부 확인
+			if (pNextLink->veh.pass_code == 1) { // 양방향
+				if (pNextLink->enode_id == pNode->node_id) {
+					nextNodeId = pNextLink->snode_id;
+				}
+				else {
+					nextNodeId = pNextLink->enode_id;
+				}
+			}
+			else if ((pNextLink->veh.pass_code == 5) && (pNextLink->snode_id == pNode->node_id)) { // 정
+				nextNodeId = pNextLink->enode_id;
+			}
+			else if ((pNextLink->veh.pass_code == 6) && (pNextLink->enode_id == pNode->node_id)) { // 역
+				nextNodeId = pNextLink->snode_id;
+			}
+			else {
+				retPass = false;
 			}
 
-			if (getPassCode(codeLinkPass, idxCurrentPass) != 2) {
-				retPass = true;
-			}			
+			if (nextNodeId.llid != 0) {
+				pNextNode = pDataMgr->GetVNodeDataById(nextNodeId);
+			}
+		}
+
+		// 출발지의 방향성으로 설정시, 진출이 불가한 (다음 링크에서 회전 불가 등) 경우 확인
+		if (pNextNode && (pNextNode->base.connnode_count >= 1)) {
+			for (int ii = 0; ii < pNextNode->base.connnode_count; ii++) {
+				if ((retPass = getNextPassCode(nextLinkId, pNextNode->connnodes[ii], pNextNode, processDepth + 1)) == true) {
+					break;
+				}
+			} // for
 		}
 	}
 
@@ -948,7 +1005,7 @@ const bool getNextPassCode(IN const KeyID currentLinkId, IN const KeyID nextLink
 }
 
 
-const bool getPrevPassCode(IN const KeyID currentLinkId, IN const KeyID prevLinkId, IN const stNodeInfo* pNode)
+const bool getPrevPassCode(IN const KeyID currentLinkId, IN const KeyID prevLinkId, IN const stNodeInfo* pNode, IN const int32_t processDepth, IN CDataManager* pDataMgr)
 {
 	bool retPass = false;
 
@@ -961,45 +1018,84 @@ const bool getPrevPassCode(IN const KeyID currentLinkId, IN const KeyID prevLink
 
 		// 현재 링크의 통과 코드에서 요청된 idx의 통과 코드값 계산
 		int32_t idxCurrentLinkPass = -1;
-		int32_t idxNextLinkPass = -1;
+		int32_t idxPrevLinkPass = -1;
 
 		for (int ii = 0; ii < pNode->base.connnode_count; ii++) {
 			if (pNode->connnodes[ii] == prevLinkId) {
 				idxCurrentLinkPass = ii;
 			}
 			else if (pNode->connnodes[ii] == currentLinkId) {
-				idxNextLinkPass = ii;
+				idxPrevLinkPass = ii;
 			}
 		}
 
-		if (idxCurrentLinkPass < 0 || idxNextLinkPass < 0) {
-			LOG_TRACE(LOG_WARNING, "can't find link matched pass, current link tile:%d, id:%d, prev link tile:%d, id:%d", currentLinkId.tile_id, currentLinkId.nid, prevLinkId.tile_id, prevLinkId.nid);
-			return false;
+		if (idxCurrentLinkPass < 0 || idxPrevLinkPass < 0) {
+			LOG_TRACE(LOG_WARNING, "can't find link matched pass, current link id:%lld%(%d,%d), prev link id:%lld(%d,%d)", currentLinkId.llid, currentLinkId.tile_id, currentLinkId.nid, prevLinkId.llid, prevLinkId.tile_id, prevLinkId.nid);
 		}
+		else {
+			// 통행코드는 자신의 현재 위치(링크) 다음 방향 값을 첫 인덱스를 시작해 자신을 가장 마지막 인덱스로 구성함.
+			// 그러나 요청되는 다음 인덱스는 노드 연결 구성시 정북 기준 순으로 저장되므로 요청된 인덱스의 순서 변경이 필요함
+			idxLinkPassOffset = (pNode->base.connnode_count - 1) - idxCurrentLinkPass;
 
-		// 통행코드는 자신의 현재 위치(링크) 다음 방향 값을 첫 인덱스를 시작해 자신을 가장 마지막 인덱스로 구성함.
-		// 그러나 요청되는 다음 인덱스는 노드 연결 구성시 정북 기준 순으로 저장되므로 요청된 인덱스의 순서 변경이 필요함
-		idxLinkPassOffset = (pNode->base.connnode_count - 1) - idxCurrentLinkPass;
-
-		codeLinkPass = pNode->conn_attr[idxCurrentLinkPass];
+			codeLinkPass = pNode->conn_attr[idxCurrentLinkPass];
 
 
-		// 통행 코드 확인
-		if (codeLinkPass == 0) {
-			// 전방향 통과 가능
-			retPass = true;
-		}
-		else { // if (codeLinkPass != 0) {
-			// 현재 링크 패스 인덱스로부터 다음 링크의 패스 인덱스 계산
-			int idxCurrentPass = (idxLinkPassOffset + idxNextLinkPass);
-			if (idxCurrentPass >= pNode->base.connnode_count) {
-				idxCurrentPass %= (pNode->base.connnode_count);
-			}
-
-			if (getPassCode(codeLinkPass, idxCurrentPass) != 2) {
+			// 통행 코드 확인
+			if (codeLinkPass == 0) {
+				// 전방향 통과 가능
 				retPass = true;
 			}
+			else { // if (codeLinkPass != 0) {
+				   // 현재 링크 패스 인덱스로부터 다음 링크의 패스 인덱스 계산
+				int idxCurrentPass = (idxLinkPassOffset + idxPrevLinkPass);
+				if (idxCurrentPass >= pNode->base.connnode_count) {
+					idxCurrentPass %= (pNode->base.connnode_count);
+				}
+
+				if (getPassCode(codeLinkPass, idxCurrentPass) != 2) {
+					retPass = true;
+				}
+			}
 		}
+	}
+
+	// 지정된 depth 만큼 역 추적
+	if ((retPass == true) && (pDataMgr != nullptr) && (0 <= processDepth) && (processDepth < maxProcessDepth)) {
+		stLinkInfo* pPrevLink = nullptr;
+		stNodeInfo* pPrevNode = nullptr;
+		KeyID prevNodeId = { 0 };
+
+		pPrevLink = pDataMgr->GetVLinkDataById(prevLinkId);
+		if (pPrevLink != nullptr) {			
+			// 양방의 경우, 현재 링크 노드의 반대 노드 구하기
+			// 일방의 경우에는 다음 링크가 현재 노드로 진입 가능한지 여부 확인
+			if (pPrevLink->veh.pass_code == 1) { // 양방향
+				if (pPrevLink->enode_id == pNode->node_id) {
+					prevNodeId = pPrevLink->snode_id;
+				} else {
+					prevNodeId = pPrevLink->enode_id;
+				}
+			} else if ((pPrevLink->veh.pass_code == 5) && (pPrevLink->enode_id == pNode->node_id)) { // 정
+				prevNodeId = pPrevLink->snode_id;
+			} else if ((pPrevLink->veh.pass_code == 6) && (pPrevLink->snode_id == pNode->node_id)) { // 역
+				prevNodeId = pPrevLink->enode_id;
+			} else {
+				retPass = false;
+			}
+
+			if (prevNodeId.llid != 0) {
+				pPrevNode = pDataMgr->GetVNodeDataById(prevNodeId);
+			}
+		}
+		
+		// 목적지의 방향성으로 설정시, 진입이 불가한 (이전 링크에서 회전 불가 등) 경우 확인
+		if (pPrevNode && (pPrevNode->base.connnode_count >= 1)) {
+			for (int ii = 0; ii < pPrevNode->base.connnode_count; ii++) {
+				if ((retPass = getPrevPassCode(prevLinkId, pPrevNode->connnodes[ii], pPrevNode, processDepth + 1)) == true) {
+					break;
+				}
+			} // for
+		}		
 	}
 
 	return retPass;

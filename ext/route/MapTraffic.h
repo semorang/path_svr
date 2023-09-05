@@ -2,6 +2,9 @@
 
 #include "MapBase.h"
 
+
+#define SPEED_NOT_AVALABLE	0xFF // 255
+
 struct stTrafficMesh {
 	uint32_t mesh;
 	unordered_map<uint64_t, uint64_t> mapMatch;
@@ -23,6 +26,7 @@ public:
 	int AddData(IN const stLinkInfo* pData); // add data to matching table 
 	bool DeleteData(IN const uint64_t keyId);
 
+	const uint32_t GetSpeed(IN const KeyID link);
 	const stTrafficInfo* GetTrafficInfo(IN const uint32_t ksId);
 	const unordered_map<uint32_t, stTrafficInfo*>* GetTrafficMapData(void);
 	

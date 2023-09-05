@@ -7,6 +7,7 @@
 
 #include "../shp/shpio.h"
 #include "../utils/UserLog.h"
+#include "../utils/Strings.h"
 #include "../route/MMPoint.hpp"
 
 #if defined(_WIN32) && defined(_DEBUG)

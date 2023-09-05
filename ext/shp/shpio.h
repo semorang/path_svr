@@ -216,11 +216,16 @@ typedef struct _tagSPoint {
 	}
 }SPoint;
 
-typedef struct {
+typedef struct _tagSBox {
 	double    Xmin;
 	double    Ymin;
 	double    Xmax;
 	double    Ymax;
+
+	_tagSBox& operator=(const _tagSBox& rhs) {
+		Xmin = rhs.Xmin; Ymin = rhs.Ymin; Xmax = rhs.Xmax; Ymax = rhs.Ymax;
+		return *this;
+	}
 }SBox;
 
 #pragma warning(disable:4200)			// ignore zero-sized array in struct/union

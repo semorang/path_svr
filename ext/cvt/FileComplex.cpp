@@ -8,6 +8,7 @@
 #include "../shp/shpio.h"
 #include "../utils/UserLog.h"
 #include "../utils/GeoTools.h"
+#include "../utils/Strings.h"
 #include "../route/MMPoint.hpp"
 #include "../route/DataManager.h"
 

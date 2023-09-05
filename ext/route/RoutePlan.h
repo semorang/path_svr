@@ -1,13 +1,16 @@
 #pragma once
 
-#include "MapDef.h"
+#include "../include/MapDef.h"
+#include "../include/types.h"
 #include "DataManager.h"
 
-// #define USE_TSP_MODULE
-// #define USE_REAL_ROUTE_TSP //실제 경로 기반 TSP
-// #define USE_REAL_ROUTE_TSP_COST // 실제 경로 코스트 기준
+#include "../utils/UserLog.h"
 
-#define MAX_WAYPOINT 100
+#define USE_TSP_MODULE
+#define USE_REAL_ROUTE_TSP //실제 경로 기반 TSP
+#define USE_REAL_ROUTE_TSP_COST // 실제 경로 코스트 기준
+
+#define MAX_WAYPOINT 9999
 #if defined(USE_PEDESTRIAN_DATA)
 #define MAX_SEARCH_DIST 15000 // 직선 최대 15km
 #define MAX_SEARCH_RANGE 5
@@ -26,7 +29,7 @@ const array<int32_t, MAX_SEARCH_RANGE> searchRange = { 100, 500, 1000, 2000, 500
 
 
 #define VAL_MAX_COST		86400 // 1day sec // 60 * 60 * 24
-#define VAL_HEURISTIC_VEHICLE_FACTOR 0.1f
+#define VAL_HEURISTIC_VEHICLE_FACTOR 0.3f//0.1f
 #define VAL_HEURISTIC_VEHICLE_FACTOR_FOR_TABLE 1.0f//0.1f
 #define VAL_HEURISTIC_PEDESTRIAN_FACTOR 0.9f
 //#define VAL_HEURISTIC_FACTOR 1.9f
@@ -134,8 +137,8 @@ typedef struct _tagRouteLinkInfo {
 	int32_t LinkDistToE; // e로의 거리
 	int32_t LinkDir; // 탐색 방향, 0:미정의, 1:정방향(S->E), 2:역방향(E->S)
 	int32_t LinkGuideType; // 링크 안내 타입, 0:일반, 1:출발지링크, 2:도착지링크, 3:경유지링크
-	vector<SPoint> LinkVtxToS; // 좌표점에서 s버텍스
-	vector<SPoint> LinkVtxToE; // 좌표점에서 e버텍스
+	vector<SPoint> LinkVtxToS; // 좌표점에서 s버텍스, 종료링크의 경우는 FromS로 이해할것
+	vector<SPoint> LinkVtxToE; // 좌표점에서 e버텍스, 종료링크의 경우는 FromS로 이해할것
 
 	_tagRouteLinkInfo() {
 		LinkId.llid = 0;
@@ -287,6 +290,7 @@ typedef struct _tagTableBaseInfo {
 
 	~_tagTableBaseInfo() {
 		//for (; !pqDijkstra.empty(); pqDijkstra.pop());
+		//or LOG_TRACE(LOG_TEST, "Release Table Base Info, row:%d, link tile:%d, id:%d, queue_size:%d, pass_size:%d", testRowId, routeLinkInfo.LinkId.tile_id, routeLinkInfo.LinkId.nid, pqDijkstra.size(), mRoutePass.size());
 		for (; !pqDijkstra.empty(); ) {
 			delete pqDijkstra.top();
 			pqDijkstra.pop();
@@ -365,7 +369,7 @@ private:
 #endif
 	const int MakeRouteResult(IN RouteInfo* pRouteInfo, OUT RouteResultInfo* pRouteResult);
 
-	const double GetCost(IN const stLinkInfo* pLink, IN const uint32_t opt, IN const double length, IN const uint32_t spd); // type, 0:보행자, 1:자전거 
+	const double GetCost(IN const stLinkInfo* pLink, IN const uint32_t dirTarget, IN const uint32_t opt, IN const double length, IN const uint32_t spd); // type, 0:보행자, 1:자전거 
 	const double GetTravelCost(IN const stLinkInfo* pLink, IN const stLinkInfo* pLinkPrev, IN const double cost, IN const int angle, IN const uint32_t type, IN const uint32_t opt, IN const uint32_t avoid); // type, 0:보행자, 1:자전거
 	const uint32_t CheckStartDirectionMaching(IN const stLinkInfo* pLink, IN const RouteLinkInfo* pRoutLinkInfo, IN const int32_t routeOpt, OUT vector<CandidateLink>& vtCandidateInfo);
 	const uint32_t CheckEndDirectionMaching(IN const stLinkInfo* pLink, IN const stNodeInfo* pSNode, IN const stNodeInfo* pENode, IN const RouteLinkInfo* pRoutLinkInfo, IN const int32_t routeOpt, OUT vector<CandidateLink>& vtCandidateInfo);

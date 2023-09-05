@@ -10,6 +10,7 @@
 Gene::Gene()
 {
 	attribute = 0;
+	glued = false;
 }
 
 
@@ -37,16 +38,30 @@ uint32_t Gene::GetAttribute(void) const
 }
 
 
+void Gene::SetGlued(IN const bool glue)
+{
+	glued = glue;
+}
+
+
+bool Gene::IsGlued(void) const
+{
+	return glued;
+}
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // Individual
 bool cmpFitness(Individual lhs, Individual rhs) {
-	return lhs.GetFitness() < rhs.GetFitness(); // ¿Ã¸²Â÷¼ø // fitness°¡ Å« °³Ã¼ ¿ì¼±
+	return lhs.GetFitness() < rhs.GetFitness(); // ì˜¬ë¦¼ì°¨ìˆœ // fitnessê°€ í° ê°œì²´ ìš°ì„ 
 }
 
 
 Individual::Individual()
 {
 	geneSize = 0;
+
+	m_start = -1;
+	m_finish = -1;
 }
 
 
@@ -113,21 +128,25 @@ double Individual::CalculateCost(IN const RouteTable** ppResultTables, IN const 
 		value += ppResultTables[prv][next].nTotalDist;
 #endif
 	}
-	prv = chromosome[geneSize - 1].GetAttribute();
-	next = chromosome[0].GetAttribute();
-#if defined(USE_REAL_ROUTE_TSP)
-	cost += ppResultTables[prv][next].dbTotalCost;
-	value += ppResultTables[prv][next].nTotalDist;
-	//value += ppResultTables[prv][next].nTotalTime;
-#else
-	value += ppResultTables[prv][next].nTotalDist;
-#endif
 
-	boundary = average / value;
+	// ì›ì íšŒê·€ ë•Œë¬¸ì— ì‹œì‘ì§€ì ì„ ë‹¤ì‹œ ë”í•´ ê³„ì‚°í•œë‹¤.
+	if ((m_start != -1) && (m_start == m_finish)) {
+		prv = chromosome[geneSize - 1].GetAttribute();
+		next = chromosome[0].GetAttribute();
+#if defined(USE_REAL_ROUTE_TSP)
+		cost += ppResultTables[prv][next].dbTotalCost;
+		value += ppResultTables[prv][next].nTotalDist;
+		//value += ppResultTables[prv][next].nTotalTime;
+#else
+		value += ppResultTables[prv][next].nTotalDist;
+#endif
+	}
+
+	boundary = average / cost;
 
 #if defined(USE_REAL_ROUTE_TSP)
 	return cost;
-	//return value;
+	// return value;
 #else
 	return value;
 #endif
@@ -201,22 +220,35 @@ void Individual::SetMutate(IN const uint32_t state)
 }
 
 
-bool Individual::Create(IN const vector<tableItemNearlest>* pNearlest, IN const uint32_t start, IN const uint32_t idx)
+bool Individual::Create(IN const vector<tableItemNearlest>* pNearlest, IN const uint32_t start, IN const uint32_t finish, IN const uint32_t idx)
 {
 	uint32_t prev, next, preVal;
 	uint32_t pos = start;
-	vector<bool> created(geneSize, false); // À¯ÀüÀÚ ¹è¿­ »ı¼º ¿©ºÎ
-	vector<bool> visited(geneSize, false); // ÀÌ¿ô index »ç¿ë ¿©ºÎ
-	const int32_t orderRate = 50; // 30; ¿ì¼±¼øÀ§ 30%³»¿¡¼­ ¼±ÅÃ // 1,2,3 ¼øÀ§¸¦ ·£´ıÀ¸·Î °¡Á®¿Àµµ·Ï
+	vector<bool> created(geneSize, false); // ìœ ì „ì ë°°ì—´ ìƒì„± ì—¬ë¶€
+	vector<bool> visited(geneSize, false); // ì´ì›ƒ index ì‚¬ìš© ì—¬ë¶€
+	const int32_t orderRate = 50; // 30; ìš°ì„ ìˆœìœ„ 30%ë‚´ì—ì„œ ì„ íƒ // 1,2,3 ìˆœìœ„ë¥¼ ëœë¤ìœ¼ë¡œ ê°€ì ¸ì˜¤ë„ë¡
+
+	m_start = start;
+	m_finish = finish;
 
 	if (geneSize <= start) {
 		LOG_TRACE(LOG_WARNING, "start position value over than capacity, capacity(%d) <= start(%d)", geneSize, start);
 		return false;
 	}
 
-	// ½ÃÀÛ À§Ä¡ °íÁ¤
-	chromosome[0].SetAttribute(pos);
-	created[pos] = visited[pos] = true;
+	// ì‹œì‘ ìœ„ì¹˜ ê³ ì •
+	if (m_start != -1) {
+		chromosome[0].SetAttribute(pos);
+		chromosome[0].SetGlued(true);
+		created[pos] = visited[pos] = true;
+	}
+
+	// ì¢…ë£Œ ìœ„ì¹˜ ê³ ì •
+	if (m_finish != -1) {
+		chromosome[geneSize - 1].SetAttribute(m_finish);
+		chromosome[geneSize - 1].SetGlued(true);
+		created[m_finish] = visited[m_finish] = true;
+	}
 
 	prev = 0;
 	next = 1;
@@ -229,12 +261,12 @@ bool Individual::Create(IN const vector<tableItemNearlest>* pNearlest, IN const 
 
 		preVal = chromosome[prev].GetAttribute();
 
-		// °¡±î¿î À¯ÀüÀÚ¸¦ ¹Ì»ç¿ëµÈ ¼ø¼­·Î °¡Á®¿Â´Ù.
+		// ê°€ê¹Œìš´ ìœ ì „ìë¥¼ ë¯¸ì‚¬ìš©ëœ ìˆœì„œë¡œ ê°€ì ¸ì˜¨ë‹¤.
 		uint32_t nearlest = 0;
-		int order = 0; // Ã¹ °³Ã¼´Â Á¦ÀÏ °¡±î¿î °ªÀ» »ç¿ë
+		int order = 0; // ì²« ê°œì²´ëŠ” ì œì¼ ê°€ê¹Œìš´ ê°’ì„ ì‚¬ìš©
 		//if (idx != 0) {
 		if (0) {
-			// µÎ¹øÂ° À¯ÀüÀÚ´Â Ã¹¹øÂ°¿¡¼­ °Å¸®¼ø Àı¹İ±îÁö À¯ÀüÀÚ¸¦ ´ëÀÔÇØ ÁØ´Ù. 
+			// ë‘ë²ˆì§¸ ìœ ì „ìëŠ” ì²«ë²ˆì§¸ì—ì„œ ê±°ë¦¬ìˆœ ì ˆë°˜ê¹Œì§€ ìœ ì „ìë¥¼ ëŒ€ì…í•´ ì¤€ë‹¤. 
 			//if ((prev == 0) && (idx < (geneSize / 2 - 1))) {
 			if (geneSize <= 30) {
 				if ((prev == 0) && (idx < (geneSize / 2 - 1))) {
@@ -247,36 +279,42 @@ bool Individual::Create(IN const vector<tableItemNearlest>* pNearlest, IN const 
 				}
 				else
 				{
-					order = rand() % (geneSize * orderRate / 100); // ¿ì¼±¼øÀ§ 30%³»¿¡¼­ ¼±ÅÃ // 1,2,3 ¼øÀ§¸¦ ·£´ıÀ¸·Î °¡Á®¿Àµµ·Ï
-					//order = rand() % (geneSize * (idx % 10) * 10 / 100); // ¿ì¼±¼øÀ§ 10%~100% ³»¿¡¼­ ¼±ÅÃ // 1,2,3 ¼øÀ§¸¦ ·£´ıÀ¸·Î °¡Á®¿Àµµ·Ï
+					order = rand() % (geneSize * orderRate / 100); // ìš°ì„ ìˆœìœ„ 30%ë‚´ì—ì„œ ì„ íƒ // 1,2,3 ìˆœìœ„ë¥¼ ëœë¤ìœ¼ë¡œ ê°€ì ¸ì˜¤ë„ë¡
+					//order = rand() % (geneSize * (idx % 10) * 10 / 100); // ìš°ì„ ìˆœìœ„ 10%~100% ë‚´ì—ì„œ ì„ íƒ // 1,2,3 ìˆœìœ„ë¥¼ ëœë¤ìœ¼ë¡œ ê°€ì ¸ì˜¤ë„ë¡
 				}
 			}
 			else {
-				order = rand() % (geneSize * orderRate / 100); // ¿ì¼±¼øÀ§ 30%³»¿¡¼­ ¼±ÅÃ // 1,2,3 ¼øÀ§¸¦ ·£´ıÀ¸·Î °¡Á®¿Àµµ·Ï
-				//order = rand() % (geneSize * (idx % 10) * 10 / 100); // ¿ì¼±¼øÀ§ 10%~100% ³»¿¡¼­ ¼±ÅÃ // 1,2,3 ¼øÀ§¸¦ ·£´ıÀ¸·Î °¡Á®¿Àµµ·Ï
+				order = rand() % (geneSize * orderRate / 100); // ìš°ì„ ìˆœìœ„ 30%ë‚´ì—ì„œ ì„ íƒ // 1,2,3 ìˆœìœ„ë¥¼ ëœë¤ìœ¼ë¡œ ê°€ì ¸ì˜¤ë„ë¡
+				//order = rand() % (geneSize * (idx % 10) * 10 / 100); // ìš°ì„ ìˆœìœ„ 10%~100% ë‚´ì—ì„œ ì„ íƒ // 1,2,3 ìˆœìœ„ë¥¼ ëœë¤ìœ¼ë¡œ ê°€ì ¸ì˜¤ë„ë¡
 			}
 		}
 
 
+		bool isOk = false;
+
 		nearlest = pNearlest->at(preVal).nearlest[order].idx;
 		if (visited[nearlest] == false) {
+			isOk = true;
 			visited[nearlest] = true;
 		}
-		else { // ¾Æ´Ï¸é °¡±î¿î ¿ì¼±¼øÀ§ ºÎÅÍ ¼øÂ÷·Î °¡Á®¿Íº¸ÀÚ
+		else { // ì•„ë‹ˆë©´ ê°€ê¹Œìš´ ìš°ì„ ìˆœìœ„ ë¶€í„° ìˆœì°¨ë¡œ ê°€ì ¸ì™€ë³´ì
 			for (order = 0; order < geneSize - 1; order++) {
 				nearlest = pNearlest->at(preVal).nearlest[order].idx;
 				if (visited[nearlest] == true) {
 					continue;
 				}
 				else { //if (visited[nearlest] == false) {
+					isOk = true;
 					visited[nearlest] = true;
 					break;
 				}
 			}
 		}
 
-		chromosome[next].SetAttribute(nearlest);
-		created[next] = true;
+		if (isOk) {
+			chromosome[next].SetAttribute(nearlest);
+			created[next] = true;
+		}
 	}
 
 	return true;
@@ -290,7 +328,7 @@ void Individual::Print(void)
 
 	int cnt = 0;
 	for (const auto & gene : chromosome) {
-		LOG_TRACE(LOG_DEBUG_CONTINUE, "%2d¡æ", gene.GetAttribute());
+		LOG_TRACE(LOG_DEBUG_CONTINUE, "%2d>", gene.GetAttribute()); //â†’
 	}
 	LOG_TRACE(LOG_DEBUG_CONTINUE, "%d => %d, ==> %.5f", chromosome[0].GetAttribute(), value, boundary);
 }
@@ -333,7 +371,7 @@ void Environment::SetOption(TspOptions* pOpt)
 
 bool cmpNearlestGene(const tableItem& lhs, const tableItem& rhs) {
 #if defined(USE_REAL_ROUTE_TSP)
-	//return lhs.value < rhs.value;
+	// return lhs.value < rhs.value;
 	return lhs.cost < rhs.cost;
 #else
 	return lhs.value < rhs.value;
@@ -358,7 +396,7 @@ bool Environment::SetCostTable(IN const RouteTable** ppResultTables, IN const in
 	const uint32_t maxGene = tableCount;
 
 	genePriority.clear();
-	genePriority.reserve(maxGene - 1); // ÀÚ±â´Â »« ÀÌ¿ô°³¼ö
+	genePriority.reserve(maxGene - 1); // ìê¸°ëŠ” ëº€ ì´ì›ƒê°œìˆ˜
 
 	for (int ii = 0; ii < maxGene; ii++) {
 		uint32_t min = UINT32_MAX;
@@ -373,6 +411,7 @@ bool Environment::SetCostTable(IN const RouteTable** ppResultTables, IN const in
 			tableItem neighborGene;
 
 #if defined(USE_REAL_ROUTE_TSP)
+			// cost
 			if (ppTables[ii][jj].dbTotalCost < min) {
 				min = ppTables[ii][jj].dbTotalCost;
 			}
@@ -386,18 +425,22 @@ bool Environment::SetCostTable(IN const RouteTable** ppResultTables, IN const in
 			neighborGene.value = ppTables[ii][jj].nTotalDist;
 			currentGene.nearlest.emplace_back(neighborGene);
 
-			//if (ppTables[ii][jj].nTotalDist < min) {
-			//	min = ppTables[ii][jj].nTotalDist;
-			//}
 
-			//if (ppTables[ii][jj].nTotalDist > max) {
-			//	max = ppTables[ii][jj].nTotalDist;
-			//}
+			// dist
+			// if (ppTables[ii][jj].nTotalDist < min) {
+			// 	min = ppTables[ii][jj].nTotalDist;
+			// }
 
-			//neighborGene.idx = jj;
-			//neighborGene.value = ppTables[ii][jj].nTotalDist;
-			//currentGene.nearlest.emplace_back(neighborGene);
+			// if (ppTables[ii][jj].nTotalDist > max) {
+			// 	max = ppTables[ii][jj].nTotalDist;
+			// }
 
+			// neighborGene.idx = jj;
+			// neighborGene.value = ppTables[ii][jj].nTotalDist;
+			// currentGene.nearlest.emplace_back(neighborGene);
+			
+
+			// time
 			//if (ppTables[ii][jj].nTotalTime < min) {
 			//	min = ppTables[ii][jj].nTotalTime;
 			//}
@@ -425,7 +468,7 @@ bool Environment::SetCostTable(IN const RouteTable** ppResultTables, IN const in
 		} // for jj
 
 
-		// ÇöÀç À¯ÀüÀÚ¿Í °¡±î¿î À¯ÀüÀÚ º¤ÅÍ »ı¼º
+		// í˜„ì¬ ìœ ì „ìì™€ ê°€ê¹Œìš´ ìœ ì „ì ë²¡í„° ìƒì„±
 		sort(currentGene.nearlest.begin(), currentGene.nearlest.end(), cmpNearlestGene);
 		genePriority.emplace_back(currentGene);
 
@@ -454,11 +497,17 @@ void Environment::Genesis(IN const uint32_t maxGene, IN const uint32_t maxPopula
 
 	for (int ii = 0; ii < max(maxGene, maxPopulation); ii++) {
 		Individual newIndi(maxGene);
-		newIndi.Create(&genePriority, 0, ii);
+#if defined(USE_FIX_TO_START)
+		newIndi.Create(&genePriority, 0, -1, ii);
+#elif defined(USE_FIX_TO_FINISH)
+		newIndi.Create(&genePriority, -1, maxGene - 1, ii);
+#else // if defined(USE_RETURN_TO_ORIGINAL)
+		newIndi.Create(&genePriority, 0, 0, ii);
+#endif
 		population.emplace_back(newIndi);
 	}
 
-	generation++; // ¼¼´ë ½ÃÀÛ	
+	generation++; // ì„¸ëŒ€ ì‹œì‘	
 }
 
 
@@ -512,7 +561,7 @@ void Environment::Selection(OUT vector<Parents>& pairs)
 
 
 	// fitness
-	// f : ÀûÇÕµµ
+	// f : ì í•©ë„
 
 	//const int32_t mulRate = 3 - 1;
 	//double fitness = 0.f;
@@ -534,7 +583,7 @@ void Environment::Selection(OUT vector<Parents>& pairs)
 	Parents newParents;
 
 	// elitism
-	// ÃÖ»óÀ§ °³Ã¼´Â ¹«Á¶°Ç ºÎ¸ğ·Î ¼±ÅÃµÈ´Ù
+	// ìµœìƒìœ„ ê°œì²´ëŠ” ë¬´ì¡°ê±´ ë¶€ëª¨ë¡œ ì„ íƒëœë‹¤
 	newParents.idxL = 0;
 	newParents.idxR = (rand() % population.size() - 1) + 1;
 	newParents.parentL = population[newParents.idxL];
@@ -546,10 +595,10 @@ void Environment::Selection(OUT vector<Parents>& pairs)
 
 		// rullet wheel selection
 		//
-		// f = (Cw-Ci) + (Cw-Cb) / (k - 1), k > 1 , ÀÏ¹İÀûÀ¸·Î k= 3~4 Àû¿ë
-		// Cw : ÇØÁı´Ü ³»¿¡¼­ °¡Àå ³ª»Û ÇØÀÇ ºñ¿ë
-		// Cb : ÇØÁı´Ü ³»¿¡¼­ °¡Àå ÁÁÀº ÇØÀÇ ºñ¿ë
-		// Ci : ÇØ i ÀÇ ºñ¿ë
+		// f = (Cw-Ci) + (Cw-Cb) / (k - 1), k > 1 , ì¼ë°˜ì ìœ¼ë¡œ k= 3~4 ì ìš©
+		// Cw : í•´ì§‘ë‹¨ ë‚´ì—ì„œ ê°€ì¥ ë‚˜ìœ í•´ì˜ ë¹„ìš©
+		// Cb : í•´ì§‘ë‹¨ ë‚´ì—ì„œ ê°€ì¥ ì¢‹ì€ í•´ì˜ ë¹„ìš©
+		// Ci : í•´ i ì˜ ë¹„ìš©
 
 		array<int32_t, 2> parents = { 0, };
 
@@ -608,7 +657,7 @@ int32_t getFisrstVisit(IN unordered_set<uint32_t>& visited, IN const uint32_t in
 	int32_t idx = -1;
 	int32_t cur = index;
 
-	// ´Ü¼ø Ã¼Å©
+	// ë‹¨ìˆœ ì²´í¬
 	if (maxLoop < 0) {
 		if (visited.find(cur) == visited.end()) {
 			visited.insert(cur);
@@ -637,7 +686,7 @@ int32_t getFisrstVisit(IN unordered_set<uint32_t>& visited, IN const uint32_t in
 }
 
 
-// ¼­·Î ÀÌ¿ôÇÑ À¯ÀüÀÚ³¢¸® ±³Â÷½Ã °Å¸®°¡ ÂªÀº °æ¿ì ±³Â÷½Ãµµ
+// ì„œë¡œ ì´ì›ƒí•œ ìœ ì „ìë¼ë¦¬ êµì°¨ì‹œ ê±°ë¦¬ê°€ ì§§ì€ ê²½ìš° êµì°¨ì‹œë„
 bool Environment::CrossBySelf(IN Individual* pSelf, IN const int32_t pos, IN const int32_t size, IN const int32_t off) {
 	//offsprings.emplace_back(population[ii]);
 	vector<Gene>* pGenes = pSelf->GetChromosome();
@@ -660,6 +709,11 @@ bool Environment::CrossBySelf(IN Individual* pSelf, IN const int32_t pos, IN con
 	}
 
 	for (int jj = start; jj < cnt; jj++) {
+		// ê³ ì •ëœ ìœ ì „ìëŠ” ë³€ê²½í•˜ì§€ ë§ê²ƒ.
+		if (pGenes->at(jj).IsGlued()) {
+			continue;
+		}
+
 		costBefor = distAfter = 0;
 		distBefor = distAfter = 0;
 
@@ -725,7 +779,7 @@ bool Environment::Crossover(IN vector<Parents>& pairs)
 	const int32_t fullSize = population[0].GetChromosomeSize();
 	int32_t frontSize = fullSize / 2;
 	if (fullSize > 3) {
-		frontSize = fullSize % ((rand() % (fullSize - 3)) + 3); // 3~SIZE À§Ä¡ ºĞÇÒ 
+		frontSize = fullSize % ((rand() % (fullSize - 3)) + 3); // 3~SIZE ìœ„ì¹˜ ë¶„í•  
 	}
 	int32_t backSize = fullSize - frontSize;
 	unordered_set<uint32_t> visited;
@@ -737,21 +791,21 @@ bool Environment::Crossover(IN vector<Parents>& pairs)
 	offsprings.reserve(pairs.size() * 4 + 11); // 
 
 	// elitism
-	// »óÀ§ 10% ºÎ¸ğ´Â ÇüÁúÀ» ±×´ë·Î Àü½Â.
+	// ìƒìœ„ 10% ë¶€ëª¨ëŠ” í˜•ì§ˆì„ ê·¸ëŒ€ë¡œ ì „ìŠ¹.
 	//int32_t cntElitism = max(1, static_cast<int32_t>(population.size() / 100 * 10));
-	// ÃÖ»óÀ§ ºÎ¸ğ´Â ÇüÁúÀ» ±×´ë·Î Àü½Â.
+	// ìµœìƒìœ„ ë¶€ëª¨ëŠ” í˜•ì§ˆì„ ê·¸ëŒ€ë¡œ ì „ìŠ¹.
 	int32_t cntElitism = 10;// 10;
 
 	for (int ii = 0; ii < cntElitism; ii++) {
-		// ¿øÇü ±×´ë·Î À¯Àü
+		// ì›í˜• ê·¸ëŒ€ë¡œ ìœ ì „
 		offsprings.emplace_back(population[ii]);
 
-		// À¯ÀüÀÚ °­Á¦ º¯ÀÌ
+		// ìœ ì „ì ê°•ì œ ë³€ì´
 		offsprings.emplace_back(population[ii]);
 		Mutation(&offsprings.back(), 30);
 
 		if (ii % 5 == 0) {
-			// ÀüÃ¼¸¦ 1°³¾¿ ¹Ù²ãº¸°í
+			// ì „ì²´ë¥¼ 1ê°œì”© ë°”ê¿”ë³´ê³ 
 			child.GetChromosome()->assign(population[ii].GetChromosome()->begin(), population[ii].GetChromosome()->end());
 			if (CrossBySelf(&child)) {
 				offsprings.emplace_back(child);
@@ -759,7 +813,7 @@ bool Environment::Crossover(IN vector<Parents>& pairs)
 		}
 
 		if (ii % 5 == 1) {
-			// ÀüÃ¼¸¦ 2°³¾¿ ¹Ù²ãº¸°í
+			// ì „ì²´ë¥¼ 2ê°œì”© ë°”ê¿”ë³´ê³ 
 			child.GetChromosome()->assign(population[ii].GetChromosome()->begin(), population[ii].GetChromosome()->end());
 			if (CrossBySelf(&child, 1, fullSize - 4, 2)) {
 				offsprings.emplace_back(child);
@@ -767,7 +821,7 @@ bool Environment::Crossover(IN vector<Parents>& pairs)
 		}
 
 		if (ii % 5 == 2) {
-			// ÀüÃ¼¸¦ 3°³¾¿ ¹Ù²ãº¸°í
+			// ì „ì²´ë¥¼ 3ê°œì”© ë°”ê¿”ë³´ê³ 
 			child.GetChromosome()->assign(population[ii].GetChromosome()->begin(), population[ii].GetChromosome()->end());
 			if (CrossBySelf(&child, 1, fullSize - 5, 3)) {
 				offsprings.emplace_back(child);
@@ -775,7 +829,7 @@ bool Environment::Crossover(IN vector<Parents>& pairs)
 		}
 
 		if (ii % 5 == 3) {
-			// ÀüÃ¼¸¦ 4°³¾¿ ¹Ù²ãº¸°í
+			// ì „ì²´ë¥¼ 4ê°œì”© ë°”ê¿”ë³´ê³ 
 			child.GetChromosome()->assign(population[ii].GetChromosome()->begin(), population[ii].GetChromosome()->end());
 			if (CrossBySelf(&child, 1, fullSize - 6, 4)) {
 				offsprings.emplace_back(child);
@@ -783,7 +837,7 @@ bool Environment::Crossover(IN vector<Parents>& pairs)
 		}
 
 		if (ii % 5 == 4) {
-			// ÀüÃ¼¸¦ 5°³¾¿ ¹Ù²ãº¸°í
+			// ì „ì²´ë¥¼ 5ê°œì”© ë°”ê¿”ë³´ê³ 
 			child.GetChromosome()->assign(population[ii].GetChromosome()->begin(), population[ii].GetChromosome()->end());
 			if (CrossBySelf(&child, 1, fullSize - 7, 5)) {
 				offsprings.emplace_back(child);
@@ -791,7 +845,7 @@ bool Environment::Crossover(IN vector<Parents>& pairs)
 		}
 
 		if (ii % 5 != 0) {
-			// 1°³¾¿ ¹Ù²ãº¸°í
+			// 1ê°œì”© ë°”ê¿”ë³´ê³ 
 			for (int jj = 1; jj < fullSize - 3; jj++) {
 				child.GetChromosome()->assign(population[ii].GetChromosome()->begin(), population[ii].GetChromosome()->end());
 				if (CrossBySelf(&child, jj, 3, 1)) {
@@ -799,7 +853,7 @@ bool Environment::Crossover(IN vector<Parents>& pairs)
 				}
 			}
 
-			// 2°³¾¿ ¹Ù²ãº¸°í
+			// 2ê°œì”© ë°”ê¿”ë³´ê³ 
 			for (int jj = 1; jj < fullSize - 4; jj++) {
 				child.GetChromosome()->assign(population[ii].GetChromosome()->begin(), population[ii].GetChromosome()->end());
 				if (CrossBySelf(&child, jj, 4, 2)) {
@@ -807,7 +861,7 @@ bool Environment::Crossover(IN vector<Parents>& pairs)
 				}
 			}
 
-			// 3°³¾¿ ¹Ù²ãº¸°í
+			// 3ê°œì”© ë°”ê¿”ë³´ê³ 
 			for (int jj = 1; jj < fullSize - 5; jj++) {
 				child.GetChromosome()->assign(population[ii].GetChromosome()->begin(), population[ii].GetChromosome()->end());
 				if (CrossBySelf(&child, jj, 5, 3)) {
@@ -815,7 +869,7 @@ bool Environment::Crossover(IN vector<Parents>& pairs)
 				}
 			}
 
-			// 4°³¾¿ ¹Ù²ãº¸°í
+			// 4ê°œì”© ë°”ê¿”ë³´ê³ 
 			//for (int jj = 1; jj < fullSize - 6; jj++) {
 			//	child.GetChromosome()->assign(population[ii].GetChromosome()->begin(), population[ii].GetChromosome()->end());
 			//	if (CrossBySelf(&child, jj, 6, 4)) {
@@ -825,7 +879,7 @@ bool Environment::Crossover(IN vector<Parents>& pairs)
 		}
 	}
 
-	// À¯ÀüÀÚ °­Á¦ º¯ÀÌ
+	// ìœ ì „ì ê°•ì œ ë³€ì´
 	//for (int ii = 0; ii < cntElitism; ii++) {
 	//	offsprings.emplace_back(population[ii]);
 
@@ -837,10 +891,9 @@ bool Environment::Crossover(IN vector<Parents>& pairs)
 	//	//}
 	//}
 
-	//À¯ÀüÀÚ¸¦ ¿ª¼øÀ¸·Î ¹èÄ¡
+	//ìœ ì „ìë¥¼ ì—­ìˆœìœ¼ë¡œ ë°°ì¹˜
 	int nPos;
 	for (int ii = 0; ii < cntElitism; ii++) {
-
 		// ~1/2
 		offsprings.emplace_back(population[ii]);
 		nPos = (rand() % (fullSize / 2) + 2);
@@ -850,13 +903,23 @@ bool Environment::Crossover(IN vector<Parents>& pairs)
 		// 1/2 ~
 		offsprings.emplace_back(population[ii]);
 		nPos = (rand() % (fullSize / 2) + 1);
-		reverse(offsprings.back().GetChromosome()->begin() + nPos, offsprings.back().GetChromosome()->end());
+		if (offsprings.back().GetChromosome()->at(fullSize - 1).IsGlued()) {
+			reverse(offsprings.back().GetChromosome()->begin() + nPos, offsprings.back().GetChromosome()->end() - 1);
+		}
+		else {
+			reverse(offsprings.back().GetChromosome()->begin() + nPos, offsprings.back().GetChromosome()->end());
+		}		
 		offsprings.back().SetMutate(1210);
 
 		// 1/3 ~
 		offsprings.emplace_back(population[ii]);
 		nPos = (rand() % (fullSize / 3) + 1);
-		reverse(offsprings.back().GetChromosome()->begin() + nPos, offsprings.back().GetChromosome()->end());
+		if (offsprings.back().GetChromosome()->at(fullSize - 1).IsGlued()) {
+			reverse(offsprings.back().GetChromosome()->begin() + nPos, offsprings.back().GetChromosome()->end() - 1);
+		}
+		else {
+			reverse(offsprings.back().GetChromosome()->begin() + nPos, offsprings.back().GetChromosome()->end());
+		}
 		offsprings.back().SetMutate(1310);
 
 		// 1/3 ~ 2/3
@@ -868,7 +931,12 @@ bool Environment::Crossover(IN vector<Parents>& pairs)
 		// 2/3 ~
 		offsprings.emplace_back(population[ii]);
 		nPos = (rand() % (fullSize / 3) + 1);
-		reverse(offsprings.back().GetChromosome()->end() - nPos, offsprings.back().GetChromosome()->end());
+		if (offsprings.back().GetChromosome()->at(fullSize - 1).IsGlued()) {
+			reverse(offsprings.back().GetChromosome()->begin() + nPos, offsprings.back().GetChromosome()->end() - 1);
+		}
+		else {
+			reverse(offsprings.back().GetChromosome()->end() - nPos, offsprings.back().GetChromosome()->end());
+		}
 		offsprings.back().SetMutate(2310);
 	}
 
@@ -877,30 +945,30 @@ bool Environment::Crossover(IN vector<Parents>& pairs)
 	int32_t cur, next;
 
 	for (auto & pair : pairs) {
-		//frontSize = fullSize / ((rand() % (fullSize - 2)) + 2); // 2~SIZE À§Ä¡ ºĞÇÒ 
+		//frontSize = fullSize / ((rand() % (fullSize - 2)) + 2); // 2~SIZE ìœ„ì¹˜ ë¶„í•  
 		//backSize = fullSize - frontSize;
 
-		//// ºÎ¸ğL À¯ÀüÀÚ¸¦ ¿ª¼øÀ¸·Î ¹èÄ¡
+		//// ë¶€ëª¨L ìœ ì „ìë¥¼ ì—­ìˆœìœ¼ë¡œ ë°°ì¹˜
 		//child.GetChromosome()->assign(pair.parentL.GetChromosome()->begin(), pair.parentL.GetChromosome()->end());
 		//reverse(child.GetChromosome()->begin() + 1, child.GetChromosome()->end());
-		//// ÀÚ³à µî·Ï
+		//// ìë…€ ë“±ë¡
 		//offsprings.emplace_back(child);
 
 
-		//// ºÎ¸ğR À¯ÀüÀÚ¸¦ ¿ª¼øÀ¸·Î ¹èÄ¡
+		//// ë¶€ëª¨R ìœ ì „ìë¥¼ ì—­ìˆœìœ¼ë¡œ ë°°ì¹˜
 		//child.GetChromosome()->assign(pair.parentR.GetChromosome()->begin(), pair.parentR.GetChromosome()->end());
 		//reverse(child.GetChromosome()->begin() + 1, child.GetChromosome()->end());
-		//// ÀÚ³à µî·Ï
+		//// ìë…€ ë“±ë¡
 		//offsprings.emplace_back(child);
 
 
-		// ºÎ¸ğ À¯ÀüÀÚ¸¦ ÀÏÁ¡ ±³¹è
+		// ë¶€ëª¨ ìœ ì „ìë¥¼ ì¼ì  êµë°°
 		vector<Gene> *lhs, *rhs, *chd = child.GetChromosome();
 
 		for (int loop = 0; loop < 1; loop++) {
 			visited.clear();
 
-			// ºÎ¸ğ µî·Ï
+			// ë¶€ëª¨ ë“±ë¡
 			child.SetParent(pair.idxL, pair.idxR);
 			child.SetMutate(0);
 
@@ -913,7 +981,7 @@ bool Environment::Crossover(IN vector<Parents>& pairs)
 				rhs = pair.parentL.GetChromosome();
 			}
 
-			// front ¾Õ, 
+			// front ì•, 
 			//copy(pair.parentL.GetChromosome()->begin(), pair.parentL.GetChromosome()->begin() + frontSize, child.GetChromosome()->begin());
 			copy(lhs->begin(), lhs->begin() + frontSize, chd->begin());
 			for (int ii = 0; ii < frontSize; ii++) {
@@ -921,8 +989,8 @@ bool Environment::Crossover(IN vector<Parents>& pairs)
 				visited.emplace(cur);
 			}
 
-			// back µÚ, 
-			// Áßº¹ ¾ÈµÇ´Â ³à¼®¸¸ ¿ì¼± ÀÔ·Â
+			// back ë’¤, 
+			// ì¤‘ë³µ ì•ˆë˜ëŠ” ë…€ì„ë§Œ ìš°ì„  ì…ë ¥
 			vector<int32_t> vtRetry;
 			//copy(pair.parentL.GetChromosome()->begin() + frontSize, pair.parentL.GetChromosome()->end(), child.GetChromosome()->begin() + frontSize);
 			copy(rhs->begin() + frontSize, rhs->end(), chd->begin() + frontSize);
@@ -930,7 +998,7 @@ bool Environment::Crossover(IN vector<Parents>& pairs)
 				cur = rhs->at(ii).GetAttribute();
 				next = getFisrstVisit(visited, cur, -1);
 
-				// Àç½Ãµµ ÇÒ ³à¼®µé
+				// ì¬ì‹œë„ í•  ë…€ì„ë“¤
 				if (next < 0) {
 					vtRetry.emplace_back(ii);
 				}
@@ -943,7 +1011,7 @@ bool Environment::Crossover(IN vector<Parents>& pairs)
 				cur = rhs->at(retry).GetAttribute();
 				next = getFisrstVisit(visited, cur, fullSize);
 
-				// À§Ä¡°¡ º¯°æµÇ¾ú´Ù¸é ¼öÁ¤
+				// ìœ„ì¹˜ê°€ ë³€ê²½ë˜ì—ˆë‹¤ë©´ ìˆ˜ì •
 				if (next != cur) {
 					chd->at(retry).SetAttribute(next);
 				}
@@ -952,13 +1020,13 @@ bool Environment::Crossover(IN vector<Parents>& pairs)
 				}
 			}
 
-			// ÀÚ³à µî·Ï
+			// ìë…€ ë“±ë¡
 			offsprings.emplace_back(child);
 
 
-			// À¯ÀüÀÚ °­Á¦ º¯ÀÌ
+			// ìœ ì „ì ê°•ì œ ë³€ì´
 			Mutation(&child, 50);
-			// ÀÚ³à µî·Ï
+			// ìë…€ ë“±ë¡
 			offsprings.emplace_back(child);
 
 			//child.GetChromosome()->assign(offsprings.back().GetChromosome()->begin(), offsprings.back().GetChromosome()->end());
@@ -969,7 +1037,7 @@ bool Environment::Crossover(IN vector<Parents>& pairs)
 	} // for
 
 
-	// ¼¼´ë ±³Ã¼
+	// ì„¸ëŒ€ êµì²´
 	population.clear();
 	population.assign(offsprings.begin(), offsprings.end());
 
@@ -1000,7 +1068,7 @@ bool Environment::Mutation(IN Individual* pIndividual, IN const int32_t mutation
 
 		if (mutePos1 == mutePos2) {
 			if (mutePos1 >= pIndividual->GetGeneSize() - 1) {
-				// ¸¶Áö¸· À¯ÀüÀÚ¸é
+				// ë§ˆì§€ë§‰ ìœ ì „ìë©´
 				mutePos1--;
 			}
 			else {
@@ -1009,6 +1077,10 @@ bool Environment::Mutation(IN Individual* pIndividual, IN const int32_t mutation
 		}
 
 		if (mutePos1 != mutePos2) {
+			if (pIndividual->GetChromosome()->at(mutePos1).IsGlued() || pIndividual->GetChromosome()->at(mutePos2).IsGlued()) {
+				continue;
+			}
+
 			int32_t muteVal1 = pIndividual->GetChromosome()->at(mutePos1).GetAttribute();
 			int32_t muteVal2 = pIndividual->GetChromosome()->at(mutePos2).GetAttribute();
 

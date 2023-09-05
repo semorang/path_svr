@@ -41,6 +41,10 @@ public:
 	int Route(/*packet*/);
 	int Table(TspOptions* pOpt, IN RouteTable** ppResultTables, OUT vector<uint32_t>& vtBestWaypoints);
 	int GetTable(OUT RouteTable** ppResultTables);
+	int GetCluster(IN const int32_t cntCluster, IN RouteTable** ppTables, OUT vector<stDistrict>& vtCluster);
+	int GetBoundary(IN const vector<SPoint>& vtPois, OUT vector<SPoint>& vtBoundary);
+
+	int GetCluster_for_geoyoung(IN const int32_t cntCluster, OUT vector<stDistrict>& vtCluster);
 
 	const RouteResultInfo* GetRouteResult(void) const;
 

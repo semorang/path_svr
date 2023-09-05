@@ -29,7 +29,7 @@ int32_t MapClass<T>::AddData(IN const T * pData)
 {
 	if (pData != nullptr /*&& pData->info != NOT_USE*/) 
 	{
-		//mapData.emplace(pData->bld_id.llid, const_cast<T*>(pData));
+		mapData.emplace(pData->bld_id.llid, const_cast<T*>(pData));
 		return true;
 	}
 	else
@@ -41,13 +41,13 @@ int32_t MapClass<T>::AddData(IN const T * pData)
 template <typename T>
 bool MapClass<T>::DeleteData(IN const KeyID keyId)
 {
-	//map<uint64_t, T*>::iterator it = mapData.find(keyId.llid);
-	//if (it != mapData.end()) {
-	//	delete it->second;
-	//	it->second = nullptr;
-	//	mapData.erase(keyId.llid);
-	//	return true;
-	//}
+	typename map<uint64_t, T*>::iterator it = mapData.find(keyId.llid);
+	if (it != mapData.end()) {
+		delete it->second;
+		it->second = nullptr;
+		mapData.erase(keyId.llid);
+		return true;
+	}
 
 	return false;
 }
@@ -65,14 +65,14 @@ void MapClass<T>::Release(void)
 {
 	if (!mapData.empty())
 	{
-		// for (map<uint64_t, T*>::iterator it = mapData.begin(); it != mapData.end(); it++)
-		// {
-		// 	delete it->second;
-		// 	it->second = nullptr;
-		// }
+		for (typename map<uint64_t, T*>::iterator it = mapData.begin(); it != mapData.end(); it++)
+		{
+			delete it->second;
+			it->second = nullptr;
+		}
 
-		// mapData.clear();
-		// map<uint64_t, T*>().swap(mapData);
+		mapData.clear();
+		map<uint64_t, T*>().swap(mapData);
 	}
 }
 
@@ -80,10 +80,10 @@ void MapClass<T>::Release(void)
 template <typename T>
 T * MapClass<T>::GetDataById(IN const KeyID keyId)
 {
-	// map<uint64_t, T*>::iterator it = mapData.find(keyId.llid);
-	// if (it != mapData.end()) {
-	// 	return it->second;
-	// }
+	typename map<uint64_t, T*>::iterator it = mapData.find(keyId.llid);
+	if (it != mapData.end()) {
+		return it->second;
+	}
 	
 	return nullptr;
 }

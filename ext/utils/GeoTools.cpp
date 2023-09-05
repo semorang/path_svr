@@ -206,13 +206,26 @@ PJ_CONTEXT* proj_ctxt = nullptr;
 PJ* proj_pj = nullptr;
 
 // Source CRS : UTM52N
-// Target CRS : WGS84
+// Source CRS : UTMK(EPSG:5179)
+// Target CRS : WGS84(EPSG:4326)
 // 교차 변환은 인자 Text만 변경하면 됨
-bool initProj4()
+bool initProj4(IN const char* szType)
 {
+	char strcoordType[64] = { 0, };
+	if (szType != nullptr && strlen(szType) > 0) {
+		strcpy(strcoordType, szType);
+		_strupr(strcoordType);
+	}
+
 	proj_ctxt = proj_context_create();
 	if (proj_ctxt != nullptr) {
-		proj_pj = proj_create_crs_to_crs(proj_ctxt, "+proj=utm +zone=52 +ellps=WGS84 +datum=WGS84 +units=m +no_defs", "+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs", nullptr);
+		if (strcmp(strcoordType, "UTMK") == 0) { // UTMK(EPSG:5179)
+			proj_pj = proj_create_crs_to_crs(proj_ctxt, "+proj=tmerc +lat_0=38 +lon_0=127.5 +k=0.9996 +x_0=1000000 +y_0=2000000 +ellps=GRS80 +units=m +no_defs", "+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs", nullptr);
+			//proj_pj = proj_create_crs_to_crs(proj_ctxt, "+proj=tmerc +lat_0=38 +lon_0=127 +k=1 +x_0=200000 +y_0=600000 +ellps=GRS80 +units=m +no_defs", "+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs", nullptr);
+		}
+		else { // if (strcmp(strupr(szType), "UTM52N") == 0) {
+			proj_pj = proj_create_crs_to_crs(proj_ctxt, "+proj=utm +zone=52 +ellps=WGS84 +datum=WGS84 +units=m +no_defs", "+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs", nullptr);
+		} 
 		//P = proj_create_crs_to_crs(ctxt, "+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs", "+proj=utm +zone=52 +ellps=WGS84 +datum=WGS84 +units=m +no_defs", nullptr);
 	}
 
@@ -257,7 +270,66 @@ bool translateUTM52NtoWGS84(IN const double lng, IN const double lat, OUT double
 
 	return true;
 }
+
+bool translateUTMKtoWGS84(IN const double lng, IN const double lat, OUT double& x, OUT double& y)
+{
+	if (proj_pj == nullptr) {
+		LOG_TRACE(LOG_WARNING, "PROJ4 library not defined");
+		return false;
+	}
+
+	PJ_COORD c;
+	c.v[0] = lng;
+	c.v[1] = lat;
+
+	PJ_COORD c_ori = c;
+	auto res = proj_trans(proj_pj, PJ_FWD, c);
+
+	//printf("%f, %f\n", res.v[0], res.v[1]);
+
+	x = res.v[0];
+	y = res.v[1];
+
+	return true;
+}
 #endif // #if defined(USE_PROJ4_LIB)
 
 
 
+
+
+// 폴리곤의 중심점을 구하는 함수
+SPoint getPolygonCenter(IN const vector<SPoint>& points)
+{
+	SPoint center = { 0.0, 0.0 };
+
+	for (int i = 0; i < points.size(); i++) {
+		center.x += points[i].x;
+		center.y += points[i].y;
+	}
+	center.x /= points.size();
+	center.y /= points.size();
+
+	return center;
+}
+
+// 폴리곤 면적을 구하는 함수
+double GetPolygonArea(IN const vector<SPoint>& points) {
+	double ret = 0;
+	int i, j;
+	int cnt = points.size();
+	i = cnt - 1;
+
+	if (cnt <= 2) {
+		ret = 0;
+	} else {
+		for (j = 0; j < cnt; ++j) {
+			ret += points[i].x * points[j].y - points[j].x * points[i].y;
+			i = j;
+		}
+		ret = ret < 0 ? -ret : ret;
+		ret /= 2;
+	}
+
+	return ret * 100000;
+}

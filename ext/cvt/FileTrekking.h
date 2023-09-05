@@ -4,7 +4,7 @@
 
 //class CFileManager;
 
-struct stForestNode
+struct stTrekkingNode
 {
 	uint32_t MeshID;
 	uint32_t NodeID;
@@ -19,7 +19,7 @@ struct stForestNode
 	uint32_t Zvalue; // 고도, 높이
 };
 
-struct stForestLink
+struct stTrekkingLink
 {
 	uint32_t MeshID;
 	uint32_t LinkID;
@@ -55,8 +55,8 @@ public:
 	~CFileTrekking();
 
 private:
-	bool SetData_Node(int idx, stForestNode &getNode_Dbf, char* colData);
-	bool SetData_Link(int idx, stForestLink &getLink_Dbf, char* colData);
+	bool SetData_Node(int idx, stTrekkingNode &getNode_Dbf, char* colData);
+	bool SetData_Link(int idx, stTrekkingLink &getLink_Dbf, char* colData);
 
 public:
 	virtual bool Initialize();

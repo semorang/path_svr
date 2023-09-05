@@ -38,6 +38,7 @@ using namespace rapidjson;
 #include "../ext/cvt/FileManager.h"
 #include "../ext/route/RouteManager.h"
 #include "../ext/route/DataManager.h"
+#include "../ext/route/RoutePackage.h"
 
 
 
@@ -45,6 +46,7 @@ using namespace rapidjson;
 CFileManager m_pFileMgr;
 CDataManager m_pDataMgr;
 CRouteManager m_pRouteMgr;
+CRoutePackage m_pRoutePkg;
 
 namespace open_route_api {
 
@@ -208,12 +210,14 @@ void Init(const FunctionCallbackInfo<Value>& args) {
 	m_pDataMgr.Initialize();
 	m_pFileMgr.Initialize();
 	m_pRouteMgr.Initialize();
+   m_pRoutePkg.Initialize();
 
    // m_pFileMgr.SetCacheCount(100);
    m_pDataMgr.SetFileMgr(&m_pFileMgr);
 	m_pFileMgr.SetDataMgr(&m_pDataMgr);
    m_pFileMgr.LoadData(strDataPath.c_str());
 	m_pRouteMgr.SetDataMgr(&m_pDataMgr);
+   m_pRoutePkg.SetDataMgr(&m_pDataMgr);
 }
 
 
@@ -428,7 +432,7 @@ void SetDeparture(const FunctionCallbackInfo<Value>& args) {
       double lng = args[0].As<Number>()->Value();
       double lat = args[1].As<Number>()->Value();
 
-      LOG_TRACE(LOG_TEST, "Set departure lng:%f, lat:%f", lng, lat);
+      LOG_TRACE(LOG_DEBUG, "Set departure lng:%f, lat:%f", lng, lat);
 
       bool useOptimalPoint = false;
       if (cnt >= 2) {
@@ -503,6 +507,55 @@ void SetWaypoint(const FunctionCallbackInfo<Value>& args) {
    }
 }
 
+
+
+void SetDestination(const FunctionCallbackInfo<Value>& args) {
+   // Isolate* isolate = args.GetIsolate();
+   // double lng = To<double>(info[0]).FromJust();//->NumberValue();
+   // double lng = info.GetReturnValue().Set(Number::New(isolate, info[0]));
+
+   if (args.Length() < 2) {
+      LOG_TRACE(LOG_DEBUG, "function call argument too short : %s", args);
+   }
+   else {
+      int cnt = args.Length();
+      LOG_TRACE(LOG_DEBUG, "arg length : %d", cnt);
+
+      double lng = args[0].As<Number>()->Value();
+      double lat = args[1].As<Number>()->Value();
+      // int opt = args[2].As<Number>()->Value();
+
+      LOG_TRACE(LOG_DEBUG, "Set destination lng:%f, lat:%f", lng, lat);
+
+      bool useOptimalPoint = false;
+      if (cnt >= 2) {
+         useOptimalPoint = args[2].As<Boolean>()->Value();
+      }     
+
+      int typeLinkMatch = TYPE_LINK_MATCH_NONE;
+      if (cnt >= 3) {
+         typeLinkMatch = args[3].As<Number>()->Value();
+      }
+
+      if (useOptimalPoint == true) {
+         stOptimalPointInfo optInfo;
+         if (m_pDataMgr.GetOptimalPointDataByPoint(lng, lat, &optInfo) > 0) {
+            lng = optInfo.vtEntryPoint[0].x;
+            lat = optInfo.vtEntryPoint[0].y;
+
+            LOG_TRACE(LOG_DEBUG, "Set optimal destination lng:%f, lat:%f", lng, lat);
+         }
+      }
+
+#if defined(USE_P2P_DATA)
+      m_pRouteMgr.SetDestination(lng, lat, TYPE_LINK_MATCH_FOR_HD);
+#else
+      m_pRouteMgr.SetDestination(lng, lat, typeLinkMatch);
+#endif
+   }
+}
+
+
 void SetRpCost(const FunctionCallbackInfo<Value>& args) {
    Isolate* isolate = args.GetIsolate();
    Local<Context> context = isolate->GetCurrentContext();
@@ -549,52 +602,6 @@ void SetRpCost(const FunctionCallbackInfo<Value>& args) {
 }
 
 
-void SetDestination(const FunctionCallbackInfo<Value>& args) {
-   // Isolate* isolate = args.GetIsolate();
-   // double lng = To<double>(info[0]).FromJust();//->NumberValue();
-   // double lng = info.GetReturnValue().Set(Number::New(isolate, info[0]));
-
-   if (args.Length() < 2) {
-      LOG_TRACE(LOG_DEBUG, "function call argument too short : %s", args);
-   }
-   else {
-      int cnt = args.Length();
-      LOG_TRACE(LOG_DEBUG, "arg length : %d", cnt);
-
-      double lng = args[0].As<Number>()->Value();
-      double lat = args[1].As<Number>()->Value();
-      // int opt = args[2].As<Number>()->Value();
-
-      LOG_TRACE(LOG_TEST, "Set destination lng:%f, lat:%f", lng, lat);
-
-      bool useOptimalPoint = false;
-      if (cnt >= 2) {
-         useOptimalPoint = args[2].As<Boolean>()->Value();
-      }     
-
-      int typeLinkMatch = TYPE_LINK_MATCH_NONE;
-      if (cnt >= 3) {
-         typeLinkMatch = args[3].As<Number>()->Value();
-      }
-
-      if (useOptimalPoint == true) {
-         stOptimalPointInfo optInfo;
-         if (m_pDataMgr.GetOptimalPointDataByPoint(lng, lat, &optInfo) > 0) {
-            lng = optInfo.vtEntryPoint[0].x;
-            lat = optInfo.vtEntryPoint[0].y;
-
-            LOG_TRACE(LOG_DEBUG, "Set optimal destination lng:%f, lat:%f", lng, lat);
-         }
-      }
-
-#if defined(USE_P2P_DATA)
-      m_pRouteMgr.SetDestination(lng, lat, TYPE_LINK_MATCH_FOR_HD);
-#else
-      m_pRouteMgr.SetDestination(lng, lat, typeLinkMatch);
-#endif
-   }
-}
-
 void DoRoute(const FunctionCallbackInfo<Value>& args) {
    Isolate* isolate = args.GetIsolate();
    Local<Context> context = isolate->GetCurrentContext();
@@ -621,6 +628,7 @@ void DoRoute(const FunctionCallbackInfo<Value>& args) {
       LOG_TRACE(LOG_DEBUG, "Route Opt:%d, Avoid:%d", opt, avoid);
 
       m_pRouteMgr.SetRouteOption(opt, avoid);
+      
       ret = m_pRouteMgr.Route();
 
       if (ret == 0) {
@@ -927,7 +935,7 @@ void GetMultiRouteResultForiNavi(const FunctionCallbackInfo<Value>& args) {
             cJSON_AddNumberToObject(p2p, "dir", link.dir);
 
             // type 링크 타입, 0:일반, 1:출발지링크, 2:도착지링크, 3:경유지링크
-            cJSON_AddNumberToObject(p2p, "type", link.type);
+            cJSON_AddNumberToObject(p2p, "guide_type", link.type);
 
             // ang, 진행각
             cJSON_AddNumberToObject(p2p, "ang", link.angle);
@@ -1016,152 +1024,183 @@ void GetMultiRouteResult(const FunctionCallbackInfo<Value>& args) {
 
       LOG_TRACE(LOG_DEBUG, "Route target:%d", target);
    }
-
-   if (pResult == nullptr) {
-      LOG_TRACE(LOG_ERROR, "Error, Route result pointer null");
-
-      // header
-      mainobj->Set(context, String::NewFromUtf8(isolate, "result_code").ToLocalChecked(), Integer::New(isolate, ROUTE_RESULT_FAILED));
-      mainobj->Set(context, String::NewFromUtf8(isolate, "error_msg").ToLocalChecked(), String::NewFromUtf8(isolate, "Error, route result pointer null").ToLocalChecked());
-  }
-   else {
-      // header
-      mainobj->Set(context, String::NewFromUtf8(isolate, "user_id").ToLocalChecked(), Number::New(isolate, pResult->RequestId));
-      mainobj->Set(context, String::NewFromUtf8(isolate, "result_code").ToLocalChecked(), Integer::New(isolate, pResult->ResultCode));
-
-
-      // routes
-      Local<Array> routes = Array::New(isolate);
+  
+   if (target == 0) // use pkg mgr
+   {
+      string strJson;
       
-      int cntRoutes = 1;
-      for(int ii=0; ii<cntRoutes; ii++) {
-        // - summary
-         Local<Object> summary = Object::New(isolate);
-         summary->Set(context, String::NewFromUtf8(isolate, "type").ToLocalChecked(), Integer::New(isolate, pResult->LinkInfo[ii].link_info));
-         // - distance
-         summary->Set(context, String::NewFromUtf8(isolate, "distance").ToLocalChecked(), Integer::New(isolate, pResult->TotalLinkDist));
-         // - time
-         summary->Set(context, String::NewFromUtf8(isolate, "time").ToLocalChecked(), Integer::New(isolate, pResult->TotalLinkTime));
-         // - now
-         time_t timer = time(NULL);
-         struct tm* tmNow = localtime(&timer);
-         string strVal = string_format("%04d-%02d-%02d %02d:%02d:%02d", tmNow->tm_year + 1900, tmNow->tm_mon + 1, tmNow->tm_mday, tmNow->tm_hour, tmNow->tm_min, tmNow->tm_sec);
-         summary->Set(context, String::NewFromUtf8(isolate, "now").ToLocalChecked(), String::NewFromUtf8(isolate, strVal.c_str()).ToLocalChecked());
-         // - eta
-         timer += pResult->TotalLinkTime;
-         tmNow = localtime(&timer);
-         strVal = string_format("%04d-%02d-%02d %02d:%02d:%02d", tmNow->tm_year + 1900, tmNow->tm_mon + 1, tmNow->tm_mday, tmNow->tm_hour, tmNow->tm_min, tmNow->tm_sec);
-         summary->Set(context, String::NewFromUtf8(isolate, "eta").ToLocalChecked(), String::NewFromUtf8(isolate, strVal.c_str()).ToLocalChecked());
-         
-         // add routes - summary
-         Local<Object> route = Object::New(isolate);
-         route->Set(context, String::NewFromUtf8(isolate, "summary").ToLocalChecked(), summary);
-
-
-         // - link_info
-         Local<Array> links = Array::New(isolate);
-         int cntLinks = pResult->LinkInfo.size();
-         for(int jj=0; jj<cntLinks; jj++) {
-            Local<Object> idoff = Object::New(isolate);
-            idoff->Set(context, String::NewFromUtf8(isolate, "id").ToLocalChecked(), Number::New(isolate, pResult->LinkInfo[jj].link_id.nid));
-            idoff->Set(context, String::NewFromUtf8(isolate, "length").ToLocalChecked(), Number::New(isolate, pResult->LinkInfo[jj].length));
-            idoff->Set(context, String::NewFromUtf8(isolate, "time").ToLocalChecked(), Number::New(isolate, pResult->LinkInfo[jj].time));
-            idoff->Set(context, String::NewFromUtf8(isolate, "angle").ToLocalChecked(), Number::New(isolate, pResult->LinkInfo[jj].angle));
-            idoff->Set(context, String::NewFromUtf8(isolate, "vertex_offset").ToLocalChecked(), Number::New(isolate, pResult->LinkInfo[jj].vtx_off));
-            idoff->Set(context, String::NewFromUtf8(isolate, "vertex_count").ToLocalChecked(), Number::New(isolate, pResult->LinkInfo[jj].vtx_cnt));
-            idoff->Set(context, String::NewFromUtf8(isolate, "remain_distance").ToLocalChecked(), Number::New(isolate, pResult->LinkInfo[jj].rlength));
-            idoff->Set(context, String::NewFromUtf8(isolate, "remain_time").ToLocalChecked(), Number::New(isolate, pResult->LinkInfo[jj].rtime));
-
-            // 링크 부가 정보 
-            uint64_t sub_info = pResult->LinkInfo[ii].link_info;
-            if (sub_info > 0) {
-               stLinkBaseInfo* pBaseInfo = reinterpret_cast<stLinkBaseInfo*>(&sub_info);
-               
-               idoff->Set(context, String::NewFromUtf8(isolate, "type").ToLocalChecked(), Number::New(isolate, pBaseInfo->link_type));
-
-               // 보행자 데이터
-               if (pBaseInfo && pBaseInfo->link_type == TYPE_DATA_PEDESTRIAN) {
-                  stLinkPedestrianInfo* pPedInfo = reinterpret_cast<stLinkPedestrianInfo*>(&sub_info);
-                  idoff->Set(context, String::NewFromUtf8(isolate, "facility_type").ToLocalChecked(), Number::New(isolate, pPedInfo->facility_type));
-                  idoff->Set(context, String::NewFromUtf8(isolate, "gate_type").ToLocalChecked(), Number::New(isolate, pPedInfo->gate_type));
-               }
-               else {
-                  idoff->Set(context, String::NewFromUtf8(isolate, "facility_type").ToLocalChecked(), Number::New(isolate, 9));
-                  idoff->Set(context, String::NewFromUtf8(isolate, "gate_type").ToLocalChecked(), Number::New(isolate, 9));
-               }
-            }
-            links->Set(context, jj, idoff);
-         }
-         // add routes - link_info
-         route->Set(context, String::NewFromUtf8(isolate, "link_info").ToLocalChecked(), links);
-
-
-
-         // - vertex_info
-         Local<Array> vertices = Array::New(isolate);
-         int cntVertices = pResult->LinkVertex.size();
-         for(auto jj=0; jj<cntVertices; jj++) {
-            Local<Object> lnglat = Object::New(isolate);
-            lnglat->Set(context, String::NewFromUtf8(isolate, "x").ToLocalChecked(), Number::New(isolate, pResult->LinkVertex[jj].x));
-            lnglat->Set(context, String::NewFromUtf8(isolate, "y").ToLocalChecked(), Number::New(isolate, pResult->LinkVertex[jj].y));
-            vertices->Set(context, jj, lnglat);
-
-            // Local<Array> lnglat = Array::New(isolate);
-            // lnglat->Set(context, 0, Number::New(isolate, pResult->LinkVertex[ii].x));
-            // lnglat->Set(context, 1, Number::New(isolate, pResult->LinkVertex[ii].y));
-            // coords->Set(context, ii, lnglat);
-         }
-         // add routes - vertex_info
-         route->Set(context, String::NewFromUtf8(isolate, "vertex_info").ToLocalChecked(), vertices);
-
-
-         if (target == ROUTE_TARGET_KAKAOVX) {
-            // junction_info
-            Local<Array> junctions = Array::New(isolate);
-            vector<RouteProbablePath*> vtRpp;
-            int cntRpp = m_pRouteMgr.GetRouteProbablePath(vtRpp);
-            for(auto jj=0; jj<cntRpp; jj++) {
-               Local<Object> link_info = Object::New(isolate);
-               Local<Array> links = Array::New(isolate);
-               RouteProbablePath* pRpp = vtRpp[jj];
-               for(auto kk=0; kk<pRpp->JctLinks.size(); kk++) {
-                  Local<Object> jct_info = Object::New(isolate);
-                  Local<Array> link_vtx = Array::New(isolate);
-                  stLinkInfo* pLink = pRpp->JctLinks[kk];
-                  for (auto ll=0; ll<pLink->getVertexCount()  ; ll++) {
-                     Local<Object> lnglat = Object::New(isolate);
-                     lnglat->Set(context, String::NewFromUtf8(isolate, "x").ToLocalChecked(), Number::New(isolate, pLink->getVertexX(ll)));
-                     lnglat->Set(context, String::NewFromUtf8(isolate, "y").ToLocalChecked(), Number::New(isolate, pLink->getVertexY(ll)));
-                     link_vtx->Set(context, ll, lnglat);
-                  } // for vtx
-                  jct_info->Set(context, String::NewFromUtf8(isolate, "id").ToLocalChecked(), Number::New(isolate, pLink->link_id.nid));
-                  jct_info->Set(context, String::NewFromUtf8(isolate, "vertices").ToLocalChecked(), link_vtx);
-                  links->Set(context, kk, jct_info);  
-               } // for links
-               link_info->Set(context, String::NewFromUtf8(isolate, "id").ToLocalChecked(), Number::New(isolate, pRpp->LinkId.nid));
-               link_info->Set(context, String::NewFromUtf8(isolate, "node_id").ToLocalChecked(), Number::New(isolate, pRpp->NodeId.nid));
-               link_info->Set(context, String::NewFromUtf8(isolate, "junction").ToLocalChecked(), links);
-               junctions->Set(context, jj, link_info);
-
-               //release
-               SAFE_DELETE(pRpp);          
-            } // for junctions
-
-
-            // add routes - junction_info
-            route->Set(context, String::NewFromUtf8(isolate, "junction_info").ToLocalChecked(), junctions);
-         }
-
-
-         // increse route
-         routes->Set(context, ii, route);
+      if (pResult == nullptr) {
+         m_pRoutePkg.GetErrorResult(-1, "failed", strJson);
+      } else {
+         m_pRoutePkg.GetMultiRouteResult(pResult, strJson);
       }
 
-      // add routes
-      mainobj->Set(context, String::NewFromUtf8(isolate, "routes").ToLocalChecked(), routes);
+      args.GetReturnValue().Set(String::NewFromUtf8(isolate, strJson.c_str()).ToLocalChecked());
    }
+   else {
+      if (pResult == nullptr) {
+         LOG_TRACE(LOG_ERROR, "Error, Route result pointer null");
 
-   args.GetReturnValue().Set(mainobj);
+         // header
+         mainobj->Set(context, String::NewFromUtf8(isolate, "result_code").ToLocalChecked(), Integer::New(isolate, ROUTE_RESULT_FAILED));
+         mainobj->Set(context, String::NewFromUtf8(isolate, "error_msg").ToLocalChecked(), String::NewFromUtf8(isolate, "Error, route result pointer null").ToLocalChecked());
+      }
+      else {
+         // header
+         mainobj->Set(context, String::NewFromUtf8(isolate, "user_id").ToLocalChecked(), Number::New(isolate, pResult->RequestId));
+         mainobj->Set(context, String::NewFromUtf8(isolate, "result_code").ToLocalChecked(), Integer::New(isolate, pResult->ResultCode));
+
+
+         // routes summary
+         Local<Array> summarys = Array::New(isolate);
+         Local<Object> summary = Object::New(isolate);
+         cnt = pResult->RouteSummarys.size();
+         for(int ii=0; ii<cnt; ii++) {
+            summary->Set(context, String::NewFromUtf8(isolate, "distance").ToLocalChecked(), Number::New(isolate, pResult->RouteSummarys[ii].TotalDist));
+            summary->Set(context, String::NewFromUtf8(isolate, "time").ToLocalChecked(), Number::New(isolate, pResult->RouteSummarys[ii].TotalTime));
+
+            summarys->Set(context, ii, summary);
+         }
+
+         // add
+         mainobj->Set(context, String::NewFromUtf8(isolate, "summarys").ToLocalChecked(), summarys);
+
+
+
+         // routes
+         Local<Array> routes = Array::New(isolate);
+         
+         int cntRoutes = 1;
+         for(int ii=0; ii<cntRoutes; ii++) {
+         // - summary
+            Local<Object> summary = Object::New(isolate);
+            summary->Set(context, String::NewFromUtf8(isolate, "type").ToLocalChecked(), Integer::New(isolate, pResult->LinkInfo[ii].link_info));
+            // - distance
+            summary->Set(context, String::NewFromUtf8(isolate, "distance").ToLocalChecked(), Integer::New(isolate, pResult->TotalLinkDist));
+            // - time
+            summary->Set(context, String::NewFromUtf8(isolate, "time").ToLocalChecked(), Integer::New(isolate, pResult->TotalLinkTime));
+            // - now
+            time_t timer = time(NULL);
+            struct tm* tmNow = localtime(&timer);
+            string strVal = string_format("%04d-%02d-%02d %02d:%02d:%02d", tmNow->tm_year + 1900, tmNow->tm_mon + 1, tmNow->tm_mday, tmNow->tm_hour, tmNow->tm_min, tmNow->tm_sec);
+            summary->Set(context, String::NewFromUtf8(isolate, "now").ToLocalChecked(), String::NewFromUtf8(isolate, strVal.c_str()).ToLocalChecked());
+            // - eta
+            timer += pResult->TotalLinkTime;
+            tmNow = localtime(&timer);
+            strVal = string_format("%04d-%02d-%02d %02d:%02d:%02d", tmNow->tm_year + 1900, tmNow->tm_mon + 1, tmNow->tm_mday, tmNow->tm_hour, tmNow->tm_min, tmNow->tm_sec);
+            summary->Set(context, String::NewFromUtf8(isolate, "eta").ToLocalChecked(), String::NewFromUtf8(isolate, strVal.c_str()).ToLocalChecked());
+            
+            // add routes - summary
+            Local<Object> route = Object::New(isolate);
+            route->Set(context, String::NewFromUtf8(isolate, "summary").ToLocalChecked(), summary);
+
+
+            // - link_info
+            Local<Array> links = Array::New(isolate);
+            int cntLinks = pResult->LinkInfo.size();
+            for(int jj=0; jj<cntLinks; jj++) {
+               Local<Object> idoff = Object::New(isolate);
+               idoff->Set(context, String::NewFromUtf8(isolate, "id").ToLocalChecked(), Number::New(isolate, pResult->LinkInfo[jj].link_id.nid));
+               idoff->Set(context, String::NewFromUtf8(isolate, "length").ToLocalChecked(), Number::New(isolate, pResult->LinkInfo[jj].length));
+               idoff->Set(context, String::NewFromUtf8(isolate, "time").ToLocalChecked(), Number::New(isolate, pResult->LinkInfo[jj].time));
+               idoff->Set(context, String::NewFromUtf8(isolate, "angle").ToLocalChecked(), Number::New(isolate, pResult->LinkInfo[jj].angle));
+               idoff->Set(context, String::NewFromUtf8(isolate, "vertex_offset").ToLocalChecked(), Number::New(isolate, pResult->LinkInfo[jj].vtx_off));
+               idoff->Set(context, String::NewFromUtf8(isolate, "vertex_count").ToLocalChecked(), Number::New(isolate, pResult->LinkInfo[jj].vtx_cnt));
+               idoff->Set(context, String::NewFromUtf8(isolate, "remain_distance").ToLocalChecked(), Number::New(isolate, pResult->LinkInfo[jj].rlength));
+               idoff->Set(context, String::NewFromUtf8(isolate, "remain_time").ToLocalChecked(), Number::New(isolate, pResult->LinkInfo[jj].rtime));
+               idoff->Set(context, String::NewFromUtf8(isolate, "guide_type").ToLocalChecked(), Number::New(isolate, pResult->LinkInfo[jj].type));
+
+               // 링크 부가 정보 
+               uint64_t sub_info = pResult->LinkInfo[ii].link_info;
+               if (sub_info > 0) {
+                  stLinkBaseInfo* pBaseInfo = reinterpret_cast<stLinkBaseInfo*>(&sub_info);
+                  
+                  idoff->Set(context, String::NewFromUtf8(isolate, "type").ToLocalChecked(), Number::New(isolate, pBaseInfo->link_type));
+
+                  // 보행자 데이터
+                  if (pBaseInfo && pBaseInfo->link_type == TYPE_DATA_PEDESTRIAN) {
+                     stLinkPedestrianInfo* pPedInfo = reinterpret_cast<stLinkPedestrianInfo*>(&sub_info);
+                     idoff->Set(context, String::NewFromUtf8(isolate, "facility_type").ToLocalChecked(), Number::New(isolate, pPedInfo->facility_type));
+                     idoff->Set(context, String::NewFromUtf8(isolate, "gate_type").ToLocalChecked(), Number::New(isolate, pPedInfo->gate_type));
+                  }
+                  else {
+                     idoff->Set(context, String::NewFromUtf8(isolate, "facility_type").ToLocalChecked(), Number::New(isolate, 9));
+                     idoff->Set(context, String::NewFromUtf8(isolate, "gate_type").ToLocalChecked(), Number::New(isolate, 9));
+                  }
+               }
+               links->Set(context, jj, idoff);
+            }
+            // add routes - link_info
+            route->Set(context, String::NewFromUtf8(isolate, "link_info").ToLocalChecked(), links);
+
+
+
+            // - vertex_info
+            Local<Array> vertices = Array::New(isolate);
+            int cntVertices = pResult->LinkVertex.size();
+            for(auto jj=0; jj<cntVertices; jj++) {
+               Local<Object> lnglat = Object::New(isolate);
+               lnglat->Set(context, String::NewFromUtf8(isolate, "x").ToLocalChecked(), Number::New(isolate, pResult->LinkVertex[jj].x));
+               lnglat->Set(context, String::NewFromUtf8(isolate, "y").ToLocalChecked(), Number::New(isolate, pResult->LinkVertex[jj].y));
+               vertices->Set(context, jj, lnglat);
+
+               // Local<Array> lnglat = Array::New(isolate);
+               // lnglat->Set(context, 0, Number::New(isolate, pResult->LinkVertex[ii].x));
+               // lnglat->Set(context, 1, Number::New(isolate, pResult->LinkVertex[ii].y));
+               // coords->Set(context, ii, lnglat);
+            }
+            // add routes - vertex_info
+            route->Set(context, String::NewFromUtf8(isolate, "vertex_info").ToLocalChecked(), vertices);
+
+
+            if (target == ROUTE_TARGET_KAKAOVX) {
+               // junction_info
+               Local<Array> junctions = Array::New(isolate);
+               vector<RouteProbablePath*> vtRpp;
+               int cntRpp = m_pRouteMgr.GetRouteProbablePath(vtRpp);
+               for(auto jj=0; jj<cntRpp; jj++) {
+                  Local<Object> link_info = Object::New(isolate);
+                  Local<Array> links = Array::New(isolate);
+                  RouteProbablePath* pRpp = vtRpp[jj];
+                  for(auto kk=0; kk<pRpp->JctLinks.size(); kk++) {
+                     Local<Object> jct_info = Object::New(isolate);
+                     Local<Array> link_vtx = Array::New(isolate);
+                     stLinkInfo* pLink = pRpp->JctLinks[kk];
+                     for (auto ll=0; ll<pLink->getVertexCount()  ; ll++) {
+                        Local<Object> lnglat = Object::New(isolate);
+                        lnglat->Set(context, String::NewFromUtf8(isolate, "x").ToLocalChecked(), Number::New(isolate, pLink->getVertexX(ll)));
+                        lnglat->Set(context, String::NewFromUtf8(isolate, "y").ToLocalChecked(), Number::New(isolate, pLink->getVertexY(ll)));
+                        link_vtx->Set(context, ll, lnglat);
+                     } // for vtx
+                     jct_info->Set(context, String::NewFromUtf8(isolate, "id").ToLocalChecked(), Number::New(isolate, pLink->link_id.nid));
+                     jct_info->Set(context, String::NewFromUtf8(isolate, "vertices").ToLocalChecked(), link_vtx);
+                     links->Set(context, kk, jct_info);  
+                  } // for links
+                  link_info->Set(context, String::NewFromUtf8(isolate, "id").ToLocalChecked(), Number::New(isolate, pRpp->LinkId.nid));
+                  link_info->Set(context, String::NewFromUtf8(isolate, "node_id").ToLocalChecked(), Number::New(isolate, pRpp->NodeId.nid));
+                  link_info->Set(context, String::NewFromUtf8(isolate, "junction").ToLocalChecked(), links);
+                  junctions->Set(context, jj, link_info);
+
+                  //release
+                  SAFE_DELETE(pRpp);          
+               } // for junctions
+
+
+               // add routes - junction_info
+               route->Set(context, String::NewFromUtf8(isolate, "junction_info").ToLocalChecked(), junctions);
+            }
+
+
+            // increse route
+            routes->Set(context, ii, route);
+         }
+
+         // add routes
+         mainobj->Set(context, String::NewFromUtf8(isolate, "routes").ToLocalChecked(), routes);
+      }
+
+      args.GetReturnValue().Set(mainobj);
+   }
 }
 
 
@@ -1239,7 +1278,8 @@ void GetRouteView(const FunctionCallbackInfo<Value>& args) {
          idoff->Set(context, String::NewFromUtf8(isolate, "vertex_count").ToLocalChecked(), Number::New(isolate, pResult->LinkInfo[ii].vtx_cnt));
          idoff->Set(context, String::NewFromUtf8(isolate, "remain_distance").ToLocalChecked(), Number::New(isolate, pResult->LinkInfo[ii].rlength));
          idoff->Set(context, String::NewFromUtf8(isolate, "remain_time").ToLocalChecked(), Number::New(isolate, pResult->LinkInfo[ii].rtime));
-        
+         idoff->Set(context, String::NewFromUtf8(isolate, "type").ToLocalChecked(), Number::New(isolate, pResult->LinkInfo[ii].type));
+
          // 링크 부가 정보 
          uint64_t sub_info = pResult->LinkInfo[ii].link_info;
          if (sub_info > 0) {
@@ -1478,7 +1518,10 @@ void GetTable(const FunctionCallbackInfo<Value>& args) {
       int result_code = ROUTE_RESULT_FAILED;
       string str_msg = "";
 
-      m_pRouteMgr.SetRouteOption(2, 0);
+      int routOpt = 2;
+      int routAvoid = 0;
+
+      m_pRouteMgr.SetRouteOption(routOpt, routAvoid);
       
       int ret = m_pRouteMgr.GetTable(resultTables);
       
@@ -1559,6 +1602,210 @@ void GetTable(const FunctionCallbackInfo<Value>& args) {
 }
 
 
+void GetCluster_for_geoyoung(const FunctionCallbackInfo<Value>& args) {
+   Isolate* isolate = args.GetIsolate();
+
+   int ret;
+   string strJson;
+
+   if (args.Length() < 1) {
+      LOG_TRACE(LOG_WARNING, "GetCluster arg to short, length : %d", args.Length());
+
+      m_pRoutePkg.GetErrorResult(ROUTE_RESULT_FAILED_WRONG_PARAM, "input param count not enough", strJson);
+   }
+   else {
+      int cntClusters = args[0].As<Number>()->Value();
+      int result_code = ROUTE_RESULT_FAILED;
+
+      // get cluster
+      vector<stDistrict> vtClusters;
+      ret = m_pRouteMgr.GetCluster_for_geoyoung(cntClusters, vtClusters);
+      if (ret != ROUTE_RESULT_SUCCESS) {
+         m_pRoutePkg.GetErrorResult(ret, "failed", strJson);
+      } else {
+         m_pRoutePkg.GetClusteringResult(vtClusters, strJson);
+      }
+      
+      vtClusters.clear();
+      vector<stDistrict>().swap(vtClusters);
+   }
+
+   args.GetReturnValue().Set(String::NewFromUtf8(isolate, strJson.c_str()).ToLocalChecked());
+}
+
+
+void GetCluster(const FunctionCallbackInfo<Value>& args) {
+   Isolate* isolate = args.GetIsolate();
+
+   int ret;
+   string strJson;
+
+   if (args.Length() < 1) {
+      LOG_TRACE(LOG_WARNING, "GetCluster arg to short, length : %d", args.Length());
+
+      m_pRoutePkg.GetErrorResult(ROUTE_RESULT_FAILED_WRONG_PARAM, "input param count not enough", strJson);
+   }
+   else {
+      int cntClusters = args[0].As<Number>()->Value();
+      int result_code = ROUTE_RESULT_FAILED;
+      int nFileMode = 0; // 0:not thing, 1:read, 2:write, 3:read or write
+      int cntPois = 0;
+      string strFilePath;
+      const int32_t dataSize = sizeof(RouteTable::nTotalDist) + sizeof(RouteTable::nTotalTime) + sizeof(RouteTable::dbTotalCost);
+      RouteTable** ppResultTables = nullptr;
+
+      if (args.Length() >= 4) {
+         cntPois = args[1].As<Number>()->Value();
+         String::Utf8Value str(isolate, args[2]);
+         strFilePath = *str;
+         nFileMode = args[3].As<Number>()->Value();
+         bool isRead = false;
+	      bool isWrite = false;
+
+         // 지점 개수 만큼의 결과 테이블(n * n) 생성
+         // create route table rows
+         ppResultTables = new RouteTable*[cntPois];            
+         // create route table cols 
+         for (int ii = 0; ii < cntPois; ii++) {
+            ppResultTables[ii] = new RouteTable[cntPois];
+         }
+
+         // 저장된 테이블 데이터를 파일에서 읽어 사용 
+         if (nFileMode == 1 || nFileMode == 3) {
+            FILE* fp = fopen(strFilePath.c_str(), "rb");
+            if (fp) {
+               // read count
+               int32_t readRows = 0;
+               int32_t readDataSize = 0;
+
+               fread(&readRows, 1, sizeof(readRows), fp); // read 4byte
+               fread(&readDataSize, 1, sizeof(readDataSize), fp); // read 4byte
+
+               if ((readRows <= 0 || readDataSize <= 0) || (readRows != cntPois) || (readDataSize != dataSize)) {
+                  LOG_TRACE(LOG_WARNING, "failed, read weight matrix, rading cnt:%d, dataSize:%d, source cnt:%d, dataSize", readRows, readDataSize, cntPois, dataSize);
+               } else {
+                  // create route table cols 
+                  for (int ii = 0; ii < readRows; ii++) {
+                     for (int jj = 0; jj < readRows; jj++) {
+                        // read matrix
+                        //uint32_t nTotalDist;
+                        fread(&ppResultTables[ii][jj].nTotalDist, 1, sizeof(RouteTable::nTotalDist), fp);
+                        //uint32_t nTotalTime;
+                        fread(&ppResultTables[ii][jj].nTotalTime, 1, sizeof(RouteTable::nTotalTime), fp);
+                        //double dbTotalCost;
+                        fread(&ppResultTables[ii][jj].dbTotalCost, 1, sizeof(RouteTable::dbTotalCost), fp);
+                     } // for
+                  } // for
+
+                  isRead = true;
+				      ret = ROUTE_RESULT_SUCCESS;
+               }
+               fclose(fp);
+            } // fp
+         }
+         
+         if (!isRead) {
+            ret = m_pRouteMgr.GetTable(ppResultTables);
+         }
+
+         // 테이블 데이터 미리 읽어 파일에 저장하고 사용하자
+         if (ret == ROUTE_RESULT_SUCCESS && (nFileMode == 2 || nFileMode == 3)) {
+            FILE* fp = fopen(strFilePath.c_str(), "wb");
+            if (fp) {
+               // write count
+               fwrite(&cntPois, 1, sizeof(cntPois), fp);
+
+               // write data size
+               fwrite(&dataSize, 1, sizeof(dataSize), fp);
+
+               // write matrix
+               for (int ii = 0; ii < cntPois; ii++) {
+                  for (int jj = 0; jj < cntPois; jj++) {
+                     //uint32_t nTotalDist;
+                     fwrite(&ppResultTables[ii][jj].nTotalDist, 1, sizeof(RouteTable::nTotalDist), fp);
+                     //uint32_t nTotalTime;
+                     fwrite(&ppResultTables[ii][jj].nTotalTime, 1, sizeof(RouteTable::nTotalTime), fp);
+                     //double dbTotalCost;
+                     fwrite(&ppResultTables[ii][jj].dbTotalCost, 1, sizeof(RouteTable::dbTotalCost), fp);
+                  } // for
+               } // for
+               isWrite = true;
+               fclose(fp);
+            } // fp
+         }
+         else if (ret != ROUTE_RESULT_SUCCESS) {
+            LOG_TRACE(LOG_WARNING, "failed, get weight matrix, err:%d", ret);
+         }
+      }
+
+      // get cluster
+      vector<stDistrict> vtClusters;
+      ret = m_pRouteMgr.GetCluster(cntClusters, ppResultTables, vtClusters);
+      if (ret != ROUTE_RESULT_SUCCESS) {
+         m_pRoutePkg.GetErrorResult(ret, "failed", strJson);
+      } else {
+         m_pRoutePkg.GetClusteringResult(vtClusters, strJson);
+      }
+
+
+      // release
+      if (ppResultTables != nullptr) {
+         for (int ii = 0; ii < cntPois; ii++) {
+            SAFE_DELETE_ARR(ppResultTables[ii]);
+         }
+         SAFE_DELETE_ARR(ppResultTables);
+      }
+      
+      vtClusters.clear();
+      vector<stDistrict>().swap(vtClusters);
+   }
+
+   args.GetReturnValue().Set(String::NewFromUtf8(isolate, strJson.c_str()).ToLocalChecked());
+}
+
+
+void GetBoundary(const FunctionCallbackInfo<Value>& args) {
+   Isolate* isolate = args.GetIsolate();
+   Local<Context> context = isolate->GetCurrentContext();
+
+   string strJson;
+
+   if (args.Length() < 1) {
+      LOG_TRACE(LOG_WARNING, "GetBoundary arg to short, length : %d", args.Length());
+      m_pRoutePkg.GetErrorResult(ROUTE_RESULT_FAILED_WRONG_PARAM, "input param count not enough", strJson);
+   }
+   else {
+      int countPois = args[0].As<Number>()->Value();
+      Local<Array> arrPois = args[1].As<Array>();
+
+      vector<SPoint> vtBoundary;
+      vector<SPoint> vtPois;
+      SPoint coord;
+      for (int ii=0; ii<countPois; ii++) {
+         Local<Value> poi = arrPois->Get(context, ii).ToLocalChecked();
+         String::Utf8Value strValue(isolate, poi);
+         string strCoord = *strValue;
+         size_t pos = strCoord.find(',');
+         coord.x = atof(strCoord.substr(0, pos).c_str());
+         coord.y = atof(strCoord.substr(pos + 1).c_str());
+
+         vtPois.emplace_back(coord);
+      }
+      
+      int ret = m_pRouteMgr.GetBoundary(vtPois, vtBoundary);
+      if (ret != ROUTE_RESULT_SUCCESS) {
+         m_pRoutePkg.GetErrorResult(ret, "failed", strJson);
+      } else {
+         m_pRoutePkg.GetBoundaryResult(vtBoundary, strJson);
+      }
+      vtPois.clear();
+      vector<SPoint>().swap(vtPois);
+   }
+
+   args.GetReturnValue().Set(String::NewFromUtf8(isolate, strJson.c_str()).ToLocalChecked());
+}
+
+
 void GetWaypoints(const FunctionCallbackInfo<Value>& args) {
    Isolate* isolate = args.GetIsolate();
    Local<Context> context = isolate->GetCurrentContext();
@@ -1589,8 +1836,6 @@ void GetWaypoints(const FunctionCallbackInfo<Value>& args) {
       int result_code = ROUTE_RESULT_FAILED;
       string str_msg = "";
 
-      int routOpt = 2;
-
       uint32_t typeAlgorithm = tspOpt; // default tsp value is 0
       uint32_t cntMaxRows = cntRows;
       uint32_t cntMaxPopulation = 100;
@@ -1603,7 +1848,10 @@ void GetWaypoints(const FunctionCallbackInfo<Value>& args) {
 			cntMaxLoop,
 		};
 
-      m_pRouteMgr.SetRouteOption(routOpt, 0);
+      int routOpt = 2;
+      int routAvoid = 0;
+
+      m_pRouteMgr.SetRouteOption(routOpt, routAvoid);
 
       vector<uint32_t> vtBestwaypoints;
       int ret = m_pRouteMgr.Table(&opt, resultTables, vtBestwaypoints);
@@ -1735,6 +1983,9 @@ void init(Local<Object> exports) {
    NODE_SET_METHOD(exports, "getmultiroute_for_inavi", GetMultiRouteResultForiNavi);
    NODE_SET_METHOD(exports, "getview", GetRouteView);
    NODE_SET_METHOD(exports, "gettable", GetTable);
+   NODE_SET_METHOD(exports, "getcluster", GetCluster);
+   NODE_SET_METHOD(exports, "getcluster_for_geoyoung", GetCluster_for_geoyoung);   
+   NODE_SET_METHOD(exports, "getboundary", GetBoundary);
    NODE_SET_METHOD(exports, "getwaypoints", GetWaypoints);
 // NODE_SET_METHOD(exports, "getresultstring", GetResultString);
 

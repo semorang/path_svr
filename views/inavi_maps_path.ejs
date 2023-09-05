@@ -7,9 +7,9 @@
 </head>
 
 <body>
-    <div class=header>
+    <!-- <div class=header>
 
-    </header>
+    </header> -->
 
     <div class="body">
 
@@ -26,15 +26,22 @@
         </div>
 
         <!-- 경로탐색 컨트롤 div 입니다 -->
-        <div class="custom_typecontrol radius_border" style="position:absolute;top:10px;left:10px;overflow:hidden;width:260px;height:30px;margin:0;z-index:1;border:0">
-            <span id="btnStart" class="btn" onclick="setRouteType(1)" style="width:65px">출발</span>
-            <span id="btnVia" class="btn" onclick="setRouteType(3)" style="width:65px">경유</span>
-            <span id="btnEnd" class="btn" onclick="setRouteType(2)" style="width:65px">도착</span>
-            <span id="btnRoute" class="btn" onclick="doRoute()" style="width:65px">탐색</span>
+        <div class="custom_typecontrol radius_border" style="position:absolute;top:10px;left:10px;overflow:hidden;width:250px;height:30px;margin:0;z-index:1;border:1">
+            <span id="btnStart" class="btn" onclick="setRouteType(1)" style="width:50px">출발</span>
+            <span id="btnVia1" class="btn" onclick="setRouteType(3)" style="width:30px">경유1</span>
+            <span id="btnVia2" class="btn" onclick="setRouteType(4)" style="width:30px">경유2</span>
+            <span id="btnVia3" class="btn" onclick="setRouteType(5)" style="width:30px">경유3</span>
+            <span id="btnVia4" class="btn" onclick="setRouteType(6)" style="width:30px">경유4</span>
+            <span id="btnVia5" class="btn" onclick="setRouteType(7)" style="width:30px">경유5</span>
+            <span id="btnEnd" class="btn" onclick="setRouteType(2)" style="width:50px">도착</span>
+        </div>
+
+        <div class="custom_typecontrol radius_border" style="position:absolute;top:10px;left:260px;overflow:hidden;width:50px;height:30px;margin:0;z-index:1;border:1">
+        <span id="btnRoute" class="btn" onclick="doRoute()" style="width:50px">탐색</span>
         </div>
 
         <!-- 경로탐색 JSON 결과 div 입니다 -->
-        <div class="custom_typecontrol radius_border" style="position:absolute;top:10px;left:300px;overflow:hidden;width:70;height:30px;margin:0;z-index:1;border:0">
+        <div class="custom_typecontrol radius_border" style="position:absolute;top:10px;left:330px;overflow:hidden;width:70;height:30px;margin:0;z-index:1;border:0">
             <span id="btnGoToJsonResult" class="btn" onclick="gotoJSON()" style="width:65px">JSON보기</span>
         </div>
 
@@ -57,500 +64,617 @@
             <hr>
             <ul id="placesList"></ul>
         </div>
+    </div>
+
     
 
+    <link rel="stylesheet" href="css/maps_inavi.css" />
+    <script type="text/javascript" src="script/inavimaps.js"></script>
+    <script type="text/javascript" src="script/boundarys.js"></script>
+    <script type="text/javascript" src="script/typenames.js"></script>
+    <script type="text/javascript" src="script/search.js"></script>
+    <script type="text/javascript" src="http://code.jquery.com/jquery-1.10.2.js"></script>
 
-        <link rel="stylesheet" href="css/maps_inavi.css" />
-        <script type="text/javascript" src="script/inavimaps.js"></script>
-        <script type="text/javascript" src="script/boundarys.js"></script>
-        <script type="text/javascript" src="script/typenames.js"></script>
-        <script type="text/javascript" src="script/search.js"></script>
-        <script type="text/javascript" src="http://code.jquery.com/jquery-1.10.2.js"></script>
+    <script>
+        let markers; // for route
 
-        <script>
-            let markers; // for route
+        let result_obj = JSON.parse('<%- JSON.stringify(result) %>');
+        let user_obj = result_obj.user_info;
+        let cnt_route = result_obj.route.data.length;
+        let user_pos = [ result_obj.route.data[0].vertex_info[~~((result_obj.route.data[0].vertex_info.length) / 2)].x, result_obj.route.data[0].vertex_info[~~((result_obj.route.data[0].vertex_info.length) / 2)].y ];
+        
+        // let route_color = ["#CC0000", "#FF00DD", "#33FF00"];
+        // let route_offset = [0, 1, -1];
+        let route_color = ["#CC0000", "#008888"];
+        let route_offset = [0, 2];
 
-            let result_obj = JSON.parse('<%- JSON.stringify(result) %>');
-            let user_obj = result_obj.user_info;
-            let cnt_route = result_obj.route.data.length;
-            let user_pos = [ result_obj.route.data[0].vertex_info[~~((result_obj.route.data[0].vertex_info.length) / 2)].x, result_obj.route.data[0].vertex_info[~~((result_obj.route.data[0].vertex_info.length) / 2)].y ];
+
+        // 경로 탐색 정보
+        let typeRouteStep = 0; // 0:없음, 1:출발, 2:도착, 3:경유1, 4:경유2, 5:경유3, 6:경유4, 7:경유5
+        let click_pos;
+        let departure_pos;
+        let waypoint_pos = new Array(5);
+        let destination_pos;
+
+        // map 사이즈 조절
+        var screenHeight = window.innerHeight - 18;
+        document.getElementById("map").style.height = screenHeight + "px";
+
+
+        let links = new Array();
+        let nodes = new Array();
+        let distanceOverlay = new Object();
+
+        markers = new Array();
+
+        function initMap() {
+
+            map = new inavi.maps.Map({
+                center: user_pos,
+                container: "map",
+                zoom: 17
+            });
+
+
+            marker = new inavi.maps.Marker({
+                map: map,
+                center: user_pos,
+            });
+            marker.setVisible(false);
+
+
+            // 인포윈도우
+            searchinfoWindow = new inavi.maps.InfoWindow({ map: map, zIndex: 1, opacity: 0, offset: [0, -45], closeButton: false });
+
+
+            // 대구 테크노폴리스 도로링크 유효 범위
+            var boundarys = new inavi.maps.Polyline({
+                map: map,
+                path: getDaeguBoundary(),
+                style: {
+                    lineColor: "#808080",
+                    lineWidth: 3,
+                    lineDasharray: [1, 1],
+                },
+            });
             
-            // let route_color = ["#CC0000", "#FF00DD", "#33FF00"];
-            // let route_offset = [0, 1, -1];
-            let route_color = ["#CC0000", "#008888"];
-            let route_offset = [0, 2];
+
+            // 경로 그리기
+            for (var ii = cnt_route - 1; ii >= 0; --ii) {
+                drawRoute(result_obj.route.data[ii], map, route_offset[ii], route_color[ii]);
+            }
+
+            // onmouseover
+
+            // outmouseover
+
+            //-- 노드 생성
 
 
-            // 경로 탐색 정보
-            let typeRouteStep = 0; // 0:없음, 1:출발, 2:도착, 3:경유
-            let click_pos;
-            let departure_pos;
-            let waypoint_pos;
-            let destination_pos;
 
-            // map 사이즈 조절
-            var screenHeight = window.innerHeight - 18;
-            document.getElementById("map").style.height = screenHeight + "px";
-
-
-            let links = new Array();
-            let nodes = new Array();
-            let distanceOverlay = new Object();
-
-            markers = new Array();
-
-            function initMap() {
-
-                map = new inavi.maps.Map({
-                    center: user_pos,
-                    container: "map",
-                    zoom: 17
-                });
-
-
-                marker = new inavi.maps.Marker({
+            // 마커가 표시될 위치입니다
+            markers.push(
+                // 시작점
+                new inavi.maps.Marker({
                     map: map,
-                    center: user_pos,
-                });
-                marker.setVisible(false);
-
-
-                // 인포윈도우
-                searchinfoWindow = new inavi.maps.InfoWindow({ map: map, zIndex: 1, opacity: 0, offset: [0, -45], closeButton: false });
-
-
-                // 대구 테크노폴리스 도로링크 유효 범위
-                var boundarys = new inavi.maps.Polyline({
+                    // icon: "https://www.fivepin.co.kr/resources/images/PoiMarker/marker_1_on.png",
+                    icon: "images/flags/ico_road_flag_start.png",
+                    offset: [13, -4], // 깃발 봉위치를 센터로
+                    position: [0, 0],
+                    visibility: false,
+                    title: "출발지",
+                }));
+            markers.push(
+                // 종료점
+                new inavi.maps.Marker({
                     map: map,
-                    path: getDaeguBoundary(),
-                    style: {
-                        lineColor: "#808080",
-                        lineWidth: 3,
-                        lineDasharray: [1, 1],
-                    },
-                });
-                
-
-                // 경로 그리기
-                for (var ii = cnt_route - 1; ii >= 0; --ii) {
-                    drawRoute(result_obj.route.data[ii], map, route_offset[ii], route_color[ii]);
-                }
-
-                // onmouseover
-
-                // outmouseover
-
-                //-- 노드 생성
-
-
-
-                // 마커가 표시될 위치입니다
+                    // icon: "https://www.fivepin.co.kr/resources/images/PoiMarker/marker_3_on.png",
+                    icon: "images/flags/ico_road_flag_arrive.png",
+                    offset: [13, -4], // 깃발 봉위치를 센터로
+                    position: [0, 0],
+                    visibility: false,
+                    title: "목적지",
+                }));
+            for(var ii=0; ii<100; ii++) {
                 markers.push(
-                    // 시작점
-                    new inavi.maps.Marker({
-                        map: map,
-                        // icon: "https://www.fivepin.co.kr/resources/images/PoiMarker/marker_1_on.png",
-                        icon: "images/flags/ico_road_flag_start.png",
-                        offset: [13, -4], // 깃발 봉위치를 센터로
-                        position: [0, 0],
-                        visibility: false,
-                        title: "출발지",
-                    }));
-                markers.push(
-                    // 종료점
-                    new inavi.maps.Marker({
-                        map: map,
-                        // icon: "https://www.fivepin.co.kr/resources/images/PoiMarker/marker_3_on.png",
-                        icon: "images/flags/ico_road_flag_arrive.png",
-                        offset: [13, -4], // 깃발 봉위치를 센터로
-                        position: [0, 0],
-                        visibility: false,
-                        title: "목적지",
-                    }));
-                for(var ii=0; ii<100; ii++) {
-                    markers.push(
-                    // 경유지
-                    new inavi.maps.Marker({
-                        map: map,
-                        // icon: "https://www.fivepin.co.kr/resources/images/PoiMarker/marker_2_on.png",
-                        icon: "images/flags/ico_road_flag_via.png",
-                        offset: [13, -4], // 깃발 봉위치를 센터로
-                        position: [0, 0],
-                        visibility: false,
-                        title: "경유지"+ii,
-                    }));
-                }
+                // 경유지
+                new inavi.maps.Marker({
+                    map: map,
+                    // icon: "https://www.fivepin.co.kr/resources/images/PoiMarker/marker_2_on.png",
+                    icon: "images/flags/ico_road_flag_via.png",
+                    offset: [13, -4], // 깃발 봉위치를 센터로
+                    position: [0, 0],
+                    visibility: false,
+                    title: "경유지"+ii,
+                }));
+            }
 
-                setDeparture(new inavi.maps.LngLat(user_obj.start.x ,user_obj.start.y));
-                setDestination(new inavi.maps.LngLat(user_obj.end.x, user_obj.end.y));
-                if (user_obj.vias != undefined) {
-                    for(var ii=0; ii<user_obj.vias.length; ii++) {
+            // 출발지
+            setDeparture(new inavi.maps.LngLat(user_obj.start.x ,user_obj.start.y));
+            // 목적지
+            setDestination(new inavi.maps.LngLat(user_obj.end.x, user_obj.end.y));
+            // 경유지
+            if (user_obj.vias != undefined) {
+                for(var ii=0; ii<user_obj.vias.length; ii++) {
+                    if (user_obj.vias[ii].x != 0 && user_obj.vias[ii].y != 0) {
                         setWaypoints(ii, new inavi.maps.LngLat(user_obj.vias[ii].x, user_obj.vias[ii].y));
                     }
-                } else if (user_obj.via != undefined) {
-                    document.getElementById('btnVia').className = 'checked_btn';
-                    setWaypoint(new inavi.maps.LngLat(user_obj.via.x, user_obj.via.y));
-                } else {
-                    setWaypoint(null);
                 }
-                //-- 마커가 표시될 위치입니다
+            }
+            //-- 마커가 표시될 위치입니다
 
 
 
-                // 경로 정보를 커스텀 오버레이로 생성하고 지도에 표시합니다
-                drawRouteInfo();
+            // 경로 정보를 커스텀 오버레이로 생성하고 지도에 표시합니다
+            drawRouteInfo();
 
 
-                // 지도 클릭 이벤트 등록
-                map.on("click", function (mouseEvent) {
-                    // var lnglat = mouseEvent.lngLat;
-                    // var pathname = window.location.pathname;
-                    // var move2url = pathname + '?lng=' + lnglat.lng + '&lat=' + lnglat.lat + '&type=0&api=inavi';
-                    // window.open(move2url, '_self');
+            // 지도 클릭 이벤트 등록
+            map.on("click", function (mouseEvent) {
+                // var lnglat = mouseEvent.lngLat;
+                // var pathname = window.location.pathname;
+                // var move2url = pathname + '?lng=' + lnglat.lng + '&lat=' + lnglat.lat + '&type=0&api=inavi';
+                // window.open(move2url, '_self');
 
-                    // alert('클릭 기능 아직 미적용')
+                // alert('클릭 기능 아직 미적용')
 
-                    click_pos = mouseEvent.lngLat;
-                    console.log('클릭된 좌표 : ' + click_pos.lng + ", " + click_pos.lat);
+                click_pos = mouseEvent.lngLat;
+                console.log('클릭된 좌표 : ' + click_pos.lng + ", " + click_pos.lat);
 
-                    switch(typeRouteStep) {
-                        case 1: {
-                            setDeparture(click_pos);
-                        }
-                        break;
-
-                        case 2: {
-                            setDestination(click_pos);
-                        }
-                        break;
-
-                        case 3: {
-                            setWaypoint(click_pos);
-                        }
-                        break;
-                    }
-                });
-                //-- 지도 클릭 이벤트 등록
-
-            } // initMap
-
-
-
-            // 경로탐색 컨트롤의 버튼 클릭
-            function setRouteType(type) {
-                switch(type) {
+                switch(typeRouteStep) {
+                    // 출발지
                     case 1: {
-                        // 출발지 설정
-                        typeRouteStep = 1;
-
-                        document.getElementById('btnStart').className = 'selected_btn';
-                        document.getElementById('btnVia').className = 'btn';
-                        document.getElementById('btnEnd').className = 'btn';
+                        setDeparture(click_pos);
                     }
                     break;
 
+                    // 목적지
                     case 2: {
-                        // 목적지 설정
-                        typeRouteStep = 2
-
-                        document.getElementById('btnStart').className = 'btn';
-                        document.getElementById('btnVia').className = 'btn';
-                        document.getElementById('btnEnd').className = 'selected_btn';
+                        setDestination(click_pos);
                     }
                     break;
 
-                    case 3: {
-                        // 경유지 설정
-                        if (document.getElementById('btnVia').className == 'selected_btn') {
-                            // 해제
-                            typeRouteStep = 9999 // 해제도 변경사항이므로
-
-                            document.getElementById('btnVia').className = 'btn';
-                            setWaypoint(null);
-                        } else {
-                            typeRouteStep = 3
-
-                            document.getElementById('btnStart').className = 'btn';
-                            document.getElementById('btnVia').className = 'selected_btn';
-                            document.getElementById('btnEnd').className = 'btn';
-                        }
+                    // 경유지
+                    case 3: case 4: case 5: case 6: case 7: {
+                        setWaypoints(typeRouteStep - 3, click_pos);
                     }
                     break;
 
-                    default: {
-                        typeRouteStep = 0;
+                    default:
+                        break;
+                } // switchf
+            });
+            //-- 지도 클릭 이벤트 등록
+        } // initMap
 
+
+
+        // 경로탐색 컨트롤의 버튼 클릭
+        function setRouteType(type) {
+            typeRouteStep = type;
+            switch(type) {
+                case 1: {
+                    // 출발지 설정
+                    document.getElementById('btnStart').className = 'selected_btn';                    
+                    document.getElementById('btnEnd').className = 'btn';
+                    document.getElementById('btnVia1').className = 'btn';
+                    document.getElementById('btnVia2').className = 'btn';
+                    document.getElementById('btnVia3').className = 'btn';
+                    document.getElementById('btnVia4').className = 'btn';
+                    document.getElementById('btnVia5').className = 'btn';
+                }
+                break;
+
+                case 2: {
+                    // 목적지 설정
+                    document.getElementById('btnStart').className = 'btn';
+                    document.getElementById('btnEnd').className = 'selected_btn';
+                    document.getElementById('btnVia1').className = 'btn';
+                    document.getElementById('btnVia2').className = 'btn';
+                    document.getElementById('btnVia3').className = 'btn';
+                    document.getElementById('btnVia4').className = 'btn';
+                    document.getElementById('btnVia5').className = 'btn';
+                }
+                break;
+
+                case 3: {
+                    // 경유지1 설정
+                    if (document.getElementById('btnVia1').className == 'selected_btn') {
+                        // 해제
+                        typeRouteStep = 9999 // 해제도 변경사항이므로
+                        document.getElementById('btnVia1').className = 'btn';                        
+                        setWaypoints(0);
+                    } else {
                         document.getElementById('btnStart').className = 'btn';
-                        document.getElementById('btnVia').className = 'btn';
                         document.getElementById('btnEnd').className = 'btn';
+                        document.getElementById('btnVia1').className = 'selected_btn';
+                        document.getElementById('btnVia2').className = 'btn';
+                        document.getElementById('btnVia3').className = 'btn';
+                        document.getElementById('btnVia4').className = 'btn';
+                        document.getElementById('btnVia5').className = 'btn';
                     }
-                    break;
                 }
-            }
+                break;
 
-            function setDeparture(pos) {
-                if (pos != undefined) {
-                    departure_pos = pos;
-                    markers[0].setPosition(pos);
-                    markers[0].setVisible(true);
-                } else {
-                    markers[0].setVisible(false);
-                }
-            }
-
-            function setDestination(pos) {
-                if (pos != undefined) {
-                    destination_pos = pos;
-                    markers[1].setPosition(pos);
-                    markers[1].setVisible(true);
-                } else {
-                    markers[1].setVisible(false);
-                }
-            }
-            
-            function setWaypoint(pos) {
-                if (pos != undefined) {
-                    waypoint_pos = pos;
-                    markers[2].setPosition(pos);
-                    markers[2].setVisible(true);
-                } else {
-                    waypoint_pos = null;
-                    markers[2].setVisible(false);
-                }
-            }
-
-            function setWaypoints(ii, pos) {
-                if (pos != undefined) {
-                    markers[2 + ii].setPosition(pos);
-                    markers[2 + ii].setVisible(true);
-                } else {
-                    waypoint_pos = null;
-                    markers[2 + ii].setVisible(false);
-                }
-            }
-
-            function doRoute() {
-                document.getElementById('btnStart').className = 'btn';
-                document.getElementById('btnVia').className = 'btn';
-                document.getElementById('btnEnd').className = 'btn';
-
-                if (typeRouteStep == 0 || departure_pos === undefined || destination_pos === undefined ) {
-                    alert("출,도착지를 새로 설정하고 사용하세요.")
-                } else {
-                    var params = new URLSearchParams(window.location.search);
-                    params.set('start', departure_pos.lng.toString() + ',' + departure_pos.lat.toString());
-                    params.set('end', destination_pos.lng.toString() + ',' + destination_pos.lat.toString());
-                    // var pathname = '/optimalposition'; // window.location.pathname;
-                    // var move2url = pathname + '?' + params.toString();
-                    // var move2url = pathname + '?lng=' + latlng.lng + '&lat=' + latlng.lat + '&type=0&near=true&expand=true&api=inavi';
-                    if (waypoint_pos != undefined && waypoint_pos.lng > 120 && waypoint_pos.lat > 30) {
-                        params.set('via', waypoint_pos.lng.toString() + ',' + waypoint_pos.lat.toString());
-                    } else if (params.has('via')) {
-                        params.delete('via');
+                case 4: {
+                    // 경유지2 설정
+                    if (document.getElementById('btnVia2').className == 'selected_btn') {
+                        // 해제
+                        typeRouteStep = 9999 // 해제도 변경사항이므로
+                        document.getElementById('btnVia2').className = 'btn';                        
+                        setWaypoints(1);
+                    } else {
+                        document.getElementById('btnStart').className = 'btn';
+                        document.getElementById('btnEnd').className = 'btn';
+                        document.getElementById('btnVia1').className = 'btn';
+                        document.getElementById('btnVia2').className = 'selected_btn';
+                        document.getElementById('btnVia3').className = 'btn';
+                        document.getElementById('btnVia4').className = 'btn';
+                        document.getElementById('btnVia5').className = 'btn';
                     }
-                    params.set('opt', 8);
+                }
+                break;
 
-                    var pathname = '/api/multiroute'; // window.location.pathname;
-                    var route2url = pathname + '?' + params.toString();
-                    // var route2url = window.location.pathname + '?' + params.toString();
+                case 5: {
+                    // 경유지3 설정
+                    if (document.getElementById('btnVia3').className == 'selected_btn') {
+                        // 해제
+                        typeRouteStep = 9999 // 해제도 변경사항이므로
+                        document.getElementById('btnVia3').className = 'btn';                        
+                        setWaypoints(2);
+                    } else {
+                        document.getElementById('btnStart').className = 'btn';
+                        document.getElementById('btnEnd').className = 'btn';
+                        document.getElementById('btnVia1').className = 'btn';
+                        document.getElementById('btnVia2').className = 'btn';
+                        document.getElementById('btnVia3').className = 'selected_btn';
+                        document.getElementById('btnVia4').className = 'btn';
+                        document.getElementById('btnVia5').className = 'btn';
+                    }
+                }
+                break;
 
-                    console.log("request route : " + route2url.toString());
+                case 6: {
+                    // 경유지4 설정
+                    if (document.getElementById('btnVia4').className == 'selected_btn') {
+                        // 해제
+                        typeRouteStep = 9999 // 해제도 변경사항이므로
+                        document.getElementById('btnVia4').className = 'btn';                        
+                        setWaypoints(3);
+                    } else {
+                        document.getElementById('btnStart').className = 'btn';
+                        document.getElementById('btnEnd').className = 'btn';
+                        document.getElementById('btnVia1').className = 'btn';
+                        document.getElementById('btnVia2').className = 'btn';
+                        document.getElementById('btnVia3').className = 'btn';
+                        document.getElementById('btnVia4').className = 'selected_btn';
+                        document.getElementById('btnVia5').className = 'btn';
+                    }
+                }
+                break;
 
-                    // window.open(move2url, '_self');
-                    $.ajax({
-                    type: 'get',         // 타입 (get, post, put 등등)
-                    url: route2url,       // 요청할 서버 url
-                    // async: false,         // 비동기화 여부 (default : true)
-                    success: function(result) {
-                        var header = result.header;
-                        if (header.isSuccessful == true) {      
-                            console.log("response, route data: " + result.route.data.length)
+                case 7: {
+                    // 경유지5 설정
+                    if (document.getElementById('btnVia5').className == 'selected_btn') {
+                        // 해제
+                        typeRouteStep = 9999 // 해제도 변경사항이므로
+                        document.getElementById('btnVia5').className = 'btn';                        
+                        setWaypoints(4);
+                    } else {
+                        document.getElementById('btnStart').className = 'btn';
+                        document.getElementById('btnEnd').className = 'btn';
+                        document.getElementById('btnVia1').className = 'btn';
+                        document.getElementById('btnVia2').className = 'btn';
+                        document.getElementById('btnVia3').className = 'btn';
+                        document.getElementById('btnVia4').className = 'btn';
+                        document.getElementById('btnVia5').className = 'selected_btn';
+                    }
+                }
+                break;
 
-                            // set route result
-                            result_obj = result;
+                default: {
+                    document.getElementById('btnStart').className = 'btn';
+                    document.getElementById('btnEnd').className = 'btn';
+                    document.getElementById('btnVia1').className = 'btn';
+                    document.getElementById('btnVia2').className = 'btn';
+                    document.getElementById('btnVia3').className = 'btn';
+                    document.getElementById('btnVia4').className = 'btn';
+                    document.getElementById('btnVia5').className = 'btn';
+                }
+                break;
+            }
+        }
 
-                            user_obj = result_obj.user_info;
-                            cnt_route = result_obj.route.data.length;
+        function setDeparture(pos) {
+            if (pos != undefined) {
+                departure_pos = pos;
+                markers[0].setPosition(pos);
+                markers[0].setVisible(true);
+            } else {
+                markers[0].setVisible(false);
+            }
+        }
 
-                            user_pos.x = result.route.data[0].x;
-                            user_pos.y = result.route.data[0].y;
+        function setDestination(pos) {
+            if (pos != undefined) {
+                destination_pos = pos;
+                markers[1].setPosition(pos);
+                markers[1].setVisible(true);
+            } else {
+                markers[1].setVisible(false);
+            }
+        }
+        
+        function setWaypoints(ii, pos) {
+            if (pos != undefined) {
+                waypoint_pos[ii] = pos;
+                markers[2 + ii].setPosition(pos);
+                markers[2 + ii].setVisible(true);
+                // markers[2 + ii].setZIndex(ii);
+            } else {
+                waypoint_pos[ii] = null;
+                markers[2 + ii].setVisible(false);
+                // markers[2 + ii].setZIndex(-999);
+            }
+        }
 
-                            releaseRoute();
+        function doRoute() {
+            document.getElementById('btnStart').className = 'btn';
+            document.getElementById('btnEnd').className = 'btn';
+            document.getElementById('btnVia1').className = 'btn';
+            document.getElementById('btnVia2').className = 'btn';
+            document.getElementById('btnVia3').className = 'btn';
+            document.getElementById('btnVia4').className = 'btn';
+            document.getElementById('btnVia5').className = 'btn';
 
-                            // 경로 그리기
-                            for (var ii = cnt_route - 1; ii >= 0; --ii) {
-                                drawRoute(result_obj.route.data[ii], map, route_offset[ii], route_color[ii]);
-                            }
+            if (typeRouteStep == 0 || departure_pos === undefined || destination_pos === undefined ) {
+                alert("출,도착지를 새로 설정하고 사용하세요.")
+            } else {
+                var params = new URLSearchParams(window.location.search);
+                params.set('start', departure_pos.lng.toString() + ',' + departure_pos.lat.toString());
+                params.set('end', destination_pos.lng.toString() + ',' + destination_pos.lat.toString());
+                // var pathname = '/optimalposition'; // window.location.pathname;
+                // var move2url = pathname + '?' + params.toString();
+                // var move2url = pathname + '?lng=' + latlng.lng + '&lat=' + latlng.lat + '&type=0&near=true&expand=true&api=inavi';
+                params.delete('vias');
+                for(var ii = 0; ii < waypoint_pos.length; ii++) {
+                    if (waypoint_pos[ii] != null && waypoint_pos[ii].lng > 120 && waypoint_pos[ii].lat > 30) {
+                        params.append('vias', waypoint_pos[ii].lng.toString() + ',' + waypoint_pos[ii].lat.toString());
+                    }
+                }
+                params.set('opt', 8);
 
-                            drawRouteInfo();
-                        } else {
-                            alert('err code: ' + header.resultCode + '\nerr msg: ' + header.resultMessage)
+                var pathname = '/api/multiroute'; // window.location.pathname;
+                var route2url = pathname + '?' + params.toString();
+                // var route2url = window.location.pathname + '?' + params.toString();
+
+                console.log("request route : " + route2url.toString());
+
+                typeRouteStep = 0;
+
+                // window.open(move2url, '_self');
+                $.ajax({
+                type: 'get',         // 타입 (get, post, put 등등)
+                url: route2url,       // 요청할 서버 url
+                // async: false,         // 비동기화 여부 (default : true)
+                success: function(result) {
+                    var header = result.header;
+                    if (header.isSuccessful == true) {      
+                        console.log("response, route data: " + result.route.data.length)
+
+                        // set route result
+                        result_obj = result;
+
+                        user_obj = result_obj.user_info;
+                        cnt_route = result_obj.route.data.length;
+
+                        user_pos.x = result.route.data[0].x;
+                        user_pos.y = result.route.data[0].y;
+
+                        releaseRoute();
+
+                        // 경로 그리기
+                        for (var ii = cnt_route - 1; ii >= 0; --ii) {
+                            drawRoute(result_obj.route.data[ii], map, route_offset[ii], route_color[ii]);
                         }
-                    },
-                    error: function(request, status, error) {
-                        alert('경로 탐색 요청 실패')
-                    },
-                    complete: function(xhr, status) {
+
+                        drawRouteInfo();
+                    } else {
+                        alert('err code: ' + header.resultCode + '\nerr msg: ' + header.resultMessage)
                     }
-                });    
+                },
+                error: function(request, status, error) {
+                    alert('경로 탐색 요청 실패')
+                },
+                complete: function(xhr, status) {
                 }
+            });    
             }
+        }
 
 
-            // 경로 결과를 새창에서 JSON 결과로 보내도록 하자
-            function gotoJSON() {
+        // 경로 결과를 새창에서 JSON 결과로 보내도록 하자
+        function gotoJSON() {
 
-                document.getElementById('btnStart').className = 'btn';
-                document.getElementById('btnVia').className = 'btn';
-                document.getElementById('btnEnd').className = 'btn';
+            document.getElementById('btnStart').className = 'btn';
+            document.getElementById('btnVia1').className = 'btn';
+            document.getElementById('btnVia2').className = 'btn';
+            document.getElementById('btnVia3').className = 'btn';
+            document.getElementById('btnVia4').className = 'btn';
+            document.getElementById('btnVia5').className = 'btn';
+            document.getElementById('btnEnd').className = 'btn';
 
-                if (departure_pos === undefined || destination_pos === undefined ) {
-                    alert("출,도착지를 새로 설정하고 사용하세요.")
-                } else {
-                    var params = new URLSearchParams(window.location.search);
-                    params.set('start', departure_pos.lng.toString() + ',' + departure_pos.lat.toString());
-                    params.set('end', destination_pos.lng.toString() + ',' + destination_pos.lat.toString());
-                    // var pathname = '/optimalposition'; // window.location.pathname;
-                    // var move2url = pathname + '?' + params.toString();
-                    // var move2url = pathname + '?lng=' + latlng.lng + '&lat=' + latlng.lat + '&type=0&near=true&expand=true&api=inavi';
-                    if (waypoint_pos != undefined && waypoint_pos.lng > 120 && waypoint_pos.lat > 30) {
-                        params.set('via', waypoint_pos.lng.toString() + ',' + waypoint_pos.lat.toString());
-                    } else if (params.has('via')) {
-                        params.delete('via');
+            if (departure_pos === undefined || destination_pos === undefined ) {
+                alert("출,도착지를 새로 설정하고 사용하세요.")
+            } else {
+                var params = new URLSearchParams(window.location.search);
+                params.set('start', departure_pos.lng.toString() + ',' + departure_pos.lat.toString());
+                params.set('end', destination_pos.lng.toString() + ',' + destination_pos.lat.toString());
+                // var pathname = '/optimalposition'; // window.location.pathname;
+                // var move2url = pathname + '?' + params.toString();
+                // var move2url = pathname + '?lng=' + latlng.lng + '&lat=' + latlng.lat + '&type=0&near=true&expand=true&api=inavi';
+                params.delete('vias');
+                for(var ii = 0; ii < waypoint_pos.length; ii++) {
+                    if (waypoint_pos[ii] != null && waypoint_pos[ii].lng > 120 && waypoint_pos[ii].lat > 30) {
+                        params.set('vias', waypoint_pos[ii].lng.toString() + ',' + waypoint_pos[ii].lat.toString());
                     }
-                    // params.set('opt', 8);
-                    // params.set('target', 'inavi');
-                    var pathname = '/api/path'; // window.location.pathname;
-                    var route2url = pathname + '?' + params.toString();
-                    // var route2url = window.location.pathname + '?' + params.toString();
-
-                    console.log("request route : " + route2url.toString());
-
-                    window.open(route2url, '_blank');                    
                 }
+                // params.set('opt', 8);
+                // params.set('target', 'inavi');
+                var pathname = '/api/path'; // window.location.pathname;
+                var route2url = pathname + '?' + params.toString();
+                // var route2url = window.location.pathname + '?' + params.toString();
+
+                console.log("request route : " + route2url.toString());
+
+                window.open(route2url, '_blank');                    
+            }
+        }
+
+
+        // 지도타입 컨트롤의 지도 또는 스카이뷰 버튼을 클릭하면 호출되어 지도타입을 바꾸는 함수입니다
+        function setMapType(maptype) {
+            var roadmapControl = document.getElementById('btnRoadmap');
+            var skyviewControl = document.getElementById('btnSkyview');
+            if (maptype === 'roadmap') {
+                map.setType('NORMAL');
+                roadmapControl.className = 'selected_btn';
+                skyviewControl.className = 'btn';
+            } else {
+                map.setType('SATELLITE');
+                skyviewControl.className = 'selected_btn';
+                roadmapControl.className = 'btn';
             }
 
+            redrawRoute(map);
 
-            // 지도타입 컨트롤의 지도 또는 스카이뷰 버튼을 클릭하면 호출되어 지도타입을 바꾸는 함수입니다
-            function setMapType(maptype) {
-                var roadmapControl = document.getElementById('btnRoadmap');
-                var skyviewControl = document.getElementById('btnSkyview');
-                if (maptype === 'roadmap') {
-                    map.setType('NORMAL');
-                    roadmapControl.className = 'selected_btn';
-                    skyviewControl.className = 'btn';
-                } else {
-                    map.setType('SATELLITE');
-                    skyviewControl.className = 'selected_btn';
-                    roadmapControl.className = 'btn';
-                }
+            // 경로 다시 그리기
+            // releaseRoute();
 
-                redrawRoute(map);
-
-                // 경로 다시 그리기
-                // releaseRoute();
-
-                // 경로 그리기
-                // for (var ii = cnt_route - 1; ii >= 0; --ii) {
-                //     drawRoute(result_obj.routes[ii], map, route_width[ii], route_color[ii]);
-                // }
+            // 경로 그리기
+            // for (var ii = cnt_route - 1; ii >= 0; --ii) {
+            //     drawRoute(result_obj.routes[ii], map, route_width[ii], route_color[ii]);
+            // }
 
 
-                // if(map.getType() !== "SATELLITE") {
-                //     // 지도 타입 설정
-                //     let isShowTraffic = $("#trafficBtn").hasClass("on");
+            // if(map.getType() !== "SATELLITE") {
+            //     // 지도 타입 설정
+            //     let isShowTraffic = $("#trafficBtn").hasClass("on");
 
-                //     map.once("render", () => {
-                //     map.call("get","_").map.getStyle().layers.filter(layer => layer.id.startsWith("user_")).forEach(layer => {
-                //     map.call("get","_").map.setLayoutProperty(layer.id, 'visibility', 'visible');
-                //     })
-                //     if(isShowTraffic) {
-                //         map.call("get","_").map.setLayoutProperty("satellite_traffic", 'visibility', 'visible');
-                //     } else {
-                //         map.call("get","_").map.setLayoutProperty("satellite_traffic", 'visibility', 'none');
-                //     }
-                //     });
-                // }
+            //     map.once("render", () => {
+            //     map.call("get","_").map.getStyle().layers.filter(layer => layer.id.startsWith("user_")).forEach(layer => {
+            //     map.call("get","_").map.setLayoutProperty(layer.id, 'visibility', 'visible');
+            //     })
+            //     if(isShowTraffic) {
+            //         map.call("get","_").map.setLayoutProperty("satellite_traffic", 'visibility', 'visible');
+            //     } else {
+            //         map.call("get","_").map.setLayoutProperty("satellite_traffic", 'visibility', 'none');
+            //     }
+            //     });
+            // }
+        }
+
+
+        // release map item
+        function releaseRoute() {
+            if (links != undefined && links.length) {
+                links.forEach(element => element.setMap());
+                links.splice(0);
             }
 
-
-            // release map item
-            function releaseRoute() {
-                if (links != undefined && links.length) {
-                    links.forEach(element => element.setMap());
-                    links.splice(0);
-                }
-
-                if (nodes != undefined && nodes.length) {
-                    nodes.forEach(element => element.setMap());
-                    nodes.splice(0);
-                }
-
-                if (distanceOverlay != undefined) {
-                    distanceOverlay.setMap();
-                }
+            if (nodes != undefined && nodes.length) {
+                nodes.forEach(element => element.setMap());
+                nodes.splice(0);
             }
 
-            function redrawRoute(map) {
-                if (links != undefined && links.length) {
-                    links.forEach(element => element.setMap(map));
-                }
+            if (distanceOverlay != undefined) {
+                distanceOverlay.setMap();
+            }
+        }
 
-                if (nodes != undefined && nodes.length) {
-                    nodes.forEach(element => element.setMap(map));
-                }
-
-                if (distanceOverlay != undefined) {
-                    distanceOverlay.setMap(map);
-                }
+        function redrawRoute(map) {
+            if (links != undefined && links.length) {
+                links.forEach(element => element.setMap(map));
             }
 
-            // draw map item
-            function drawRoute(result_dat, map, off, color) {
-                var cntLink = result_dat.link_info.length;
-                var cntVtx = result_dat.vertex_info.length;
-                // var cntJct = result_dat.junction_info.length;
+            if (nodes != undefined && nodes.length) {
+                nodes.forEach(element => element.setMap(map));
+            }
 
-                var vertices = new Array();
+            if (distanceOverlay != undefined) {
+                distanceOverlay.setMap(map);
+            }
+        }
 
-                // 경로선 생성
-                for (var ii = 0; ii < cntVtx; ii++) {
-                    vertices.push([result_dat.vertex_info[ii].x, result_dat.vertex_info[ii].y]);
-                }// for
+        // draw map item
+        function drawRoute(result_dat, map, off, color) {
+            var cntLink = result_dat.link_info.length;
+            var cntVtx = result_dat.vertex_info.length;
+            let colors = ["#CC0000", "#3282F6", "#EA3FF7", "#18A705"]; // , "#782DFF"
+            // var cntJct = result_dat.junction_info.length;
 
-                links.push(new inavi.maps.Polyline({
-                    map: map,
-                    path: vertices,
-                    style: {
-                        lineOffset: off,
-                        lineColor: color,
-                        lineWidth: 10,
-                        // lineOpacity: 0.7,
-                    },
-                }));
-                //-- 경로선 생성
+            var vertices_all = new Array();
+            var vertices = new Array();
+            var vertex_offset = 0;
 
+            // 경로선 생성
+            var via_idx = 0;
+            for (var ii=0; ii<cntLink; ii++) {
+                for (var vtx = 0; vtx < result_dat.link_info[ii].vertex_count; vtx++) {
+                    // 경로선 확장
+                    vertices_all.push([result_dat.vertex_info[vertex_offset].x, result_dat.vertex_info[vertex_offset].y]);
+                    
+                    vertices.push([result_dat.vertex_info[vertex_offset].x, result_dat.vertex_info[vertex_offset].y]);
+                    vertex_offset++;
+                }
 
-                // 노드 생성
-                // 경로에 노드를 생성합니다
-                var off = 0;
-                // 마지막 목적지의 종료 노드까지 처리하기 위해 for를 +1해서 돌림
-                for (var ii = 0; ii < cntLink; ii++) {
-                    nodes.push(new inavi.maps.Circle({
+                if (ii != 0 && result_dat.link_info[ii].guide_type != 0) {
+                    via_idx++;
+
+                    // 경로선 추가
+                    links.push(new inavi.maps.Polyline({
                         map: map,
-                        position: [result_dat.vertex_info[off].x, result_dat.vertex_info[off].y], // 원 중심 좌표
-                        radius: 0.005, // 원 반지름 킬로미터 단위
+                        path: vertices,
                         style: {
-                            fillOpacity: 0.5,  // 채우기 불투명도 입니다
-                            fillColor: "#CFE7FF",
-                            fillOutlineColor: "#DB4455",
+                            lineOffset: off,
+                            // lineColor: color,
+                            lineColor: colors[via_idx++ % colors.length],
+                            lineWidth: 10,
+                            // lineOpacity: 0.7,
                         },
                     }));
+                    
+                    // 초기화
+                    vertices.splice(0);
+                }
+            }// for
+            //-- 경로선 생성
 
-                    off += result_dat.link_info[ii].vertex_count;
-                } // for
 
-                // 마지막 목적지의 종료 노드까지 처리하기 위해 
+            // 노드 생성
+            // 경로에 노드를 생성합니다
+            var off = 0;
+            // 마지막 목적지의 종료 노드까지 처리하기 위해 for를 +1해서 돌림
+            for (var ii = 0; ii < cntLink; ii++) {
+                nodes.push(new inavi.maps.Circle({
+                    map: map,
+                    position: [result_dat.vertex_info[off].x, result_dat.vertex_info[off].y], // 원 중심 좌표
+                    radius: 0.005, // 원 반지름 킬로미터 단위
+                    style: {
+                        fillOpacity: 0.5,  // 채우기 불투명도 입니다
+                        fillColor: "#CFE7FF",
+                        fillOutlineColor: "#DB4455",
+                    },
+                }));
+
+                off += result_dat.link_info[ii].vertex_count;
+                if (off >= result_dat.vertex_info.length) {
+                    break;
+                }                
+            } // for
+
+            // 마지막 목적지의 종료 노드까지 처리하기 위해 
+            if (result_dat.vertex_info[off - 1] != undefined) {
                 nodes.push(new inavi.maps.Circle({
                     map: map,
                     position: [result_dat.vertex_info[off - 1].x, result_dat.vertex_info[off - 1].y], // 원 중심 좌표
@@ -561,100 +685,101 @@
                         fillOutlineColor: "#DB4455",
                     },
                 }));
-
-
-                // 정션 생성
-                if (result_dat.junction_info != undefined) {
-                    result_dat.junction_info.forEach(function(jct) {
-                        jct.junction.forEach(function(lnk) {
-                            var junctions = new Array();
-                            lnk.vertices.forEach(function(coord) {
-                                junctions.push([coord.x, coord.y]);
-                            }); // forEach vtx
-                            
-                            links.push(new inavi.maps.Polyline({
-                                map: map,
-                                path: junctions,
-                                style: {
-                                    lineColor: "#F09B59", //"#FFC90E",
-                                    lineWidth: 5,
-                                    // lineOpacity: 0.7,
-                                },
-                            }));
-                        });// forEach lnk
-                    }); // forEach jct
-                }                
-                //-- 정션 생성
-
-
-                map.fitCoordinates(vertices, {
-                    padding: 90,
-                    // heading: 90,
-                    // tilt: 30,
-                    // duration: 1000
-                });
             }
 
 
-            // 커스텀 오버레이를 생성하고 지도에 표시합니다
-            function drawRouteInfo() {                                
-                distanceOverlay = new inavi.maps.CustomInfoWindow({
-                    map: map, // 커스텀오버레이를 표시할 지도입니다
-                    content: getResultHtmlContent(result_obj.route.data[0].summary.distance, result_obj.route.data[0].summary.time),  // 커스텀오버레이에 표시할 내용입니다
-                    position: markers[1].getPosition(), // 커스텀오버레이를 표시할 위치입니다.
-                    // xAnchor: 0,
-                    // yAnchor: 0,
-                    anchor: 'top-right',
-                    zIndex: 3,
-                    opacity: 0.8,
-                    closeButton: true
-                });
+            // 정션 생성
+            if (result_dat.junction_info != undefined) {
+                result_dat.junction_info.forEach(function(jct) {
+                    jct.junction.forEach(function(lnk) {
+                        var junctions = new Array();
+                        lnk.vertices.forEach(function(coord) {
+                            junctions.push([coord.x, coord.y]);
+                        }); // forEach vtx
+                        
+                        links.push(new inavi.maps.Polyline({
+                            map: map,
+                            path: junctions,
+                            style: {
+                                lineColor: "#F09B59", //"#FFC90E",
+                                lineWidth: 5,
+                                // lineOpacity: 0.7,
+                            },
+                        }));
+                    });// forEach lnk
+                }); // forEach jct
+            }                
+            //-- 정션 생성
+
+
+            map.fitCoordinates(vertices_all, {
+                padding: 90,
+                // heading: 90,
+                // tilt: 30,
+                // duration: 1000
+            });
+        }
+
+
+        // 커스텀 오버레이를 생성하고 지도에 표시합니다
+        function drawRouteInfo() {                                
+            distanceOverlay = new inavi.maps.CustomInfoWindow({
+                map: map, // 커스텀오버레이를 표시할 지도입니다
+                content: getResultHtmlContent(result_obj.route.data[0].summary.distance, result_obj.route.data[0].summary.time),  // 커스텀오버레이에 표시할 내용입니다
+                position: markers[1].getPosition(), // 커스텀오버레이를 표시할 위치입니다.
+                // xAnchor: 0,
+                // yAnchor: 0,
+                anchor: 'top-right',
+                zIndex: 3,
+                opacity: 0.8,
+                closeButton: true
+            });
+        }
+
+
+        // 키워드 검색 
+        function searchKeyword() {
+            var keyword = document.getElementById('keyword').value;
+
+            if (!keyword.replace(/^\s+|\s+$/g, '')) {
+                alert('키워드를 입력해주세요');
+                return false;
             }
 
+            // var pathname = 'https://api-maps.cloud.toast.com/maps/v3.0/appkeys/uuLPV7fHLk6NIVfCPnBv/searches';
+            var pathname = 'https://maps.inavi.com/maps/v3.0/appkeys/<%=javascriptkey%>/searches'
+            var search2url = pathname + '?&query=' + keyword.toString() + '&reqcount=' + 10;
 
-            // 키워드 검색 
-            function searchKeyword() {
-                var keyword = document.getElementById('keyword').value;
+            console.log("request, search data: " + keyword)
 
-                if (!keyword.replace(/^\s+|\s+$/g, '')) {
-                    alert('키워드를 입력해주세요');
-                    return false;
-                }
+            $.ajax({
+                type: 'get',         // 타입 (get, post, put 등등)
+                url: search2url,       // 요청할 서버 url
+                // async: false,         // 비동기화 여부 (default : true)
+                success: function(result) {                
+                    var header = result.header;
+                    if (header.isSuccessful == true) {      
+                        console.log("response, search data: " + result.search.totalcount)
 
-                // var pathname = 'https://api-maps.cloud.toast.com/maps/v3.0/appkeys/uuLPV7fHLk6NIVfCPnBv/searches';
-                var pathname = 'https://maps.inavi.com/maps/v3.0/appkeys/<%=javascriptkey%>/searches'
-                var search2url = pathname + '?&query=' + keyword.toString() + '&reqcount=' + 10;
-
-                console.log("request, search data: " + keyword)
-
-                $.ajax({
-                    type: 'get',         // 타입 (get, post, put 등등)
-                    url: search2url,       // 요청할 서버 url
-                    // async: false,         // 비동기화 여부 (default : true)
-                    success: function(result) {                
-                        var header = result.header;
-                        if (header.isSuccessful == true) {      
-                            console.log("response, search data: " + result.search.totalcount)
-
-                            // set search result
-                            displaySearchList(result.search);
-                        } else {
-                            alert('err code: ' + header.resultCode + '\nerr msg: ' + header.resultMessage)
-                        }
-                    },
-                    error: function(request, status, error) {
-                        alert('통합 검색 요청 실패')
-                    },
-                    complete: function(xhr, status) {
+                        // set search result
+                        displaySearchList(result.search);
+                    } else {
+                        alert('err code: ' + header.resultCode + '\nerr msg: ' + header.resultMessage)
                     }
-                });    
-            }
+                },
+                error: function(request, status, error) {
+                    alert('통합 검색 요청 실패')
+                },
+                complete: function(xhr, status) {
+                }
+            });    
+        }
 
-        </script>
-        <script type="text/javascript"
-            src="https://maps.inavi.com/maps/v3.0/appkeys/<%=javascriptkey%>/maps?callback=initMap"></script>
-        <!-- <script src="/script/position.js"></script> -->
-    </div>
+    </script>
+    <script type="text/javascript"
+        src="https://maps.inavi.com/maps/v3.0/appkeys/<%=javascriptkey%>/maps?callback=initMap"></script>
+    <!-- <script src="/script/position.js"></script> -->
+
 </body>
 
 </html>

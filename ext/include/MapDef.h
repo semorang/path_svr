@@ -8,8 +8,10 @@
 #include <array>
 #include <queue>
 #include <algorithm>
+#include <memory>
 #include <stdint.h>
 #include <stdio.h>
+#include <time.h>
 
 #include "../shp/shpio.h" 
 using namespace std;
@@ -20,12 +22,14 @@ using namespace std;
 #include <float.h>
 #endif
 
+#if !defined(_DEBUG)
 #define USE_MULTIPROCESS
+#endif
 #if defined(USE_MULTIPROCESS)
 #define PROCESS_NUM 8
 #include <omp.h>
 #else
-#define PROCESS_NUM 1
+#define PROCESS_NUM 8
 #endif
 
 
@@ -36,7 +40,7 @@ using namespace std;
 #define USE_ROUTE_TABLE_LEVEL	8 // 8 레벨보다 낮아지면 도로 확장이 어려워짐.
 //#define __USE_TEMPLETE // 템플릿 사용
 
-// #define USE_OPTIMAL_POINT_API // 최적 지점 API
+//#define USE_OPTIMAL_POINT_API // 최적 지점 API
 #define USE_TREKKING_POINT_API // 경로 탐색 API
 #if defined(USE_OPTIMAL_POINT_API)
 //#define USE_TREKKING_DATA // 숲길 데이터
@@ -45,11 +49,11 @@ using namespace std;
 #define USE_BUILDING_DATA // 건물 데이터
 #define USE_COMPLEX_DATA // 단지 데이터
 #elif defined(USE_TREKKING_POINT_API)
-// #define USE_TREKKING_DATA // 숲길 데이터
-// #define USE_PEDESTRIAN_DATA // 보행자/자전거 데이터
+//#define USE_TREKKING_DATA // 숲길 데이터
+//#define USE_PEDESTRIAN_DATA // 보행자/자전거 데이터
 #define USE_VEHICLE_DATA // 차량 데이터
 #define USE_P2P_DATA // P2P 데이터
-// #define TARGET_FOR_KAKAO_VX // 카카오VX제공 
+//#define TARGET_FOR_KAKAO_VX // 카카오VX제공
 #endif
 
 
@@ -274,13 +278,23 @@ typedef struct _tagstLinkPedestrianInfo {
 }stLinkPedestrianInfo;
 
 typedef struct _tagstLinkTrekkingInfo {
+	//uint64_t dummy_type : 3; // link_type 공유 공간
+	//uint64_t course_type : 3; // 0:미정의, 1 : 등산로, 2 : 둘레길, 3 : 자전거길, 4 : 종주코스
+	//uint64_t road_info : 11; // 노면정보 코드, 0:기타, 1:오솔길, 2:포장길, 3:계단, 4:교량, 5:암릉, 6:릿지, 7;사다리, 8:밧줄, 9:너덜길, 10:야자수매트, 11:데크로드
+	//uint64_t diff : 6; // 난도 0~50, (숫자가 클수록 어려움)
+	//uint64_t popular : 4; // 인기도 지수, 0-10
+	//uint64_t tre_reserved : 5; // reserved
+	//uint64_t shared : 32; // link_ang 공유 공간
+	
 	uint64_t dummy_type : 3; // link_type 공유 공간
-	uint64_t course_type : 3; // 0:미정의, 1 : 등산로, 2 : 둘레길, 3 : 자전거길, 4 : 종주코스
-	uint64_t road_info : 11; // 노면정보 코드, 0:기타, 1:오솔길, 2:포장길, 3:계단, 4:교량, 5:암릉, 6:릿지, 7;사다리, 8:밧줄, 9:너덜길, 10:야자수매트, 11:데크로드
-	uint64_t diff : 6; // 난도 0~50, (숫자가 클수록 어려움)
-	uint64_t popular : 4; // 인기도 지수, 0-10
-	uint64_t tre_reserved : 5; // reserved
-	uint64_t shared : 32; // link_ang 공유 공간
+	uint64_t course_type : 3; // 0:미정의, 1:등산로, 2:둘레길, 3:자전거길, 4:종주코스, 5:추천코스, 6:MTB코스, 7:인기코스
+	uint64_t road_info : 12; // 노면정보, 0:기타, 1:오솔길, 2:포장길, 3:계단, 4:교량, 5:암릉, 6:릿지, 7;사다리, 8:밧줄, 9:너덜길, 10:야자수매트, 11:데크로드, 12:철구조물
+	uint64_t diff : 7; // 난도 0~100, (숫자가 클수록 어려움)
+	uint64_t slop : 8; // 경사도 +/- 128
+	uint64_t fw_tm : 6;// 0~60 정방향 이동 시간 (분)
+	uint64_t bw_tm : 6;// -~60 역방향 이동 시간 (분)
+	uint64_t popular : 7; // 인기도 지수, 0-100
+	uint64_t tre_reserved : 12; // reserved
 }stLinkTrekkingInfo;
 
 typedef struct _tagstLinkVehicleInfo {
@@ -562,6 +576,7 @@ struct stTrafficKey{
 		};
 	};
 };
+
 
 struct stTrafficInfo {
 	stTrafficKey key;
@@ -924,6 +939,10 @@ typedef enum {
 	TYPE_TRE_TRAIL, // 둘레길
 	TYPE_TRE_BIKE, // 자전거길
 	TYPE_TRE_CROSS, // 종주길
+	TYPE_TRE_RECOMMENDED, // 추천길
+	TYPE_TRE_MTB, // MTB코스
+	TYPE_TRE_POPULAR, // 인기코스
+	TYPE_TRE_COUNT,
 }TYPE_TREKKING;
 
 
@@ -1386,6 +1405,13 @@ typedef struct _tagRouteResultLinkMatchInfo {
 	}
 } RouteResultLinkMatchInfo;
 
+
+typedef struct _tagRouteSummary {
+	uint32_t TotalDist;
+	uint32_t TotalTime;
+} RouteSummary;
+
+
 typedef struct _tagRouteResultInfo {
 	uint32_t ResultCode; // 경로 결과 코드, 0:성공, 1~:실패
 
@@ -1404,6 +1430,7 @@ typedef struct _tagRouteResultInfo {
 
 	// 경로선
 	SBox RouteBox; // 경로선 영역	
+	vector<RouteSummary> RouteSummarys; // 다중 탐색 결과의 개별 경로 요약 정보
 	vector<RouteResultLinkEx> LinkInfo; // 링크 정보
 	vector<SPoint> LinkVertex; // 경로선
 	
@@ -1425,6 +1452,10 @@ typedef struct _tagRouteResultInfo {
 
 		memset(&RouteBox, 0x00, sizeof(RouteBox));
 
+		if (!RouteSummarys.empty()) {
+			RouteSummarys.clear();
+			vector<RouteSummary>().swap(RouteSummarys);
+		}
 		if (!LinkInfo.empty()) {
 			LinkInfo.clear();
 			vector<RouteResultLinkEx>().swap(LinkInfo);

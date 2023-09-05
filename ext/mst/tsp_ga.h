@@ -11,31 +11,35 @@
 #include "../route/RoutePlan.h"
 
 
-#define MAX_INDIVIDUAL 10000 // ÃÖ´ë °³Ã¼ 
-#define MAX_CHROMOSOME 1000 //50 // ÃÖ´ë ¿°»öÃ¼ ¼ö
-#define MAX_GENE 1000 //50 // ÃÖ´ë À¯ÀüÀÚ ¼ö
+#define MAX_INDIVIDUAL 10000 // ìµœëŒ€ ê°œì²´ 
+#define MAX_CHROMOSOME 1000 //50 // ìµœëŒ€ ì—¼ìƒ‰ì²´ ìˆ˜
+#define MAX_GENE 1000 //50 // ìµœëŒ€ ìœ ì „ì ìˆ˜
 
 #if 1 // defined(_DEBUG)
-#define SHOW_STATUS // °á°ú È®ÀÎ¿ë
+#define SHOW_STATUS // ê²°ê³¼ í™•ì¸ìš©
 #endif
 
-// °³º° À¯ÀüÀÚ º° °¡±î¿î °ªÀ» ¹Ù·Î È®ÀÎÇÏ±â À§ÇØ ¾ÆÀÌÅÛ °ü¸®
+#define USE_FIX_TO_START // ì¶œë°œì§€ ê³ ì •
+// #define USE_FIX_TO_FINISH // ë„ì°©ì§€ ëª¨ë¸
+// #define USE_RETURN_TO_ORIGINAL // ì›ì íšŒê·€ ëª¨ë¸
+
+// ê°œë³„ ìœ ì „ì ë³„ ê°€ê¹Œìš´ ê°’ì„ ë°”ë¡œ í™•ì¸í•˜ê¸° ìœ„í•´ ì•„ì´í…œ ê´€ë¦¬
 struct tableItem
 {
-	uint32_t idx; // Å×ÀÌºí ¿ä¼Ò ÀÎµ¦½º
-	uint32_t value; // °ª (ÃÑ°Å¸®, ÃÑ½Ã°£ µî)
+	uint32_t idx; // í…Œì´ë¸” ìš”ì†Œ ì¸ë±ìŠ¤
+	uint32_t value; // ê°’ (ì´ê±°ë¦¬, ì´ì‹œê°„ ë“±)
 	double cost;
 };
 
-// ÀüÃ¼ À¯ÀüÀÚº° °¡±î¿î ¾ÆÀÌÅÛ º¤ÅÍ
+// ì „ì²´ ìœ ì „ìë³„ ê°€ê¹Œìš´ ì•„ì´í…œ ë²¡í„°
 struct tableItemNearlest
 {
-	uint32_t idx; // Å×ÀÌºí ¿ä¼Ò ÀÎµ¦½º
-	vector<tableItem> nearlest; // °¡±î¿î Å×ÀÌºí ÀÎµ¦½º
+	uint32_t idx; // í…Œì´ë¸” ìš”ì†Œ ì¸ë±ìŠ¤
+	vector<tableItem> nearlest; // ê°€ê¹Œìš´ í…Œì´ë¸” ì¸ë±ìŠ¤
 };
 
 
-// À¯ÀüÀÚ
+// ìœ ì „ì
 class Gene {
 public:
 	Gene();
@@ -45,16 +49,20 @@ public:
 	void SetAttribute(IN const uint32_t attr);
 	uint32_t GetAttribute(void) const;
 
+	void SetGlued(IN const bool glue);
+	bool IsGlued(void) const;
+
 private:
-	uint32_t attribute; // ¼Ó¼º(°Å¸®, ½Ã°£ µî)
+	uint32_t attribute; // ì†ì„±(ê±°ë¦¬, ì‹œê°„ ë“±)
+	bool glued; // ê³ ì •ë˜ì–´ ë³€ê²½ë˜ì§€ ì•ŠìŒ
 };
 
 
-// °³Ã¼
+// ê°œì²´
 class Individual {
 public:
 	Individual();
-	Individual(IN const uint32_t size); // ÃÖ´ë À¯ÀüÀÚ ¼ö
+	Individual(IN const uint32_t size); // ìµœëŒ€ ìœ ì „ì ìˆ˜
 	virtual ~Individual();
 
 	void SetGeneSize(IN const uint32_t size);
@@ -74,7 +82,7 @@ public:
 	void SetParent(IN const uint32_t parent1, IN const uint32_t parent2);
 	void SetMutate(IN const uint32_t state);
 
-	bool Create(IN const vector<tableItemNearlest>* pNearlest, IN const uint32_t start = 0, IN const uint32_t idx = 0); // °³Ã¼ ÀÚµ¿ »ı¼º
+	bool Create(IN const vector<tableItemNearlest>* pNearlest, IN const uint32_t start = 0, IN const uint32_t finish = 0, IN const uint32_t idx = 0); // ê°œì²´ ìë™ ìƒì„±
 
 
 #if defined(SHOW_STATUS)
@@ -83,18 +91,21 @@ public:
 
 private:
 	uint32_t geneSize;
-	uint32_t value; // °ª (ÃÑ°Å¸®, ÃÑ½Ã°£ µî)
+	uint32_t value; // ê°’ (ì´ê±°ë¦¬, ì´ì‹œê°„ ë“±)
 	double cost;
 	double boundary;
 
 	double fvalue;
-	double fitness; // ÀûÇÕµµ
+	double fitness; // ì í•©ë„
 
-	vector<Gene> chromosome; // ¿°»öÃ¼
+	vector<Gene> chromosome; // ì—¼ìƒ‰ì²´
 
 	uint32_t parent1;
 	uint32_t parent2;
-	uint32_t mutate; // 1:º¯ÀÌ, 2:ÀÚÃ¼ÀÌ¿ôº¯ÀÌ
+	uint32_t mutate; // 1:ë³€ì´, 2:ìì²´ì´ì›ƒë³€ì´
+
+	int32_t m_start;
+	int32_t m_finish;
 };
 
 
@@ -106,7 +117,7 @@ typedef struct _tagParents
 	Individual parentR;
 }Parents;
 
-// È¯°æ
+// í™˜ê²½
 class Environment {
 public:
 	Environment();
@@ -116,14 +127,14 @@ public:
 
 	bool SetCostTable(IN const RouteTable** ppResultTables, IN const int count);
 
-	void Genesis(IN const uint32_t maxGene, IN const uint32_t maxPopulation); // ÃÖÃÊ »ı¼º
+	void Genesis(IN const uint32_t maxGene, IN const uint32_t maxPopulation); // ìµœì´ˆ ìƒì„±
 
-	const double Evaluation(void); // Æò°¡ - return : top value 
+	const double Evaluation(void); // í‰ê°€ - return : top value 
 
-	void Selection(OUT vector<Parents>& pairs); // ¼±ÅÃ
+	void Selection(OUT vector<Parents>& pairs); // ì„ íƒ
 
-	//bool Crossover(IN const Individual* pParentL, IN const Individual* pParentR, OUT Individual& pChild); // ±³¹è
-	bool Crossover(IN vector<Parents>& pairs); // ±³¹è
+	//bool Crossover(IN const Individual* pParentL, IN const Individual* pParentR, OUT Individual& pChild); // êµë°°
+	bool Crossover(IN vector<Parents>& pairs); // êµë°°
 	bool CrossBySelf(IN Individual* pSelf, IN const int32_t pos = -1, IN const int32_t size = -1, IN const int32_t off = 1);
 
 	bool Mutation(IN Individual* pIndividual, IN const int32_t mutationRate);
@@ -137,9 +148,9 @@ public:
 #endif
 
 private:
-	int nMaxPopulation; // ÃÖ´ë °³Ã¼¼ö
+	int nMaxPopulation; // ìµœëŒ€ ê°œì²´ìˆ˜
 	vector<Individual> population;
-	uint32_t generation; // ¼¼´ë
+	uint32_t generation; // ì„¸ëŒ€
 
 	const RouteTable** ppTables;
 	uint32_t tableCount;

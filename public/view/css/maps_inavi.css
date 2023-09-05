@@ -85,10 +85,13 @@
         #placesList .info .addr {color:#4d4b4b;}
         #placesList .info .coord {color:#009900;}
 
-
-
-
-
+        
+        .header {
+                    height: 65px;
+                    background-color: #2A2C35;
+                    margin: 0;
+                    margin-top: 0;
+                }
 
 
 

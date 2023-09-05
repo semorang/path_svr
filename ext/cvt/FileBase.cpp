@@ -15,6 +15,7 @@
 #include "../shp/shpio.h"
 #include "../utils/UserLog.h"
 #include "../utils/GeoTools.h"
+#include "../utils/Strings.h"
 #include "../route/MMPoint.hpp"
 #include "../route/DataManager.h"
 
@@ -39,10 +40,6 @@ CFileBase::CFileBase()
 
 	memset(&m_rtBox, 0x00, sizeof(m_rtBox));
 	memset(&m_fileHeader, 0x00, sizeof(m_fileHeader));
-	
-#if defined(USE_PROJ4_LIB)
-	initProj4();
-#endif
 
 //#if defined (USE_PEDESTRIAN_DATA)
 //	m_trackShpMgr.SetFileManager(this);
@@ -55,11 +52,6 @@ CFileBase::~CFileBase()
 		vector<FileIndex>().swap(m_vtIndex);
 		m_vtIndex.clear();
 	}
-
-
-#if defined(USE_PROJ4_LIB)
-	releaseProj4();
-#endif
 
 	//_CrtDumpMemoryLeaks();
 }
@@ -108,67 +100,6 @@ int32_t linkProjection(IN stLinkInfo* pData, IN const double& lng, IN const doub
 	}
 
 	return idxMatchLine;
-}
-
-//char *trim(char *str, char *buf, int buf_len)
-//{
-//	int str_len, start_point = 0;
-//	int i, j;
-//
-//	if (!str || !buf) return NULL;
-//
-//	str_len = strlen(str) - 1;
-//	while (*(str + (str_len -= 1)) == ' ');
-//	while (*(str + (start_point += 1)) == ' ');
-//
-//	for (i = start_point, j = 0; i <= str_len && j < buf_len; i++, j++) {
-//		buf[j] = str[i];
-//	}
-//	buf[j] = '\0';
-//
-//	return buf;
-//}
-
-char* trim(char *line)
-{
-	size_t len = 0;
-	char cpTrim[MAX_PATH];
-	int xMan = 0;
-	int i;
-
-	len = strlen(line);
-	if (len >= MAX_PATH)
-	{
-		puts("string too long");
-		return NULL;
-	}
-
-	strcpy(cpTrim, line);
-
-	// 앞에거 잘라내기
-	for (i = 0; i < len; i++)
-	{
-		if (cpTrim[i] == ' ' || cpTrim[i] == '\t')
-			xMan++;
-		else
-			break;
-	}
-
-	// 뒤에거 잘라내기
-	for (i = len - 1; i >= 0; i--)
-	{
-		if (cpTrim[i] == ' ' || cpTrim[i] == '\t' || cpTrim[i] == '\n')
-			cpTrim[i] = '\0';
-		else
-			break;
-	}
-
-	if (len != (strlen(cpTrim) - xMan)) {
-		strcpy(line, cpTrim + xMan);
-	}
-
-	//return strlen(line);
-	return line;
 }
 
 
@@ -2809,22 +2740,4 @@ const char* CFileBase::GetErrorMsg()
 }
 
 
-char* strsep(char** stringp, const char* delim)
-{
-	char* start = *stringp;
-	char* p;
 
-	p = (start != NULL) ? strpbrk(start, delim) : NULL;
-
-	if (p == NULL)
-	{
-		*stringp = NULL;
-	}
-	else
-	{
-		*p = '\0';
-		*stringp = p + 1;
-	}
-
-	return start;
-}

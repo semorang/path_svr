@@ -399,6 +399,70 @@ app.post('/api/distancematrix', function(req, res) {
 });
 
 
+// clustering api 호출
+app.get('/api/clustering/appkeys/:userkey', function(req, res) {
+    logout("start clustering request");
+
+    const key = req.params.userkey;
+    const mode = req.query.mode;
+    const destinations = req.query.origins;
+    const count = req.query.count;
+
+    const ret = apis.clustering(key, mode, destinations, count);
+
+    res.send(ret);
+
+    logout("end clustering request by GET");
+});
+
+
+app.post('/api/clustering', function(req, res) {
+    logout("start clustering request");
+
+    const key = req.headers.authorization;
+    const mode = req.body.mode;
+    const destinations = req.body.origins;
+    const count = req.body.count;
+
+    const ret = apis.clustering(key, mode, destinations, count);
+
+    res.send(ret);
+
+    logout("end clustering request");
+});
+
+
+// clustering boundary api 호출
+app.get('/api/boundary/appkeys/:userkey', function(req, res) {
+    logout("start boundary request");
+
+    const key = req.params.userkey;
+    const mode = req.query.mode;
+    const destinations = req.query.origins;
+
+    const ret = apis.boundary(key, mode, destinations);
+
+    res.send(ret);
+
+    logout("end boundary request by GET");
+});
+
+
+app.post('/api/boundary', function(req, res) {
+    logout("start boundary request");
+
+    const key = req.headers.authorization;
+    const mode = req.body.mode;
+    const destinations = req.body.origins;
+
+    const ret = apis.boundary(key, mode, destinations);
+
+    res.send(ret);
+
+    logout("end boundary request");
+});
+
+
 app.get('/api/bestwaypoints/appkeys/:userkey', function(req, res) {
     logout("start bestwaypoints request");
 

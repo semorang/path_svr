@@ -7,8 +7,17 @@
 </head>
 
 <body>
-    <div class=header>
-
+    <header class="header">
+        <table style="height:65px;width: 100%;">
+            <tr>
+                <td style="width: 45px;">
+                    <img src="images/icons/INAVI_Symbol.png" alt="" width="35" height="35" style="margin-left: 10px;">
+                </td>
+                <td style="color: rgba(255, 255, 255, 0.9);text-align: left;font-size: 20px;">
+                    Best Waypoints
+                </td>
+            </tr>
+        </table>
     </header>
 
     <div class="body">
@@ -20,40 +29,55 @@
         <div id="map" style="width:100%;height:100px;position:relative;overflow:hidden;"></div>
 
         <!-- 지도타입 컨트롤 div 입니다 -->
+        <table style="height:50px;width:100%;position:absolute;left:0px;top:0px;">
+        <tr style="background-color: white;">
+            <!-- 경로탐색 컨트롤 div 입니다 -->
+            <!-- <div class="custom_typecontrol radius_border" style="position:absolute;top:10px;left:10px;overflow:hidden;width:260px;height:30px;margin:0;z-index:1;border:0">
+                <span id="btnStart" class="btn" onclick="setRouteType(1)" style="width:65px">출발</span>
+                <span id="btnVia" class="btn" onclick="setRouteType(3)" style="width:65px">경유</span>
+                <span id="btnEnd" class="btn" onclick="setRouteType(2)" style="width:65px">도착</span>
+                <span id="btnRoute" class="btn" onclick="doRoute()" style="width:65px">탐색</span>
+            </div> -->
+
+            <!-- 경로선 컨트롤 div 입니다 -->
+            <!-- <div class="custom_typecontrol radius_border" style="position:absolute;top:10px;left:10px;overflow:hidden;width:260px;height:30px;margin:0;z-index:1;border:0">
+                <span id="btnRoute" class="btn" onclick="setLineType(1)" style="width:65px">경로선</span>
+                <span id="btnLine" class="btn" onclick="setLineType(2)" style="width:65px">직선</span>
+            </div> -->
+
+            <td style="width: 190px;text-align: center;">
+            <!-- 경유지 변경 확정 -->
+            <div class="custom_typecontrol radius_border" style="position:absolute;top:10px;left:10px;overflow:hidden;width:160px;height:30px;margin:0;z-index:1;">
+                <span id="btnOk" class="btn" onclick="setViaOk(tmp_user_obj)" style="width:160px">배송 스케쥴 확정</span>         
+            </div>
+            <!-- 경유지 변경 취소 -->
+            <div class="custom_typecontrol radius_border" style="position:absolute;top:10px;left:180px;overflow:hidden;width:160px;height:30px;margin:0;z-index:1;">
+                <span id="btnCancel" class="btn" onclick="setViaCancel(tmp_user_obj)" style="width:160px">배송 스케쥴 취소(닫기)</span>           
+            </div>
+            </td>
+        </tr>
+        </table>
+
         <div class="custom_typecontrol radius_border">
             <span id="btnRoadmap" class="selected_btn" onclick="setMapType('roadmap')">지도</span>
             <span id="btnSkyview" class="btn" onclick="setMapType('skyview')">스카이뷰</span>
         </div>
 
-        <!-- 경로탐색 컨트롤 div 입니다 -->
-        <!-- <div class="custom_typecontrol radius_border" style="position:absolute;top:10px;left:10px;overflow:hidden;width:260px;height:30px;margin:0;z-index:1;border:0">
-            <span id="btnStart" class="btn" onclick="setRouteType(1)" style="width:65px">출발</span>
-            <span id="btnVia" class="btn" onclick="setRouteType(3)" style="width:65px">경유</span>
-            <span id="btnEnd" class="btn" onclick="setRouteType(2)" style="width:65px">도착</span>
-            <span id="btnRoute" class="btn" onclick="doRoute()" style="width:65px">탐색</span>
-        </div> -->
-
-        <!-- 경로선 컨트롤 div 입니다 -->
-        <div class="custom_typecontrol radius_border" style="position:absolute;top:10px;left:10px;overflow:hidden;width:260px;height:30px;margin:0;z-index:1;border:0">
-            <span id="btnRoute" class="btn" onclick="setLineType(1)" style="width:65px">경로선</span>
-            <span id="btnLine" class="btn" onclick="setLineType(2)" style="width:65px">직선</span>
-        </div>
-
         <!-- 검색 div -->
         <div style="position:absolute;left:10px;top:80px;width:250px;padding:5px;background:rgba(255, 255, 255, 0.8);z-index: 1;font-size:13px;border-radius: 5px;">
             <form onsubmit="searchKeyword(); return false;">
-                키워드 : <input type="text" value="아이나비시스템즈" id="keyword" size="15">
+                키워드 : <input type="text" value="지오영" id="keyword" size="15">
                 <button type="submit">검색</button>
             </form>
         </div>
 
         <!-- 메뉴 생성 -->
-        <div id="menu_wrap" class="bg_white" style="top:120px;height:80%">
+        <div id="menu_wrap" class="bg_white" style="top:120px;height:85%">
             <div id="menu_title" style="text-align:center"><P>검색 결과 목록</P></div>
             <hr>
             <div style="font-size:12px;font-family:'Malgun Gothic', '맑은 고딕', sans-serif;">
-                <div id="clicked_type" style="text-align:left">결과 갯수 : </div>
-                <div id="clicked_name" style="text-align:left"></div>
+                <div id="clicked_type" style="text-align:left;padding:5px 0px 5px 5px;">경유지 갯수: </div>
+                <div id="clicked_name" style="text-align:left;padding:0px 0px 5px 5px;">운행거리: , 운행시간:</div>
             </div>
             <hr>
             <ul id="placesList"></ul>
@@ -79,6 +103,8 @@
         let cnt_route = result_obj.route.data.length;
         let user_pos = [ result_obj.route.data[0].vertex_info[~~((result_obj.route.data[0].vertex_info.length) / 2)].x, result_obj.route.data[0].vertex_info[~~((result_obj.route.data[0].vertex_info.length) / 2)].y ];
         
+        var tmp_user_obj = user_obj;        
+
         // let route_color = ["#CC0000", "#FF00DD", "#33FF00"];
         // let route_offset = [0, 1, -1];
         let route_color = ["#CC0000", "#008888", "#6666FF"];
@@ -94,7 +120,7 @@
         let destination_pos;
 
         // map 사이즈 조절
-        var screenHeight = window.innerHeight - 18;
+        var screenHeight = window.innerHeight - 80;
         document.getElementById("map").style.height = screenHeight + "px";
 
 
@@ -102,6 +128,7 @@
         let links = new Array();
         let nodes = new Array();
         let distanceOverlay = new Object();
+        let selLink;
 
         markers = new Array();
 
@@ -207,7 +234,7 @@
             drawRouteInfo();
 
             // 경유지 정보를 리스트로 표시
-            displayWaypointList(user_obj, result_obj.route.data[0]);
+            displayWaypointList(user_obj, result_obj.summarys, result_obj.route.data[0]);
 
             // 지도 클릭 이벤트 등록
             map.on("click", function (mouseEvent) {
@@ -253,8 +280,8 @@
                     // 경로선 설정
                     typeRouteLine = 1;
 
-                    document.getElementById('btnRoute').className = 'selected_btn';
-                    document.getElementById('btnLine').className = 'btn';
+                    // document.getElementById('btnRoute').className = 'selected_btn';
+                    // document.getElementById('btnLine').className = 'btn';
                 }
                 break;
 
@@ -262,16 +289,16 @@
                     // 직선 설정
                     typeRouteLine = 2
 
-                    document.getElementById('btnRoute').className = 'btn';
-                    document.getElementById('btnLine').className = 'selected_btn';
+                    // document.getElementById('btnRoute').className = 'btn';
+                    // document.getElementById('btnLine').className = 'selected_btn';
                 }
                 break;
 
                 default: {
                     typeRouteLine = 0;
 
-                    document.getElementById('btnRoute').className = 'btn';
-                    document.getElementById('btnLine').className = 'btn';
+                    // document.getElementById('btnRoute').className = 'btn';
+                    // document.getElementById('btnLine').className = 'btn';
                 }
                 break;
             }
@@ -292,6 +319,59 @@
                 links.forEach(element => element.setMap());
                 lines.forEach(element => element.setMap());
             }
+        }
+        
+        function selectRoute(idx) {
+            var result_dat = result_obj.route.data[0];
+            var cntLink = result_dat.link_info.length;
+            var vertex_offset = 0;
+
+            // 경로선 생성
+
+            // 다중 경유지 판단, 우선은 남은거리가 늘어나면 경유지를 지났다고 보자
+            var via_idx = 0;
+            
+            var selRoute = new Array();        
+
+            for (var ii=0; ii<cntLink; ii++) {
+                // 경로선 확장
+                for (var vtx = 0; vtx < result_dat.link_info[ii].vertex_count; vtx++) {
+                    if (via_idx == idx) {
+                        selRoute.push([result_dat.vertex_info[vertex_offset].x, result_dat.vertex_info[vertex_offset].y]);
+                    }
+                    vertex_offset++;
+                }
+
+                if (result_dat.link_info[ii].guide_type != 0) {
+                    via_idx++;
+                }
+
+                if (via_idx > idx) {
+                    // 경로선 추가
+                    if (selLink == undefined) {
+                        selLink = new inavi.maps.Polyline({
+                            map: map,
+                            path: selRoute,
+                            style: {
+                                lineColor: "#FF0000",
+                                lineWidth: 10,
+                                lineOpacity: 1,
+                                lineBlur: 3,
+                            },
+                        });
+                    }
+                    else {
+                        selLink.setPath(selRoute);
+                    }
+
+                    map.fitCoordinates(selRoute, {
+                        padding: 300,
+                    });
+
+                    break;
+                }
+            }// for
+            //-- 경로선 생성
         }
 
         // 경로탐색 컨트롤의 버튼 클릭
@@ -519,9 +599,9 @@
         }
 
         function redrawRoute(map) {
-            if (lines != undefined && lines.length) {
-                lines.forEach(element => element.setMap(map));
-            }
+            // if (lines != undefined && lines.length) {
+            //     lines.forEach(element => element.setMap(map));
+            // }
 
             if (links != undefined && links.length) {
                 links.forEach(element => element.setMap(map));
@@ -630,11 +710,11 @@
                         map: map,
                         path: vertices,
                         style: {
-                            lineOffset: offs[via_idx % offs.length],
+                            // lineOffset: offs[via_idx % offs.length],
                             lineColor: colors[via_idx++ % colors.length],
-                            lineWidth: 2,
-                            // lineWidth: 7,
-                            // lineOpacity: 0.7,
+                            // lineWidth: 2,
+                            lineWidth: 7,
+                            lineOpacity: 0.7,
                         },
                     }));
                     

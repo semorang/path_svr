@@ -61,16 +61,26 @@ CRoutePlan::CRoutePlan()
 #else
 #if defined(USE_REAL_ROUTE_TSP)	
 	// 도로 가중치
-	m_rpCost.vehicle.cost_lv0 = 1;
-	m_rpCost.vehicle.cost_lv1 = 1;
-	m_rpCost.vehicle.cost_lv2 = 1;
-	m_rpCost.vehicle.cost_lv3 = 1;
-	m_rpCost.vehicle.cost_lv4 = 1;
-	m_rpCost.vehicle.cost_lv5 = 1;
-	m_rpCost.vehicle.cost_lv6 = 1;
-	m_rpCost.vehicle.cost_lv7 = 1;
-	m_rpCost.vehicle.cost_lv8 = 1;
-	m_rpCost.vehicle.cost_lv9 = 1;
+	//m_rpCost.vehicle.cost_lv0 = 1;
+	//m_rpCost.vehicle.cost_lv1 = 1;
+	//m_rpCost.vehicle.cost_lv2 = 1;
+	//m_rpCost.vehicle.cost_lv3 = 1;
+	//m_rpCost.vehicle.cost_lv4 = 1;
+	//m_rpCost.vehicle.cost_lv5 = 1;
+	//m_rpCost.vehicle.cost_lv6 = 1;
+	//m_rpCost.vehicle.cost_lv7 = 1;
+	//m_rpCost.vehicle.cost_lv8 = 1;
+	//m_rpCost.vehicle.cost_lv9 = 1;
+	m_rpCost.vehicle.cost_lv0 = 50;
+	m_rpCost.vehicle.cost_lv1 = 50;
+	m_rpCost.vehicle.cost_lv2 = 40;
+	m_rpCost.vehicle.cost_lv3 = 30;
+	m_rpCost.vehicle.cost_lv4 = 30;
+	m_rpCost.vehicle.cost_lv5 = 25;
+	m_rpCost.vehicle.cost_lv6 = 20;
+	m_rpCost.vehicle.cost_lv7 = 15;
+	m_rpCost.vehicle.cost_lv8 = 15;
+	m_rpCost.vehicle.cost_lv9 = 15;
 #else
 	m_rpCost.vehicle.cost_lv0 = 50;
 	m_rpCost.vehicle.cost_lv1 = 50;
@@ -206,7 +216,7 @@ void CRoutePlan::SetRouteCost(IN const uint32_t type, IN const RpCost* pCost)
 		LOG_TRACE(LOG_DEBUG, "set rp type:%d", type);
 
 		LOG_TRACE(LOG_DEBUG_LINE, "set rp cost(old):");
-		for(int ii=0; ii<18; ii++) {
+		for(int ii=0; ii<listCount; ii++) {
 			LOG_TRACE(LOG_DEBUG_CONTINUE, "%d, ", m_rpCost.base[ii]);
 		}
 		LOG_TRACE(LOG_DEBUG_CONTINUE, "\n");
@@ -214,7 +224,7 @@ void CRoutePlan::SetRouteCost(IN const uint32_t type, IN const RpCost* pCost)
 		memcpy(&m_rpCost.base, &pCost->base, sizeof(int32_t) * listCount);
 
 		LOG_TRACE(LOG_DEBUG_LINE, "set rp cost(new):");
-		for(int ii=0; ii<18; ii++) {
+		for(int ii=0; ii<listCount; ii++) {
 			LOG_TRACE(LOG_DEBUG_CONTINUE, "%d, ", pCost->base[ii]);
 		}
 		LOG_TRACE(LOG_DEBUG_CONTINUE, "\n");
@@ -222,7 +232,7 @@ void CRoutePlan::SetRouteCost(IN const uint32_t type, IN const RpCost* pCost)
 }
 
 
-const double CRoutePlan::GetCost(IN const stLinkInfo* pLink, IN const uint32_t opt, IN const double length, IN const uint32_t spd) // type, 0:보행자, 1:자전거 
+const double CRoutePlan::GetCost(IN const stLinkInfo* pLink, IN const uint32_t dirTarget, IN const uint32_t opt, IN const double length, IN const uint32_t spd) // type, 0:보행자, 1:자전거 
 {
 	// 거리를 시간으로 환산	// 기본 이동 속도 = 5Km/h = 5000m/60M = 500m/6M = 500m/360s = 1.388..m/s => 1.3888/s;
 	static const int32_t avgTreSpd = 3; // 산행 이동 속도 = 3Km/h
@@ -314,7 +324,23 @@ const double CRoutePlan::GetCost(IN const stLinkInfo* pLink, IN const uint32_t o
 			int nRoadType = pLink->tre.road_info;
 			// 노면정보 코드, 0:기타, 1:오솔길, 2:포장길, 3:계단, 4:교량, 5:암릉, 6:릿지, 7;사다리, 8:밧줄, 9:너덜길, 10:야자수매트, 11:데크로드
 
-			if (nRoadType > 0 && opt == ROUTE_OPT_COMFORTABLE)
+			if (opt == ROUTE_OPT_SHORTEST) {
+				if (dirTarget == 1) { // 정방향 
+					secCost = pLink->tre.fw_tm;
+				}
+				else {
+					secCost = pLink->tre.bw_tm;
+				}
+			}
+			else if (opt == ROUTE_OPT_FASTEST) {
+				if (dirTarget == 1) { // 정방향 
+					secCost = pLink->tre.fw_tm;
+				}
+				else {
+					secCost = pLink->tre.bw_tm;
+				}
+			}
+			else if (nRoadType > 0 && opt == ROUTE_OPT_COMFORTABLE)
 			{
 				if ((nRoadType & ROUTE_AVOID_DECK) == ROUTE_AVOID_DECK) { // 11:데크로드 = 1000 0000 0000 = 1024
 					secCost *= 0.6f;
@@ -450,6 +476,16 @@ const double CRoutePlan::GetTravelCost(IN const stLinkInfo* pLink, IN const stLi
 			int nRoadType = pLink->tre.road_info;
 			// 노면정보 코드, 0:기타, 1:오솔길, 2:포장길, 3:계단, 4:교량, 5:암릉, 6:릿지, 7;사다리, 8:밧줄, 9:너덜길, 10:야자수매트, 11:데크로드
 
+			if (opt == ROUTE_OPT_SHORTEST) {
+				secCost = pLink->length;
+			}
+			else if (opt == ROUTE_OPT_FASTEST) {
+				; // 기본 시간 사용
+			}
+			else if (opt == ROUTE_OPT_RECOMMENDED) {
+				secCost = 1000 - pLink->tre.popular;
+			}
+			
 			if (nRoadType > 0 && avoid > 0)
 			{
 				if ((nRoadType & ROUTE_AVOID_DECK) == ROUTE_AVOID_DECK) { // 11:데크로드 = 1000 0000 0000 = 1024
@@ -483,7 +519,10 @@ const double CRoutePlan::GetTravelCost(IN const stLinkInfo* pLink, IN const stLi
 						waitCost = 3600;
 					}
 				}
-				if ((nRoadType & ROUTE_AVOID_STAIRS) == ROUTE_AVOID_STAIRS) { // 3:계단 = 100 = 4				
+				if ((nRoadType & ROUTE_AVOID_STAIRS) == ROUTE_AVOID_STAIRS) { // 3:계단 = 100 = 4			
+					if ((avoid & ROUTE_AVOID_STAIRS) == ROUTE_AVOID_STAIRS) {
+						waitCost = 3600;
+					}
 				}
 				if ((nRoadType & ROUTE_AVOID_PAVE) == ROUTE_AVOID_PAVE) { // 2:포장길 = 10 = 2				
 				}
@@ -778,10 +817,6 @@ const double CRoutePlan::GetTravelCost(IN const stLinkInfo* pLink, IN const stLi
 			} // switch
 
 
-
-			
-
-
 			if (pLink->ped.walk_type == TYPE_WALK_WITH_BYC) {
 				// pLink->length * 3;
 			}
@@ -834,7 +869,7 @@ const double CRoutePlan::GetTravelCost(IN const stLinkInfo* pLink, IN const stLi
 						avgSpd = m_rpCost.vehicle.cost_lv7;// 15; break; //30
 					} // switch
 
-#if defined(USE_REAL_ROUTE_TSP)
+#if defined(USE_P2P_DATA)
 					double spdValue = avgSpd / 3.6f;	
 #elif defined(USE_REAL_ROUTE_TSP)
 					double spdValue = avgSpd / 1.f;
@@ -1011,7 +1046,6 @@ const int CRoutePlan::AddNewLinks(IN RouteInfo* pRouteInfo, IN const CandidateLi
 		return -1;
 	}
 
-
 	// 아래 루틴 1, 2는 getNextPassCode(...) 함수로 대체가능, 중복 계산을 방지하기 위해 나눠 사용 중
 	// 루틴 1, 링크의 통행 코드
 	int16_t codeLinkPass = 0;
@@ -1019,7 +1053,19 @@ const int CRoutePlan::AddNewLinks(IN RouteInfo* pRouteInfo, IN const CandidateLi
 	// 링크의 통행코드에서 링크 자신의 인덱스 위치
 	int32_t idxLinkPassOffset = 0;
 
-	if (pLink->base.link_type == TYPE_DATA_VEHICLE) {
+
+	// 구획변교점일경우 연결 노드 구하자
+	if (pNodeNext->base.point_type == TYPE_NODE_EDGE) {
+		KeyID oldKey = pNodeNext->edgenode_id;
+		pNodeNext = m_pDataMgr->GetVNodeDataById(oldKey);
+
+		if (!pNodeNext)
+		{
+			LOG_TRACE(LOG_ERROR, "Failed, can't find next edge node, next edge node id:%lld", oldKey.llid);
+			return -1;
+		}
+	}
+	else if (pLink->base.link_type == TYPE_DATA_VEHICLE) {
 		// 현재 링크의 통과 코드에서 요청된 idx의 통과 코드값 계산
 		int idxLinkPass = -1;
 
@@ -1042,8 +1088,6 @@ const int CRoutePlan::AddNewLinks(IN RouteInfo* pRouteInfo, IN const CandidateLi
 		codeLinkPass = pNodeNext->conn_attr[idxLinkPass];
 	}
 	// - // 루틴 1, 링크의 통행 코드
-
-
 
 	double heuristicCost = 0.f;
 	double toDestStraightDist = 0.f;
@@ -1103,7 +1147,7 @@ const int CRoutePlan::AddNewLinks(IN RouteInfo* pRouteInfo, IN const CandidateLi
 			}
 
 			// 자기 자신은 제외
-			if (pLink->link_id.nid == pLinkNext->link_id.nid && retPassCode != 1) {
+			if ((pLink->link_id.nid == pLinkNext->link_id.nid) && (retPassCode != 1)) {
 				continue;
 			}
 
@@ -1161,7 +1205,7 @@ const int CRoutePlan::AddNewLinks(IN RouteInfo* pRouteInfo, IN const CandidateLi
 				heuristicCost = toDestStraightDist * VAL_HEURISTIC_VEHICLE_FACTOR;
 #	endif
 #else
-				heuristicCost = toDestStraightDist * VAL_HEURISTIC_PEDESTRIAN_FACTOR;
+				heuristicCost = toDestStraightDist * VAL_HEURISTIC_VEHICLE_FACTOR;//VAL_HEURISTIC_PEDESTRIAN_FACTOR;
 #endif
 				// 링크 타입 비교를 안하면 연산에 좀더 빠르려나
 				//if (pLinkNext->base.link_type == TYPE_DATA_VEHICLE) {
@@ -1182,7 +1226,7 @@ const int CRoutePlan::AddNewLinks(IN RouteInfo* pRouteInfo, IN const CandidateLi
 				}
 
 				// 트리 등록
-				costReal = GetCost(pLinkNext, pRouteInfo->RouteOption, 0, 0);
+				costReal = GetCost(pLinkNext, dirTarget, pRouteInfo->RouteOption, 0, 0);
 				costTreavel = GetTravelCost(pLinkNext, pLink, costReal, angDiff, pRouteInfo->RouteOption, pRouteInfo->RouteOption, pRouteInfo->AvoidOption);
 
 				nextCandidate.parents_id = pCurInfo->parentId.nid;
@@ -1196,7 +1240,7 @@ const int CRoutePlan::AddNewLinks(IN RouteInfo* pRouteInfo, IN const CandidateLi
 				pItem->distReal = pLinkNext->length;	// 실 거리
 				pItem->timeReal = costReal; // 실 시간
 				pItem->costTreavel = pCurInfo->costTreavel + costTreavel;	// 계산 비용
-				//pItem->costHeuristic = pCurInfo->costTreavel + heuristicCost;	// 가중치 계산 비용
+				// pItem->costHeuristic = pCurInfo->costTreavel + heuristicCost;	// 가중치 계산 비용 // old
 				pItem->costHeuristic = pItem->costTreavel + heuristicCost;	// 가중치 계산 비용
 				pItem->depth = pCurInfo->depth + 1;	// 탐색 깊이
 				pItem->visited = false; // 방문 여부
@@ -1519,7 +1563,7 @@ const int CRoutePlan::Propagation(IN TableBaseInfo* pRouteInfo, IN const Candida
 				}
 
 				// 트리 등록
-				costReal = GetCost(pLinkNext, pRouteInfo->routeOption, 0, 0);
+				costReal = GetCost(pLinkNext, dirTarget, pRouteInfo->routeOption, 0, 0);
 				costTreavel = GetTravelCost(pLinkNext, pLink, costReal, angDiff, pRouteInfo->routeOption, pRouteInfo->routeOption, pRouteInfo->avoidOption);
 
 				nextCandidate.parents_id = pCurInfo->parentId.nid;
@@ -1537,7 +1581,8 @@ const int CRoutePlan::Propagation(IN TableBaseInfo* pRouteInfo, IN const Candida
 				pItem->distReal = pCurInfo->distReal + pLinkNext->length;	// 실 거리
 				pItem->timeReal = pCurInfo->timeReal + costReal; // 실 시간
 				pItem->costTreavel = pCurInfo->costTreavel + costTreavel;	// 계산 비용
-				pItem->costHeuristic = pCurInfo->costTreavel + heuristicCost;	// 가중치 계산 비용
+				// pItem->costHeuristic = pCurInfo->costTreavel + heuristicCost;	// 가중치 계산 비용 // old
+				pItem->costHeuristic = pItem->costTreavel;// + heuristicCost;	// 가중치 계산 비용
 				pItem->depth = pCurInfo->depth + 1;	// 탐색 깊이
 				pItem->visited = false; // 방문 여부
 				pItem->dir = dirTarget; // 탐색방향
@@ -1760,7 +1805,61 @@ const bool CRoutePlan::SetRouteLinkInfo(IN const SPoint& ptPosition, const IN Ke
 	else
 #endif
 	if (pLink->base.link_type == TYPE_DATA_VEHICLE) {
-		pRouteLinkInfo->LinkDir = getRouteDirFromPosition(pLink, nLinkMatchVtxIdx, ptPosition.x, ptPosition.y);
+		// 우선 도착지에 대해서만,-> 출발지도 적용(2023.8.10)
+		// 6레벨 이상, 일반도로, 2차선 이하, 본선비분리 도로는 양쪽에 매칭 가능하도록 하자
+		if (//!isStart && 
+			(pLink->veh.level >= 6) && (pLink->veh.lane_cnt <= 2) && (pLink->veh.road_type >= 6) && (pLink->veh.link_type == 1)) {
+			pRouteLinkInfo->LinkDir = 0;
+		}
+		else {
+			pRouteLinkInfo->LinkDir = getRouteDirFromPosition(pLink, nLinkMatchVtxIdx, ptPosition.x, ptPosition.y);
+
+			stNodeInfo* pNode = nullptr;
+
+			// 출발지의 방향성으로 설정시, 진출이 불가한 (이전 링크에서 회전 불가 등) 경우 확인
+			// 목적지의 방향성으로 설정시, 진입이 불가한 (이전 링크에서 회전 불가 등) 경우 확인
+			if ((pRouteLinkInfo->LinkDir == 1)) {
+				pNode = m_pDataMgr->GetVNodeDataById(isStart ? pLink->enode_id : pLink->snode_id);
+			}
+			else if ((pRouteLinkInfo->LinkDir == 2)) {
+				pNode = m_pDataMgr->GetVNodeDataById(isStart ? pLink->snode_id : pLink->enode_id);
+			}
+
+			if (pNode && (pNode->base.point_type == TYPE_NODE_EDGE))
+			{
+				// 구획 변경점은 방향성 유지
+			}
+			// 우선 도착지에 대해서만,
+			// 단점 노드 에서의 진입인 경우 확인 -> 오류 해소
+			else if ((!isStart) && 
+				(((pRouteLinkInfo->LinkDir == 1) && (m_pDataMgr->GetVNodeDataById(pLink->snode_id)->base.connnode_count <= 1)) || // 목적지가 정방향인데, S노드가 단점이면
+				((pRouteLinkInfo->LinkDir == 2) && (m_pDataMgr->GetVNodeDataById(pLink->enode_id)->base.connnode_count <= 1)))) {  // 목적지가 역방향인데, E노드가 단점이면
+
+				// 방향성 바꾸기
+				pRouteLinkInfo->LinkDir = (pRouteLinkInfo->LinkDir == 1) ? 2 : 1;
+			}
+			else {
+				bool isPassed = false;
+
+				if (pNode && (pNode->base.connnode_count >= 1)) {
+					for (int ii = 0; ii < pNode->base.connnode_count; ii++) {
+						if ((isStart && getNextPassCode(pLink->link_id, pNode->connnodes[ii], pNode, 0, m_pDataMgr) == true) ||
+							(!isStart && getPrevPassCode(pLink->link_id, pNode->connnodes[ii], pNode, 0, m_pDataMgr) == true)) {
+							isPassed = true;
+							break;
+						}
+					} // for
+
+					if (isPassed == false) {
+						// 방향성 바꾸기
+						int oldDir = pRouteLinkInfo->LinkDir;
+						pRouteLinkInfo->LinkDir = (pRouteLinkInfo->LinkDir == 1) ? 2 : 1;
+
+						LOG_TRACE(LOG_WARNING, "Current link dir not connected, change link dir, isStart:%d, tile:%d, id:%d, dir:%d->%d", isStart, pRouteLinkInfo->LinkId.tile_id, pRouteLinkInfo->LinkId.nid, oldDir, pRouteLinkInfo->LinkDir);
+					}
+				}
+			}
+		}
 	}
 	else { // 방향성 기본			
 		pRouteLinkInfo->LinkDir = 0;
@@ -1821,6 +1920,16 @@ const int CRoutePlan::DoRoute(IN const uint32_t reqId, IN const SPoint ptStart, 
 
 	// 함수로 대체
 	int ret = MakeRoute(0, &routeInfo, pRouteResult);
+	if (ret == ROUTE_RESULT_FAILED_EXPEND) {
+		// 시작점의 방향성을 바꿔서 한번 더 재탐색 시도
+		if (routeInfo.StartLinkInfo.LinkDir != 0) {
+			int oldDir = routeInfo.StartLinkInfo.LinkDir;
+			routeInfo.StartLinkInfo.LinkDir = (routeInfo.StartLinkInfo.LinkDir == 1) ? 2 : 1;
+
+			LOG_TRACE(LOG_DEBUG, "Retry, make single route, change start link dir, tile:%d, id:%d, dir:%d->%d, tick:%lld", routeInfo.StartLinkInfo.LinkId.tile_id, routeInfo.StartLinkInfo.LinkId.nid, oldDir, routeInfo.StartLinkInfo.LinkId.dir);
+			ret = MakeRoute(0, &routeInfo, pRouteResult);
+		}
+	}
 
 	return ret;
 }
@@ -1920,9 +2029,23 @@ const int CRoutePlan::DoRoutes(IN const RequestRouteInfo* pReqInfo, OUT vector<R
 
 
 		int ret = MakeRoute(ii, &routeInfo, &routeResult);
+		if (ret == ROUTE_RESULT_FAILED_EXPEND) {
+			// 시작점의 방향성을 바꿔서 한번 더 재탐색 시도
+			if (routeInfo.StartLinkInfo.LinkDir != 0) {
+				int oldDir = routeInfo.StartLinkInfo.LinkDir;
+				routeInfo.StartLinkInfo.LinkDir = (routeInfo.StartLinkInfo.LinkDir == 1) ? 2 : 1;
+
+				ret = MakeRoute(ii, &routeInfo, &routeResult);
+				LOG_TRACE(LOG_DEBUG, "Retry, make routes, result:%d, idx:%d, change start link dir, llid:%lld, tile:%d, id:%d, dir:%d->%d", ret, ii, routeInfo.StartLinkInfo.LinkId.llid, routeInfo.StartLinkInfo.LinkId.tile_id, routeInfo.StartLinkInfo.LinkId.nid, oldDir, routeInfo.StartLinkInfo.LinkId.dir);
+			}
+		}
 
 		if (ret != ROUTE_RESULT_SUCCESS) {
-			continue;
+			LOG_TRACE(LOG_DEBUG, "--->>>Failed, make routes, result:%d, idx:%d, change start link dir, llid:%lld, tile:%d, id:%d, ", ret, ii, routeInfo.StartLinkInfo.LinkId.llid, routeInfo.StartLinkInfo.LinkId.tile_id, routeInfo.StartLinkInfo.LinkId.nid);
+			RouteResultLinkEx failedInfo = { 0, };
+			// 링크 안내 타입, 0:일반, 1:S출발지링크, 2:V경유지링크, 3:E도착지링크, 4:SV출발지-경유지, 5:SE출발지-도착지, 6:VV경유지-경유지, 7:VE경유지-도착지
+			failedInfo.type = routeInfo.EndLinkInfo.LinkGuideType;
+			routeResult.LinkInfo.emplace_back(failedInfo);
 		}
 	} // for
 
@@ -1969,7 +2092,7 @@ const int CRoutePlan::DoTabulate(IN const RequestRouteInfo* pReqInfo, OUT RouteT
 		SPoint ptRequest = { pReqInfo->vtPoints[ii].x, pReqInfo->vtPoints[ii].y };
 
 		// 각 지점의 매칭 정보
-		if (!SetRouteLinkInfo(ptRequest, keyLink, true, &newInfo)) {
+		if (!SetRouteLinkInfo(ptRequest, keyLink, false, &newInfo)) {
 			LOG_TRACE(LOG_ERROR, "Failed, set tabuate link info, idx:%d, map:%d, link;%d, x:%.5f, y:%.5f", ii, keyLink.tile_id, keyLink.nid, ptRequest.x, ptRequest.y);
 
 			return ROUTE_RESULT_FAILED_SET_VIA;
@@ -2123,7 +2246,7 @@ const int CRoutePlan::MakeRoute(IN const int idx, IN RouteInfo* pRouteInfo, OUT 
 		pItem->linkId = pLink->link_id;  // 링크 ID
 		pItem->nodeId = pLink->snode_id;	// 노드 ID
 		pItem->distReal = pRouteInfo->StartLinkInfo.LinkDistToS; // 실 거리
-		pItem->timeReal = GetCost(pLink, pRouteInfo->RouteOption, pRouteInfo->StartLinkInfo.LinkDistToS, 0); // 실 주행 시간
+		pItem->timeReal = GetCost(pLink, candidateId.parents_id, pRouteInfo->RouteOption, pRouteInfo->StartLinkInfo.LinkDistToS, 0); // 실 주행 시간
 		pItem->costTreavel = pRouteInfo->StartLinkInfo.LinkDistToS;	// 계산 비용
 		pItem->costHeuristic = pRouteInfo->StartLinkInfo.LinkDistToS;	// 가중치 계산 비용
 		pItem->depth = 0;	// 탐색 깊이
@@ -2152,7 +2275,7 @@ const int CRoutePlan::MakeRoute(IN const int idx, IN RouteInfo* pRouteInfo, OUT 
 		pItem->linkId = pLink->link_id;  // 링크 ID
 		pItem->nodeId = pLink->enode_id;	// 노드 ID
 		pItem->distReal = pRouteInfo->StartLinkInfo.LinkDistToE;	// 실 거리
-		pItem->timeReal = GetCost(pLink, pRouteInfo->RouteOption, pRouteInfo->StartLinkInfo.LinkDistToE, 0); // 실 주행 시간
+		pItem->timeReal = GetCost(pLink, candidateId.parents_id, pRouteInfo->RouteOption, pRouteInfo->StartLinkInfo.LinkDistToE, 0); // 실 주행 시간
 		pItem->costTreavel = pRouteInfo->StartLinkInfo.LinkDistToE;	// 계산 비용
 		pItem->costHeuristic = pRouteInfo->StartLinkInfo.LinkDistToE;	// 가중치 계산 비용
 		pItem->depth = 0;	// 탐색 깊이
@@ -2173,7 +2296,9 @@ const int CRoutePlan::MakeRoute(IN const int idx, IN RouteInfo* pRouteInfo, OUT 
 	static const uint32_t cntMaxExtraSearch = 100; // 목적지 추가 도달 검사 최대 허용치
 	uint32_t cntExtraSearch = 0; // 목적지 도달 후 추가 도달 검사 카운트
 
-	// 경로 탐색 성공
+	int ret = ROUTE_RESULT_FAILED;
+
+	// 경로 탐색
 	LOG_TRACE(LOG_TEST, "Start finding goal, req_idx:%d", idx);
 
 	while (!pRouteInfo->pqDijkstra.empty())
@@ -2371,11 +2496,12 @@ const int CRoutePlan::MakeRoute(IN const int idx, IN RouteInfo* pRouteInfo, OUT 
 				}
 			} // while
 
-			int ret = MakeRouteResult(pRouteInfo, pRouteResult);
+			ret = MakeRouteResult(pRouteInfo, pRouteResult);
 
 			//LOG_TRACE(LOG_DEBUG, "max result size : %d", m_routeResult.LinkInfo.size());
 
-			return ret;
+			//return ret;
+			break;
 		}
 		else {
 			/*AddNewLinks(&m_routeInfo, pCurInfo, pCurInfo->linkId.dir);*/
@@ -2398,23 +2524,25 @@ const int CRoutePlan::MakeRoute(IN const int idx, IN RouteInfo* pRouteInfo, OUT 
 #endif
 	}
 
-	LOG_TRACE(LOG_INFO, "Failed, req_idx:%d, can't find route, couldn't leached end point(the point will isolated)", idx);
-	LOG_TRACE(LOG_INFO, "Failed, req_idx:%d, start(link:%d, x:%.6f, y:%.6f), end(link:%d, x:%.6f. y:%.6f)", idx,
-		pRouteInfo->StartLinkInfo.LinkId.nid, pRouteInfo->StartLinkInfo.Coord.x, pRouteInfo->StartLinkInfo.Coord.y, 
-		pRouteInfo->EndLinkInfo.LinkId.nid, pRouteInfo->EndLinkInfo.Coord.x, pRouteInfo->EndLinkInfo.Coord.y);
-	/* display
-	WCHAR buff[128];
-	while (!pqScore.empty())
-	{
-	wsprintf(buff, L"%d, %d \n", pqScore.top().id, pqScore.top().length);
-	OutputDebugString(buff);
-	pqScore.pop();
+	if (ret != ROUTE_RESULT_SUCCESS) {
+		LOG_TRACE(LOG_INFO, "Failed, req_idx:%d, can't find route, couldn't leached end point(the point will isolated)", idx);
+		LOG_TRACE(LOG_INFO, "Failed, req_idx:%d, start(link:%d, coord:%.6f,%.6f), end(link:%d, coord:%.6f,%.6f)", idx,
+			pRouteInfo->StartLinkInfo.LinkId.nid, pRouteInfo->StartLinkInfo.Coord.x, pRouteInfo->StartLinkInfo.Coord.y,
+			pRouteInfo->EndLinkInfo.LinkId.nid, pRouteInfo->EndLinkInfo.Coord.x, pRouteInfo->EndLinkInfo.Coord.y);
+		/* display
+		WCHAR buff[128];
+		while (!pqScore.empty())
+		{
+		wsprintf(buff, L"%d, %d \n", pqScore.top().id, pqScore.top().length);
+		OutputDebugString(buff);
+		pqScore.pop();
+		}
+		*/
+
+		ret = pRouteResult->ResultCode = ROUTE_RESULT_FAILED_EXPEND;
 	}
-	*/
 
-	pRouteResult->ResultCode = ROUTE_RESULT_FAILED_EXPEND;
-
-	return pRouteResult->ResultCode;
+	return ret;
 }
 
 
@@ -2443,7 +2571,7 @@ const uint32_t CRoutePlan::CheckStartDirectionMaching(IN const stLinkInfo* pLink
 		pItem.linkId = pLink->link_id;  // 링크 ID
 		pItem.nodeId = pLink->snode_id;	// 노드 ID
 		pItem.distReal = pRoutLinkInfo->LinkDistToS; // 실 거리
-		pItem.timeReal = GetCost(pLink, routeOpt, pRoutLinkInfo->LinkDistToS, 0); // 실 주행 시간
+		pItem.timeReal = GetCost(pLink, candidateId.parents_id, routeOpt, pRoutLinkInfo->LinkDistToS, 0); // 실 주행 시간
 		pItem.costTreavel = pRoutLinkInfo->LinkDistToS;	// 계산 비용
 		pItem.costHeuristic = pRoutLinkInfo->LinkDistToS;	// 가중치 계산 비용
 		pItem.depth = 0;	// 탐색 깊이
@@ -2480,7 +2608,7 @@ const uint32_t CRoutePlan::CheckStartDirectionMaching(IN const stLinkInfo* pLink
 		pItem.linkId = pLink->link_id;  // 링크 ID
 		pItem.nodeId = pLink->enode_id;	// 노드 ID
 		pItem.distReal = pRoutLinkInfo->LinkDistToE;	// 실 거리
-		pItem.timeReal = GetCost(pLink, routeOpt, pRoutLinkInfo->LinkDistToE, 0); // 실 주행 시간
+		pItem.timeReal = GetCost(pLink, candidateId.parents_id, routeOpt, pRoutLinkInfo->LinkDistToE, 0); // 실 주행 시간
 		pItem.costTreavel = pRoutLinkInfo->LinkDistToE;	// 계산 비용
 		pItem.costHeuristic = pRoutLinkInfo->LinkDistToE;	// 가중치 계산 비용
 		pItem.depth = 0;	// 탐색 깊이
@@ -2529,7 +2657,7 @@ const uint32_t CRoutePlan::CheckEndDirectionMaching(IN const stLinkInfo* pLink, 
 				pItem.linkId = pLink->link_id;  // 링크 ID
 				pItem.nodeId = pLink->snode_id;	// 노드 ID
 				pItem.distReal = pRoutLinkInfo->LinkDistToS; // 실 거리
-				pItem.timeReal = GetCost(pLink, routeOpt, pRoutLinkInfo->LinkDistToS, 0); // 실 주행 시간
+				pItem.timeReal = GetCost(pLink, pRoutLinkInfo->LinkDir, routeOpt, pRoutLinkInfo->LinkDistToS, 0); // 실 주행 시간
 				pItem.costTreavel = pRoutLinkInfo->LinkDistToS;	// 계산 비용
 				pItem.costHeuristic = pRoutLinkInfo->LinkDistToS;	// 가중치 계산 비용
 				pItem.depth = 0;	// 탐색 깊이
@@ -2574,7 +2702,7 @@ const uint32_t CRoutePlan::CheckEndDirectionMaching(IN const stLinkInfo* pLink, 
 				pItem.linkId = pLink->link_id;  // 링크 ID
 				pItem.nodeId = pLink->enode_id;	// 노드 ID
 				pItem.distReal = pRoutLinkInfo->LinkDistToS; // 실 거리
-				pItem.timeReal = GetCost(pLink, routeOpt, pRoutLinkInfo->LinkDistToS, 0); // 실 주행 시간
+				pItem.timeReal = GetCost(pLink, pRoutLinkInfo->LinkDir, routeOpt, pRoutLinkInfo->LinkDistToS, 0); // 실 주행 시간
 				pItem.costTreavel = pRoutLinkInfo->LinkDistToS;	// 계산 비용
 				pItem.costHeuristic = pRoutLinkInfo->LinkDistToS;	// 가중치 계산 비용
 				pItem.depth = 0;	// 탐색 깊이
@@ -2826,7 +2954,9 @@ const int CRoutePlan::MakeTabulate(IN const RequestRouteInfo* pReqInfo, IN const
 		uint32_t cntDestination = checkDestinationCount - 1; // 자신은 제외
 		uint32_t cntGoal = 0;
 		uint32_t cntExtraGoal = 0;
+		int32_t idxPassedLink = -1; // 지나는 가지만 방향성이 안맞는 링크의 idx
 		bool isFirst = true;
+		bool isRetry = false;
 
 		RouteTable* pCell = nullptr;
 		unordered_map<uint64_t, vector<int32_t>>::const_iterator it;
@@ -2918,9 +3048,10 @@ const int CRoutePlan::MakeTabulate(IN const RequestRouteInfo* pReqInfo, IN const
 							pCell->nTotalTime = pCurInfo->timeReal;
 							pCell->nTotalDist = pCurInfo->distReal;
 							pCell->dbTotalCost = pCurInfo->costTreavel;
-							// 경로 탐색 성공
-							// LOG_TRACE(LOG_TEST, "Find route table item, %d/%d, table[%d][%d], time:%d, dist:%d",
-							//	cntGoal, cntDestination, ii, it->second, pCell->nTotalTime, pCell->nTotalDist);
+
+							 // 경로 탐색 성공
+							 //LOG_TRACE(LOG_TEST, "Find route table item, %d/%d, table[%d][%d], time:%d, dist:%d",
+								//cntGoal, cntDestination, ii, idx, pCell->nTotalTime, pCell->nTotalDist);
 
 							// 링크내 종료 포인트에서 노드까지의 거리 
 							if (pCurInfo->dir == 1) {
@@ -2950,7 +3081,7 @@ const int CRoutePlan::MakeTabulate(IN const RequestRouteInfo* pReqInfo, IN const
 					else {
 						// 여기로 들어오느다는건 목적지 테이블이 아예 잘못되었다는건데, 이건 있어서는 안되는 거야
 						LOG_TRACE(LOG_WARNING, "Failed, destination table info not correct, table[%d][%d] should have llid:%lld, but now llid:%lld (tile:%d, id:%d)",
-							ii, it->second, it->first, pCell->linkInfo.LinkId.llid, pCell->linkInfo.LinkId.tile_id, pCell->linkInfo.LinkId.nid);
+							ii, idx, it->first, pCell->linkInfo.LinkId.llid, pCell->linkInfo.LinkId.tile_id, pCell->linkInfo.LinkId.nid);
 						ret = ROUTE_RESULT_FAILED_SET_MEMORY;
 						break;
 					}
@@ -2965,14 +3096,93 @@ const int CRoutePlan::MakeTabulate(IN const RequestRouteInfo* pReqInfo, IN const
 			if (cntDestination <= cntGoal)
 			{
 				// 경로 탐색 성공
-				LOG_TRACE(LOG_TEST, "Success make table[%d], rows:%d/%d, goal:%d/%d +%d", ii, ii + 1, cntRows, cntGoal, cntDestination, cntExtraGoal);
+				LOG_TRACE(LOG_DEBUG, "Success make table[%d], rows:%d/%d, goal:%d/%d +%d", ii, ii + 1, cntRows, cntGoal, cntDestination, cntExtraGoal);
 				ret = ROUTE_RESULT_SUCCESS;
+
+				// release mem
+				for (; !pBase->pqDijkstra.empty(); ) {
+					delete pBase->pqDijkstra.top();
+					pBase->pqDijkstra.pop();
+				}
+
+				if (!pBase->mRoutePass.empty()) {
+					pBase->mRoutePass.clear();
+					unordered_map<uint64_t, bool>().swap(pBase->mRoutePass);
+				}
+
 				break;
 			}
 			else {
 				isFirst = false;
 				// 단순 확장
 				Propagation(pBase, pCurInfo, pCurInfo->dir, baseTablesStart[curNearest.id].routeLinkInfo.Coord);
+
+				if (pBase->pqDijkstra.empty() && (cntDestination != cntGoal) && !isRetry) {
+
+					// 시작점이 방향성을 가지고 있으면 반대로 설정해 한번더 시도
+					if (cntGoal <= 0) {
+						if ((baseTablesStart[ii].vtCandidateLink.size() == 1) && (baseTablesStart[ii].vtCandidateLink[0].dir != 0)) {
+							isRetry = 1;
+
+							// release mem
+							for (; !pBase->pqDijkstra.empty(); ) {
+								delete pBase->pqDijkstra.top();
+								pBase->pqDijkstra.pop();
+							}
+
+							if (!pBase->mRoutePass.empty()) {
+								pBase->mRoutePass.clear();
+								unordered_map<uint64_t, bool>().swap(pBase->mRoutePass);
+							}
+
+							// 시작 지점 정보 재등록
+							CandidateLink* pNew = new CandidateLink();
+							memcpy(pNew, &baseTablesStart[ii].vtCandidateLink[0], sizeof(CandidateLink));
+							// 출발지 진행 방향 바꾸기
+							int oldDir = pNew->dir;
+							pNew->dir = (pNew->dir == 1) ? pNew->dir = 2 : pNew->dir = 1;
+
+							pBase->pqDijkstra.emplace(pNew);
+
+							LOG_TRACE(LOG_DEBUG, "Retry, make table, rows[%02d], change start link dir, tile:%d, id:%d, dir:%d->%d", ii, pNew->linkId.tile_id, pNew->linkId.nid, oldDir, pNew->dir);
+						}
+					}
+					// 도착지점이 방향성을 가지고 있으면 반대로 설정해 한번더 시도
+					else {
+						continue;
+
+						if ((baseTablesStart[ii].vtCandidateLink.size() == 1) && (baseTablesStart[ii].vtCandidateLink[0].dir != 0)) {
+							isRetry = 2;
+
+							// release mem
+							for (; !pBase->pqDijkstra.empty(); ) {
+								delete pBase->pqDijkstra.top();
+								pBase->pqDijkstra.pop();
+							}
+
+							if (!pBase->mRoutePass.empty()) {
+								pBase->mRoutePass.clear();
+								unordered_map<uint64_t, bool>().swap(pBase->mRoutePass);
+							}
+
+							// 시작 지점 정보 재등록
+							pBase->pqDijkstra.emplace(&baseTablesStart[ii].vtCandidateLink[0]);
+
+							// 도착 지점 정보 변경
+							int idx = 0, oldDir = 0;
+							RouteLinkInfo* pDest = nullptr;
+							for (int idx = 0; idx < cntDestination; idx++) {
+								if (ppResultTables[ii][idx].nUsable == false) {
+									pDest = &ppResultTables[ii][idx].linkInfo;
+									oldDir = pDest->LinkDir;
+									pDest->LinkDir = (oldDir == 1) ? 2 : 1;
+
+									LOG_TRACE(LOG_DEBUG, "Retry, make table, rows[%02d][%02d], change end link dir, tile:%d, id:%d, dir:%d->%d", ii, idx, pDest->LinkId.tile_id, pDest->LinkId.nid, oldDir, pDest->LinkDir);
+								}
+							}							
+						}
+					}
+				}
 			}
 
 			// 연결 노드의 링크 셋
@@ -2992,8 +3202,20 @@ const int CRoutePlan::MakeTabulate(IN const RequestRouteInfo* pReqInfo, IN const
 
 
 		if (cntDestination != cntGoal) {
-			LOG_TRACE(LOG_DEBUG, "Failed, can't make table, rows[%02d], result:%d/%d, tick:%lld", ii, cntGoal, cntDestination, pBase->tickFinish - pBase->tickStart);
+			if (isRetry) {
+				int idx = 0;
+				for (int idx = 0; idx < cntDestination; idx++) {
+					if (ppResultTables[ii][idx].nUsable == false) {
+						LOG_TRACE(LOG_WARNING, "Failed, can't retry make table, rows[%02d][%02d], link dir, tile:%d, id:%d, dir:%d", ii, idx, baseTablesStart[ii].vtCandidateLink[0].linkId.tile_id, baseTablesStart[ii].vtCandidateLink[0].linkId.nid, baseTablesStart[ii].vtCandidateLink[0].dir);
+					}
+				}
+			}
+			else {
+				LOG_TRACE(LOG_DEBUG, "Failed, can't make table, rows[%02d], result:%d/%d, tick:%lld", ii, cntGoal, cntDestination, pBase->tickFinish - pBase->tickStart);
+			}
+
 			ret = ROUTE_RESULT_FAILED_EXPEND;
+
 #if defined(USE_MULTIPROCESS)
 			flag = true;
 			continue;
@@ -3035,7 +3257,7 @@ const int CRoutePlan::MakeTabulate(IN const RequestRouteInfo* pReqInfo, IN const
 	if (ret != ROUTE_RESULT_SUCCESS) {
 		LOG_TRACE(LOG_DEBUG, "Failed, can't find route, couldn't leached end point(the point will isolated)");
 	}
-	else {
+	else if (0) {
 		// print result table
 
 		// 경로 탐색 성공
@@ -3092,8 +3314,8 @@ const int CRoutePlan::MakeTabulate(IN const RequestRouteInfo* pReqInfo, IN const
 						sprintf(szBuff, "%10.1f |", 0);
 					}
 					else {
-						//sprintf(szBuff, "%6d |", ppResultTables[rows][cols].nTotalDist);
-						sprintf(szBuff, "%10.1f |", ppResultTables[rows][cols].dbTotalCost);
+						sprintf(szBuff, "%6d |", ppResultTables[rows][cols].nTotalDist);
+						// sprintf(szBuff, "%10.1f |", ppResultTables[rows][cols].dbTotalCost);
 					}
 					strRowsValue.append(szBuff);
 				} // for
@@ -3141,14 +3363,15 @@ const int CRoutePlan::MakeTabulate(IN const RequestRouteInfo* pReqInfo, IN const
 			LOG_TRACE(LOG_DEBUG, "%s", strRowsValue.c_str());
 
 			// print bottom
-			// strRowsValue.clear();
-			// memset(szBuff, 0x00, sizeof(szBuff));
-			// memset(szBuff, '=', (width * (cntCols + 2)) * sizeof(char));
-			// strRowsValue.append(szBuff);
-			// LOG_TRACE(LOG_TEST, "%s", strRowsValue.c_str());
+			strRowsValue.clear();
+			memset(szBuff, 0x00, sizeof(szBuff));
+			memset(szBuff, '=', (width * (cntCols + 2)) * sizeof(char));
+			strRowsValue.append(szBuff);
+			LOG_TRACE(LOG_DEBUG, "%s", strRowsValue.c_str());
 		}
 	}
 
+	LOG_TRACE(LOG_DEBUG, "Finish make table, rows:%d", cntRows);
 
 	// release mem	
 	if (baseTablesStart) {
@@ -3239,55 +3462,94 @@ const int CRoutePlan::MakeRouteResult(IN RouteInfo* pRouteInfo, OUT RouteResultI
 		if (pRouteInfo->StartLinkInfo.LinkDir == 2)
 		{
 			pRouteResult->StartResultLink.LinkDist = pRouteInfo->StartLinkInfo.LinkDistToS - pRouteInfo->EndLinkInfo.LinkDistToS;
-			//pRouteResult->StartResultLink.LinkVtx.push_back(pRouteInfo->StartLinkInfo.LinkVtxToS[0]);
 			pRouteResult->LinkVertex.emplace_back(pRouteInfo->StartLinkInfo.LinkVtxToS[0]);
 		}
 		// e노드로 나간 경우, 정
-		else //if (pRouteInfo->StartLinkInfo.LinkDir == 1)
+		else if (pRouteInfo->StartLinkInfo.LinkDir == 1)
 		{
 			pRouteResult->StartResultLink.LinkDist = pRouteInfo->StartLinkInfo.LinkDistToE - pRouteInfo->EndLinkInfo.LinkDistToE;
-			//pRouteResult->StartResultLink.LinkVtx.push_back(pRouteInfo->StartLinkInfo.LinkVtxToE[0]);
 			pRouteResult->LinkVertex.emplace_back(pRouteInfo->StartLinkInfo.LinkVtxToE[0]);
+		}
+		// 양방향
+		else
+		{
+			// 역
+			if (pRouteInfo->StartLinkInfo.LinkDistToS >= pRouteInfo->EndLinkInfo.LinkDistToS) {
+				pRouteResult->StartResultLink.LinkDist = pRouteInfo->StartLinkInfo.LinkDistToS - pRouteInfo->EndLinkInfo.LinkDistToS;
+				pRouteResult->LinkVertex.emplace_back(pRouteInfo->StartLinkInfo.LinkVtxToS[0]);
+			}
+			// 정
+			else {
+				pRouteResult->StartResultLink.LinkDist = pRouteInfo->StartLinkInfo.LinkDistToE - pRouteInfo->EndLinkInfo.LinkDistToE;
+				pRouteResult->LinkVertex.emplace_back(pRouteInfo->StartLinkInfo.LinkVtxToE[0]);
+			}
 		}
 
 
 		// 중간 vtx
-		if (pRouteResult->StartResultLink.LinkSplitIdx != pRouteInfo->EndLinkInfo.LinkSplitIdx) {
-			for (int ii = pRouteResult->StartResultLink.LinkSplitIdx + 1; ii < pRouteInfo->EndLinkInfo.LinkSplitIdx; ii++) {
-				if (pRouteInfo->StartLinkInfo.LinkDir == 2)
-				{
-					//pRouteResult->StartResultLink.LinkVtx.push_back(pRouteInfo->StartLinkInfo.LinkVtxToS[ii]);
+		if (pRouteInfo->StartLinkInfo.LinkSplitIdx != pRouteInfo->EndLinkInfo.LinkSplitIdx) {
+			if (pRouteInfo->StartLinkInfo.LinkDir == 2)
+			{
+				for (int ii = pRouteInfo->StartLinkInfo.LinkSplitIdx + 1; ii < pRouteInfo->StartLinkInfo.LinkSplitIdx; ii++) {
 					pRouteResult->LinkVertex.emplace_back(pRouteInfo->StartLinkInfo.LinkVtxToS[ii]);
 				}
-				// e노드로 나간 경우, 정
-				else //if (pRouteInfo->StartLinkInfo.LinkDir == 1)
-				{
-					//pRouteResult->StartResultLink.LinkVtx.push_back(pRouteInfo->StartLinkInfo.LinkVtxToE[ii]);
-					pRouteResult->LinkVertex.emplace_back(pRouteInfo->StartLinkInfo.LinkVtxToE[ii]);
+			}
+			// e노드로 나간 경우, 정
+			else if (pRouteInfo->StartLinkInfo.LinkDir == 1)
+			{
+				for (int ii = pRouteInfo->EndLinkInfo.LinkSplitIdx + 1; ii < pRouteInfo->EndLinkInfo.LinkSplitIdx; ii++) {
+					pRouteResult->LinkVertex.emplace_back(pRouteInfo->EndLinkInfo.LinkVtxToE[ii]);
+				}
+			}
+			// 양방향
+			else
+			{
+				// 역
+				if (pRouteInfo->StartLinkInfo.LinkSplitIdx > pRouteInfo->EndLinkInfo.LinkSplitIdx) {
+					for (int ii = pRouteInfo->EndLinkInfo.LinkSplitIdx + 1; ii <= pRouteInfo->StartLinkInfo.LinkSplitIdx; ii++) {
+						pRouteResult->LinkVertex.emplace_back(pRouteInfo->StartLinkInfo.LinkVtxToS[ii]);
+					}
+				}
+				// 정
+				else {
+					for (int ii = pRouteInfo->StartLinkInfo.LinkSplitIdx + 1; ii <= pRouteInfo->EndLinkInfo.LinkSplitIdx; ii++) {
+						pRouteResult->LinkVertex.emplace_back(pRouteInfo->StartLinkInfo.LinkVtxToE[ii]);
+					}
 				}
 			} // for
 		}
 
 
 		// 종료 vtx
-		// e노드로 들어온 경우
+
+		// e노드로 들어온 경우 // 역
 		if (pRouteInfo->EndLinkInfo.LinkDir == 2)
 		{
-			pRouteResult->EndResultLink.LinkDist = pRouteInfo->EndLinkInfo.LinkDistToE - pRouteInfo->StartLinkInfo.LinkDistToE;
-
 			// 진행과 반대방향의 시작 vtx
+			pRouteResult->EndResultLink.LinkDist = pRouteInfo->EndLinkInfo.LinkDistToE - pRouteInfo->StartLinkInfo.LinkDistToE;
 			pRouteResult->LinkVertex.emplace_back(pRouteInfo->EndLinkInfo.LinkVtxToE[pRouteInfo->EndLinkInfo.LinkVtxToE.size() - 1]);
 		}
-
-		// s노드로 들어온 경우
-		else //if (pRouteInfo->EndLinkInfo.LinkDir == 1)
+		// s노드로 들어온 경우 // 정
+		else if (pRouteInfo->EndLinkInfo.LinkDir == 1)
 		{
-			pRouteResult->EndResultLink.LinkDist = pRouteInfo->EndLinkInfo.LinkDistToS - pRouteInfo->StartLinkInfo.LinkDistToS;
-
 			// 진행과 반대방향의 시작 vtx
+			pRouteResult->EndResultLink.LinkDist = pRouteInfo->StartLinkInfo.LinkDistToE - pRouteInfo->EndLinkInfo.LinkDistToE;
 			pRouteResult->LinkVertex.emplace_back(pRouteInfo->EndLinkInfo.LinkVtxToS[pRouteInfo->EndLinkInfo.LinkVtxToS.size() - 1]);
 		}
-
+		// 양방향
+		else
+		{
+			// 역
+			if (pRouteInfo->EndLinkInfo.LinkDistToE >= pRouteInfo->StartLinkInfo.LinkDistToE) {
+				pRouteResult->EndResultLink.LinkDist = pRouteInfo->EndLinkInfo.LinkDistToE - pRouteInfo->StartLinkInfo.LinkDistToE;
+				pRouteResult->LinkVertex.emplace_back(pRouteInfo->EndLinkInfo.LinkVtxToS[pRouteInfo->EndLinkInfo.LinkVtxToS.size() - 1]);
+			}
+			// 정
+			else {
+				pRouteResult->EndResultLink.LinkDist = pRouteInfo->StartLinkInfo.LinkDistToE - pRouteInfo->EndLinkInfo.LinkDistToE;
+				pRouteResult->LinkVertex.emplace_back(pRouteInfo->EndLinkInfo.LinkVtxToE[pRouteInfo->EndLinkInfo.LinkVtxToE.size() - 1]);
+			}
+		}
 
 		//linkMerge(pRouteResult->LinkVertex, pRouteResult->StartResultLink.LinkVtx);
 

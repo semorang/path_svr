@@ -6,8 +6,11 @@
                 "../src/apis.cc", 
 
                 "../ext/utils/UserLog.cpp",
+                "../ext/utils/Strings.cpp",
                 "../ext/utils/GeoTools.cpp",
-
+                "../ext/utils/Vector2D.cpp",
+                "../ext/utils/CatmullRom.cpp",
+                "../ext/utils/convexhull.cpp",
                 "../ext/libjson/cjson/cJSON.c",
 
                 "../ext/shp/ShpObj.cpp",
@@ -16,6 +19,7 @@
 
                 "../ext/mst/prim.cpp",
                 "../ext/mst/tsp_ga.cpp",
+                "../ext/tms/GnKmeansClassfy.cpp",
                 "../ext/route/MMPoint.hpp",
                 "../ext/route/MapBase.cpp",
                 "../ext/route/MapName.cpp",
@@ -28,6 +32,7 @@
                 "../ext/route/TrafficManager.cpp",
                 "../ext/route/RoutePlan.cpp",
                 "../ext/route/RouteManager.cpp",
+                "../ext/route/RoutePackage.cpp",
 
                 "../ext/cvt/FileBase.cpp",
                 "../ext/cvt/FileManager.cpp",
@@ -70,6 +75,7 @@
                             'AdditionalOptions': ['/MT', '/openmp'],
                         },
                     },
+                    # 'include_dirs': ["../ext/libjson/include"],
                     'libraries': [
                             '-lnafxcw.lib', '-llibcmtd.lib',
                             # '-L<some library directory>'
