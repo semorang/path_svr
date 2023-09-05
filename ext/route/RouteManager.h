@@ -52,13 +52,6 @@ public:
 	const RouteResultInfo* GetRouteResults(IN const uint32_t idx) const;
 
 
-	// 분기점 노드의 경로선을 제외한 나머지 링크 얻기 // like a mpp
-	// length = 본경로의 최대 길이, 0: 전체, ...
-	// expansion = 본 경로 외 확장할 레벨, 0: 현재 경로만, 1: 현재 경로에서 1단계만 가지치기 ...
-	// branchLength = 가지치기한 경로의 최대 길이
-	const size_t GetRouteProbablePath(OUT vector<RouteProbablePath*>& vtJctInfo, IN const double length = 0, IN const int32_t expansion = 1, IN const double branchLength = 50);
-
-
 #if defined(USE_SHOW_ROUTE_SATATUS)
 	void SetRouteStatusFunc(IN const void *pHost, IN void (*fpDrawRouting)(const void *, const unordered_map<uint64_t, CandidateLink*>*));
 #endif

@@ -20,6 +20,7 @@
                 "../ext/mst/prim.cpp",
                 "../ext/mst/tsp_ga.cpp",
                 "../ext/tms/GnKmeansClassfy.cpp",
+
                 "../ext/route/MMPoint.hpp",
                 "../ext/route/MapBase.cpp",
                 "../ext/route/MapName.cpp",

@@ -106,28 +106,6 @@ struct cmpDist {
 };
 
 
-typedef struct _tagRouteProbablePath {
-	KeyID LinkId; // 링크 ID
-	KeyID NodeId; // 노드 ID
-	vector<stLinkInfo*> JctLinks; // 정션 링크
-
-	_tagRouteProbablePath() {
-		LinkId.llid = 0;
-		NodeId.llid = 0;
-	}
-
-	~_tagRouteProbablePath() {
-		if (!JctLinks.empty()) {
-			for (const auto& junction : JctLinks) {
-				delete ((stLinkInfo*)junction);
-			}
-			JctLinks.clear();
-			vector<stLinkInfo*>().swap(JctLinks);
-		}
-	}
-}RouteProbablePath;
-
-
 typedef struct _tagRouteLinkInfo {
 	KeyID LinkId; // 링크 ID
 	SPoint Coord; // 좌표

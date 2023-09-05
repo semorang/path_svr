@@ -621,51 +621,42 @@
             // 경로선 생성
             var via_idx = 0;
             result_dat.paths.forEach(link => {
-                link.coords.forEach(vtx => {
-                    // 경로선 확장
-                    vertices_all.push([vtx.x, vtx.y]);
-                    vertices.push([vtx.x, vtx.y]);
-                });
+                if (link.coords.length > 0) {
+                    link.coords.forEach(vtx => {
+                        // 경로선 확장
+                        vertices_all.push([vtx.x, vtx.y]);
+                        vertices.push([vtx.x, vtx.y]);
+                    });
 
-                
-                // 경로선 추가
-                if (link.p2p_extend.type > 1) {
-                    via_idx++;
-
+                    
                     // 경로선 추가
-                    links.push(new inavi.maps.Polyline({
-                        map: map,
-                        path: vertices,
-                        style: {
-                            lineOffset: off,
-                            // lineColor: color,
-                            lineColor: colors[via_idx++ % colors.length],
-                            lineWidth: 10,
-                            // lineOpacity: 0.7,
-                        },
-                    }));
+                    if (link.p2p_extend == undefined || link.p2p_extend.type == undefined) {
+                        var test =0;
+                    }
+                    else if (link.p2p_extend.type > 1) {
+                        via_idx++;
 
-                    // 초기화
-                    vertices.splice(0);
-                }
+                        // 경로선 추가
+                        links.push(new inavi.maps.Polyline({
+                            map: map,
+                            path: vertices,
+                            style: {
+                                lineOffset: off,
+                                // lineColor: color,
+                                lineColor: colors[via_idx++ % colors.length],
+                                lineWidth: 10,
+                                // lineOpacity: 0.7,
+                            },
+                        }));
 
-                // 노드 생성
-                nodes.push(new inavi.maps.Circle({
-                    map: map,
-                    position: [link.coords[0].x, link.coords[0].y], // 원 중심 좌표
-                    radius: 0.005, // 원 반지름 킬로미터 단위
-                    style: {
-                        fillOpacity: 0.5,  // 채우기 불투명도 입니다
-                        fillColor: "#CFE7FF",
-                        fillOutlineColor: "#DB4455",
-                    },
-                }));
+                        // 초기화
+                        vertices.splice(0);
+                    }
 
-                // 마지막 목적지의 종료 노드까지 처리하기 위해 
-                if (via_idx == result_dat.paths.length) {
+                    // 노드 생성
                     nodes.push(new inavi.maps.Circle({
                         map: map,
-                        position: [link.coords[link.coords.length - 1].x, link.coords[link.coords.length - 1].y], // 원 중심 좌표
+                        position: [link.coords[0].x, link.coords[0].y], // 원 중심 좌표
                         radius: 0.005, // 원 반지름 킬로미터 단위
                         style: {
                             fillOpacity: 0.5,  // 채우기 불투명도 입니다
@@ -673,6 +664,20 @@
                             fillOutlineColor: "#DB4455",
                         },
                     }));
+
+                    // 마지막 목적지의 종료 노드까지 처리하기 위해 
+                    if (via_idx == result_dat.paths.length) {
+                        nodes.push(new inavi.maps.Circle({
+                            map: map,
+                            position: [link.coords[link.coords.length - 1].x, link.coords[link.coords.length - 1].y], // 원 중심 좌표
+                            radius: 0.005, // 원 반지름 킬로미터 단위
+                            style: {
+                                fillOpacity: 0.5,  // 채우기 불투명도 입니다
+                                fillColor: "#CFE7FF",
+                                fillOutlineColor: "#DB4455",
+                            },
+                        }));
+                    }
                 }
             });
             //-- 경로선 생성

@@ -197,7 +197,6 @@ exports.doroute = function(req, option) {
         if (is_sum) {
             res = addon.getsummary();
         } else if (target === "inavi") {
-            logout("call function getmultiroute_for_inavi");
             res = addon.getmultiroute_for_inavi();
             res = JSON.parse(res);
         } else if (target === "kakaovx") {
@@ -391,8 +390,8 @@ exports.domultiroute = function(req, option) {
         } else if (route_cnt > 3) {
             route_cnt = 3;
         }
-        route_opt = [codes.ROUTE_OPTIONS.ROUTE_OPT_SHORTEST, codes.ROUTE_OPTIONS.ROUTE_OPT_COMFORTABLE, codes.ROUTE_OPTIONS.ROUTE_OPT_COMFORTABLE];
-        route_void = [codes.ROUTE_AVOIDS.ROUTE_OPT_NONE, codes.ROUTE_AVOIDS.ROUTE_OPT_PALM, codes.ROUTE_AVOIDS.ROUTE_OPT_BRIDGE];
+        route_opt = [codes.ROUTE_OPTIONS.ROUTE_OPT_FASTEST, codes.ROUTE_OPTIONS.ROUTE_OPT_SHORTEST, codes.ROUTE_OPTIONS.ROUTE_OPT_RECOMMENDED];
+        route_void = [codes.ROUTE_AVOIDS.ROUTE_OPT_NONE, codes.ROUTE_AVOIDS.ROUTE_OPT_NONE, codes.ROUTE_AVOIDS.ROUTE_OPT_BRIDGE];
     }
 
     logout("route info, cnt:" + route_cnt + ", opt:" + route_opt + ", avoid:" + route_void + ", target:" + target);
@@ -404,13 +403,11 @@ exports.domultiroute = function(req, option) {
             if (is_sum) {
                 res = addon.getsummary();
             } else if (target === "inavi") {
-                // logout("call function getmultiroute_for_inavi");
                 res = addon.getmultiroute_for_inavi();
                 res = JSON.parse(res);
             } else if (target === "kakaovx") {
                 res = addon.getmultiroute(2); // 2:for kakaovx
-            } else { // if (target === "kakaovx") {
-                // logout("call function getmultiroute");
+            } else {
                 res = addon.getmultiroute();
                 res = JSON.parse(res);
             }
