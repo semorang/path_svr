@@ -5,6 +5,7 @@
 #include "FileName.h"
 #include "FileMesh.h"
 #include "FileTrekking.h"
+#include "FileForest.h"
 #include "FilePedestrian.h"
 #include "FileVehicle.h"
 #include "FileTraffic.h"
@@ -34,6 +35,7 @@ private:
 	CFileName m_fileName;
 	CFileMesh m_fileMesh;
 	CFileTrekking m_fileTrekking;
+	CFileForest m_fileForest;
 	CFilePedestrian m_filePedestrian;
 	CFileVehicle m_fileVehicle;
 	CFileTraffic m_fileTraffic;

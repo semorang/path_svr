@@ -56,8 +56,13 @@ void CFileManager::SetDataMgr(CDataManager* pDataMgr)
 		m_fileMesh.SetDataManager(pDataMgr);
 
 #if defined(USE_TREKKING_DATA)
+#	if defined(USE_FOREST_SAMPLE)
+		m_fileForest.SetDataManager(pDataMgr);
+		m_fileForest.SetNameManager(&m_fileName);
+#	else
 		m_fileTrekking.SetDataManager(pDataMgr);
 		m_fileTrekking.SetNameManager(&m_fileName);
+#	endif // #	if defined(USE_FOREST_SAMPLE)
 #endif
 #if defined(USE_PEDESTRIAN_DATA)
 		m_filePedestrian.SetDataManager(pDataMgr);
@@ -115,7 +120,11 @@ bool CFileManager::OpenFile(IN const char* pszFilePath, IN const uint32_t nFileT
 
 #if defined(USE_TREKKING_DATA)
 	case TYPE_DATA_TREKKING:
+#	if defined(USE_FOREST_SAMPLE)
+		m_fileForest.OpenFile(pszFilePath);
+#	else
 		m_fileTrekking.OpenFile(pszFilePath);
+#	endif // #	if defined(USE_FOREST_SAMPLE)
 		break;
 #endif
 
@@ -170,7 +179,11 @@ bool CFileManager::SaveData(IN const char* pszFilePath)
 	m_fileMesh.SaveData(pszFilePath);
 
 #if defined(USE_TREKKING_DATA)
+#	if defined(USE_FOREST_SAMPLE)
+	m_fileForest.SaveData(pszFilePath);
+#	else
 	m_fileTrekking.SaveData(pszFilePath);
+#	endif // #	if defined(USE_FOREST_SAMPLE)
 #endif
 #if defined(USE_PEDESTRIAN_DATA)
 	m_filePedestrian.SaveData(pszFilePath);
@@ -203,9 +216,15 @@ bool CFileManager::LoadData(IN const char* pszFilePath)
 	m_fileMesh.LoadData(pszFilePath);
 
 #if defined(USE_TREKKING_DATA)
+#	if defined(USE_FOREST_SAMPLE)
+	if (m_fileForest.LoadData(pszFilePath) == true) {
+		memcpy(&m_rtBox, m_fileTrekking.GetMeshRegion(), sizeof(m_rtBox));
+	}
+#	else
 	if (m_fileTrekking.LoadData(pszFilePath) == true) {
 		memcpy(&m_rtBox, m_fileTrekking.GetMeshRegion(), sizeof(m_rtBox));
 	}
+#	endif // #	if defined(USE_FOREST_SAMPLE)
 #endif
 
 #if defined(USE_PEDESTRIAN_DATA)
@@ -245,7 +264,11 @@ bool CFileManager::LoadDataByIdx(IN const uint32_t idx)
 	m_fileName.LoadDataByIdx(idx);
 
 #if defined(USE_TREKKING_DATA)
+#	if defined(USE_FOREST_SAMPLE)
+	m_fileForest.LoadDataByIdx(idx);
+#	else
 	m_fileTrekking.LoadDataByIdx(idx);
+#	endif // #	if defined(USE_FOREST_SAMPLE)
 #endif
 #if defined(USE_PEDESTRIAN_DATA)
 	m_filePedestrian.LoadDataByIdx(idx);
@@ -278,7 +301,11 @@ bool CFileManager::GetData(IN const uint32_t idTile)
 	m_fileMesh.LoadDataByIdx(idTile);
 
 #if defined(USE_TREKKING_DATA)
+#	if defined(USE_FOREST_SAMPLE)
+	ret |= m_fileForest.LoadDataByIdx(idTile);
+#	else
 	ret |= m_fileTrekking.LoadDataByIdx(idTile);
+#	endif // #	if defined(USE_FOREST_SAMPLE)
 #endif
 
 #if defined(USE_PEDESTRIAN_DATA)
