@@ -25,15 +25,14 @@ struct stForestLink
 	uint32_t LinkID;
 	uint32_t FromNodeID; // from 노드 ID
 	uint32_t ToNodeID; // to 노드 ID
-	uint32_t CourseType : 3; // 코스타입, 0:미정의, 1:등산로, 2:둘레길, 3:자전거길, 4:종주코스, 5:추천코스, 6:MTB코스, 7:인기코스
-	uint32_t CourseDir : 2; // 방면방향정보, 0:미정의, 1:정, 2:역
-	uint32_t ConnectType: 1; // 연결로 여부, 0:기타, 1:연결로
-	uint32_t Diff : 7; // 난이도(0~100,  숫자가 클수록 어려움)
-	uint32_t Popular : 7; // 인기도 지수, 0-100
-	uint32_t Reserved1 : 4; // reserved
-	uint32_t FwTime : 12; // 정방향 이동 소요시간 (분->초), 0-60 -> 3600
-	uint32_t BwTime : 12; // 역방향 이동 소요시간 (분->초), 0-60 -> 3600
-	uint32_t Reserved2 : 16; // reserved
+	uint64_t CourseType : 3; // 코스타입, 0:미정의, 1:등산로, 2:둘레길, 3:자전거길, 4:종주코스, 5:추천코스, 6:MTB코스, 7:인기코스
+	uint64_t CourseDir : 2; // 방면방향정보, 0:미정의, 1:정, 2:역
+	uint64_t ConnectType: 1; // 연결로 여부, 0:기타, 1:연결로
+	uint64_t Diff : 7; // 난이도(0~100,  숫자가 클수록 어려움)
+	uint64_t Popular : 12; // 인기도 지수, 0-4095
+	uint64_t FwTime : 12; // 정방향 이동 소요시간 (초), 1023(17분) // 최대값 확인 후 사이즈 조절 필요
+	uint64_t BwTime : 12; // 역방향 이동 소요시간 (초), 1023(17분) // 최대값 확인 후 사이즈 조절 필요
+	uint64_t Reserved : 15; // reserved
 	uint32_t CourseNameCD; // 코스 명칭 코드
 	uint32_t CourseDirNameIDX; // 진행방면정보 인덱스
 	uint32_t SFRestrict; // 여름/가을 시즌 통제기간 MMDDMMDD(시작일 MMDD + 종료일 MMDD)

@@ -83,7 +83,7 @@ bool CFileComplex::ParseData(IN const char* fname)
 		};
 
 		DBF_FIELD_INFO fieldInfo;
-
+		
 		for (int ii = 0; ii < colCnt; ii++) {
 			if (shpReader.GetFieldInfo(ii, fieldInfo) == false) {
 				LOG_TRACE(LOG_ERROR, "can't get dbf filed info, idx : %d ", ii);

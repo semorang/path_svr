@@ -17,7 +17,7 @@ public:
 	bool DeleteData(IN const KeyID keyId);
 	stPolygonInfo* GetDataById(IN const KeyID keyId);
 	
-	bool IsPitInPolygon(IN const KeyID keyId, IN const double lng, IN const double lat);
+	stPolygonInfo* GetPitInPolygon(IN const KeyID keyId, IN const double lng, IN const double lat, IN const int32_t nMaxDist = 0);
 
 private:
 	map<uint64_t, stPolygonInfo*> mapData;

@@ -43,12 +43,6 @@ var changwonBoundary = [
 ]
 
 var daeguBoundary = [
-    // [128.43529, 35.71135],
-    // [128.43529, 35.66969],
-    // [128.49778, 35.66969],
-    // [128.49778, 35.71135],
-    // [128.43529, 35.71135],
-
     [128.4353, 35.6697],
     [128.4353, 35.8363],
     [128.5603, 35.8363],
@@ -56,6 +50,14 @@ var daeguBoundary = [
     [128.4978, 35.753],
     [128.4978, 35.6697],
     [128.4353, 35.6697],
+]
+
+var bukhansanBoundary = [
+    [126.8729, 37.7528],
+    [127.0606, 37.7528],
+    [127.0606, 37.5861],
+    [126.8729, 37.5861],
+    [126.8729, 37.7528],
 ]
 
 function getSeungnamBoundary() {
@@ -70,7 +72,12 @@ function getDaeguBoundary() {
     return daeguBoundary;
 }
 
+function getBukhansanBoundary() {
+    return bukhansanBoundary;
+}
+
 function getChangwonBoundarySize() {
     return changwonBoundary.length;
 }
+
 // export { meshes }

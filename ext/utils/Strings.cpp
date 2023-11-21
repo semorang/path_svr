@@ -1,7 +1,9 @@
 #if defined(_WIN32)
 #include <windows.h>
 #include <wchar.h>
-#define _WINDOWS
+#	ifndef _WINDOWS
+#		define _WINDOWS
+#	endif
 #else
 #include <iconv.h>
 #endif

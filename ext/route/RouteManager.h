@@ -29,7 +29,8 @@ public:
 	KeyID SetWaypoint(IN const double lng, IN const double lat, IN const int matchType = TYPE_LINK_MATCH_NONE);
 	KeyID SetDestination(IN const double lng, IN const double lat, IN const int matchType = TYPE_LINK_MATCH_NONE);
 	void SetRouteOption(IN const uint32_t route, IN const uint32_t avoid);
-	void SetRouteCost(IN const uint32_t type, IN const RpCost* pCost);
+	void SetRouteDirOption(IN const uint32_t departuretDir, IN const uint32_t waypointDir, IN const uint32_t destinationDir);
+	void SetRouteCost(IN const uint32_t type, IN const DataCost* pCost);
 
 	int GetWayPointCount(void);
 
@@ -94,6 +95,10 @@ private:
 
 	uint32_t m_nRouteOpt;
 	uint32_t m_nAvoidOpt;
+
+	int32_t m_nDepartureDirIgnore; // 출발지 방향성 무시
+	int32_t m_nWaypointDirIgnore; // 경유지 방향성 무시
+	int32_t m_nDestinationDirIgnore; // 도착지 방향성 무시
 
 	RouteResultInfo m_routeResult;
 

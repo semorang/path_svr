@@ -6,9 +6,9 @@
 
 
 typedef struct _tagRouteProbablePath {
-	KeyID LinkId; // ¸µÅ© ID
-	KeyID NodeId; // ³ëµå ID
-	vector<stLinkInfo*> JctLinks; // Á¤¼Ç ¸µÅ©
+	KeyID LinkId; // ë§í¬ ID
+	KeyID NodeId; // ë…¸ë“œ ID
+	vector<stLinkInfo*> JctLinks; // ì •ì…˜ ë§í¬
 
 	_tagRouteProbablePath() {
 		LinkId.llid = 0;
@@ -47,12 +47,15 @@ public:
 	void GetMultiRouteResultForiNavi(IN const RouteResultInfo* pResult, OUT string& strResult);
 	void GetClusteringResult(IN const vector<stDistrict>& vtClusters, OUT string& strJson);
 	void GetBoundaryResult(IN const vector<SPoint>& vtBoundary, OUT string& strJson);
-		// ºĞ±âÁ¡ ³ëµåÀÇ °æ·Î¼±À» Á¦¿ÜÇÑ ³ª¸ÓÁö ¸µÅ© ¾ò±â // like a mpp
-	// length = º»°æ·ÎÀÇ ÃÖ´ë ±æÀÌ, 0: ÀüÃ¼, ...
-	// expansion = º» °æ·Î ¿Ü È®ÀåÇÒ ·¹º§, 0: ÇöÀç °æ·Î¸¸, 1: ÇöÀç °æ·Î¿¡¼­ 1´Ü°è¸¸ °¡ÁöÄ¡±â ...
-	// branchLength = °¡ÁöÄ¡±âÇÑ °æ·ÎÀÇ ÃÖ´ë ±æÀÌ
-	const size_t GetRouteProbablePath(IN const RouteResultInfo* pResult, OUT vector<RouteProbablePath*>& vtJctInfo, IN const double length = 0, IN const int32_t expansion = 1, IN const double branchLength = 50);
+		// ë¶„ê¸°ì  ë…¸ë“œì˜ ê²½ë¡œì„ ì„ ì œì™¸í•œ ë‚˜ë¨¸ì§€ ë§í¬ ì–»ê¸° // like a mpp
+	// length = ë³¸ê²½ë¡œì˜ ìµœëŒ€ ê¸¸ì´, 0: ì „ì²´, ...
+	// expansion = ë³¸ ê²½ë¡œ ì™¸ í™•ì¥í•  ë ˆë²¨, 0: í˜„ì¬ ê²½ë¡œë§Œ, 1: í˜„ì¬ ê²½ë¡œì—ì„œ 1ë‹¨ê³„ë§Œ ê°€ì§€ì¹˜ê¸° ...
+	// branchLength = ê°€ì§€ì¹˜ê¸°í•œ ê²½ë¡œì˜ ìµœëŒ€ ê¸¸ì´
+	
+	/*const size_t GetRouteProbablePath(IN const RouteResultInfo* pResult, OUT vector<RouteProbablePath*>& vtJctInfo, IN const double length = 0, IN const int32_t expansion = 1, IN const double branchLength = 100);*/
+	const size_t GetRouteProbablePath(IN const vector<RouteResultLinkEx>& vtLinkInfo, OUT vector<RouteProbablePath*>& vtJctInfo, IN const double length = 0, IN const int32_t expansion = 1, IN const double branchLength = 100);
 
+	void GetOptimalPosition(IN const stReqOptimal* pReq, IN const stOptimalPointInfo* pResult, OUT string& strJson);
 private:
 	CDataManager* m_pDataMgr;
 };

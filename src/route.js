@@ -55,8 +55,19 @@ exports.version = function() {
 
 
 exports.optimalposition = function(req) {
-    const lng = req.query.lng;
-    const lat = req.query.lat;
+
+    var header = {
+        isSuccessful: false,
+        resultCode: codes.ERROR_CODES.ROUTE_RESULT_FAILED,
+        resultMessage: ""
+    };
+
+    var ret = {
+        header: header,
+    };
+
+    let lng = req.query.lng;
+    let lat = req.query.lat;
     let type = 0;
     let count = 0;
     
@@ -71,27 +82,40 @@ exports.optimalposition = function(req) {
         expand = parseInt(req.query.expand)
     }
 
-    return addon.getoptimalposition(parseFloat(lng), parseFloat(lat), type, count, expand);
-}
-
-
-exports.optimalview = function(req) {
-    const lng = req.query.lng;
-    const lat = req.query.lat;
-    let type = 0;
-    let count = 0;
-    let expand = 1; // 웹뷰에선 기본 사용
-    if (req.query.type != undefined) {
-        type = parseInt(req.query.type)
-    }
-    if (req.query.count != undefined) {
-        count = parseInt(req.query.count)
-    }
-    if (req.query.expand != undefined) {
-        expand = parseInt(req.query.expand)
+    if (lng == undefined || lat == undefined) {
+        var inaviDef = codes.getDefaultPosition("inavi");
+        if (inaviDef.center != undefined) {
+            let centerCoord = inaviDef.center.split(',');
+            if (centerCoord.length == 2) {
+                lng = centerCoord[0];
+                lat = centerCoord[1];
+            }
+        }
     }
 
-    return addon.getoptimalposition(parseFloat(lng), parseFloat(lat), type, count, expand);
+    let res = addon.getoptimalposition(parseFloat(lng), parseFloat(lat), type, count, expand);
+    res = JSON.parse(res);
+
+    if (res.result_code == 0) {
+        ret.header.isSuccessful = true;
+        ret.header.resultCode = res.result_code;
+        ret.header.resultMessage = codes.getOptimalErrMsg(res.result_code);
+
+        if (res.data != undefined) {
+            ret.data = res.data;
+        }
+
+        if (res.expand != undefined) {
+            ret.expand = res.expand;
+        }
+    }
+    else {
+        ret.header.isSuccessful = false;
+        ret.header.resultCode = res.result_code;
+        ret.header.resultMessage = codes.getOptimalErrMsg(res.result_code);
+    } 
+
+    return ret;
 }
 
 
@@ -104,7 +128,7 @@ exports.doroute = function(req, option) {
     const departure = req.query.start;
     const destination = req.query.end;
     const waypoint = req.query.via;
-    const opt = (req.query.opt === undefined) ? 0 : req.query.opt;
+    const route_option = (req.query.option === undefined) ? 0 : parseInt(req.query.option);
     const is_sum = (option == 'summary') ? true : false;
     const is_view = (option == 'view') ? true : false;
     const target = (req.query.target === undefined) ? '' : req.query.target;
@@ -117,7 +141,7 @@ exports.doroute = function(req, option) {
     
     var user_info = {
         id: id,
-        option: opt
+        option: route_option
     };
 
     var route = {
@@ -190,13 +214,13 @@ exports.doroute = function(req, option) {
 
 
     // addon.logout("do routing");
-    var res = addon.doroute(parseInt(opt), 0);
+    var res = addon.doroute(parseInt(route_option), 0);
     logout("find result : " + res.result + ", msg : " + res.msg);
 
     if (res.result == 0) {
         if (is_sum) {
             res = addon.getsummary();
-        } else if (target === "inavi") {
+        } else if ((target === "inavi") || (target === "p2p")) {
             res = addon.getmultiroute_for_inavi();
             res = JSON.parse(res);
         } else if (target === "kakaovx") {
@@ -214,7 +238,7 @@ exports.doroute = function(req, option) {
 
         if (is_sum) {
             ;
-        } else if (target === "inavi") {
+        } else if ((target === "inavi") || (target === "p2p")) {
             ret.route.data.push(res.routes[0]);
             logout("route count : " + res.routes.length + ", paths : " + res.routes[0].paths.length);
         } else if (is_view) {
@@ -242,20 +266,20 @@ exports.doroute = function(req, option) {
     return ret;
 }
 
-exports.domultiroute = function(req, option) {
+exports.domultiroute = function(key, req, option) {
     addon.logout("start multi routing");
 
     var querystring = require('querystring');
 
     const id = req.query.id;
-    const departure = req.query.start;
-    const destination = req.query.end;
+    let departure = req.query.start;
+    let destination = req.query.end;
     const waypoint = req.query.via;
     const waypoints = req.query.vias;
-    const opt = (req.query.opt === undefined) ? 0 : req.query.opt;
+    const route_option = (req.query.option === undefined) ? -1 : parseInt(req.query.option);
     const is_sum = (option == 'summary') ? true : false;
     const is_view = (option == 'view') ? true : false;
-    const is_optimal = true; // 최적지점 사용
+    const is_optimal = (route_option !== 8) ? true : false; // 최적지점 사용, p2p는 무시
     const target = (req.query.target === undefined) ? '' : req.query.target;
     
     var header = {
@@ -266,11 +290,10 @@ exports.domultiroute = function(req, option) {
     
     var user_info = {
         id: id,
-        option: opt
     };
 
-    var route = {
-        data: new Array,
+    if (route_option >= 0) {
+        user_info.option = route_option;
     }
 
     var summarys = {
@@ -281,10 +304,36 @@ exports.domultiroute = function(req, option) {
         header: header,
         user_info: user_info,
         summarys: summarys,
-        route: route,
     };
 
- 
+    if (req.query.target === 'kakaovx') {
+        // 사용자 키 확인
+        var user = auth.checkAuth(key);
+        if (user == null || user.length <= 0 || user !== 'kakaovx') {
+            ret.header.resultCode = codes.ERROR_CODES.RESULT_APPKEY_ERROR;
+            ret.header.resultMessage = codes.getErrMsg(codes.ERROR_CODES.RESULT_APPKEY_ERROR);
+            logout("client key error : " + JSON.stringify(ret));
+            return ret;
+        }
+
+        if (departure == undefined || destination == undefined) {
+            var kakaovxDef = codes.getDefaultPosition("kakaovx");
+            if (kakaovxDef.departure != undefined && kakaovxDef.destination != undefined) {
+                departure = kakaovxDef.departure;
+                destination = kakaovxDef.destination;
+            }
+        }
+    }
+    else if (req.query.target === 'p2p') {
+        if (departure == undefined || destination == undefined) {
+            var p2pDef = codes.getDefaultPosition("p2p");
+            if (p2pDef.departure != undefined && p2pDef.destination != undefined) {
+                departure = p2pDef.departure;
+                destination = p2pDef.destination;
+            }
+        }
+    }
+
 
     if (departure == undefined || destination == undefined) {
         logout("client request query not correct" + util.inspect(req.query, false, null, true));
@@ -375,26 +424,32 @@ exports.domultiroute = function(req, option) {
     // let route_opt = [2, 7]; // 보행자, 자전거
     // let route_void = [0, 0]; // bridge
 
-    var route_cnt = 1;
-    let route_opt = [parseInt(opt, 10)];
+    let route_cnt = 1;
+    let route_opt = [route_option];
     let route_void = [0];
     
     // var route_cnt = 2;
     // var route_opt = [codes.ROUTE_OPTIONS.ROUTE_OPT_SHORTEST, codes.ROUTE_OPTIONS.ROUTE_OPT_TRAIL];
     // var route_void = [codes.ROUTE_AVOIDS.ROUTE_OPT_NONE, codes.ROUTE_AVOIDS.ROUTE_OPT_BRIDGE];
 
-    if (target === "kakaovx") {
-        route_cnt = opt;
-        if (route_cnt <= 0) {
-            route_cnt = 1;
-        } else if (route_cnt > 3) {
-            route_cnt = 3;
-        }
-        route_opt = [codes.ROUTE_OPTIONS.ROUTE_OPT_FASTEST, codes.ROUTE_OPTIONS.ROUTE_OPT_SHORTEST, codes.ROUTE_OPTIONS.ROUTE_OPT_RECOMMENDED];
-        route_void = [codes.ROUTE_AVOIDS.ROUTE_OPT_NONE, codes.ROUTE_AVOIDS.ROUTE_OPT_NONE, codes.ROUTE_AVOIDS.ROUTE_OPT_BRIDGE];
-    }
+    if ((target === "kakaovx") && (route_option < 0 || route_option > 3)){
+        route_cnt = 4;
+        route_opt = [codes.ROUTE_OPTIONS.ROUTE_OPT_RECOMMENDED, codes.ROUTE_OPTIONS.ROUTE_OPT_FASTEST, codes.ROUTE_OPTIONS.ROUTE_OPT_SHORTEST, codes.ROUTE_OPTIONS.ROUTE_OPT_COMFORTABLE];
+        route_void = [codes.ROUTE_AVOIDS.ROUTE_AVOID_NONE, codes.ROUTE_AVOIDS.ROUTE_AVOID_NONE, codes.ROUTE_AVOIDS.ROUTE_AVOID_NONE, codes.ROUTE_AVOIDS.ROUTE_AVOID_NONE];    
+   }
 
     logout("route info, cnt:" + route_cnt + ", opt:" + route_opt + ", avoid:" + route_void + ", target:" + target);
+
+
+    // 타겟별로 속성이 일부 변경됨.
+    if (is_sum) {
+        ;
+    } else if ((target === "inavi") || (target === "p2p")) {
+        ret.route = new Object;
+        ret.route.data = new Array;
+    } else {
+        ret.routes = new Array;
+    }
 
     for(ii=0; ii<route_cnt; ii++) {
         var res = addon.doroute(route_opt[ii], route_void[ii]);
@@ -402,15 +457,14 @@ exports.domultiroute = function(req, option) {
         if (res.result == 0) {
             if (is_sum) {
                 res = addon.getsummary();
-            } else if (target === "inavi") {
+            } else if ((target === "inavi") || (target === "p2p")) {
                 res = addon.getmultiroute_for_inavi();
-                res = JSON.parse(res);
             } else if (target === "kakaovx") {
                 res = addon.getmultiroute(2); // 2:for kakaovx
             } else {
                 res = addon.getmultiroute();
-                res = JSON.parse(res);
             }
+            res = JSON.parse(res);
 
             if (res.result_code == 0) {
                 ret.header.isSuccessful = true;
@@ -421,12 +475,12 @@ exports.domultiroute = function(req, option) {
     
                 if (is_sum) {
                     ;
-                } else if (target === "inavi") {
+                } else if ((target === "inavi") || (target === "p2p")) {
                     ret.route.data.push(res.routes[0]);
                     logout("route("+ii+") count : " + res.routes.length + ", paths : " + res.routes[0].paths.length);
                 } else { // if (target === "kakaovx") {
                     logout("route("+ii+") count : " + res.routes.length);
-                    ret.route.data.push(res.routes[0]);
+                    ret.routes.push(res.routes[0]);
                 }
             }
             else {
@@ -445,7 +499,7 @@ exports.domultiroute = function(req, option) {
 
     addon.releaseroute();
 
-    logout("end routing, count: " + ret.route.data.length + ", result(" + ret.header.resultCode + '), ' + ret.header.resultMessage);
+    logout("end routing, count: " + route_cnt + ", result(" + ret.header.resultCode + '), ' + ret.header.resultMessage);
 
     return ret;
 }
@@ -533,9 +587,9 @@ exports.gettable = function(mode, destinations) {
 }
 
 
-exports.setrpcost = function(key, mode, cost) {
+exports.setdatacost = function(key, mode, base, cost) {
 
-    addon.logout("start set rp cost");
+    addon.logout("start set data cost");
 
     var header = {
         isSuccessful: false,
@@ -550,11 +604,24 @@ exports.setrpcost = function(key, mode, cost) {
     var user = auth.checkAuth(key);
     if (user != null && user.length > 0) {
         if (mode !== undefined && cost !== undefined) {       
-            logout("client user:'" + user + "', req:" + JSON.stringify(cost));
+            logout("client user:'" + user + "', mode:'" + mode + "', base:" + base + ", req:" + JSON.stringify(cost));
             
-            var type = 4; //vehicle
+            var type = 5; // default = TYPE_DATA_VEHICLE
+            if (mode === 'vehicle') { 
+                type = 5; // vehicle = TYPE_DATA_VEHICLE
+            } else if (mode === 'forest') {
+                type = 2; // forest = TYPE_DATA_TREKKING
+            } else if (mode === 'optimal') {
+                type = 7; // optimal = TYPE_DATA_ENTRANCE
+            }else {
+                type = 4;
+            }
+            var devide = base;
+            if (devide == undefined) {
+                devide = 0;
+            }
             var count = cost.length;
-            var res = addon.setrpcost(type, count, cost);
+            var res = addon.setdatacost(type, devide, count, cost);
         
             if (res.result_code == 0) {
                 ret.header.isSuccessful = true;
@@ -568,7 +635,7 @@ exports.setrpcost = function(key, mode, cost) {
         ret.header.resultMessage = codes.getErrMsg(codes.ERROR_CODES.RESULT_APPKEY_ERROR);
     } 
 
-    addon.logout("end set rp cost");
+    addon.logout("end set data cost");
 
     return ret;
 }

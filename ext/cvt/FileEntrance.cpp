@@ -109,17 +109,20 @@ bool CFileEntrance::ParseData(IN const char* fname)
 		{
 			// B_ENT_ID
 			pTok = strsep(&pLine, token);
-			lenTok = strlen(pTok);
-			if (lenTok <= 0) {
-				LOG_TRACE(LOG_ERROR, "Failed, entrance building B_ENT_ID emtpy, line:%d", lineCount);
-				continue;
-			}
+			//lenTok = strlen(pTok);
+			// 비어있을 수도 있음
+			//if (lenTok <= 0) {
+			//	LOG_TRACE(LOG_ERROR, "Failed, entrance building B_ENT_ID emtpy, line:%d", lineCount);
+			//	continue;
+			//}
 
 			// MID // 건물 고유 ID
 			pTok = strsep(&pLine, token);
 			lenTok = strlen(pTok);
 			if (lenTok <= 0) {
+#if !defined(_USE_TEST_MESH)
 				LOG_TRACE(LOG_ERROR, "Failed, entrance building id emtpy, line:%d", lineCount);
+#endif
 				continue;
 			}
 
@@ -147,9 +150,11 @@ bool CFileEntrance::ParseData(IN const char* fname)
 			lenTok = strlen(pTok);
 			if (lenTok <= 0) {
 				LOG_TRACE(LOG_ERROR, "Failed, entrance building SGG code empty, line:%d", lineCount);
-				continue;
+				ent_data.SdSggCode = 0;
 			}
-			ent_data.SdSggCode = atoi(pTok);
+			else {
+				ent_data.SdSggCode = atoi(pTok);
+			}			
 
 			// B_ENT_CD // 건물 입구점 코드
 			pTok = strsep(&pLine, token);

@@ -7,21 +7,21 @@
 struct stConnectedAttr
 {
 	KeyID NodeID;
-	uint16_t PassCode; // 0:ÅëÇà°¡´É(À¯ÅÏÁ¦¿Ü), 1:ÅëÇà°¡´É(À¯ÅÏÆ÷ÇÔ), 2:ÅëÇàºÒ°¡
-	uint16_t Angle; // ÁøÃâ °¢µµ // 360µµ ¹æ½Ä
+	uint16_t PassCode; // 0:í†µí–‰ê°€ëŠ¥(ìœ í„´ì œì™¸), 1:í†µí–‰ê°€ëŠ¥(ìœ í„´í¬í•¨), 2:í†µí–‰ë¶ˆê°€
+	uint16_t Angle; // ì§„ì¶œ ê°ë„ // 360ë„ ë°©ì‹
 };
 
 struct stVehicleNode
 {
 	uint32_t MeshID;
 	uint32_t NodeID;
-	uint32_t AdjEdgeMesh; // ÀÎÁ¢ ¸Ş½¬ ID
-	uint32_t AdjEdgeNode; // ÀÎÁ¢ ³ëµå ID
-	uint32_t CrossNameIDX; // ±³Â÷·Î ¸íÄª ÀÎµ¦½º
-	SPoint NodeCoord; // ³ëµå ÁÂÇ¥
-	uint32_t ConnectNum : 4; // Á¢¼Ó ³ëµå ¼ö, MAX:15
-	stConnectedAttr ConnectAttr[8]; // Á¢¼Ó ³ëµå ¼Ó¼º, MAX:8
-	uint32_t NodeType : 4; // ³ëµå Å¸ÀÔ, 1:±³Â÷Á¡, 2:´ÜÁ¡, 3:´õ¹ÌÁ¡, 4:±¸È¹º¯°æÁ¡, 5:¼Ó¼ºº¯È­Á¡, 6:ÁöÇÏÃ¶ÁøÃâÀÔ, 7:Ã¶µµÁøÃâÀÔ, 8:ÁöÇÏµµÁøÃâÀÔ, 9:ÁöÇÏ»ó°¡ÁøÃâÀÔ, 10:°Ç¹°ÁøÃâÀÔ
+	uint32_t AdjEdgeMesh; // ì¸ì ‘ ë©”ì‰¬ ID
+	uint32_t AdjEdgeNode; // ì¸ì ‘ ë…¸ë“œ ID
+	uint32_t CrossNameIDX; // êµì°¨ë¡œ ëª…ì¹­ ì¸ë±ìŠ¤
+	SPoint NodeCoord; // ë…¸ë“œ ì¢Œí‘œ
+	uint32_t ConnectNum : 4; // ì ‘ì† ë…¸ë“œ ìˆ˜, MAX:15
+	stConnectedAttr ConnectAttr[8]; // ì ‘ì† ë…¸ë“œ ì†ì„±, MAX:8
+	uint32_t NodeType : 4; // ë…¸ë“œ íƒ€ì…, 1:êµì°¨ì , 2:ë‹¨ì , 3:ë”ë¯¸ì , 4:êµ¬íšë³€ê²½ì , 5:ì†ì„±ë³€í™”ì , 6:ì§€í•˜ì² ì§„ì¶œì…, 7:ì² ë„ì§„ì¶œì…, 8:ì§€í•˜ë„ì§„ì¶œì…, 9:ì§€í•˜ìƒê°€ì§„ì¶œì…, 10:ê±´ë¬¼ì§„ì¶œì…
 	uint32_t TypeReserved : 24; // reserved
 };
 
@@ -29,49 +29,49 @@ struct stVehicleLink
 {
 	uint32_t MeshID;
 	uint32_t LinkID;
-	uint32_t FromNodeID; // from ³ëµå ID
-	uint32_t ToNodeID; // to ³ëµå ID
-	uint32_t RoadNameIDX; // µµ·Î¸í ÀÎµ¦½º
-	uint32_t RoadNum; // ³ë¼±¹øÈ£
-	uint32_t SubRoadNum1; //Áß¿ë1³ë¼±¹øÈ£
-	uint32_t SubRoadNum2; //Áß¿ë2³ë¼±¹øÈ£
-	uint32_t SubRoadNum3; //Áß¿ë3³ë¼±¹øÈ£
+	uint32_t FromNodeID; // from ë…¸ë“œ ID
+	uint32_t ToNodeID; // to ë…¸ë“œ ID
+	uint32_t RoadNameIDX; // ë„ë¡œëª… ì¸ë±ìŠ¤
+	uint32_t RoadNum; // ë…¸ì„ ë²ˆí˜¸
+	uint32_t SubRoadNum1; //ì¤‘ìš©1ë…¸ì„ ë²ˆí˜¸
+	uint32_t SubRoadNum2; //ì¤‘ìš©2ë…¸ì„ ë²ˆí˜¸
+	uint32_t SubRoadNum3; //ì¤‘ìš©3ë…¸ì„ ë²ˆí˜¸
 
-	uint32_t RoadType : 4; // µµ·ÎÁ¾º°, 1:°í¼Óµµ·Ï, 2:µµ½Ã°í¼Óµµ·Î, 3:ÀÏ¹İ±¹µµ, 4:Æä¸®Ç×·Î, 5:Áö¹æµµ, 6:ÀÏ¹İµµ·Î, 7:¼Ò·Î, 8:°ñ¸ñ±æ, 9:½ÃÀå±æ
-	uint32_t LaneCount : 6; // Â÷¼±¼ö, 63
-	uint32_t LinkType : 4; // ¸µÅ©Á¾º°, 0:ÀÔ±¸Á¡, 1:º»¼±ºñºĞ¸®, 2:º»¼±ºĞ¸®, 3:¿¬°á·Î, 4:±³Â÷·Î, 5:·¥ÇÁ, 6:·ÎÅÍ¸®, 7:ÈŞ°è¼Ò(SA), 8:À¯ÅÏ
-	uint32_t Level : 4; // °æ·Î·¹º§, 0:°í¼Óµµ·Î, 1:µµ½Ã°í¼Óµµ·Î, ÀÚµ¿Â÷Àü¿ë ±¹µµ/Áö¹æµµ, 2:±¹µµ, 3:Áö¹æµµ/ÀÏ¹İµµ·Î8Â÷¼±ÀÌ»ó, 4:ÀÏ¹İµµ·Î6Â÷¼±ÀÌ»ó, 5:ÀÏ¹İµµ·Î4Â÷¼±ÀÌ»ó, 6:ÀÏ¹İµµ·Î2Â÷¼±ÀÌ»ó, 7:ÀÏ¹İµµ·Î1Â÷¼±ÀÌ»ó, 8:SSµµ·Î, 9:GSSµµ·Î/´ÜÁö³»µµ·Î/ÅëÇà±İÁöµµ·Î/ºñÆ÷Àåµµ·Î
-	uint32_t PassCode : 3; // ÅëÇàÄÚµå, 1:ÅëÇà°¡´É, 2:ÅëÇàºÒ°¡, 3:°ø»ç±¸°£, 4:°ø»ç°èÈ¹±¸°£
-	uint32_t ControlCode : 3;// ±ÔÁ¦ÄÚµå, 1:ÅëÇà°¡´É, 2:ÅëÇàºÒ°¡, 4:ÀÏ¹æÅëÇà_Á¤, 5:ÀÏ¹æÅëÇà_¿ª
-	uint32_t CarOnly : 2; // ÀÚµ¿Â÷Àü¿ëµµ·Î, 1:ÀÖÀ½, 2:¾øÀ½
-	uint32_t Charge : 2; //À¯·áµµ·Î, 1:ÀÖÀ½, 2:¾øÀ½
-	uint32_t SafeZone : 2; //¾î¸°ÀÌº¸È£±¸¿ª, ³ëÀÎº¸È£±¸¿ª, 0:¾øÀ½, 1:¾î¸°ÀÌº¸È£±¸¿ª, 2:³ëÀÎº¸È£±¸¿ª
-	uint32_t Tunnel : 1; // ÅÍ³Î À¯¹«, 0:¾øÀ½, 1:ÀÖÀ½
-	uint32_t UnderPass : 1; // ÁöÇÏÂ÷µµ À¯¹«, 0:¾øÀ½, 1:ÀÖÀ½
+	uint32_t RoadType : 4; // ë„ë¡œì¢…ë³„, 1:ê³ ì†ë„ë¡, 2:ë„ì‹œê³ ì†ë„ë¡œ, 3:ì¼ë°˜êµ­ë„, 4:í˜ë¦¬í•­ë¡œ, 5:ì§€ë°©ë„, 6:ì¼ë°˜ë„ë¡œ, 7:ì†Œë¡œ, 8:ê³¨ëª©ê¸¸, 9:ì‹œì¥ê¸¸
+	uint32_t LaneCount : 6; // ì°¨ì„ ìˆ˜, 63
+	uint32_t LinkType : 4; // ë§í¬ì¢…ë³„, 0:ì…êµ¬ì , 1:ë³¸ì„ ë¹„ë¶„ë¦¬, 2:ë³¸ì„ ë¶„ë¦¬, 3:ì—°ê²°ë¡œ, 4:êµì°¨ë¡œ, 5:ë¨í”„, 6:ë¡œí„°ë¦¬, 7:íœ´ê³„ì†Œ(SA), 8:ìœ í„´
+	uint32_t Level : 4; // ê²½ë¡œë ˆë²¨, 0:ê³ ì†ë„ë¡œ, 1:ë„ì‹œê³ ì†ë„ë¡œ, ìë™ì°¨ì „ìš© êµ­ë„/ì§€ë°©ë„, 2:êµ­ë„, 3:ì§€ë°©ë„/ì¼ë°˜ë„ë¡œ8ì°¨ì„ ì´ìƒ, 4:ì¼ë°˜ë„ë¡œ6ì°¨ì„ ì´ìƒ, 5:ì¼ë°˜ë„ë¡œ4ì°¨ì„ ì´ìƒ, 6:ì¼ë°˜ë„ë¡œ2ì°¨ì„ ì´ìƒ, 7:ì¼ë°˜ë„ë¡œ1ì°¨ì„ ì´ìƒ, 8:SSë„ë¡œ, 9:GSSë„ë¡œ/ë‹¨ì§€ë‚´ë„ë¡œ/í†µí–‰ê¸ˆì§€ë„ë¡œ/ë¹„í¬ì¥ë„ë¡œ
+	uint32_t PassCode : 3; // í†µí–‰ì½”ë“œ, 1:í†µí–‰ê°€ëŠ¥, 2:í†µí–‰ë¶ˆê°€, 3:ê³µì‚¬êµ¬ê°„, 4:ê³µì‚¬ê³„íšêµ¬ê°„
+	uint32_t ControlCode : 3;// ê·œì œì½”ë“œ, 1:í†µí–‰ê°€ëŠ¥, 2:í†µí–‰ë¶ˆê°€, 4:ì¼ë°©í†µí–‰_ì •, 5:ì¼ë°©í†µí–‰_ì—­
+	uint32_t CarOnly : 2; // ìë™ì°¨ì „ìš©ë„ë¡œ, 1:ìˆìŒ, 2:ì—†ìŒ
+	uint32_t Charge : 2; //ìœ ë£Œë„ë¡œ, 1:ìˆìŒ, 2:ì—†ìŒ
+	uint32_t SafeZone : 2; //ì–´ë¦°ì´ë³´í˜¸êµ¬ì—­, ë…¸ì¸ë³´í˜¸êµ¬ì—­, 0:ì—†ìŒ, 1:ì–´ë¦°ì´ë³´í˜¸êµ¬ì—­, 2:ë…¸ì¸ë³´í˜¸êµ¬ì—­
+	uint32_t Tunnel : 1; // í„°ë„ ìœ ë¬´, 0:ì—†ìŒ, 1:ìˆìŒ
+	uint32_t UnderPass : 1; // ì§€í•˜ì°¨ë„ ìœ ë¬´, 0:ì—†ìŒ, 1:ìˆìŒ
 	// 32
 
-	uint32_t SubRoadCount : 2; // Áß¿ë³ë¼± ¼ö, MAX:3
-	uint32_t SubRoadType1 : 4; //Áß¿ë1Á¾º°
-	uint32_t SubRoadType2 : 4; //Áß¿ë2Á¾º°
-	uint32_t SubRoadType3 : 4; //Áß¿ë3Á¾º°
-	uint32_t DetailCode1 : 3; // µµ·Î¼¼ºÎÁ¾º°(¾È³»°ü·Ã), 0:¹ÌÁ¤ÀÇ, 6:ÁÂÈ¸Àü Àü¿ë¸µÅ©, 7:±³Â÷·Î PÅÏ¸µÅ©
-	uint32_t DetailCode2 : 2; // µµ·Î¼¼ºÎÁ¾º°(Å½»ö°ü·Ã), 0:¹ÌÁ¤ÀÇ, 1:SSµµ·Î, 2:º¸µµºí·°
-	uint32_t DetailCode3 : 3; // µµ·Î¼¼ºÎÁ¾º°(¼¼ºÎ¼Ó¼º), 0:¹ÌÁ¤ÀÇ, 1:°í°¡µµ·Î, ÁöÇÏÂ÷µµ ¿·±æ, 2: ºñÆ÷Àåµµ·Î, 3: ´ÜÁö³»µµ·Î
+	uint32_t SubRoadCount : 2; // ì¤‘ìš©ë…¸ì„  ìˆ˜, MAX:3
+	uint32_t SubRoadType1 : 4; //ì¤‘ìš©1ì¢…ë³„
+	uint32_t SubRoadType2 : 4; //ì¤‘ìš©2ì¢…ë³„
+	uint32_t SubRoadType3 : 4; //ì¤‘ìš©3ì¢…ë³„
+	uint32_t DetailCode1 : 3; // ë„ë¡œì„¸ë¶€ì¢…ë³„(ì•ˆë‚´ê´€ë ¨), 0:ë¯¸ì •ì˜, 6:ì¢ŒíšŒì „ ì „ìš©ë§í¬, 7:êµì°¨ë¡œ Pí„´ë§í¬
+	uint32_t DetailCode2 : 2; // ë„ë¡œì„¸ë¶€ì¢…ë³„(íƒìƒ‰ê´€ë ¨), 0:ë¯¸ì •ì˜, 1:SSë„ë¡œ, 2:ë³´ë„ë¸”ëŸ­
+	uint32_t DetailCode3 : 3; // ë„ë¡œì„¸ë¶€ì¢…ë³„(ì„¸ë¶€ì†ì„±), 0:ë¯¸ì •ì˜, 1:ê³ ê°€ë„ë¡œ, ì§€í•˜ì°¨ë„ ì˜†ê¸¸, 2: ë¹„í¬ì¥ë„ë¡œ, 3: ë‹¨ì§€ë‚´ë„ë¡œ
 	uint32_t TypeReserved : 10; // reserved
 	// 32
 	
 #if defined(USE_P2P_DATA)
-	uint32_t Bridge : 1; // ±³·® À¯¹«, 0:¾øÀ½, 1:ÀÖÀ½
-	uint32_t OverPass : 1; // °í°¡µµ·Î À¯¹«, 0:¾øÀ½, 1:ÀÖÀ½
-	uint32_t MaxSpeed : 8; // Á¦ÇÑ¼Óµµ, 0~255
-	uint32_t MaxW : 6; // Áß·® Á¦ÇÑ T(Åæ) 0~63
-	uint32_t MaxH : 3; // ³ôÀÌ Á¦ÇÑ M(¹ÌÅÍ) 0~7
-	uint32_t HdFlag : 2; // HD ¸µÅ© ¸ÅÇÎ, 0:¾øÀ¾, 1:ÀüÃ¼, 2:ºÎºĞ
+	uint32_t Bridge : 1; // êµëŸ‰ ìœ ë¬´, 0:ì—†ìŒ, 1:ìˆìŒ
+	uint32_t OverPass : 1; // ê³ ê°€ë„ë¡œ ìœ ë¬´, 0:ì—†ìŒ, 1:ìˆìŒ
+	uint32_t MaxSpeed : 8; // ì œí•œì†ë„, 0~255
+	uint32_t MaxW : 6; // ì¤‘ëŸ‰ ì œí•œ T(í†¤) 0~63
+	uint32_t MaxH : 3; // ë†’ì´ ì œí•œ M(ë¯¸í„°) 0~7
+	uint32_t HdFlag : 2; // HD ë§í¬ ë§¤í•‘, 0:ì—†ì, 1:ì „ì²´, 2:ë¶€ë¶„
 	uint32_t HdReserved : 11; // reserved
 	// 32
 #endif
 
-	double LinkLen; // ¸µÅ© ±æÀÌ
+	double LinkLen; // ë§í¬ ê¸¸ì´
 	vector<SPoint> LinkVertex;
 };
 
@@ -101,10 +101,10 @@ public:
 };
 
 
-// 8ÀÚ¸® ÅëÇà ÄÚµå¸¦ 2ºñÆ®¾¿ ÇÏÀ§ºÎÅÍ Ã¤¿ö³Ö´Â´Ù
+// 8ìë¦¬ í†µí–‰ ì½”ë“œë¥¼ 2ë¹„íŠ¸ì”© í•˜ìœ„ë¶€í„° ì±„ì›Œë„£ëŠ”ë‹¤
 const uint16_t setPassCode(const char* szPassCode);
 
-// 8ÀÚ¸® ÅëÇà ÄÚµå¿¡¼­ ÇöÀç ÀÎµ¦½ºÀÇ ÅëÇà ÄÚµå¸¦ °¡Á®¿Â´Ù.
+// 8ìë¦¬ í†µí–‰ ì½”ë“œì—ì„œ í˜„ì¬ ì¸ë±ìŠ¤ì˜ í†µí–‰ ì½”ë“œë¥¼ ê°€ì ¸ì˜¨ë‹¤.
 const uint16_t getPassCode(IN const uint16_t currentLinkPassCode, IN const int32_t idxCurrentPass);
 const bool getNextPassCode(IN const KeyID currentLinkId, IN const KeyID nextLinkId, IN const stNodeInfo* pNode, IN const int32_t processDepth = -1, IN CDataManager* pDataMgr = nullptr);
 const bool getPrevPassCode(IN const KeyID currentLinkId, IN const KeyID prevLinkId, IN const stNodeInfo* pNode, IN const int32_t processDepth = -1, IN CDataManager* pDataMgr = nullptr);

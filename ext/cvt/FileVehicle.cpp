@@ -83,6 +83,25 @@ bool CFileVehicle::ParseData(IN const char* fname)
 			{ "BRIDGE" },{ "TUNNEL" },{ "OVER_P" },{ "UNDER_P" },{ "HD_FLAG" },
 			{ "LINK_LEN" },{ "REMARK" },
 		};
+#elif defined(USE_SAMSUNG_HEAVY)
+		static char szLinkField[128][35] = {
+			{ "SN" },{ "ID" },{ "Node1" },{ "Node2" },{ "관리자" },
+			{ "도로종별" },{ "노선번호" },{ "중용1" },{ "중용번호1" },{ "중용2" },
+			{ "중용번호2" },{ "중용3" },{ "중용번호3" },{ "중용4" },{ "중용번호4" },
+			{ "중용5" },{ "중용번호5" },{ "중용6" },{ "중용번호6" },{ "유료" },
+			{ "통행여부" },{ "일방" },{ "도로폭" },{ "차선수" },{ "링크종별" },
+			{ "레벨치" },{ "링크내속성" },{ "링크길이" },{ "보간점수" },{ "전용" },
+			{ "특수차" },{ "스쿨존" },{ "기타속성" },{ "속성명칭1" },{ "속성명칭2" },
+		};
+		//static char szNodeField[128][] = {
+		//	{ "SN" },{ "ID" },{ "NUMBE" },{ "NAME1" },{ "노드종류" },
+		//	{ "NAME1" },{ "NAME2" },{ "접속링크수" },{ "접속노드1" },{ "각도1" },
+		//	{ "통행코드1" },{ "접속노드2" },{ "각도2" },{ "통행코드2" },{ "접속노드3" },
+		//	{ "각도3" },{ "통행코드3" },{ "접속노드4" },{ "각도4" },{ "통행코드4" },
+		//	{ "접속노드5" },{ "각도5" },{ "통행코드5" },{ "접속노드6" },{ "각도6" },
+		//	{ "통행코드6" },{ "접속노드7" },{ "각도7" },{ "통행코드7" },{ "접속노드8" },
+		//	{ "각도8" },{ "통행코드8" },
+		//};
 #else
 		static char szLinkField[128][32] = {
 			{ "MESH" },{ "SNODE_ID" },{ "ENODE_ID" },{ "ROAD_K" },{ "ROAD_NUM" },
@@ -272,7 +291,12 @@ bool CFileVehicle::ParseData(IN const char* fname)
 			pLink->veh.road_type = link.RoadType;
 			pLink->veh.lane_cnt = min((int)link.LaneCount, 15); // 최대 3bit
 			pLink->veh.link_type = link.LinkType;
+			// 최적지점에서는 단지폴리곤에 속한 단지내도로만 단지내도로로 인정
+#if defined(USE_OPTIMAL_POINT_API)
+			pLink->veh.link_dtype = link.DetailCode3 != 3 ? link.DetailCode3 : 0;
+#else
 			pLink->veh.link_dtype = link.DetailCode3; // uint64_t link_dtype : 3; // 링크세부종별(dk3), 0:미정의, 1:고가도로,지하차도 옆길, 2:비포장도로, 3:단지내도로, 4:터널, 5:지하도로
+#endif
 			pLink->veh.level = link.Level;
 			if (link.ControlCode == 2) {//  2:통행불가
 				pLink->veh.pass_code = 2;
@@ -604,8 +628,8 @@ bool CFileVehicle::GenServiceData()
 
 	int32_t cntProc = 0;
 
-	// 링크 결합
-#if !defined(USE_P2P_DATA) // p2p는 각도 필드에 링크 속성을 확장해서 사용
+	// 링크 결합, 구획변경점을 기본 사용하기에 이제는 링크 결합하지 않는다.
+#if 0 // !defined(USE_P2P_DATA)
 	LOG_TRACE(LOG_DEBUG, "LOG, start, link merge");
 
 	for (itLink = m_mapLink.begin(); itLink != m_mapLink.end(); itLink++)

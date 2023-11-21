@@ -16,7 +16,7 @@ double get_road_slope(int32_t dist, int32_t height);
 double getRealWorldDistance(IN const double slng, IN const double slat, IN const double elng, IN const double elat);
 bool getPointByDistance(IN const double slng, IN const double slat, IN OUT double& elng, IN OUT double& elat, double lDistance);
 
-bool isInBox(IN const double lon, IN const double lat, IN const SBox& inBox);
+bool isInBox(IN const double lon, IN const double lat, IN const SBox& inBox, IN const double inMargin = 0);
 bool isInPitBox(IN const SBox& fromBox, IN const SBox& inBox);
 void getClosestPoint(IN const double x1, IN const double y1, IN const double x2, IN const double y2, IN const double ox, IN const double oy, OUT double *a, OUT double *b, IN OUT double *ir);
 

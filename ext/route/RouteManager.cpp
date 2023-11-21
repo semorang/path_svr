@@ -33,6 +33,10 @@ CRouteManager::CRouteManager()
 
 	m_nRouteOpt = 0;
 	m_nAvoidOpt = 0;
+
+	m_nDepartureDirIgnore = 0;
+	m_nWaypointDirIgnore = 0;
+	m_nDestinationDirIgnore = 0;
 }
 
 
@@ -58,6 +62,10 @@ bool CRouteManager::Initialize(void)
 
 	m_nRouteOpt = 0;
 	m_nAvoidOpt = 0;
+
+	m_nDepartureDirIgnore = 0;
+	m_nWaypointDirIgnore = 0;
+	m_nDestinationDirIgnore = 0;
 
 	return true;
 }
@@ -204,7 +212,15 @@ void CRouteManager::SetRouteOption(IN const uint32_t route, IN const uint32_t av
 }
 
 
-void CRouteManager::SetRouteCost(IN const uint32_t type, IN const RpCost* pCost)
+void CRouteManager::SetRouteDirOption(IN const uint32_t departuretDir, IN const uint32_t waypointDir, IN const uint32_t destinationDir)
+{
+	m_nDepartureDirIgnore = departuretDir;
+	m_nWaypointDirIgnore = waypointDir;
+	m_nDestinationDirIgnore = destinationDir;
+}
+
+
+void CRouteManager::SetRouteCost(IN const uint32_t type, IN const DataCost* pCost)
 {
 	m_pRoutePlan->SetRouteCost(type, pCost);
 }
@@ -553,7 +569,7 @@ int CRouteManager::DoRouting(/*Packet*/)
 	m_routeResult.Init();
 
 	if (m_ptWaypoints.empty()) {
-		if ((ret = m_pRoutePlan->DoRoute(uid, m_ptDeparture, m_ptDestination, keyDeparture, keyDestination, m_nRouteOpt, m_nAvoidOpt, &m_routeResult)) == ROUTE_RESULT_SUCCESS)
+		if ((ret = m_pRoutePlan->DoRoute(uid, m_ptDeparture, m_ptDestination, keyDeparture, keyDestination, m_nRouteOpt, m_nAvoidOpt, m_nDepartureDirIgnore, m_nDestinationDirIgnore, &m_routeResult)) == ROUTE_RESULT_SUCCESS)
 		{
 			;
 		}
@@ -563,6 +579,9 @@ int CRouteManager::DoRouting(/*Packet*/)
 		reqInfo.RequestId = uid;
 		reqInfo.RouteOption = m_nRouteOpt;
 		reqInfo.AvoidOption = m_nAvoidOpt;
+		reqInfo.StartDirIgnore = m_nDepartureDirIgnore;
+		reqInfo.WayDirIgnore = m_nWaypointDirIgnore;
+		reqInfo.EndDirIgnore = m_nDestinationDirIgnore;
 
 		// start 
 		reqInfo.vtPoints.emplace_back(m_ptDeparture);
@@ -646,6 +665,9 @@ int CRouteManager::GetTable(OUT RouteTable** ppResultTables)
 	reqInfo.RequestId = uid;
 	reqInfo.RouteOption = m_nRouteOpt;
 	reqInfo.AvoidOption = m_nAvoidOpt;
+	reqInfo.StartDirIgnore = m_nDepartureDirIgnore;
+	reqInfo.WayDirIgnore = m_nWaypointDirIgnore;
+	reqInfo.EndDirIgnore = m_nDestinationDirIgnore;
 
 	// start 
 	reqInfo.vtPoints.emplace_back(m_ptDeparture);
@@ -1082,6 +1104,9 @@ int CRouteManager::DoTabulate(TspOptions* pOpt, IN RouteTable** ppResultTables, 
 	reqInfo.RequestId = uid;
 	reqInfo.RouteOption = m_nRouteOpt;
 	reqInfo.AvoidOption = m_nAvoidOpt;
+	reqInfo.StartDirIgnore = m_nDepartureDirIgnore;
+	reqInfo.WayDirIgnore = m_nWaypointDirIgnore;
+	reqInfo.EndDirIgnore = m_nDestinationDirIgnore;
 
 	// start 
 	reqInfo.vtPoints.emplace_back(m_ptDeparture);

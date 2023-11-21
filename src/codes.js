@@ -127,6 +127,62 @@ function getErrMsg(code) {
 }
 
 
+function getDefaultPosition(target) {
+    var pos;
+
+    if (target === "kakaovx") {
+        var newPos = {
+            departure : "126.521857543595,33.290872116984", // 치유의숲
+            destination : "126.52000827044,33.36144251951", // 한라산
+            center : "126.5314590086,33.499659893321", // 제주도청
+        }
+        pos = newPos;
+    } else if (target === "inavi") {
+        var newPos = {
+            departure : "127.108950065049,37.404237963557", // 성남판교행복주택
+            destination : "127.111989747142,37.387052287024", // 신백현초등학교
+            center : "127.110767364421,37.402196784342", // 아이나비시스템즈(판교)
+        }
+        pos = newPos;
+    } else if (target === "p2p") {
+        var newPos = {
+            departure : "128.452528360378,35.694445345774", // 대구포산초등학교
+            destination : "128.457019511114,35.7043620533", // 대구경북과학기술원
+            center : "128.456012633768,35.691998971295", // 대구테크노폴리스지구
+        }
+        pos = newPos;
+    }
+
+    return pos;
+}
+
+
+function getOptimalErrMsg(code) {
+    var msg;
+
+    switch(code) {
+        case ERROR_OPTIMAL_CODES.OPTIMAL_RESULT_SUCCESS:
+            msg = "성공";
+            break;
+        case ERROR_OPTIMAL_CODES.OPTIMAL_RESULT_NO_RESULT:
+            msg = "결과 없음";
+            break;
+        case ERROR_OPTIMAL_CODES.OPTIMAL_RESULT_WRONG_PARAM:
+            msg = "잘못된 파라미터(필수 파라미터 체크)";
+            break;
+        case ERROR_OPTIMAL_CODES.OPTIMAL_RESULT_SERVER_ERROR:
+            msg = "서버 오류";
+            break;
+        default:
+            msg = "실패(알수 없는 오류)";
+            break;
+    }
+
+    return msg;
+}
+
+
+
 module.exports = {
     // route options
     ROUTE_OPTIONS,
@@ -139,4 +195,6 @@ module.exports = {
     ERROR_OPTIMAL_CODES,
     
     getErrMsg,
+    getOptimalErrMsg,
+    getDefaultPosition,
 }

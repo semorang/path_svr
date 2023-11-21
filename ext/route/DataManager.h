@@ -32,16 +32,21 @@ struct stEntryPointInfo {
 
 // 최적 지점 결과 정보
 struct stOptimalPointInfo {
-	int32_t nType;	// 매칭 타입, 0:일반도로(미매칭), 1:빌딩입구점, 2:단지입구점, 3:단지내도로//, 4:최근접도로
 	double x;
 	double y;
+
+	int32_t nType;	// 매칭 타입, 0:일반도로(미매칭), 1:빌딩입구점, 2:단지입구점, 3:단지내도로//, 4:최근접도로
+	uint64_t id; // 매칭된 오브젝트 ID, 단지/빌딩/도로
 	string name;
 	vector<stEntryPointInfo> vtEntryPoint;
 	vector<SPoint> vtPolygon;
 };
 
-// 입구점 요청 타입
-struct stReqEntryType {
+// 최적지점 요청
+struct stReqOptimal {
+	double x;
+	double y;
+	bool isExpand;
 	union {
 		int32_t typeAll;
 		struct {
@@ -71,6 +76,34 @@ struct stLinkMatchTable {
 	int32_t link_idx;
 };
 
+// 나중에 Cost Manager 따로 두고 관리하는 것도 고려해볼만함.
+typedef struct _tagDataCost {
+	union {
+		double base[128];
+		struct {
+			double cost_lv0; double cost_lv1; double cost_lv2; double cost_lv3; double cost_lv4;
+			double cost_lv5; double cost_lv6; double cost_lv7; double cost_lv8; double cost_lv9;
+			double cost_ang0; double cost_ang45; double cost_ang90; double cost_ang135; double cost_ang180;
+			double cost_ang225; double cost_ang270; double cost_ang315;
+			// 18
+		}vehicle;
+		struct { // cost will devide by 100000, ex cost_popular = 10000 ==> 10000 / 100000 ==> 0.1
+			double cost_popular; double cost_comfortable; double cost_lv2; double cost_lv3; double cost_lv4;
+			double cost_lv5; double cost_lv6; double cost_lv7; double cost_lv8; double cost_lv9;
+			double cost_ang0; double cost_ang45; double cost_ang90; double cost_ang135; double cost_ang180;
+			double cost_ang225; double cost_ang270; double cost_ang315;
+			// 18
+		}forest;
+		struct {
+			double cost_lv0; double cost_lv1; double cost_lv2; double cost_lv3; double cost_lv4;
+			double cost_lv5; double cost_lv6; double cost_lv7; double cost_lv8; double cost_lv9;
+			double cost_mes; double cost_bld; double cost_cpx; double cost_ent; double cost_rod;
+			// 15
+		}optimal;
+	};
+}DataCost;
+
+
 #pragma pack (pop)
 
 
@@ -98,6 +131,9 @@ private:
 	// cache
 	uint32_t m_cntMaxCache;
 	std::map<uint32_t, FileCacheData> m_mapCache;
+
+	// for optimal cost
+	DataCost m_dataCost;
 
 protected:
 	char m_szDataPath[MAX_PATH];
@@ -130,6 +166,9 @@ public:
 	bool Initialize(void);
 	void Release(void);
 	void SetFileMgr(IN CFileManager* pFileMgr);
+
+	// set value
+	void SetDataCost(IN const uint32_t type, IN const DataCost* pCost);
 
 	// cache
 	bool AddIndexData(IN const FileIndex& pData);
@@ -202,9 +241,8 @@ public:
 	// nMatchType : 차량 출/도착지 매칭 옵션(고속도로/터널/지하차도 등은 매칭 안되도록), 이미 매칭되어 들어오는 좌표일 경우에는 사용 안함으로
 	stLinkInfo * GetLinkDataByPointAround(IN const double lng, IN const double lat, IN const int32_t nMaxDist, OUT double& retLng, OUT double& retLat, OUT double& retDist, IN const int32_t nMatchType = TYPE_LINK_MATCH_CARSTOP, OUT int32_t* pMatchVtxIdx = nullptr);
 	int32_t GetLinkVertexDataByPoint(IN const double lng, IN const double lat, IN const int32_t nMaxDist, IN const KeyID linkId, OUT double& retLng, OUT double& retLat, OUT double& retDist);
-	stPolygonInfo* GetPolygonDataByPoint(IN OUT double& lng, IN OUT double& lat, IN const int32_t nType = 0); // 0:알아서, 1:빌딩만, 2:단지만
-	
-	bool GetNearRoadByPoint(IN const double lng, IN const double lat, IN const int32_t maxDist, IN const int32_t matchType, OUT stEntryPointInfo& entInfo);
+	stPolygonInfo* GetPolygonDataByPoint(IN const double lng, IN const double lat, IN const int32_t nType = 0, IN const bool useNeighborMesh = true); // nType 0:입구점있는것만, 1:모두, 2:빌딩만, 3:단지만, useNeighborMesh : 이웃메쉬 확장 검색	
+	stLinkInfo * GetNearRoadByPoint(IN const double lng, IN const double lat, IN const int32_t maxDist, IN const int32_t matchType, OUT stEntryPointInfo& entInfo);
 	int32_t GetOptimalPointDataByPoint(IN const double lng, IN const double lat, OUT stOptimalPointInfo* pOptInfo, IN const int32_t nEntType = 0, IN const int32_t nRetCount = 0, IN const int32_t nMatchType = TYPE_LINK_MATCH_CARSTOP);
 	// nPolyType, 폴리곤 타입 // 0:알아서, 1:빌딩만, 2:단지만																																																		  
 	// nEntType, 입구점 타입 // 0:알아서, 1: 차량 입구점, 2: 택시 승하차 지점(건물), 3: 택시 승하차 지점(건물군), 4: 택배 차량 하차 거점, 5: 보행자 입구점, 	6: 배달 하차점(차량, 오토바이), 7: 배달 하차점(자전거, 도보)

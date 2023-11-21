@@ -101,53 +101,53 @@ void CRoutePackage::GetMultiRouteResult(IN const RouteResultInfo* pResult, IN co
 		cJSON_AddItemToObject(root, "error_msg", cJSON_CreateString("success"));
 
 		// summarys
-		cJSON* summarys = cJSON_CreateArray();
+		// cJSON* summarys = cJSON_CreateArray();
 		int cntRoutes = pResult->RouteSummarys.size();
-		uint32_t remained_dist = pResult->TotalLinkDist;
-		uint32_t remained_time = pResult->TotalLinkTime;
+		// uint32_t remained_dist = pResult->TotalLinkDist;
+		// uint32_t remained_time = pResult->TotalLinkTime;
 		// - now
 		time_t timer = time(NULL);
 		struct tm* tmNow;
 		string strEta;
-		for (const auto& summary : pResult->RouteSummarys) {
-			// - summary
-			cJSON* pSummary = cJSON_CreateObject();
-			// - distance
-			cJSON_AddItemToObject(pSummary, "distance", cJSON_CreateNumber(summary.TotalDist));
-			// - time
-			cJSON_AddItemToObject(pSummary, "time", cJSON_CreateNumber(summary.TotalTime));
+		// for (const auto& summary : pResult->RouteSummarys) {
+		// 	// - summary
+		// 	cJSON* pSummary = cJSON_CreateObject();
+		// 	// - distance
+		// 	cJSON_AddItemToObject(pSummary, "distance", cJSON_CreateNumber(summary.TotalDist));
+		// 	// - time
+		// 	cJSON_AddItemToObject(pSummary, "time", cJSON_CreateNumber(summary.TotalTime));
 
-			// - remained distance
-			cJSON_AddItemToObject(pSummary, "remain_distance", cJSON_CreateNumber(remained_dist));
-			if (remained_dist < summary.TotalDist) {
-				remained_dist = 0;
-			} else {
-				remained_dist -= summary.TotalDist;
-			}
+		// 	// - remained distance
+		// 	cJSON_AddItemToObject(pSummary, "remain_distance", cJSON_CreateNumber(remained_dist));
+		// 	if (remained_dist < summary.TotalDist) {
+		// 		remained_dist = 0;
+		// 	} else {
+		// 		remained_dist -= summary.TotalDist;
+		// 	}
 
-			// - remained time
-			cJSON_AddItemToObject(pSummary, "remain_time", cJSON_CreateNumber(remained_time));
-			if (remained_time < summary.TotalTime) {
-				remained_time = 0;
-			} else {
-				remained_time -= summary.TotalTime;
-			}
+		// 	// - remained time
+		// 	cJSON_AddItemToObject(pSummary, "remain_time", cJSON_CreateNumber(remained_time));
+		// 	if (remained_time < summary.TotalTime) {
+		// 		remained_time = 0;
+		// 	} else {
+		// 		remained_time -= summary.TotalTime;
+		// 	}
 
-			//// now
-			//tmNow = localtime(&timer);
-			//string strVal = string_format("%04d-%02d-%02d %02d:%02d:%02d", tmNow->tm_year + 1900, tmNow->tm_mon + 1, tmNow->tm_mday, tmNow->tm_hour, tmNow->tm_min, tmNow->tm_sec);
-			//cJSON_AddItemToObject(summary, "now", cJSON_CreateString(strVal.c_str()));
+		// 	//// now
+		// 	//tmNow = localtime(&timer);
+		// 	//string strVal = string_format("%04d-%02d-%02d %02d:%02d:%02d", tmNow->tm_year + 1900, tmNow->tm_mon + 1, tmNow->tm_mday, tmNow->tm_hour, tmNow->tm_min, tmNow->tm_sec);
+		// 	//cJSON_AddItemToObject(summary, "now", cJSON_CreateString(strVal.c_str()));
 
-			// eta
-			timer += summary.TotalTime;
-			tmNow = localtime(&timer);
-			//string strVal = string_format("%04d-%02d-%02d %02d:%02d:%02d", tmNow->tm_year + 1900, tmNow->tm_mon + 1, tmNow->tm_mday, tmNow->tm_hour, tmNow->tm_min, tmNow->tm_sec);
-			strEta = string_format("%02d:%02d:%02d", tmNow->tm_hour, tmNow->tm_min, tmNow->tm_sec);
-			cJSON_AddItemToObject(pSummary, "eta", cJSON_CreateString(strEta.c_str()));
+		// 	// eta
+		// 	timer += summary.TotalTime;
+		// 	tmNow = localtime(&timer);
+		// 	//string strVal = string_format("%04d-%02d-%02d %02d:%02d:%02d", tmNow->tm_year + 1900, tmNow->tm_mon + 1, tmNow->tm_mday, tmNow->tm_hour, tmNow->tm_min, tmNow->tm_sec);
+		// 	strEta = string_format("%02d:%02d:%02d", tmNow->tm_hour, tmNow->tm_min, tmNow->tm_sec);
+		// 	cJSON_AddItemToObject(pSummary, "eta", cJSON_CreateString(strEta.c_str()));
 
-			cJSON_AddItemToArray(summarys, pSummary);
-		} // for
-		cJSON_AddItemToObject(root, "summarys", summarys);
+		// 	cJSON_AddItemToArray(summarys, pSummary);
+		// } // for
+		// cJSON_AddItemToObject(root, "summarys", summarys);
 
 		// routes
 		cJSON* routes = cJSON_CreateArray();
@@ -156,7 +156,7 @@ void CRoutePackage::GetMultiRouteResult(IN const RouteResultInfo* pResult, IN co
 			// - summary
 			cJSON* summary = cJSON_CreateObject();
 			// - type
-			cJSON_AddItemToObject(summary, "type", cJSON_CreateNumber(pResult->LinkInfo[ii].link_info));
+			cJSON_AddItemToObject(summary, "option", cJSON_CreateNumber(pResult->RouteOption));
 			// - distance
 			cJSON_AddItemToObject(summary, "distance", cJSON_CreateNumber(pResult->TotalLinkDist));
 			// - time
@@ -182,37 +182,52 @@ void CRoutePackage::GetMultiRouteResult(IN const RouteResultInfo* pResult, IN co
 			// - link_info
 			cJSON* links = cJSON_CreateArray();
 			int cntLinks = pResult->LinkInfo.size();
+			int vertex_offset = 0;
 			for (int jj = 0; jj<cntLinks; jj++) {
 				cJSON* idoff = cJSON_CreateObject();
 				cJSON_AddItemToObject(idoff, "id", cJSON_CreateNumber(pResult->LinkInfo[jj].link_id.nid));
 				cJSON_AddItemToObject(idoff, "length", cJSON_CreateNumber(pResult->LinkInfo[jj].length));
 				cJSON_AddItemToObject(idoff, "time", cJSON_CreateNumber(pResult->LinkInfo[jj].time));
 				cJSON_AddItemToObject(idoff, "angle", cJSON_CreateNumber(pResult->LinkInfo[jj].angle));
-				cJSON_AddItemToObject(idoff, "vertex_offset", cJSON_CreateNumber(pResult->LinkInfo[jj].vtx_off));
+				//cJSON_AddItemToObject(idoff, "vertex_offset", cJSON_CreateNumber(pResult->LinkInfo[jj].vtx_off));
+				cJSON_AddItemToObject(idoff, "vertex_offset", cJSON_CreateNumber(vertex_offset));
 				cJSON_AddItemToObject(idoff, "vertex_count", cJSON_CreateNumber(pResult->LinkInfo[jj].vtx_cnt));
 				cJSON_AddItemToObject(idoff, "remain_distance", cJSON_CreateNumber(pResult->LinkInfo[jj].rlength));
 				cJSON_AddItemToObject(idoff, "remain_time", cJSON_CreateNumber(pResult->LinkInfo[jj].rtime));
 				cJSON_AddItemToObject(idoff, "guide_type", cJSON_CreateNumber(pResult->LinkInfo[jj].type));
 
+				vertex_offset += pResult->LinkInfo[jj].vtx_cnt; // 경유지에서 offset 초기화 되지 않도록
+
 				// 링크 부가 정보 
-				uint64_t sub_info = pResult->LinkInfo[ii].link_info;
+				uint64_t sub_info = pResult->LinkInfo[jj].link_info;
 				if (sub_info > 0) {
 					stLinkBaseInfo* pBaseInfo = reinterpret_cast<stLinkBaseInfo*>(&sub_info);
 
-					cJSON_AddItemToObject(idoff, "type", cJSON_CreateNumber(pBaseInfo->link_type));
+					// 숲길 데이터
+					if (pBaseInfo && pBaseInfo->link_type == TYPE_DATA_TREKKING) {
+						stLinkTrekkingInfo* pForestInfo = reinterpret_cast<stLinkTrekkingInfo*>(&sub_info);
+						cJSON_AddItemToObject(idoff, "type", cJSON_CreateNumber(ROUTE_TYPE_TREKKING));
+						cJSON_AddItemToObject(idoff, "course_type", cJSON_CreateNumber(pForestInfo->course_type));
+						cJSON_AddItemToObject(idoff, "road_type", cJSON_CreateNumber(pForestInfo->road_info));
+						cJSON_AddItemToObject(idoff, "difficult", cJSON_CreateNumber(pForestInfo->diff));
+						cJSON_AddItemToObject(idoff, "slop", cJSON_CreateNumber(pForestInfo->slop));
+						cJSON_AddItemToObject(idoff, "popular", cJSON_CreateNumber(pForestInfo->popular));
+					}
 					// 보행자 데이터
-					if (pBaseInfo && pBaseInfo->link_type == TYPE_DATA_PEDESTRIAN) {
+					else if (pBaseInfo && pBaseInfo->link_type == TYPE_DATA_PEDESTRIAN) {
 						stLinkPedestrianInfo* pPedInfo = reinterpret_cast<stLinkPedestrianInfo*>(&sub_info);
+						cJSON_AddItemToObject(idoff, "type", cJSON_CreateNumber(ROUTE_TYPE_PEDESTRIAN));
 						cJSON_AddItemToObject(idoff, "facility_type", cJSON_CreateNumber(pPedInfo->facility_type));
 						cJSON_AddItemToObject(idoff, "gate_type", cJSON_CreateNumber(pPedInfo->gate_type));
-					}
+					}					
 					else {
+						cJSON_AddItemToObject(idoff, "type", cJSON_CreateNumber(0));
 						cJSON_AddItemToObject(idoff, "facility_type", cJSON_CreateNumber(9));
 						cJSON_AddItemToObject(idoff, "gate_type", cJSON_CreateNumber(9));
 					}
 				}
 				cJSON_AddItemToArray(links, idoff);
-			}
+			} // for
 			// add routes - link_info
 			cJSON_AddItemToObject(route, "link_info", links);
 
@@ -239,7 +254,7 @@ void CRoutePackage::GetMultiRouteResult(IN const RouteResultInfo* pResult, IN co
 				// junction_info
 				cJSON* junctions = cJSON_CreateArray();
 				vector<RouteProbablePath*> vtRpp;
-				int cntRpp = GetRouteProbablePath(pResult, vtRpp);
+				int cntRpp = GetRouteProbablePath(pResult->LinkInfo, vtRpp);
 				for (auto jj = 0; jj<cntRpp; jj++) {
 					cJSON* link_info = cJSON_CreateObject();
 					cJSON* links = cJSON_CreateArray();
@@ -273,7 +288,7 @@ void CRoutePackage::GetMultiRouteResult(IN const RouteResultInfo* pResult, IN co
 
 			// increse route
 			cJSON_AddItemToArray(routes, route);
-		}
+		} // for
 
 		// add routes
 		cJSON_AddItemToObject(root, "routes", routes);
@@ -580,35 +595,37 @@ void CRoutePackage::GetBoundaryResult(IN const vector<SPoint>& vtBoundary, OUT s
 }
 
 
-const size_t CRoutePackage::GetRouteProbablePath(IN const RouteResultInfo* pResult, OUT vector<RouteProbablePath*>& vtJctInfo, IN const double length, IN const int32_t expansion, IN const double branchLength)
+//const size_t CRoutePackage::GetRouteProbablePath(IN const RouteResultInfo* pResult, OUT vector<RouteProbablePath*>& vtJctInfo, IN const double length, IN const int32_t expansion, IN const double branchLength)
+const size_t CRoutePackage::GetRouteProbablePath(IN const vector<RouteResultLinkEx>& vtLinkInfo, OUT vector<RouteProbablePath*>& vtJctInfo, IN const double length, IN const int32_t expansion, IN const double branchLength)
 {
 	// 경로선 노드의 경로선 외 링크 정보
-	const RouteResultInfo* pRouteResult = pResult;
+	//const RouteResultInfo* pRouteResult = pResult;
 
 	stLinkInfo* pLinkBefore = nullptr;
 	stLinkInfo* pLinkNext = nullptr;
 
-	for (int ii = 0; ii < pRouteResult->LinkInfo.size() - 1; ii++) {
+	//for (int ii = 0; ii < pRouteResult->LinkInfo.size() - 1; ii++) {
+	for (int ii = 0; ii < vtLinkInfo.size() - 1; ii++) {
 #if defined(USE_TREKKING_DATA)
-		pLinkBefore = m_pDataMgr->GetLinkDataById(pRouteResult->LinkInfo[ii].link_id);
-		pLinkNext = m_pDataMgr->GetLinkDataById(pRouteResult->LinkInfo[ii + 1].link_id);
+		pLinkBefore = m_pDataMgr->GetLinkDataById(vtLinkInfo[ii].link_id);
+		pLinkNext = m_pDataMgr->GetLinkDataById(vtLinkInfo[ii + 1].link_id);
 #elif defined(USE_PEDESTRIAN_DATA)
-		pLinkBefore = m_pDataMgr->GetWLinkDataById(pRouteResult->LinkInfo[ii].link_id);
-		pLinkNext = m_pDataMgr->GetWLinkDataById(pRouteResult->LinkInfo[ii + 1].link_id);
+		pLinkBefore = m_pDataMgr->GetWLinkDataById(vtLinkInfo[ii].link_id);
+		pLinkNext = m_pDataMgr->GetWLinkDataById(vtLinkInfo[ii + 1].link_id);
 #elif defined(USE_VEHICLE_DATA)
-		pLinkBefore = m_pDataMgr->GetVLinkDataById(pRouteResult->LinkInfo[ii].link_id);
-		pLinkNext = m_pDataMgr->GetVLinkDataById(pRouteResult->LinkInfo[ii + 1].link_id);
+		pLinkBefore = m_pDataMgr->GetVLinkDataById(vtLinkInfo[ii].link_id);
+		pLinkNext = m_pDataMgr->GetVLinkDataById(vtLinkInfo[ii + 1].link_id);
 #else
-		pLinkBefore = m_pDataMgr->GetLinkDataById(pRouteResult->LinkInfo[ii].link_id);
-		pLinkNext = m_pDataMgr->GetLinkDataById(pRouteResult->LinkInfo[ii + 1].link_id);
+		pLinkBefore = m_pDataMgr->GetLinkDataById(vtLinkInfo[ii].link_id);
+		pLinkNext = m_pDataMgr->GetLinkDataById(vtLinkInfo[ii + 1].link_id);
 #endif
 
 		if (pLinkBefore == nullptr) {
-			LOG_TRACE(LOG_WARNING, "failed, can't find fore link, idx:%d, id:%d", ii, pRouteResult->LinkInfo[ii].link_id);
+			LOG_TRACE(LOG_WARNING, "failed, can't find fore link, idx:%d, id:%d", ii, vtLinkInfo[ii].link_id);
 			// return 0;
 			continue;
 		} else if (pLinkNext == nullptr) {
-			LOG_TRACE(LOG_WARNING, "failed, can't find next link, idx:%d, id:%d", ii + 1, pRouteResult->LinkInfo[ii + 1].link_id);
+			LOG_TRACE(LOG_WARNING, "failed, can't find next link, idx:%d, id:%d", ii + 1, vtLinkInfo[ii + 1].link_id);
 			// return 0;
 			continue;
 		}
@@ -657,12 +674,13 @@ const size_t CRoutePackage::GetRouteProbablePath(IN const RouteResultInfo* pResu
 		pJctInfo->LinkId = pLinkBefore->link_id;
 		pJctInfo->NodeId = pJctNode->node_id;
 		
-		if (pJctNode->base.connnode_count > 2) {
+		if (pJctNode->base.connnode_count >= 2) {
 			for (int jj = 0; jj<pJctNode->base.connnode_count; jj++) {
 				// 경로에 사용된 링크는 제외
-				if (pJctNode->connnodes[jj] == pLinkBefore->link_id || pJctNode->connnodes[jj] == pLinkNext->link_id) {
+				// 2회 이상 재귀되는 경우 추가 확장되는 링크는 검사 안함 
+				if (vtLinkInfo[ii].node_id.llid != NOT_USE && (pJctNode->connnodes[jj] == pLinkBefore->link_id || pJctNode->connnodes[jj] == pLinkNext->link_id)) {
 					continue;
-				}
+				}			
 
 				// 경로선 외 링크
 #if defined(USE_TREKKING_DATA)
@@ -674,6 +692,12 @@ const size_t CRoutePackage::GetRouteProbablePath(IN const RouteResultInfo* pResu
 #else
 				pJctLink = m_pDataMgr->GetLinkDataById(pJctNode->connnodes[jj]);
 #endif				
+
+#if defined(USE_P2P_DATA)
+				// 4차선 미만 도로는 제외
+				if (pJctLink->veh.lane_cnt < 4)
+					continue;
+#endif
 
 				stLinkInfo* pLinkInfo = new stLinkInfo;
 				pLinkInfo->link_id = pJctLink->link_id;
@@ -740,6 +764,52 @@ const size_t CRoutePackage::GetRouteProbablePath(IN const RouteResultInfo* pResu
 						pJctInfo->JctLinks.push_back(pLinkInfo);
 					}
 				}
+
+				// 요청 길이에 못미치는 정션이 요청된 길이에 미치치 못하면 남은 길이 만큼 추가 
+				if (pJctLink->length < branchLength) {
+					stNodeInfo* pNextJctNode = nullptr;
+
+					if (pJctNode->node_id.llid == pJctLink->enode_id.llid) {
+#if defined(USE_TREKKING_DATA)
+						pNextJctNode = m_pDataMgr->GetNodeDataById(pJctLink->snode_id);
+#elif defined(USE_PEDESTRIAN_DATA)
+						pNextJctNode = m_pDataMgr->GetWNodeDataById(pJctLink->snode_id);
+#elif defined(USE_VEHICLE_DATA)
+						pNextJctNode = m_pDataMgr->GetVNodeDataById(pJctLink->snode_id);
+#else
+						pNextJctNode = m_pDataMgr->GetNodeDataById(pJctLink->snode_id);
+#endif
+					}
+					else {
+#if defined(USE_TREKKING_DATA)
+						pNextJctNode = m_pDataMgr->GetNodeDataById(pJctLink->enode_id);
+#elif defined(USE_PEDESTRIAN_DATA)
+						pNextJctNode = m_pDataMgr->GetWNodeDataById(pJctLink->enode_id);
+#elif defined(USE_VEHICLE_DATA)
+						pNextJctNode = m_pDataMgr->GetVNodeDataById(pJctLink->enode_id);
+#else
+						pNextJctNode = m_pDataMgr->GetNodeDataById(pJctLink->enode_id);
+#endif
+					}
+					
+					// 다음 링크가 단일 링크 연결일 경우
+					if (pNextJctNode && pNextJctNode->base.connnode_count == 2) {
+						// 현재 링크 저장
+						vector<RouteResultLinkEx> vtNewLinkInfo;
+						RouteResultLinkEx addLinkEx;
+						addLinkEx.link_id = pJctLink->link_id;
+						addLinkEx.node_id.llid = NOT_USE;
+						vtNewLinkInfo.emplace_back(addLinkEx);
+
+						// 다음 링크 저장
+						addLinkEx.link_id = (pNextJctNode->connnodes[0] == pJctLink->link_id) ? pNextJctNode->connnodes[1] : pNextJctNode->connnodes[0];
+						addLinkEx.node_id.llid = NOT_USE;
+						vtNewLinkInfo.emplace_back(addLinkEx);
+
+						// 재귀 함수 호출
+						GetRouteProbablePath(vtNewLinkInfo, vtJctInfo, length, expansion, branchLength - pLinkInfo->length);
+					}
+				}
 			} // for jj
 		}
 		else {
@@ -751,4 +821,111 @@ const size_t CRoutePackage::GetRouteProbablePath(IN const RouteResultInfo* pResu
 	} // for ii
 
 	return vtJctInfo.size();
+}
+
+
+void CRoutePackage::GetOptimalPosition(IN const stReqOptimal* pRequest, IN const stOptimalPointInfo* pResult, OUT string& strJson)
+{
+   	int result_code = ROUTE_RESULT_FAILED;
+	string str_msg = "";
+
+#if defined(USE_CJSON)
+	cJSON* root = cJSON_CreateObject();
+
+	if (pRequest == nullptr || pResult == nullptr) {
+		// header
+		cJSON_AddItemToObject(root, "result_code", cJSON_CreateNumber(ROUTE_RESULT_FAILED));
+		cJSON_AddItemToObject(root, "error_msg", cJSON_CreateString("failed"));
+	}
+	else {
+		int cntItems = pResult->vtEntryPoint.size();
+
+		if (cntItems <= 0) {
+			LOG_TRACE(LOG_ERROR, "Error, Optimal position result null");
+			// mainobj->Set(context, String::NewFromUtf8(isolate, "msg").ToLocalChecked(), String::NewFromUtf8(isolate, "Error, Can not find optimal location").ToLocalChecked());
+			// header
+			cJSON_AddItemToObject(root, "result_code", cJSON_CreateNumber(OPTIMAL_RESULT_FAILED));
+			cJSON_AddItemToObject(root, "error_msg", cJSON_CreateString("no result"));
+		}
+		else {
+			// header
+			cJSON_AddItemToObject(root, "result_code", cJSON_CreateNumber(OPTIMAL_RESULT_SUCCESS));
+			cJSON_AddItemToObject(root, "error_msg", cJSON_CreateString("success"));
+
+			// data
+			cJSON* data = cJSON_CreateObject();
+
+			cJSON_AddItemToObject(data, "result", cJSON_CreateBool(true));
+			cJSON_AddItemToObject(data, "count", cJSON_CreateNumber(cntItems));
+
+			// items
+			cJSON* items = cJSON_CreateArray();
+			for(const auto & it : pResult->vtEntryPoint) {
+				cJSON* item = cJSON_CreateObject();
+				cJSON_AddItemToObject(item, "x", cJSON_CreateNumber(it.x));
+				cJSON_AddItemToObject(item, "y", cJSON_CreateNumber(it.y));
+				cJSON_AddItemToObject(item, "type", cJSON_CreateNumber(it.nAttribute));
+				cJSON_AddItemToArray(items, item);
+			}
+			// entrypoints
+			cJSON_AddItemToObject(data, "entrypoints", items);
+
+			// add data
+			cJSON_AddItemToObject(root, "data", data);
+
+
+			// add more expand
+			if (pRequest->isExpand == true) {
+				// expand
+				cJSON* expand = cJSON_CreateObject();
+				
+				// request position
+				cJSON_AddItemToObject(expand, "x", cJSON_CreateNumber(pRequest->x));
+				cJSON_AddItemToObject(expand, "y", cJSON_CreateNumber(pRequest->y));
+
+				// type
+				cJSON_AddItemToObject(expand, "type", cJSON_CreateNumber(pResult->nType));
+				
+				// name
+				if (!pResult->name.empty()) {
+		#if defined(_WIN32)
+					char szUTF8[MAX_PATH] = {0,};
+					MultiByteToUTF8(pResult->name.c_str(), szUTF8);
+					cJSON_AddStringToObject(expand, "name", szUTF8);
+		#else
+					cJSON_AddStringToObject(expand, "name", pResult->name.c_str());
+		#endif
+				}
+
+				// vertices
+				cJSON* vertices = cJSON_CreateArray();
+				for(int ii=pResult->vtPolygon.size() - 1; ii >= 0; --ii) {
+					cJSON* vertex = cJSON_CreateArray();
+					cJSON_AddItemToArray(vertex, cJSON_CreateNumber(pResult->vtPolygon[ii].x));
+					cJSON_AddItemToArray(vertex, cJSON_CreateNumber(pResult->vtPolygon[ii].y));
+					cJSON_AddItemToArray(vertices, vertex);
+				}
+				cJSON_AddItemToObject(expand, "vertices", vertices);
+
+				// id
+				cJSON_AddItemToObject(expand, "id", cJSON_CreateNumber(pResult->id));
+
+				// add expand
+				cJSON_AddItemToObject(root, "expand", expand);
+			} // is expand
+		}
+	}
+
+	strJson = cJSON_Print(root);
+	
+	cJSON_Delete(root);
+	
+#else //#if defined(USE_CJSON)
+
+
+#endif // #if defined(USE_CJSON)
+
+	if (!strJson.empty()) {
+		// mainobj->Set(context, String::NewFromUtf8(isolate, "route").ToLocalChecked(), String::NewFromUtf8(isolate, strJson.c_str()).ToLocalChecked());
+	}
 }

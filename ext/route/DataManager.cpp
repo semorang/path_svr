@@ -157,6 +157,17 @@ bool CDataManager::Initialize(void)
 	m_cntMaxCache = MAX_CASH_COUNT;
 #endif
 
+	// for optimal api
+	memset(&m_dataCost, 0x00, sizeof(m_dataCost));
+	m_dataCost.optimal.cost_lv0 = 100; // 0단계 검색 범위
+	m_dataCost.optimal.cost_lv1 = 300; // 1단계 검색 범위
+	m_dataCost.optimal.cost_lv2 = 500; // 2단계 검색 범위
+	m_dataCost.optimal.cost_lv3 = 700; // 3단계 검색 범위
+	m_dataCost.optimal.cost_lv4 = 1000; // 4단계 검색 범위
+	m_dataCost.optimal.cost_mes = 500; // 이웃메쉬 포함 영역
+	m_dataCost.optimal.cost_bld = 300; // 이웃빌딩 포함 영역
+	m_dataCost.optimal.cost_cpx = 500; // 이웃단지 포함 영역
+
 	return true;
 }
 
@@ -1023,7 +1034,7 @@ stLinkInfo * CDataManager::GetLinkDataByPointAround(IN const double lng, IN cons
 	if (nMaxMesh == 1 && !s_ppMesh[0]->neighbors.empty()) {
 		for (unordered_set<uint32_t>::const_iterator it = s_ppMesh[0]->neighbors.begin(); it != s_ppMesh[0]->neighbors.end(); it++) {
 			// 주변 메쉬의 중심 거리가 최대 요청 거리 이하일 경우만 추가
-			if ((pMesh = GetMeshDataById(*it)) != nullptr && isInBox(lng, lat, pMesh->data_box)) {
+			if ((pMesh = GetMeshDataById(*it)) != nullptr && isInBox(lng, lat, pMesh->data_box, nMaxDist)) {
 				s_ppMesh[nMaxMesh++] = pMesh;
 
 				//const int32_t nMxMeshDiff = 500; // 설정 거리안의 주변 메쉬만 확인
@@ -1147,40 +1158,48 @@ stLinkInfo * CDataManager::GetLinkDataByPointAround(IN const double lng, IN cons
 					// 연결로, 교차로, 램프, 로터리 제외
 					// 터널, 지하차도 제외
 
+					// 2023-10-11
+					// link_dtype: 링크세부종별(dk3), 1:고가도로,지하차도 옆길 -> 허용, 
+					// link_type: 링크종별 5:램프 는 level: 경로레벨, 2:국도 이하일 경우 -> 허용 
+
 					(nMatchType == TYPE_LINK_MATCH_CARSTOP) &&
-					(pLink->veh.link_dtype == 1 || pLink->veh.link_dtype == 3 || //( pLink->veh.level >= 9 || 단지폴리곤에 포함된 단지내 도로만 제외
+					(/*pLink->veh.link_dtype == 1 || */pLink->veh.link_dtype == 3 || //( pLink->veh.level >= 9 || 단지폴리곤에 포함된 단지내 도로만 제외
 					 pLink->veh.road_type == 1 || pLink->veh.road_type == 2 || pLink->veh.road_type == 4 ||
 					 pLink->veh.pass_code == 2 || pLink->veh.pass_code == 3 ||
-					 pLink->veh.link_type == 3 || pLink->veh.link_type == 4 || pLink->veh.link_type == 5 || pLink->veh.link_type == 6 || pLink->veh.link_type == 8 ||
+					 pLink->veh.link_type == 3 || pLink->veh.link_type == 4 || (pLink->veh.link_type == 5 && pLink->veh.level <= 1)  ||
+					 pLink->veh.link_type == 6 || pLink->veh.link_type == 8 ||
 					 pLink->veh.tunnel == 1 || pLink->veh.under_pass == 1)) ||
 
 					((nMatchType == TYPE_LINK_MATCH_CARSTOP_EX) &&
-					(pLink->veh.link_dtype == 1 || // 차량 승하자 + 단지내도로(건물입구점 재확인시, 단지도로에 매칭된 입구점을 확인하기 위해 포함)
+					(/*pLink->veh.link_dtype == 1 || */ // 차량 승하자 + 단지내도로(건물입구점 재확인시, 단지도로에 매칭된 입구점을 확인하기 위해 포함)
 					 pLink->veh.road_type == 1 || pLink->veh.road_type == 2 || pLink->veh.road_type == 4 ||
 					 pLink->veh.pass_code == 2 || pLink->veh.pass_code == 3 ||
 #if defined(USE_P2P_DATA)
 					pLink->veh.over_pass == 1 || pLink->veh.hd_flag != 1 || // 전체 링크가 HD로 구성된 링크만 사용(경유지)
 #endif
-					 pLink->veh.link_type == 3 || pLink->veh.link_type == 4 || pLink->veh.link_type == 5 || pLink->veh.link_type == 6 || pLink->veh.link_type == 8 ||
+					 pLink->veh.link_type == 3 || pLink->veh.link_type == 4 || (pLink->veh.link_type == 5 && pLink->veh.level <= 1) ||
+					 pLink->veh.link_type == 6 || pLink->veh.link_type == 8 ||
 					 pLink->veh.tunnel == 1 || pLink->veh.under_pass == 1)) ||
 
 					((nMatchType == TYPE_LINK_MATCH_FOR_TABLE) &&
-					(pLink->veh.link_dtype == 1 || pLink->veh.link_dtype == 3 || pLink->veh.level >= USE_ROUTE_TABLE_LEVEL || 
+					(/*pLink->veh.link_dtype == 1 || */ pLink->veh.link_dtype == 3 || pLink->veh.level >= USE_ROUTE_TABLE_LEVEL ||
 					pLink->veh.lane_cnt <= 2 || // 2차선 이하 제외
 					pLink->veh.road_type == 1 || pLink->veh.road_type == 2 || pLink->veh.road_type == 4 ||
 					pLink->veh.pass_code == 2 || pLink->veh.pass_code == 3 ||
-					pLink->veh.link_type == 3 || pLink->veh.link_type == 4 || pLink->veh.link_type == 5 || pLink->veh.link_type == 6 || pLink->veh.link_type == 8 ||
+					pLink->veh.link_type == 3 || pLink->veh.link_type == 4 || (pLink->veh.link_type == 5 && pLink->veh.level <= 1) ||
+					pLink->veh.link_type == 6 || pLink->veh.link_type == 8 ||
 					pLink->veh.tunnel == 1 || pLink->veh.under_pass == 1)) ||
 
 					((nMatchType == TYPE_LINK_MATCH_FOR_HD) &&
-					(pLink->veh.link_dtype == 1 || /*pLink->veh.link_dtype == 3 || pLink->veh.level >= 9 ||*/
+					(/*pLink->veh.link_dtype == 1 || */ /*pLink->veh.link_dtype == 3 || pLink->veh.level >= 9 ||*/
 					// 대구 경북 과학 기술원내 도로가 단지내 도로이기에, p2p는 단지내 도로는 포함
 					pLink->veh.road_type == 1 || pLink->veh.road_type == 2 || pLink->veh.road_type == 4 ||
 					pLink->veh.pass_code == 2 || pLink->veh.pass_code == 3 ||
 #if defined(USE_P2P_DATA)
 					pLink->veh.over_pass == 1 || pLink->veh.hd_flag == 0 || // HD 링크와 매칭 안되는 링크는 제외
 #endif
-					pLink->veh.link_type == 3 || pLink->veh.link_type == 4 || pLink->veh.link_type == 5 || pLink->veh.link_type == 6 || pLink->veh.link_type == 8 ||
+					pLink->veh.link_type == 3 || pLink->veh.link_type == 4 || (pLink->veh.link_type == 5 && pLink->veh.level <= 1) ||
+					pLink->veh.link_type == 6 || pLink->veh.link_type == 8 ||
 					pLink->veh.tunnel == 1 || pLink->veh.under_pass == 1)) ||
 					
 					((idxLinkVtx = linkProjection(pLink, lng, lat, nMaxDist, minLng, minLat, minDist, retIr)) < 0)) {
@@ -1265,36 +1284,64 @@ int32_t CDataManager::GetLinkVertexDataByPoint(IN const double lng, IN const dou
 }
 
 
-stPolygonInfo* CDataManager::GetPolygonDataByPoint(IN OUT double& lng, IN OUT double& lat, IN const int32_t nType)
+stPolygonInfo* CDataManager::GetPolygonDataByPoint(IN const double lng, IN const double lat, IN const int32_t nType, IN const bool useNeighborMesh)
 {
-	stPolygonInfo* pPoly = nullptr;
-	stMeshInfo* pMesh = nullptr;
+	//static const int32_t nMaxDistBuilding = 1000; // 최대 1km
+	//static const int32_t nMaxDistComplex = 5000; // 최대 5km, 골프장이 꽤 넓음.
 
-	if (m_pMapMesh && (pMesh = m_pMapMesh->GetMeshByPoint(lng, lat)) != nullptr) {
-#if defined(USE_BUILDING_DATA)
-		// find in building
-		if (nType != 3) {
-			for (vector<KeyID>::const_iterator it = pMesh->buildings.begin(); it != pMesh->buildings.end(); it++) {
-				if (m_pMapBuilding && m_pMapBuilding->IsPitInPolygon(*it, lng, lat))
-				{
-					pPoly = m_pMapBuilding->GetDataById(*it);
-					break;
+	stPolygonInfo* pPoly = nullptr;
+	stMeshInfo* pMesh = GetMeshDataByPoint(lng, lat);
+
+	if (pMesh != nullptr) {
+		vector<stMeshInfo*> vtMeshes = { pMesh };
+
+		if (useNeighborMesh) {
+			stMeshInfo* pMeshNeighbor = nullptr;
+			double dwDist = m_dataCost.optimal.cost_mes / 100000.;
+			SBox meshBoxCheck = { lng - dwDist, lat - dwDist, lng + dwDist, lat + dwDist };
+
+			for (const auto& id : pMesh->neighbors) {
+				if ((id != pMesh->mesh_id.tile_id) && ((pMeshNeighbor = GetMeshDataById(id)) != nullptr) && isInPitBox(meshBoxCheck, pMeshNeighbor->data_box)) {
+					vtMeshes.emplace_back(pMeshNeighbor);
 				}
-			}
+			} // for
 		}
+
+		for (const auto& mesh : vtMeshes) {
+#if defined(USE_BUILDING_DATA)
+			// find in building
+			if (m_pMapBuilding && nType != 2) {
+				for (vector<KeyID>::const_iterator it = mesh->buildings.begin(); it != mesh->buildings.end(); it++) {
+					if ((pPoly = m_pMapBuilding->GetPitInPolygon(*it, lng, lat, m_dataCost.optimal.cost_bld)) != nullptr) {
+						if (nType == 0 && pPoly->getAttributeCount(TYPE_POLYGON_DATA_ATTR_ENT) <= 0) {
+							// 입구점이 없으면
+							pPoly = nullptr;
+							continue;
+						}
+						break;
+					}
+				} // for
+			}
 #endif
 #if defined(USE_COMPLEX_DATA)
-		// find in complex
-		if (nType == 2 || (nType == 0 && pPoly == nullptr)) {
-			for (vector<KeyID>::const_iterator it = pMesh->complexs.begin(); it != pMesh->complexs.end(); it++) {
-				if (m_pMapComplex && m_pMapComplex->IsPitInPolygon(*it, lng, lat))
-				{
-					pPoly = m_pMapComplex->GetDataById(*it);
-					break;
-				}
+			// find in complex
+			if (pPoly == nullptr && m_pMapComplex && nType != 1) {
+				for (vector<KeyID>::const_iterator it = mesh->complexs.begin(); it != mesh->complexs.end(); it++) {
+					if ((pPoly = m_pMapComplex->GetPitInPolygon(*it, lng, lat, m_dataCost.optimal.cost_cpx)) != nullptr) {
+						if (nType == 0 && pPoly->getAttributeCount(TYPE_POLYGON_DATA_ATTR_ENT) <= 0 && pPoly->getAttributeCount(TYPE_POLYGON_DATA_ATTR_LINK) <= 0) {
+							// 입구점, 단지도로 모두 없으면
+							pPoly = nullptr;
+							continue;
+						}
+						break;
+					}
+				} // for
 			}
-		}
 #endif
+			if (pPoly != nullptr) {
+				break;
+			}
+		} // for
 	}
 
 	return pPoly;
@@ -1341,9 +1388,9 @@ int32_t checkEntType(IN const double dwLng, IN const double dwLat, IN const stEn
 	return retCnt;
 }
 
-bool CDataManager::GetNearRoadByPoint(IN const double lng, IN const double lat, IN const int32_t maxDist, IN const int32_t matchType, OUT stEntryPointInfo& entInfo) 
+stLinkInfo * CDataManager::GetNearRoadByPoint(IN const double lng, IN const double lat, IN const int32_t maxDist, IN const int32_t matchType, OUT stEntryPointInfo& entInfo)
 {
-	bool ret = false;
+	stLinkInfo * pRetLink = nullptr;
 
 	double retDist = INT_MAX;
 	int32_t idxLinkVtx = -1;
@@ -1362,7 +1409,7 @@ bool CDataManager::GetNearRoadByPoint(IN const double lng, IN const double lat, 
 		double dwLaneDist = pLink->veh.lane_cnt;
 		if (pLink->veh.lane_cnt >= 6 || pLink->veh.level <= 1) {
 			dwLaneDist = pLink->veh.lane_cnt * LaneHighDist;
-		} else if (pLink->veh.lane_cnt <= 4 || pLink->veh.level <= 4) {
+		} else if (pLink->veh.lane_cnt >= 4 || pLink->veh.level <= 4) {
 			dwLaneDist = pLink->veh.lane_cnt * LaneMidDist;
 		} else { //if () {
 			dwLaneDist = pLink->veh.lane_cnt * LaneLowDist;
@@ -1383,35 +1430,34 @@ bool CDataManager::GetNearRoadByPoint(IN const double lng, IN const double lat, 
 				isLeft = isLeftSide(pLink->getVertex(idxLinkVtx + 1), pLink->getVertex(idxLinkVtx), &reqPos);
 			}
 
-			// 무조건 도로 우측 방향으로 위치시켜 주자
-			if (isLeft) {
-				// 일방에서 좌측에 위치하면 우측 도로변으로 위치시켜 주자
-				dwLaneDist += dwDist;
+			// 분리도로일 경우 도로 이격에 마진을 조금 줄여주자
+			if (pLink->veh.lane_cnt > 1)
+				dwLaneDist *= .65;
 
-				if (getPointByDistance(lng, lat, newRetPos.x, newRetPos.y, dwLaneDist) == true) {
-					entInfo.dwDist = dwLaneDist;
-				}
-				else {
+			if (isLeft) { // 무조건 도로 우측 방향으로 위치시켜 주자
+				// 일방에서 좌측에 위치하면 우측 도로변으로 위치시켜 주자
+				if (getPointByDistance(lng, lat, newRetPos.x, newRetPos.y, dwDist + dwLaneDist) == true) {
+					entInfo.dwDist = dwDist + dwLaneDist;
+				} else {
 					entInfo.dwDist = dwDist;
 				}
-			}
-			else {
+			} else { // 우측에 있으면
 				// 도로로부터 지정된거리(도로너비) 만큼 띄워 도로변으로 위치시켜 주자
 				if (getPointByDistance(lng, lat, newRetPos.x, newRetPos.y, dwDist - dwLaneDist) == true) {
 					entInfo.dwDist = abs(dwDist - dwLaneDist);
-				}
-				else {
+				} else {
 					entInfo.dwDist = dwDist;
 				}
 			}
 		} else { // if (pLink->veh.link_type == 1) { // 비분리도로일경우 {
-			dwLaneDist /= 2;
+			dwLaneDist *= .5;
 
 			// 도로내에 매칭되면 도로변으로 위치시키자
 			if (dwDist <= dwLaneDist) {
 				// 지정거리 이내(도로 내)면 도로변으로 위치시켜 주자
 				double lngNext = lng;
 				double latNext = lat;
+
 				if (getPointByDistance(lng, lat, newRetPos.x, newRetPos.y, dwDist - dwLaneDist) == true) {
 					entInfo.dwDist = abs(dwDist - dwLaneDist);
 				} else {
@@ -1431,36 +1477,40 @@ bool CDataManager::GetNearRoadByPoint(IN const double lng, IN const double lat, 
 		// 새로운 지점 주변에 원래의 도로 말고, 또다른 가까운 도로가 있다면 원래의 도로에서 도로너비만큼 띄우지 말고, 최소의 너비만 띄운 좌표로 사용하자
 		// 근접 링크 좌표에서 일정거리 띄워진 좌표
 		SPoint nearRetPos = newRetPos;
-		stLinkInfo* pNewLink = GetLinkDataByPointAround(newRetPos.x, newRetPos.y, dwLaneDist, nearRetPos.x, nearRetPos.y, retDist, matchType, &idxLinkVtx);
+		//stLinkInfo* pNewLink = GetLinkDataByPointAround(newRetPos.x, newRetPos.y, dwLaneDist, nearRetPos.x, nearRetPos.y, retDist, TYPE_LINK_MATCH_NONE, &idxLinkVtx);
+		stLinkInfo* pNewLink = GetLinkDataByPointAround(newRetPos.x, newRetPos.y, dwLaneDist + LaneLowDist, nearRetPos.x, nearRetPos.y, retDist, TYPE_LINK_MATCH_NONE, &idxLinkVtx);
 
 		if (pNewLink != nullptr && pNewLink != pLink) {
-			// 도로 중심으로부터 지정된거리(도로너비) 만큼 띄워 도로밖으로 위치시켜 주자
-			const double dwMinDist = 1.f;
-			if (getPointByDistance(lng, lat, retPos.x, retPos.y, dwMinDist) == true) {
+			// 이격 거리 주변 도로보다 가까운 거리로 재설정 하자
+			const double dwMinDist = max(LaneLowDist, retDist);
+			if (getPointByDistance(retPos.x, retPos.y, nearRetPos.x, nearRetPos.y, dwMinDist) == true) {
 				entInfo.dwDist = abs(dwDist - dwMinDist);
 			} else {
 				entInfo.dwDist = dwDist;
 			}
 
-			entInfo.x = retPos.x;
-			entInfo.y = retPos.y;
+			entInfo.x = nearRetPos.x;
+			entInfo.y = nearRetPos.y;
 		} 
 		else {
 			entInfo.x = newRetPos.x;
 			entInfo.y = newRetPos.y;
 		}
 
-		ret = true;
+		pRetLink = pLink;
 	} // if
 
-	return ret;
+	return pRetLink;
 }
 
 
 int32_t CDataManager::GetOptimalPointDataByPoint(IN const double lng, IN const double lat, OUT stOptimalPointInfo* pOptInfo, IN const int32_t nEntType, IN const int32_t nRetCount, IN const int32_t nMatchType)
 {
 	int32_t cntRet = 0;
-	stReqEntryType reqType = { nEntType };
+	stReqOptimal reqOpt;
+	reqOpt.x = lng;
+	reqOpt.y = lat;
+	reqOpt.typeAll = nEntType;
 
 	if (pOptInfo != nullptr)
 	{
@@ -1469,52 +1519,14 @@ int32_t CDataManager::GetOptimalPointDataByPoint(IN const double lng, IN const d
 		vector<stEntryPointInfo>  vtExpInfo; // 추가 속성 (단지내도로, 최근접도로)
 
 		stPolygonInfo* pPoly = nullptr;
-		stMeshInfo* pMesh = nullptr;
-
-		//if (m_pMapMesh && (pMesh = m_pMapMesh->GetMeshByPoint(reqCoord.x, reqCoord.y)) != nullptr) {
-		if (m_pMapMesh && (pMesh = GetMeshDataByPoint(reqCoord.x, reqCoord.y)) != nullptr) {
-#if defined(USE_BUILDING_DATA)
-			// find in building
-			for (vector<KeyID>::const_iterator it = pMesh->buildings.begin(); it != pMesh->buildings.end(); it++) {
-				if (m_pMapBuilding && m_pMapBuilding->IsPitInPolygon(*it, lng, lat))
-				{
-					pPoly = m_pMapBuilding->GetDataById(*it);
-					//if (pPoly->vtEnt.empty()) {
-					if (pPoly->getAttributeCount(TYPE_POLYGON_DATA_ATTR_ENT) <= 0) {
-						// 입구점이 없으면
-						pPoly = nullptr;
-						continue;
-					}
-					break;
-				}
-			} // for
-#endif
-#if defined(USE_COMPLEX_DATA)
-			// find in complex
-			if (pPoly == nullptr) {
-				for (vector<KeyID>::const_iterator it = pMesh->complexs.begin(); it != pMesh->complexs.end(); it++) {
-					if (m_pMapComplex && m_pMapComplex->IsPitInPolygon(*it, lng, lat))
-					{
-						pPoly = m_pMapComplex->GetDataById(*it);
-						//if (pPoly->vtEnt.empty() && pPoly->vtLink.empty()) {
-						if (pPoly->getAttributeCount(TYPE_POLYGON_DATA_ATTR_ENT) <= 0 && pPoly->getAttributeCount(TYPE_POLYGON_DATA_ATTR_LINK) <= 0) {
-							// 입구점 & 단지도로 모두 없으면
-							pPoly = nullptr;
-							continue;
-						}
-						break;
-					}
-				} // for
-			}
-#endif
-		}
-		else {
-			m_strMsg = "Can't find matched mesh data";
-		}
 		
-
 		pOptInfo->x = lng;
 		pOptInfo->y = lat;
+
+		if ( reqOpt.typeAll != 99 ) { // 폴리곤무시
+			pPoly = GetPolygonDataByPoint(lng, lat);
+		}
+
 
 		if (pPoly != nullptr) {	
 			// 폴리곤 정보 복사
@@ -1525,6 +1537,8 @@ int32_t CDataManager::GetOptimalPointDataByPoint(IN const double lng, IN const d
 
 			const int cntEnt = pPoly->getAttributeCount(TYPE_POLYGON_DATA_ATTR_ENT);
 			const int cntLinkKey = pPoly->getAttributeCount(TYPE_POLYGON_DATA_ATTR_LINK);
+
+			pOptInfo->id = pPoly->poly_id.llid;
 
 			//std::copy(pData, pData + pPoly->getAttributeSize(TYPE_POLYGON_DATA_ATTR_VTX), pOptInfo->vtPolygon);
 			pOptInfo->vtPolygon.insert(pOptInfo->vtPolygon.end(), &pPolygon[0], &pPolygon[pPoly->getAttributeCount(TYPE_POLYGON_DATA_ATTR_VTX)]);
@@ -1537,7 +1551,7 @@ int32_t CDataManager::GetOptimalPointDataByPoint(IN const double lng, IN const d
 
 				// 입구점 매칭
 				//for (vector<stEntranceInfo>::const_iterator it = pPoly->vtEnt.begin(); it != pPoly->vtEnt.end(); it++) {
-				if (reqType.typeAll == 0) // 전체 타입
+				if (reqOpt.typeAll == 0) // 전체 타입
 				{
 					cntRet = checkEntType(lng, lat, pEnt, cntEnt, nMaxDist, 0, 0, vtEntInfo);
 				}
@@ -1546,20 +1560,20 @@ int32_t CDataManager::GetOptimalPointDataByPoint(IN const double lng, IN const d
 					// 최대 4번의 스텝까지 허용
 					// nEntType, 입구점 타입 // 0:알아서, 1: 차량 입구점, 2: 택시 승하차 지점(건물), 3: 택시 승하차 지점(건물군), 4: 택배 차량 하차 거점, 5: 보행자 입구점, 	6: 배달 하차점(차량, 오토바이), 7: 배달 하차점(자전거, 도보)
 					// 1st
-					if (reqType.type1st != 0) {
-						cntRet = checkEntType(lng, lat, pEnt, cntEnt, nMaxDist, reqType.type1st, 1, vtEntInfo);
+					if (reqOpt.type1st != 0) {
+						cntRet = checkEntType(lng, lat, pEnt, cntEnt, nMaxDist, reqOpt.type1st, 1, vtEntInfo);
 					}
 					// 2nd
-					if (cntRet <= 0 && reqType.type2nd != 0) {
-						cntRet = checkEntType(lng, lat, pEnt, cntEnt, nMaxDist, reqType.type2nd, 1, vtEntInfo);
+					if (cntRet <= 0 && reqOpt.type2nd != 0) {
+						cntRet = checkEntType(lng, lat, pEnt, cntEnt, nMaxDist, reqOpt.type2nd, 1, vtEntInfo);
 					}
 					// 3rd
-					if (cntRet <= 0 && reqType.type3rd != 0) {
-						cntRet = checkEntType(lng, lat, pEnt, cntEnt, nMaxDist, reqType.type3rd, 1, vtEntInfo);
+					if (cntRet <= 0 && reqOpt.type3rd != 0) {
+						cntRet = checkEntType(lng, lat, pEnt, cntEnt, nMaxDist, reqOpt.type3rd, 1, vtEntInfo);
 					}
 					// 4th
-					if (cntRet <= 0 && reqType.type4th != 0) {
-						cntRet = checkEntType(lng, lat, pEnt, cntEnt, nMaxDist, reqType.type4th, 1, vtEntInfo);
+					if (cntRet <= 0 && reqOpt.type4th != 0) {
+						cntRet = checkEntType(lng, lat, pEnt, cntEnt, nMaxDist, reqOpt.type4th, 1, vtEntInfo);
 					}
 				}
 
@@ -1596,9 +1610,9 @@ int32_t CDataManager::GetOptimalPointDataByPoint(IN const double lng, IN const d
 				}
 			}
 			else { // 단지
-				const int32_t nMaxDist = 50000; // 최대 5km, 골프장이 꽤 넓음.
+				const int32_t nMaxDist = 5000; // 최대 5km, 골프장이 꽤 넓음.
 
-				if (reqType.typeAll == 0) // 전체 타입
+				if (reqOpt.typeAll == 0) // 전체 타입
 				{
 					cntRet = checkEntType(lng, lat, pEnt, cntEnt, nMaxDist, 0, 0, vtEntInfo);
 				}
@@ -1607,20 +1621,20 @@ int32_t CDataManager::GetOptimalPointDataByPoint(IN const double lng, IN const d
 					// 최대 4번의 스텝까지 허용
 					// nEntType, 입구점 타입 // 0:알아서, 1: 차량 입구점, 2: 택시 승하차 지점(건물), 3: 택시 승하차 지점(건물군), 4: 택배 차량 하차 거점, 5: 보행자 입구점, 	6: 배달 하차점(차량, 오토바이), 7: 배달 하차점(자전거, 도보)
 					// 1st
-					if (reqType.type1st != 0) {
-						cntRet = checkEntType(lng, lat, pEnt, cntEnt, nMaxDist, reqType.type1st, 1, vtEntInfo);
+					if (reqOpt.type1st != 0) {
+						cntRet = checkEntType(lng, lat, pEnt, cntEnt, nMaxDist, reqOpt.type1st, 1, vtEntInfo);
 					}					
 					// 2nd
-					if (cntRet <= 0 && reqType.type2nd != 0) {
-						cntRet = checkEntType(lng, lat, pEnt, cntEnt, nMaxDist, reqType.type2nd, 1, vtEntInfo);
+					if (cntRet <= 0 && reqOpt.type2nd != 0) {
+						cntRet = checkEntType(lng, lat, pEnt, cntEnt, nMaxDist, reqOpt.type2nd, 1, vtEntInfo);
 					}
 					// 3rd
-					if (cntRet <= 0 && reqType.type3rd != 0) {
-						cntRet = checkEntType(lng, lat, pEnt, cntEnt, nMaxDist, reqType.type3rd, 1, vtEntInfo);
+					if (cntRet <= 0 && reqOpt.type3rd != 0) {
+						cntRet = checkEntType(lng, lat, pEnt, cntEnt, nMaxDist, reqOpt.type3rd, 1, vtEntInfo);
 					}
 					// 4th
-					if (cntRet <= 0 && reqType.type4th != 0) {
-						cntRet = checkEntType(lng, lat, pEnt, cntEnt, nMaxDist, reqType.type4th, 1, vtEntInfo);
+					if (cntRet <= 0 && reqOpt.type4th != 0) {
+						cntRet = checkEntType(lng, lat, pEnt, cntEnt, nMaxDist, reqOpt.type4th, 1, vtEntInfo);
 					}
 				}
 
@@ -1634,7 +1648,7 @@ int32_t CDataManager::GetOptimalPointDataByPoint(IN const double lng, IN const d
 				entInfo.dwDist = INT_MAX;
 
 				stLinkInfo* pLink;
-				double nMinDist = nMaxDist;
+				double nMinDist = m_dataCost.optimal.cost_cpx;
 				double retLng, retLat, retDist, retIr, minIr;
 
 				//for (vector<KeyID>::const_iterator it = pPoly->vtLink.begin(); it != pPoly->vtLink.end(); it++) {
@@ -1674,23 +1688,21 @@ int32_t CDataManager::GetOptimalPointDataByPoint(IN const double lng, IN const d
 
 		// 입구점 정보가 없으면 주변 가까운 도로 검출
 		if (vtEntInfo.empty()) {
-			static const array<int32_t, 5> arrDist = { 100, 500, 1000, 3000, 5000 }; // 최대 5km 내에서 검색
-
 			stEntryPointInfo entInfo = { 0, };
-			bool retNearRoad = false;
+			stLinkInfo * pRetNearRoad = nullptr;
 
 			// 도로 사이드에 위치시킬 최적 지점 이격 거리
-			for (const auto &nDist : arrDist) {
-				// for (int ii = 0; ii < maxArrDist; ii++) {
-				if ((retNearRoad = GetNearRoadByPoint(reqCoord.x, reqCoord.y, nDist, nMatchType, entInfo)) == true) {
+			for (int ii = 0; ii < 5; ii++) {
+				if ((pRetNearRoad = GetNearRoadByPoint(reqCoord.x, reqCoord.y, m_dataCost.base[ii], nMatchType, entInfo)) != nullptr) {
 					break;
 				}
-			} // for
+			}
 
-			if (retNearRoad == true && entInfo.dwDist < INT_MAX) {
+			if (pRetNearRoad != nullptr && entInfo.dwDist < INT_MAX) {
 				if (pOptInfo->nType == TYPE_ENT_NONE) {
 					// 결과 타입을 주변 도로로 적용
 					pOptInfo->nType = TYPE_ENT_NEAR_ROAD;
+					pOptInfo->id = pRetNearRoad->link_id.llid;
 				}
 				vtExpInfo.emplace_back(entInfo);
 			}
@@ -1702,7 +1714,7 @@ int32_t CDataManager::GetOptimalPointDataByPoint(IN const double lng, IN const d
 		}
 		else {
 			LOG_TRACE(LOG_DEBUG, "EntryPoint Info, size:%d", cntRet);
-			if (cntRet > 1 && reqType.typeAll == 0) {
+			if (cntRet > 1 && reqOpt.typeAll == 0) {
 				sort(vtEntInfo.begin(), vtEntInfo.end(), cmpEntPoint);
 			}
 
@@ -1842,6 +1854,48 @@ bool CDataManager::GetNewData(IN const double& lng, IN const double& lat)
 void CDataManager::SetFileMgr(IN CFileManager* pFileMgr)
 {
 	m_pFileMgr = pFileMgr;
+}
+
+
+void CDataManager::SetDataCost(IN const uint32_t type, IN const DataCost* pCost)
+{
+	if (pCost != nullptr) {
+		int32_t listCount = 18;
+
+		LOG_TRACE(LOG_DEBUG, "set optimal type:%d", type);
+
+		switch (type) {
+		case TYPE_DATA_BUILDING:
+		case TYPE_DATA_COMPLEX:
+		case TYPE_DATA_ENTRANCE:
+		{
+			// old 
+			LOG_TRACE(LOG_DEBUG_LINE, "set optimal cost(old), ");
+			LOG_TRACE(LOG_DEBUG_CONTINUE, "dist step : %d, %d, %d, %d, %d, ", m_dataCost.optimal.cost_lv0,
+				m_dataCost.optimal.cost_lv1, m_dataCost.optimal.cost_lv2, m_dataCost.optimal.cost_lv3, m_dataCost.optimal.cost_lv4);
+			LOG_TRACE(LOG_DEBUG_CONTINUE, " max bulding & complex : ");
+			LOG_TRACE(LOG_DEBUG_CONTINUE, "%d, %d", m_dataCost.optimal.cost_bld, m_dataCost.optimal.cost_cpx);
+			LOG_TRACE(LOG_DEBUG_CONTINUE, "\n");
+
+			memcpy(&m_dataCost, pCost, sizeof(m_dataCost));			
+
+			// new
+			LOG_TRACE(LOG_DEBUG_LINE, "set optimal arr cost(new), ");
+			LOG_TRACE(LOG_DEBUG_CONTINUE, "dist step : %d, %d, %d, %d, %d, ", m_dataCost.optimal.cost_lv0,
+				m_dataCost.optimal.cost_lv1, m_dataCost.optimal.cost_lv2, m_dataCost.optimal.cost_lv3, m_dataCost.optimal.cost_lv4);
+			LOG_TRACE(LOG_DEBUG_CONTINUE, " max bulding & complex : ");
+			LOG_TRACE(LOG_DEBUG_CONTINUE, "%d, %d", m_dataCost.optimal.cost_bld, m_dataCost.optimal.cost_cpx);
+			LOG_TRACE(LOG_DEBUG_CONTINUE, "\n");
+		}
+		break;
+
+		default:
+		{
+			LOG_TRACE(LOG_DEBUG, "default data type not defined");
+		}
+		break;
+		} //switch
+	}
 }
 
 

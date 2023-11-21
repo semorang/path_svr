@@ -462,6 +462,7 @@ void SetDeparture(const FunctionCallbackInfo<Value>& args) {
    }
 }
 
+
 void SetWaypoint(const FunctionCallbackInfo<Value>& args) {
    // Isolate* isolate = args.GetIsolate();
    // double lng = To<double>(info[0]).FromJust();//->NumberValue();
@@ -506,7 +507,6 @@ void SetWaypoint(const FunctionCallbackInfo<Value>& args) {
 #endif
    }
 }
-
 
 
 void SetDestination(const FunctionCallbackInfo<Value>& args) {
@@ -556,11 +556,12 @@ void SetDestination(const FunctionCallbackInfo<Value>& args) {
 }
 
 
-void SetRpCost(const FunctionCallbackInfo<Value>& args) {
+void SetDataCost(const FunctionCallbackInfo<Value>& args) {
    Isolate* isolate = args.GetIsolate();
    Local<Context> context = isolate->GetCurrentContext();
 
    int type = 0;
+   int devide = 0;
    int count = 0;
    Local<Array> costList;
 
@@ -569,23 +570,28 @@ void SetRpCost(const FunctionCallbackInfo<Value>& args) {
 
    int ret = -1;
 
-   if (args.Length() < 3) {
-      LOG_TRACE(LOG_DEBUG, "set route cost argument too short : %d", args.Length());
-      msg = String::NewFromUtf8(isolate, "set route cost argument too short : " + args.Length());
-   } 
+   if (args.Length() < 4) {
+      LOG_TRACE(LOG_DEBUG, "set data cost argument too short : %d", args.Length());
+      msg = String::NewFromUtf8(isolate, "set data cost argument too short : " + args.Length());
+   }
    else {
-      type = args[0].As<Number>()->Value();//ROUTE_TYPE_VEHICLE // vevhicle
-      count = args[1].As<Number>()->Value();
-      costList = args[2].As<Array>();
+      type = args[0].As<Number>()->Value();
+      devide = args[1].As<Number>()->Value();
+      count = args[2].As<Number>()->Value();
+      costList = args[3].As<Array>();
 
-      RpCost cost;
+      DataCost cost;
       if (count >= 128) {
-         LOG_TRACE(LOG_DEBUG, "set route cost count too big : %d", count);
-         msg = String::NewFromUtf8(isolate, "set route cost count too big : " + count);
+         LOG_TRACE(LOG_DEBUG, "set data cost count too big : %d", count);
+         msg = String::NewFromUtf8(isolate, "set data cost count too big : " + count);
       } else {
          for (int ii=0; ii<count; ii++) {
             Local<Value> costValue =  costList->Get(context, ii).ToLocalChecked();
             cost.base[ii] = costValue.As<Number>()->Value();
+
+            if (devide > 0) {
+                cost.base[ii] /= devide;
+            }
          }
 
          m_pRouteMgr.SetRouteCost(type, &cost);
@@ -878,7 +884,6 @@ void GetMultiRouteResultForiNavi(const FunctionCallbackInfo<Value>& args) {
 void GetMultiRouteResult(const FunctionCallbackInfo<Value>& args) {
    Isolate* isolate = args.GetIsolate();
    Local<Context> context = isolate->GetCurrentContext();
-   Local<Object> mainobj = Object::New(isolate);
 
    int target = 0;
    int cnt = 0;
@@ -1029,26 +1034,30 @@ void GetRouteView(const FunctionCallbackInfo<Value>& args) {
 
 
 void GetOptimalPosition(const FunctionCallbackInfo<Value>& args) {
-
    Isolate* isolate = args.GetIsolate();
    Local<Context> context = isolate->GetCurrentContext();
 
-   Local<Object> mainobj = Object::New(isolate);
-   v8::MaybeLocal<v8::String> msg;
-
-   int ret = -1;
-
    LOG_TRACE(LOG_DEBUG, "Start find optimal location.");
 
-   if (args.Length() < 2) {
+   string strJson;
+
+   int cnt = args.Length();
+
+   if (cnt < 2) {
+#if defined(USE_CJSON)
+      cJSON* root = cJSON_CreateObject();
+
+      cJSON_AddNumberToObject(root, "result_code", OPTIMAL_RESULT_FAILED_WRONG_PARAM);
+      cJSON_AddStringToObject(root, "msg", "input param count not enough");
+
+      strJson = cJSON_Print(root);
+
+      cJSON_Delete(root);
+#else
+
+#endif
       LOG_TRACE(LOG_DEBUG, "function call argument too short : %s", args);
-
-      msg = String::NewFromUtf8(isolate, "function call argument too short : " + args.Length());
-   }
-   else {
-      int cnt = args.Length();
-      // LOG_TRACE(LOG_DEBUG, "arg length : %d", cnt);
-
+   } else {      
       double lng = args[0].As<Number>()->Value();
       double lat = args[1].As<Number>()->Value();
       
@@ -1072,90 +1081,24 @@ void GetOptimalPosition(const FunctionCallbackInfo<Value>& args) {
 
       LOG_TRACE(LOG_DEBUG, "Request, Location lng:%f, lat:%f, ent_type:%d, ret_cnt:%d, expand:%d", lng, lat, entType, retCount, isExpand);
 
+      stReqOptimal reqOpt = {0, };
       stOptimalPointInfo optInfo = {0, };
+
+      reqOpt.x = lng;
+      reqOpt.y = lat;
+      reqOpt.isExpand = isExpand;
+      reqOpt.typeAll = entType;
 
       uint32_t cntItems = m_pDataMgr.GetOptimalPointDataByPoint(lng, lat, &optInfo, entType, retCount);
 
-      if (cntItems <= 0) {
-         LOG_TRACE(LOG_ERROR, "Error, Optimal position result null");
-         // mainobj->Set(context, String::NewFromUtf8(isolate, "msg").ToLocalChecked(), String::NewFromUtf8(isolate, "Error, Can not find optimal location").ToLocalChecked());
-         // header
-         Local<Object> header = Object::New(isolate);
-         header->Set(context, String::NewFromUtf8(isolate, "isSuccessful").ToLocalChecked(), Boolean::New(isolate, false));
-         header->Set(context, String::NewFromUtf8(isolate, "resultCode").ToLocalChecked(), Integer::New(isolate, 100));
-         header->Set(context, String::NewFromUtf8(isolate, "resultMessage").ToLocalChecked(), String::NewFromUtf8(isolate, m_pDataMgr.GetErrorMessage()).ToLocalChecked());
+      m_pRoutePkg.GetOptimalPosition(&reqOpt, &optInfo, strJson);
+   }
 
-         // make header only
-         mainobj->Set(context, String::NewFromUtf8(isolate, "header").ToLocalChecked(), header);
-      }
-      else {
-         // header
-         Local<Object> header = Object::New(isolate);
-         header->Set(context, String::NewFromUtf8(isolate, "isSuccessful").ToLocalChecked(), Boolean::New(isolate, true));
-         header->Set(context, String::NewFromUtf8(isolate, "resultCode").ToLocalChecked(), Integer::New(isolate, 0));
-         header->Set(context, String::NewFromUtf8(isolate, "resultMessage").ToLocalChecked(), String::NewFromUtf8(isolate, "success").ToLocalChecked());
+   if (!strJson.empty()) {
+      // mainobj->Set(context, String::NewFromUtf8(isolate, "route").ToLocalChecked(), String::NewFromUtf8(isolate, strJson.c_str()).ToLocalChecked());
+   }
 
-         // data
-         Local<Object> data = Object::New(isolate);
-         data->Set(context, String::NewFromUtf8(isolate, "result").ToLocalChecked(), Boolean::New(isolate, true));
-         data->Set(context, String::NewFromUtf8(isolate, "count").ToLocalChecked(), Integer::New(isolate, optInfo.vtEntryPoint.size()));
-
-         // items
-         Local<Array> items = Array::New(isolate);
-         for(int ii=0; ii<cntItems; ii++) {
-            Local<Object> item = Object::New(isolate);
-            item->Set(context, String::NewFromUtf8(isolate, "x").ToLocalChecked(), Number::New(isolate, optInfo.vtEntryPoint[ii].x));
-            item->Set(context, String::NewFromUtf8(isolate, "y").ToLocalChecked(), Number::New(isolate, optInfo.vtEntryPoint[ii].y));
-            item->Set(context, String::NewFromUtf8(isolate, "type").ToLocalChecked(), Number::New(isolate, optInfo.vtEntryPoint[ii].nAttribute));
-            items->Set(context, ii, item);
-         }
-         // add
-         data->Set(context, String::NewFromUtf8(isolate, "entrypoints").ToLocalChecked(), items);
-
-
-         // make all
-         mainobj->Set(context, String::NewFromUtf8(isolate, "header").ToLocalChecked(), header);
-         mainobj->Set(context, String::NewFromUtf8(isolate, "data").ToLocalChecked(), data);
-
-
-         // add more expand
-         if (isExpand == true) {
-            // expand
-            Local<Object> expand = Object::New(isolate);
-            
-            // request position
-            expand->Set(context, String::NewFromUtf8(isolate, "x").ToLocalChecked(), Number::New(isolate, optInfo.x));
-            expand->Set(context, String::NewFromUtf8(isolate, "y").ToLocalChecked(), Number::New(isolate, optInfo.y));
-
-            // type
-            expand->Set(context, String::NewFromUtf8(isolate, "type").ToLocalChecked(), Integer::New(isolate, optInfo.nType));
-            if (!optInfo.name.empty()) {
-#if defined(_WIN32)
-               char szUTF8[MAX_PATH] = {0,};
-               MultiByteToUTF8(optInfo.name.c_str(), szUTF8);
-               expand->Set(context, String::NewFromUtf8(isolate, "name").ToLocalChecked(), String::NewFromUtf8(isolate, szUTF8).ToLocalChecked());
-#else
-               expand->Set(context, String::NewFromUtf8(isolate, "name").ToLocalChecked(), String::NewFromUtf8(isolate, optInfo.name.c_str()).ToLocalChecked());
-#endif
-            }
-
-            // vertices
-            Local<Array> vertices = Array::New(isolate);
-            for(int ii=optInfo.vtPolygon.size() - 1; ii >= 0; --ii) {
-               Local<Array> vertex = Array::New(isolate);
-               vertex->Set(context, 0, Number::New(isolate, optInfo.vtPolygon[ii].x));
-               vertex->Set(context, 1, Number::New(isolate, optInfo.vtPolygon[ii].y));
-               vertices->Set(context, ii, vertex);
-            }
-            // add
-            expand->Set(context, String::NewFromUtf8(isolate, "vertices").ToLocalChecked(), vertices);
-
-            mainobj->Set(context, String::NewFromUtf8(isolate, "expand").ToLocalChecked(), expand);
-         }
-      }
-   } // if-else
-
-   args.GetReturnValue().Set(mainobj);
+   args.GetReturnValue().Set(String::NewFromUtf8(isolate, strJson.c_str()).ToLocalChecked());
 }
 
 
@@ -1675,7 +1618,7 @@ void init(Local<Object> exports) {
    NODE_SET_METHOD(exports, "setdeparture", SetDeparture);
    NODE_SET_METHOD(exports, "setdestination", SetDestination);
    NODE_SET_METHOD(exports, "setwaypoint", SetWaypoint);
-   NODE_SET_METHOD(exports, "setrpcost", SetRpCost);
+   NODE_SET_METHOD(exports, "setdatacost", SetDataCost);
    NODE_SET_METHOD(exports, "doroute", DoRoute);
    NODE_SET_METHOD(exports, "releaseroute", ReleaseRoute);
    NODE_SET_METHOD(exports, "getsummary", GetRouteSummary);

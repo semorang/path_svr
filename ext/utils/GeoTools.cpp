@@ -123,12 +123,12 @@ bool getPointByDistance(IN const double slng, IN const double slat, IN OUT doubl
 }
 
 
-bool isInBox(IN const double lon, IN const double lat, IN const SBox& inBox)
+bool isInBox(IN const double lon, IN const double lat, IN const SBox& inBox, IN const double inMargin)
 {
-	if (lon < inBox.Xmin) return false;
-	if (lon > inBox.Xmax) return false;
-	if (lat < inBox.Ymin) return false;
-	if (lat > inBox.Ymax) return false;
+	if (lon < inBox.Xmin - inMargin) return false;
+	if (lon > inBox.Xmax + inMargin) return false;
+	if (lat < inBox.Ymin - inMargin) return false;
+	if (lat > inBox.Ymax + inMargin) return false;
 
 	return true;
 }

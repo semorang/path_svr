@@ -172,7 +172,7 @@ app.get('/routeview', function(req, res) {
 });
 
 
-const cur_port = (process.env.WALK_SVR_PORT === undefined) ? 77777 : process.env.WALK_SVR_PORT;
+const cur_port = (process.env.PED_SVR_PORT === undefined) ? 77777 : process.env.PED_SVR_PORT;
 const server = app.listen(cur_port, function () {
     var cur_ip = require("ip");
     var cur_date = new Date();

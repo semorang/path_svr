@@ -33,10 +33,6 @@ using namespace std;
 #endif
 
 
-#define ENGINE_VERSION_MAJOR	1
-#define ENGINE_VERSION_MINOR	0
-#define ENGINE_VERSION_PATCH	0
-
 #define USE_ROUTE_TABLE_LEVEL	8 // 8 레벨보다 낮아지면 도로 확장이 어려워짐.
 //#define __USE_TEMPLETE // 템플릿 사용
 
@@ -92,6 +88,26 @@ typedef struct tagRECT
     uint32_t    bottom;
 } RECT;
 #endif
+
+
+#if defined(USE_TREKKING_POINT_API)
+#define ENGINE_VERSION_MAJOR	0
+#define ENGINE_VERSION_MINOR	0
+#define ENGINE_VERSION_PATCH	1
+#elif defined(USE_OPTIMAL_POINT_API)
+#define ENGINE_VERSION_MAJOR	1
+#define ENGINE_VERSION_MINOR	0
+#define ENGINE_VERSION_PATCH	3
+#elif defined(USE_P2P_DATA)
+#define ENGINE_VERSION_MAJOR	0
+#define ENGINE_VERSION_MINOR	0
+#define ENGINE_VERSION_PATCH	3
+#else
+#define ENGINE_VERSION_MAJOR	1
+#define ENGINE_VERSION_MINOR	0
+#define ENGINE_VERSION_PATCH	0
+#endif
+
 
 enum NETWORKTYPE { LINK, NODE };
 enum DIRECTION { BIDIRECTION, FORWARD, REVERSE };
@@ -1322,6 +1338,16 @@ typedef enum {
 // 544	The departure or destination is a logical (transportation) island, and there are more than one destination	탐색 전용	출발 또는 목적지가 논리적(교통) 섬이며, 목적지가 2개 이상인 경우
 // 545	No data requested	탐색 전용	요청한 데이터가 없음
 }ROUTE_RESULT;
+
+
+typedef enum {
+	OPTIMAL_RESULT_SUCCESS = 0,					// 성공
+
+	OPTIMAL_RESULT_FAILED = 100,				// 실패
+	OPTIMAL_RESULT_FAILED_WRONG_PARAM = 101,	// 파라미터 오류
+	OPTIMAL_RESULT_FAILED_SERVER_ERROR = 102,	// 서버 오류
+}OPTIMAL_RESULT;
+
 
 typedef struct _tagRouteResultLink {
 	KeyID linkId;

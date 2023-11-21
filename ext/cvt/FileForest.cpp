@@ -20,6 +20,14 @@ static char THIS_FILE[] = __FILE__;
 #endif
 
 
+
+static int32_t maxFwTm = 0;
+static int32_t maxBwTm = 0;
+static int32_t maxDiff = 0;
+static int32_t maxPop = 0;
+
+
+
 CFileForest::CFileForest()
 {
 	m_nFileType = TYPE_DATA_TREKKING;
@@ -44,9 +52,9 @@ bool CFileForest::ParseData(IN const char* fname)
 		return false;
 	}
 
-#if defined(USE_PROJ4_LIB)
-	initProj4("UTMK");
-#endif
+//#if defined(USE_PROJ4_LIB)
+//	initProj4("UTMK");
+//#endif
 
 	int nShpType = (int)shpReader.GetShpObjectType(); //shpPoint=1,shpPolyLine=3,shpPolygon=5
 
@@ -58,10 +66,10 @@ bool CFileForest::ParseData(IN const char* fname)
 	SBox mapBox;
 	shpReader.GetEnvelope(&mapBox);
 
-#if defined(USE_PROJ4_LIB)
-	translateUTMKtoWGS84(mapBox.Xmin, mapBox.Ymin, mapBox.Xmin, mapBox.Ymin);
-	translateUTMKtoWGS84(mapBox.Xmax, mapBox.Ymax, mapBox.Xmax, mapBox.Ymax);
-#endif
+//#if defined(USE_PROJ4_LIB)
+//	translateUTMKtoWGS84(mapBox.Xmin, mapBox.Ymin, mapBox.Xmin, mapBox.Ymin);
+//	translateUTMKtoWGS84(mapBox.Xmax, mapBox.Ymax, mapBox.Xmax, mapBox.Ymax);
+//#endif
 
 	SetMeshRegion(&mapBox);
 
@@ -165,11 +173,12 @@ bool CFileForest::ParseData(IN const char* fname)
 					LOG_TRACE(LOG_ERROR, "Error, %s", GetErrorMsg());
 					return  false;
 				}
-#if defined(USE_PROJ4_LIB)
-				translateUTMKtoWGS84(pSHPObj->point.point.x, pSHPObj->point.point.y, node.NodeCoord.x, node.NodeCoord.y);
-#else
+//#if defined(USE_PROJ4_LIB)
+//				translateUTMKtoWGS84(pSHPObj->point.point.x, pSHPObj->point.point.y, node.NodeCoord.x, node.NodeCoord.y);
+//#else
+//				node.NodeCoord = pSHPObj->point.point;
+//#endif
 				node.NodeCoord = pSHPObj->point.point;
-#endif
 			}
 			else if (nShpType == 2) {		 // 선 일때
 				if (!SetData_Link(idxCol, link, chsTmp))
@@ -184,9 +193,9 @@ bool CFileForest::ParseData(IN const char* fname)
 
 					//for (unsigned int idxObj = 0; idxObj < nPoint; idxObj++) {
 					for (int idxObj = nPoint - 1; idxObj >= 0; --idxObj) { // 선형이 거꾸로 되어 있나??
-#if defined(USE_PROJ4_LIB)
-						translateUTMKtoWGS84(pPoints[idxObj].x, pPoints[idxObj].y, pPoints[idxObj].x, pPoints[idxObj].y);
-#endif
+//#if defined(USE_PROJ4_LIB)
+//						translateUTMKtoWGS84(pPoints[idxObj].x, pPoints[idxObj].y, pPoints[idxObj].x, pPoints[idxObj].y);
+//#endif
 						link.LinkVertex.emplace_back(pPoints[idxObj]);
 					}
 				}
@@ -238,7 +247,7 @@ bool CFileForest::ParseData(IN const char* fname)
 
 			pLink->link_id.tile_id = 1; // 단일 메쉬, 메쉬id 1을 주자
 			pLink->link_id.nid = link.LinkID;
-			pLink->link_id.dir = link.CourseDir;
+			pLink->link_id.dir = 0; // link.CourseDir;
 
 			pLink->snode_id.tile_id = 1; // 단일 메쉬, 메쉬id 1을 주자
 			pLink->snode_id.nid = link.FromNodeID;
@@ -263,6 +272,9 @@ bool CFileForest::ParseData(IN const char* fname)
 				pLink->tre.road_info = 0;
 			}
 
+			// 방면방향정보, 0:미정의, 1:정, 2:역
+			pLink->tre.dir_cd = link.CourseDir;
+
 			// 난이도
 			if (link.Diff > 0) {
 				pLink->tre.diff = link.Diff;
@@ -282,11 +294,12 @@ bool CFileForest::ParseData(IN const char* fname)
 
 			// 인기도
 			if (link.Popular > 0) {
-				pLink->tre.popular = link.Popular;
+				pLink->tre.popular = link.Popular;// *100 / 4095;
 			}
 			else {
 				pLink->tre.popular = 0;
 			}
+
 			
 			m_mapLink.insert({ pLink->link_id.llid, pLink });
 
@@ -296,11 +309,16 @@ bool CFileForest::ParseData(IN const char* fname)
 		}
 	} // for
 
-#if defined(USE_PROJ4_LIB)
-	releaseProj4();
-#endif
+//#if defined(USE_PROJ4_LIB)
+//	releaseProj4();
+//#endif
 
 	shpReader.Close();
+
+	// 최대 주행 시간
+	if (nShpType == 2) {
+		LOG_TRACE(LOG_DEBUG, "LOG, Max walking time on one-link, FW:%d, BW:%d, Diff:%d, Pop:%d", maxFwTm, maxBwTm, maxDiff, maxPop);
+	}
 
 	if (!m_mapNode.empty() && !m_mapLink.empty()) {
 		return GenServiceData();
@@ -688,6 +706,7 @@ bool  CFileForest::SetData_Node(int idx, stForestNode &getNode_Dbf, char* colDat
 	return ret;
 }
 
+
 bool CFileForest::SetData_Link(int idx, stForestLink &getLink_Dbf, char* colData)
 {
 	bool ret = true;
@@ -715,7 +734,7 @@ bool CFileForest::SetData_Link(int idx, stForestLink &getLink_Dbf, char* colData
 		} break;
 	case 32:		getLink_Dbf.CourseDirNameIDX = atoi(trim(colData));	break; // 진행방면정보 인덱스
 	case 33: case 34: case 35: case 36: case 37: case 38: // 노면정보, 0:기타, 1:오솔길, 2:포장길, 3:계단, 4:교량, 5:암릉, 6:릿지, 7;사다리, 8:밧줄, 9:너덜길, 10:야자수매트, 11:데크로드, 12:철구조물
-		getLink_Dbf.RoadInfo[idx - 33] = atoi(trim(colData));		break;
+		getLink_Dbf.RoadInfo[idx - 33] = atoi(trim(colData));
 		if (getLink_Dbf.RoadInfo[idx - 33] < 0 || 12 < getLink_Dbf.RoadInfo[idx - 33]) {
 			ret = false; m_strErrMsg = "road type value not defined : " + string(colData);
 		} break;
@@ -723,11 +742,12 @@ bool CFileForest::SetData_Link(int idx, stForestLink &getLink_Dbf, char* colData
 		if (getLink_Dbf.ConnectType < 0 || 1 < getLink_Dbf.ConnectType) {
 			ret = false; m_strErrMsg = "connect type value not defined : " + string(colData);
 		} break;
-	case 40:	getLink_Dbf.LinkLen = atof(trim(colData)); break; // 링크 길이
+	case 40:	getLink_Dbf.LinkLen = atof(trim(colData)); // 링크 길이
 		if (getLink_Dbf.LinkLen < 0 || 200 < getLink_Dbf.LinkLen) {
 			ret = false; m_strErrMsg = "link length not defined : " + string(colData);
 		} break;
 	case 41:	getLink_Dbf.Diff = atoi(trim(colData)); // 0~100 난이도(숫자가 클수록 어려움)
+		if (maxDiff < getLink_Dbf.Diff) maxDiff = getLink_Dbf.Diff;		
 		if (getLink_Dbf.Diff < 0 || 100 < getLink_Dbf.Diff) {
 			ret = false; m_strErrMsg = "difficult value not defined : " + string(colData);
 		} break;
@@ -735,18 +755,19 @@ bool CFileForest::SetData_Link(int idx, stForestLink &getLink_Dbf, char* colData
 		if (getLink_Dbf.Slop < -127 || 127 < getLink_Dbf.Slop) {
 			ret = false; m_strErrMsg = "slop value not defined : " + string(colData);
 		} break;
-	//case 43:	getLink_Dbf.FwTime = (atoi(trim(colData)) * 60) + ((int)(atof(trim(colData)) * 100) % 100); // 정방향 이동 소요시간 (분->초), 0-360
-	case 43:	getLink_Dbf.FwTime = (atof(trim(colData)) * 60); // 정방향 이동 소요시간 (분->초), 0-3600
-		if (getLink_Dbf.FwTime < 0 || 3600 < getLink_Dbf.FwTime) {
+	case 43:	getLink_Dbf.FwTime = atoi(trim(colData)); // 정방향 이동 소요시간 (초), 0-1020
+		if (maxFwTm < getLink_Dbf.FwTime) maxFwTm = getLink_Dbf.FwTime;
+		if (getLink_Dbf.FwTime < 0 || 1023 < getLink_Dbf.FwTime) {
 			ret = false; m_strErrMsg = "forward travel value not defined : " + string(colData);
 		} break;
-	//case 44:	getLink_Dbf.BwTime = (atoi(trim(colData)) * 60) + ((int)(atof(trim(colData)) * 100) % 100); // 역방향 이동 소요시간 (분->초), 0-360
-	case 44:	getLink_Dbf.BwTime = (atof(trim(colData)) * 60); // 역방향 이동 소요시간 (분->초), 0-3600
-		if (getLink_Dbf.BwTime < 0 || 3600 < getLink_Dbf.BwTime) {
+	case 44:	getLink_Dbf.BwTime = atoi(trim(colData)); // 역방향 이동 소요시간 (분->초), 0-1020
+		if (maxBwTm < getLink_Dbf.BwTime) maxBwTm = getLink_Dbf.BwTime;
+		if (getLink_Dbf.BwTime < 0 || 1023 < getLink_Dbf.BwTime) {
 			ret = false; m_strErrMsg = "back travel value not defined : " + string(colData);
 		} break;
-	case 45:	getLink_Dbf.Popular = atoi(trim(colData)); break; // 인기도 지수, 0-100
-		if (getLink_Dbf.Popular < 0 || 100 < getLink_Dbf.Popular) {
+	case 45:	getLink_Dbf.Popular = atoi(trim(colData)); // 인기도 지수, 0-4095
+		if (maxPop < getLink_Dbf.Popular) maxPop = getLink_Dbf.Popular;
+		if (getLink_Dbf.Popular < 0 || 4095 < getLink_Dbf.Popular) {
 			ret = false; m_strErrMsg = "Popular value not defined : " + string(colData);
 		} break;
 

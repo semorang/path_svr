@@ -152,9 +152,7 @@ bool CFileTraffic::ParseData(IN const char* fname)
 bool CFileTraffic::GenServiceData()
 {
 	// 클래스에 추가
-	LOG_TRACE(LOG_DEBUG, "LOG, start, add entrance to polygon class");
-
-	static const int32_t nMaxEntDist = 3000; // 건물/단지와 최대 1000m 이상 차이가 나면 오류
+	LOG_TRACE(LOG_DEBUG, "LOG, start, add traffic data to class");
 
 	stTrafficKey trafficKey;
 

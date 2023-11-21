@@ -15,6 +15,8 @@ function setMapType(maptype) {
         roadmapControl.className = 'btn';
     }
 
+    redrawRoute(map);
+
     // if(map.getType() !== "SATELLITE") {
     //     // 지도 타입 설정
     //     let isShowTraffic = $("#trafficBtn").hasClass("on");

@@ -34,7 +34,7 @@ function displaySearchList(search) {
     resultDiv = document.getElementById('clicked_type');
     resultDiv.innerHTML = (search.type == 0 ? '일반검색' : '연관검색') + ', POI: ' + search.totalcount + "/" + search.count;
 
-    if (search.count > 0) {
+    if (search.poicount > 0) {
          // poi
         search.poi.forEach(function(item) {
             var coord = {x : parseFloat(item.dpx), y : parseFloat(item.dpy)};

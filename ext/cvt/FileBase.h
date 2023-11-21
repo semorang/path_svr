@@ -7,11 +7,18 @@
 #endif
 
 
+#if defined(USE_OPTIMAL_POINT_API)
 #define FILE_VERSION_MAJOR	1
 #define FILE_VERSION_MINOR	0
 #define FILE_VERSION_PATCH	0
+#else
+#define FILE_VERSION_MAJOR	1
+#define FILE_VERSION_MINOR	0
+#define FILE_VERSION_PATCH	0
+#endif
 
-#if !defined(USE_P2P_DATA) // && 1 // defined(_DEBUG)
+
+#if !defined(USE_P2P_DATA) && !defined(USE_SAMSUNG_HEAVY)// && 1 // defined(_DEBUG)
 //#define _USE_TEST_MESH
 static const array<int, 36 > g_arrTestMesh = { 
 	185308, 185405, 185406, 185313, 185410, 185411, 185318, 185415, 185416, 186303, 186400, 186401, 186308, 186405, 186406, // 서울

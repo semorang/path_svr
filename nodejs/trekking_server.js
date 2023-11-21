@@ -66,18 +66,36 @@ app.get('/test', function(req, res) {
 });
 
 
-app.post('/api/setrpcost', function(req, res) {
-    logout('start set route plan cost');
+app.get('/version', function(req, res) {
+    logout("request version info");
+
+    logout("client IP : " + request_ip.getClientIp(req));
+    logout("client req : " + JSON.stringify(req.query));
+
+    var ret = route.version();
+
+    logout("result : " + ((ret.result_code == 0) ? "success" : "failed") + ", code : " + ret.result_code);
+    if (ret.result_code != 0) {
+        logout('버전 확인 실패 : ' + ret.msg);
+    }
+
+    res.send(ret);
+});
+
+
+app.post('/api/setdatacost', function(req, res) {
+    logout('start set data cost');
 
     const key = req.headers.authorization;
     const mode = req.body.mode;
+    const base = req.body.base;
     const cost = req.body.cost;
 
-    const ret = route.setrpcost(key, mode, cost);
+    const ret = route.setdatacost(key, mode, base, cost);
 
     res.send(ret);
 
-    logout('end set route plan cost');
+    logout('end set data cost');
 });
 
 
@@ -128,7 +146,8 @@ app.get('/api/multiroute', function(req, res) {
     logout("client IP : " + request_ip.getClientIp(req));
     logout("client req : " + JSON.stringify(req.query));
 
-    var ret = route.domultiroute(req, "");
+    const key = null;
+    var ret = route.domultiroute(key, req, "");
 
     if (ret.header.isSuccessful == true) {
         // logout(JSON.stringify(ret));
@@ -155,13 +174,14 @@ app.get('/api/path', function(req, res) {
     logout("start multiroute request");
 
     // 2p2 path 전용 옵션
-    req.query.target = "inavi";
-    req.query.opt = 8;
+    req.query.target = "p2p";
+    req.query.option = 8;
 
     logout("client IP : " + request_ip.getClientIp(req));
     logout("client req : " + JSON.stringify(req.query));
 
-    var ret = route.domultiroute(req, "");
+    const key = null;
+    var ret = route.domultiroute(key, req, "");
 
     if (ret.header.isSuccessful == true) {
         // logout(JSON.stringify(ret));
@@ -183,7 +203,8 @@ app.get('/api/kakaovx', function(req, res) {
 
     req.query.target = "kakaovx";
 
-    var ret = route.domultiroute(req, "");
+    const key = (req.query.appkey != undefined) ? req.query.appkey : "kakaovx";
+    var ret = route.domultiroute(key, req, "");
 
     if (ret.header.isSuccessful == true) {
         // logout(JSON.stringify(ret));
@@ -194,6 +215,34 @@ app.get('/api/kakaovx', function(req, res) {
     }
 
     logout("end kakaovx route request");
+});
+
+
+app.get('/view/kakaovx', function(req, res) {
+    logout("start kakaovx request");
+
+    logout("client IP : " + request_ip.getClientIp(req));
+    logout("client req : " + JSON.stringify(req.query));
+
+    req.query.target = "kakaovx";
+    const api = req.query.api;
+    const key = (req.query.appkey != undefined) ? req.query.appkey : "kakaovx";
+
+    var ret = route.domultiroute(key, req, "view");
+
+    if (ret.header.isSuccessful == true) {
+        if (api === "kakao") {
+            res.render(__dirname + "/../views/kakao_maps_kakaovx", {javascriptkey:apikey.KAKAOMAPAPIKEY, result:ret});
+        } else if (req.query.target === "kakaovx") {
+            res.render(__dirname + "/../views/inavi_maps_kakaovx", {javascriptkey:apikey.INAVIMAPAPIKEY, result:ret});
+        } else {
+            res.render(__dirname + "/../views/inavi_maps_multiroute", {javascriptkey:apikey.INAVIMAPAPIKEY, result:ret});
+        }
+    } else {
+        res.send('다중 경탐 실패, 코드 : ' + ret.header.resultCode + ', 오류 : ' + ret.header.resultMessage);
+    }
+
+    logout("end kakaovx request");
 });
 
 
@@ -235,12 +284,15 @@ app.get('/view/multiroute', function(req, res) {
     logout("client req : " + JSON.stringify(req.query));
 
     const api = req.query.api;
+    const key = null;
     
-    var ret = route.domultiroute(req, "view");
+    var ret = route.domultiroute(key, req, "view");
 
     if (ret.header.isSuccessful == true) {
         if (api === "kakao") {
-            res.render(__dirname + "/../views/kakao_maps_route", {javascriptkey:apikey.KAKAOMAPAPIKEY, result:ret});
+            res.render(__dirname + "/../views/kakao_maps_kakaovx", {javascriptkey:apikey.KAKAOMAPAPIKEY, result:ret});
+        } else if (req.query.target === "kakaovx") {
+            res.render(__dirname + "/../views/inavi_maps_kakaovx", {javascriptkey:apikey.INAVIMAPAPIKEY, result:ret});
         } else {
             res.render(__dirname + "/../views/inavi_maps_multiroute", {javascriptkey:apikey.INAVIMAPAPIKEY, result:ret});
         }
@@ -259,8 +311,9 @@ app.get('/view/waypoints', function(req, res) {
     logout("client req : " + JSON.stringify(req.query));
 
     const api = req.query.api;
+    const key = null;
     
-    var ret = route.domultiroute(req, "view");
+    var ret = route.domultiroute(key, req, "view");
 
     if (ret.header.isSuccessful == true) {
         if (api === "kakao") {
@@ -282,14 +335,15 @@ app.get('/view/path', function(req, res) {
     logout("start pathview request");
 
     // 2p2 path 전용 옵션
-    req.query.opt = 8;
+    req.query.option = 8;
 
     logout("client IP : " + request_ip.getClientIp(req));
     logout("client req : " + JSON.stringify(req.query));
 
     const api = req.query.api;
+    const key = null;
     
-    var ret = route.domultiroute(req, "view");
+    var ret = route.domultiroute(key, req, "view");
 
     if (ret.header.isSuccessful == true) {
         if (api === "kakao") {
@@ -346,16 +400,15 @@ app.get('/view/optimalposition', function(req, res) {
         // req.query.type = parseInt(subtype, 16);
     }
 
+    if (req.query.expand == undefined) {
+        req.query.expand = 1;
+    }
+
     const api = req.query.api;
 
-    var ret = route.optimalview(req);
+    var ret = route.optimalposition(req);
 
-    logout("result : " + ((ret.header.resultCode == 0) ? "success" : "failed") + ", code : " + ret.header.resultCode);
-    if (ret.header.resultCode != 0) {
-        logout('최적지점 검색 실패 : ' + ret.header.resultMessage);
-        res.send(ret);
-    }
-    else { //if (ret.header.resultCode == 0) {
+    if (ret.header.resultCode == 0) {
         if (api === "kakao") {
             res.render(__dirname + "/../views/kakao_maps_position", {javascriptkey:apikey.KAKAOMAPAPIKEY, result:ret});
         } else {

@@ -2,7 +2,7 @@
 #include "../stdafx.h"
 #endif
 
-
+#include "../utils/GeoTools.h"
 #include "MapPolygon.h"
 
 #if defined(_WIN32) && defined(_DEBUG)
@@ -117,13 +117,20 @@ const uint32_t MapPolygon::GetCount(void) const
 }
 
 
-bool MapPolygon::IsPitInPolygon(IN const KeyID keyId, IN const double lng, IN const double lat)
+stPolygonInfo * MapPolygon::GetPitInPolygon(IN const KeyID keyId, IN const double lng, IN const double lat, IN const int32_t nMaxDist)
 {
 	bool isIn = false;
-
 	stPolygonInfo* pInfo = GetDataById(keyId);
 	//if (pInfo != nullptr && !pInfo->vtVtx.empty()) {
 	if (pInfo != nullptr && pInfo->getAttributeCount(TYPE_POLYGON_DATA_ATTR_VTX)) {
+		if (nMaxDist >= 0) {
+			double dwDist = nMaxDist / 100000.;
+			SBox boxCheck = { lng - dwDist, lat - dwDist, lng + dwDist, lat + dwDist };
+			if (!isInPitBox(boxCheck, pInfo->data_box)) {
+				return nullptr;
+			}
+		}
+
 		SPoint pt = { lng, lat };
 		//uint32_t cntVtx = static_cast<uint32_t>(pInfo->vtVtx.size());
 		uint32_t cntVtx = pInfo->getAttributeCount(TYPE_POLYGON_DATA_ATTR_VTX);
@@ -144,5 +151,10 @@ bool MapPolygon::IsPitInPolygon(IN const KeyID keyId, IN const double lng, IN co
 		}
 	}
 
-	return isIn;
+	if (isIn) {
+		return pInfo;
+	}
+	else {
+		return nullptr;
+	}
 }
