@@ -67,6 +67,23 @@ app.get('/test', function(req, res) {
 });
 
 
+app.get('/version', function(req, res) {
+    logout("request version info");
+
+    logout("client IP : " + request_ip.getClientIp(req));
+    logout("client req : " + JSON.stringify(req.query));
+
+    var ret = route.version();
+
+    logout("result : " + ((ret.result_code == 0) ? "success" : "failed") + ", code : " + ret.result_code);
+    if (ret.result_code != 0) {
+        logout('버전 확인 실패 : ' + ret.msg);
+    }
+
+    res.send(ret);
+});
+
+
 app.post('/api/setdatacost', function(req, res) {
     logout('start set data cost');
 
