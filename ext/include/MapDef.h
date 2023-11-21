@@ -305,12 +305,13 @@ typedef struct _tagstLinkTrekkingInfo {
 	uint64_t dummy_type : 3; // link_type 공유 공간
 	uint64_t course_type : 3; // 0:미정의, 1:등산로, 2:둘레길, 3:자전거길, 4:종주코스, 5:추천코스, 6:MTB코스, 7:인기코스
 	uint64_t road_info : 12; // 노면정보, 0:기타, 1:오솔길, 2:포장길, 3:계단, 4:교량, 5:암릉, 6:릿지, 7;사다리, 8:밧줄, 9:너덜길, 10:야자수매트, 11:데크로드, 12:철구조물
-	uint64_t diff : 7; // 난도 0~100, (숫자가 클수록 어려움)
+	uint64_t dir_cd : 2; // 방면방향정보, 0:미정의, 1:정, 2:역
+	uint64_t diff : 4; // 난도 0~15, (숫자가 클수록 어려움)
 	uint64_t slop : 8; // 경사도 +/- 128
-	uint64_t fw_tm : 6;// 0~60 정방향 이동 시간 (분)
-	uint64_t bw_tm : 6;// -~60 역방향 이동 시간 (분)
-	uint64_t popular : 7; // 인기도 지수, 0-100
-	uint64_t tre_reserved : 12; // reserved
+	uint64_t fw_tm : 10;// 0~1023 정방향 이동 시간 (초)
+	uint64_t bw_tm : 10;// 0~1023 역방향 이동 시간 (초)
+	uint64_t popular : 12; // 인기도 지수, 0-4095 // 당장은 원래값을 쓰자... 데이터가 정리되면 %로 나타내보자
+	//uint64_t tre_reserved : 5; // reserved
 }stLinkTrekkingInfo;
 
 typedef struct _tagstLinkVehicleInfo {
