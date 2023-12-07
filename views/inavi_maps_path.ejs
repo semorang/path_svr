@@ -138,6 +138,17 @@
                 },
             });
             
+            // 판교 테크노폴리스 도로링크 유효 범위
+            var boundarys = new inavi.maps.Polyline({
+                map: map,
+                path: getPangyoBoundary(),
+                style: {
+                    lineColor: "#808080",
+                    lineWidth: 3,
+                    lineDasharray: [1, 1],
+                },
+            });
+
 
             // 경로 그리기
             for (var ii = cnt_route - 1; ii >= 0; --ii) {

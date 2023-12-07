@@ -52,6 +52,14 @@ var daeguBoundary = [
     [128.4353, 35.6697],
 ]
 
+var pangyoBoundary = [
+    [127.0604, 37.4195],
+    [127.1229, 37.4195],
+    [127.1229, 37.3778],
+    [127.0604, 37.3778],
+    [127.0604, 37.4195],
+]
+
 var bukhansanBoundary = [
     [126.8729, 37.7528],
     [127.0606, 37.7528],
@@ -70,6 +78,10 @@ function getChangwonBoundary() {
 
 function getDaeguBoundary() {
     return daeguBoundary;
+}
+
+function getPangyoBoundary() {
+    return pangyoBoundary;
 }
 
 function getBukhansanBoundary() {
