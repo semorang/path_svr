@@ -414,11 +414,11 @@ void CRoutePackage::GetMultiRouteResultForiNavi(IN const RouteResultInfo* pResul
 				// dir, 0:정방향, 1:역방향
 				cJSON_AddNumberToObject(p2p, "dir", link.dir);
 
-				// type 링크 타입, 0:일반, 1:출발지링크, 2:도착지링크, 3:경유지링크
-				cJSON_AddNumberToObject(p2p, "type", link.type);
+				// type 링크 타입, 0:일반, 1:출발지링크, 2:경유지링크, 3:도착지링크
+				cJSON_AddNumberToObject(p2p, "guide_type", link.type);
 
 				// ang, 진행각
-				cJSON_AddNumberToObject(p2p, "ang", link.angle);
+				cJSON_AddNumberToObject(p2p, "angle", link.angle);
 
 				// add p2p to path
 				cJSON_AddItemToObject(path, "p2p_extend", p2p);
