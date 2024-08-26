@@ -509,6 +509,7 @@ exports.domultiroute = function(key, req, option) {
     if (target === 'p2p') {
         tickEnd = logout("end p2p route tick-count", tickStart);
         
+        ret.result = new Object();
         ret.result.work_time = tickEnd - tickStart;
     }
     
