@@ -335,6 +335,12 @@ exports.domultiroute = function(key, req, option) {
     }
 
 
+    let tickStart = 0;
+    let tickEnd = 0;
+    if (target === 'p2p') {
+        tickStart = logout("start p2p route tick-count");
+    }
+    
     if (departure == undefined || destination == undefined) {
         logout("client request query not correct" + util.inspect(req.query, false, null, true));
         ret.header.resultCode = codes.ERROR_CODES.ROUTE_RESULT_FAILED_WRONG_PARAM;
@@ -498,6 +504,14 @@ exports.domultiroute = function(key, req, option) {
 
 
     addon.releaseroute();
+    
+    
+    if (target === 'p2p') {
+        tickEnd = logout("end p2p route tick-count", tickStart);
+        
+        ret.result.work_time = tickEnd - tickStart;
+    }
+    
 
     logout("end routing, count: " + route_cnt + ", result(" + ret.header.resultCode + '), ' + ret.header.resultMessage);
 
