@@ -340,7 +340,8 @@ exports.domultiroute = function(key, req, option) {
     if (target === 'p2p') {
         tickStart = logout("start p2p route tick-count");
     }
-    
+
+    // 출발지
     if (departure == undefined || destination == undefined) {
         logout("client request query not correct" + util.inspect(req.query, false, null, true));
         ret.header.resultCode = codes.ERROR_CODES.ROUTE_RESULT_FAILED_WRONG_PARAM;
@@ -363,6 +364,7 @@ exports.domultiroute = function(key, req, option) {
     }
     addon.setdeparture(parseFloat(coordStart[0]), parseFloat(coordStart[1]), is_optimal);
 
+    // 도착지
     // addon.logout("set destination");
     let coordEnd = destination.split(',');
     if (coordEnd.length != 2) {
@@ -378,7 +380,7 @@ exports.domultiroute = function(key, req, option) {
     ret.user_info.start = { x: parseFloat(coordStart[0]), y: parseFloat(coordStart[1]) }
     ret.user_info.end =  { x: parseFloat(coordEnd[0]), y: parseFloat(coordEnd[1]) }
 
-
+    // 경유지
     let coordVia;
     if (waypoints != undefined && Array.isArray(waypoints)) {
         ret.user_info.vias = new Array();
@@ -421,6 +423,7 @@ exports.domultiroute = function(key, req, option) {
     } 
 
 
+    // 경로 옵션/회피
     // const route_cnt = 3;
     // let route_opt = [codes.ROUTE_OPTIONS.ROUTE_OPT_SHORTEST, codes.ROUTE_OPTIONS.ROUTE_OPT_RECOMMENDED, codes.ROUTE_OPTIONS.ROUTE_OPT_TRAIL];
     // let route_void = [codes.ROUTE_AVOIDS.ROUTE_OPT_NONE, codes.ROUTE_AVOIDS.ROUTE_OPT_PALM, codes.ROUTE_AVOIDS.ROUTE_OPT_BRIDGE];
@@ -451,9 +454,11 @@ exports.domultiroute = function(key, req, option) {
     if (is_sum) {
         ;
     } else if ((target === "inavi") || (target === "p2p")) {
+        // inavi maps api에서는 route 아래 data 필드를 또 둬서 route를 관리
         ret.route = new Object;
         ret.route.data = new Array;
     } else {
+        // 그외는 routes로 통합 관리
         ret.routes = new Array;
     }
 
@@ -510,7 +515,12 @@ exports.domultiroute = function(key, req, option) {
         tickEnd = logout("end p2p route tick-count", tickStart);
         
         ret.result = new Object();
-        ret.result.work_time = tickEnd - tickStart;
+
+        if (res.result == 0) {
+            ret.result.work_time = getPathWorkTime(tickEnd - tickStart, ret.route.data[0].distance);
+        } else {
+            ret.result.work_time = tickEnd - tickStart;
+        }
     }
     
 
