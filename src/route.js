@@ -2,10 +2,10 @@ const { createDiffieHellmanGroup } = require('crypto');
 const util = require('util');
 var addon = require(process.env.USER_MODULE);
 
-
 const logout = require('./logs');
 const auth = require('./auth');
 const codes = require('./codes');
+const times = require('../src/times.js')
 
 
 function checkcoord(lng, lat, contury)
@@ -42,7 +42,7 @@ exports.init = function(pid, path, log) {
             addon.init(pid, path);
         } else {
             addon.init(pid);
-        }        
+        }
     }
 
     logout("finish engine initialize");
@@ -75,9 +75,11 @@ exports.optimalposition = function(req) {
     if (req.query.type != undefined) {
         type = parseInt(req.query.type)
     }
+
     if (req.query.count != undefined) {
         count = parseInt(req.query.count)
     }
+
     if (req.query.expand != undefined) {
         expand = parseInt(req.query.expand)
     }
@@ -155,6 +157,7 @@ exports.doroute = function(req, option) {
     };
 
 
+    // 출발지
     if (departure == undefined ||
         destination == undefined) {
             logout("client request query not correct" + util.inspect(req.query, false, null, true));
@@ -180,6 +183,7 @@ exports.doroute = function(req, option) {
     }
     addon.setdeparture(parseFloat(coordStart[0]), parseFloat(coordStart[1]), true);
 
+    // 도착지
     // addon.logout("set destination");
     let coordEnd = destination.split(',');
     if (coordEnd.length != 2) {
@@ -192,6 +196,7 @@ exports.doroute = function(req, option) {
     }
     addon.setdestination(parseFloat(coordEnd[0]), parseFloat(coordEnd[1]), true);
 
+    // 경유지
     let coordVia;
     if (waypoint != undefined) {
         coordVia = waypoint.split(',');
@@ -517,7 +522,7 @@ exports.domultiroute = function(key, req, option) {
         ret.result = new Object();
 
         if (res.result == 0) {
-            ret.result.work_time = getPathWorkTime(tickEnd - tickStart, ret.route.data[0].distance);
+            ret.result.work_time = times.getPathWorkTime(tickEnd - tickStart, ret.route.data[0].distance);
         } else {
             ret.result.work_time = tickEnd - tickStart;
         }
