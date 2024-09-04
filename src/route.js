@@ -521,7 +521,7 @@ exports.domultiroute = function(key, req, option) {
         
         ret.result = new Object();
 
-        if (res.result == 0) {
+        if (ret.header.isSuccessful == true) {
             ret.result.work_time = times.getPathWorkTime(tickEnd - tickStart, ret.route.data[0].distance);
         } else {
             ret.result.work_time = tickEnd - tickStart;
