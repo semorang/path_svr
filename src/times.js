@@ -46,7 +46,7 @@ exports.getPathWorkTime = function(time, link_length) {
     }
     else
     {
-        ret *= 1000; // make ms
+        ret = parseInt(ret * 1000); // make ms
         // std::this_thread::sleep_for(std::chrono::duration<double>(additionalSleep));
     }
 
