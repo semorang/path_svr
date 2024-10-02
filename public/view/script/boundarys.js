@@ -52,6 +52,15 @@ var daeguBoundary = [
     [128.4353, 35.6697],
 ]
 
+var daeguSuseongBoundary = [
+    [128.622774, 35.794684],
+    [128.747705, 35.794721],
+    [128.747694, 35.877941],
+    [128.622784, 35.877987],
+    [128.622774, 35.794684],
+]
+
+
 var pangyoBoundary = [
     [127.0604, 37.4195],
     [127.1229, 37.4195],
@@ -68,6 +77,14 @@ var bukhansanBoundary = [
     [126.8729, 37.7528],
 ]
 
+var jejudoBoundary = [
+    [126.1230, 33.5866],
+    [126.9979, 33.5866],
+    [126.9979, 33.0866],
+    [126.12301, 33.08663],
+    [126.1230, 33.5866],
+]
+
 function getSeungnamBoundary() {
     return seungnamBoundary;
 }
@@ -80,12 +97,20 @@ function getDaeguBoundary() {
     return daeguBoundary;
 }
 
+function getDaeguSuseongBoundary() {
+    return daeguSuseongBoundary;
+}
+
 function getPangyoBoundary() {
     return pangyoBoundary;
 }
 
 function getBukhansanBoundary() {
     return bukhansanBoundary;
+}
+
+function getJejudoBoundary() {
+    return jejudoBoundary;
 }
 
 function getChangwonBoundarySize() {
