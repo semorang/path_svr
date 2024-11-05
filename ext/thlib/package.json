@@ -1,0 +1,17 @@
+{
+  "dependencies": {
+    "node-addon-api": "^8.0.0"
+  },
+  "name": "getttlspdtest",
+  "version": "1.0.0",
+  "main": "app2.js",
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "install": "node-gyp rebuild"
+  },
+  "author": "",
+  "license": "ISC",
+  "gypfile": true,
+  "description": ""
+}
