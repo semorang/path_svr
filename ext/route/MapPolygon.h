@@ -20,10 +20,10 @@ public:
 	stPolygonInfo* GetPitInPolygon(IN const KeyID keyId, IN const double lng, IN const double lat, IN const int32_t nMaxDist = 0);
 
 private:
-	map<uint64_t, stPolygonInfo*> mapData;
+	unordered_map<uint64_t, stPolygonInfo*> mapData;
 
 };
 
 
 bool isPointInPolygon(const double x, const double y, const SPoint *pptPolygon, const int32_t nPolygon);
-bool isPointInPolygon(SPoint *ppt, SPoint *pptPolygon, int32_t nPolygon);
+bool isPointInPolygon(const SPoint *ppt, const SPoint *pptPolygon, const int32_t nPolygon);

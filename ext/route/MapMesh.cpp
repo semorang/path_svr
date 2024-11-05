@@ -5,6 +5,7 @@
 
 #include "MapMesh.h"
 #include "../utils/UserLog.h"
+#include "../utils/GeoTools.h"
 
 #if defined(_WIN32) && defined(_DEBUG)
 #define new DEBUG_NEW
@@ -86,7 +87,8 @@ bool MapMesh::DeleteData(IN const uint64_t id)
 }
 
 
-int MapMesh::InsertNode(IN const KeyID keyId)
+#if defined(USE_FOREST_DATA)
+int MapMesh::InsertFNode(IN const KeyID keyId)
 {
 	stMeshInfo* pMesh = GetMeshById(keyId.tile_id);
 	if (pMesh) {
@@ -104,9 +106,10 @@ int MapMesh::InsertNode(IN const KeyID keyId)
 	return 0;
 }
 
-
-int MapMesh::InsertLink(IN const stLinkInfo * pData)
+int MapMesh::InsertFLink(IN const stLinkInfo * pData)
 {
+	int ret = 0;
+
 	if (pData != nullptr)
 	{
 		stMeshInfo* pMesh = GetMeshById(pData->link_id.tile_id);
@@ -115,23 +118,36 @@ int MapMesh::InsertLink(IN const stLinkInfo * pData)
 			auto it = pMesh->setLinkDuplicateCheck.insert(pData->link_id);
 			if (!it.second)
 			{
-				LOG_TRACE(LOG_ERROR, "Error, --------------- link id duplicated in MapMesh, %d", pData->link_id.nid);
+				//LOG_TRACE(LOG_ERROR, "Error, --------------- flink id duplicated in MapMesh, %d", pData->link_id.nid);
 			}
 #endif
 			pMesh->links.emplace_back(pData->link_id);
 
-#pragma omp parallel for
-			for (int ii = 0; ii < pData->getVertexCount(); ii++)
-			{
-				ExtendDataBox(pMesh, pData->getVertexX(ii), pData->getVertexY(ii));
-			}
+//#pragma omp parallel for
+			//for (int ii = 0; ii < pData->getVertexCount(); ii++)
+			//{
+			//	ExtendDataBox(pMesh, pData->getVertexX(ii), pData->getVertexY(ii));
+			//}
+			pMesh->data_box = pMesh->mesh_box;
 
-			return pMesh->links.size();
+			ret = pMesh->links.size();
 		}
+
+#if defined(USE_FOREST_DATA)
+		// 숲길 데이터는 1판 메쉬이기에 속도를 위해 링크에 추가된 메쉬ID로 추가 적용
+		if (pData->base.link_type == TYPE_LINK_DATA_TREKKING && pData->trk_ext.trk_ext_reserved != 0) {
+			stMeshInfo* pMesh = GetMeshById(pData->trk_ext.trk_ext_reserved);
+
+			if (pMesh != nullptr) {
+				pMesh->links.emplace_back(pData->link_id);
+			}
+		}
+#endif
 	}
 
-	return 0;
+	return ret;
 }
+#endif // #if defined(USE_FOREST_DATA)
 
 
 #if defined(USE_PEDESTRIAN_DATA)
@@ -163,16 +179,17 @@ int MapMesh::InsertWLink(IN const stLinkInfo * pData)
 			auto it = pMesh->setWLinkDuplicateCheck.insert(pData->link_id);
 			if (!it.second)
 			{
-				LOG_TRACE(LOG_ERROR, "Error, --------------- link id duplicated in MapMesh, %d", pData->link_id.nid);
+				LOG_TRACE(LOG_ERROR, "Error, --------------- wlink id duplicated in MapMesh, %d", pData->link_id.nid);
 			}
 #endif
 			pMesh->wlinks.emplace_back(pData->link_id);
 
-#pragma omp parallel for
-			for (int ii = 0; ii < pData->getVertexCount(); ii++)
-			{
-				ExtendDataBox(pMesh, pData->getVertexX(ii), pData->getVertexY(ii));
-			}
+//#pragma omp parallel for
+//			for (int ii = 0; ii < pData->getVertexCount(); ii++)
+//			{
+//				ExtendDataBox(pMesh, pData->getVertexX(ii), pData->getVertexY(ii));
+//			}
+			pMesh->data_box = pMesh->mesh_box;
 
 			return pMesh->wlinks.size();
 		}
@@ -180,7 +197,7 @@ int MapMesh::InsertWLink(IN const stLinkInfo * pData)
 
 	return 0;
 }
-#endif
+#endif // #if defined(USE_PEDESTRIAN_DATA)
 
 
 #if defined(USE_VEHICLE_DATA)
@@ -212,16 +229,17 @@ int MapMesh::InsertVLink(IN const stLinkInfo * pData)
 			auto it = pMesh->setVLinkDuplicateCheck.insert(pData->link_id);
 			if (!it.second)
 			{
-				LOG_TRACE(LOG_ERROR, "Error, --------------- link id duplicated in MapMesh, %d", pData->link_id.nid);
+				LOG_TRACE(LOG_ERROR, "Error, --------------- vlink id duplicated in MapMesh, %d", pData->link_id.nid);
 			}
 #endif
 			pMesh->vlinks.emplace_back(pData->link_id);
 
-#pragma omp parallel for
-			for (int ii = 0; ii < pData->getVertexCount(); ii++)
-			{
-				ExtendDataBox(pMesh, pData->getVertexX(ii), pData->getVertexY(ii));
-			}
+//#pragma omp parallel for
+//			for (int ii = 0; ii < pData->getVertexCount(); ii++)
+//			{
+//				ExtendDataBox(pMesh, pData->getVertexX(ii), pData->getVertexY(ii));
+//			}
+			pMesh->data_box = pMesh->mesh_box;
 
 			return pMesh->vlinks.size();
 		}
@@ -229,9 +247,10 @@ int MapMesh::InsertVLink(IN const stLinkInfo * pData)
 
 	return 0;
 }
-#endif
+#endif // #if defined(USE_VEHICLE_DATA)
 
-# if defined(USE_OPTIMAL_POINT_API)
+
+#if defined(USE_OPTIMAL_POINT_API) || defined(USE_MOUNTAIN_DATA)
 bool MapMesh::InsertComplex(IN const stPolygonInfo * pData)
 {
 	stMeshInfo* pMesh = GetMeshById(pData->poly_id.tile_id);
@@ -245,12 +264,14 @@ bool MapMesh::InsertComplex(IN const stPolygonInfo * pData)
 #endif
 		pMesh->complexs.emplace_back(pData->poly_id);
 
+//#pragma omp parallel for
+//		for (int ii = 0; ii < pData->vtVtx.size(); ii++)
+//		{
+//			ExtendDataBox(pMesh, pData->vtVtx[ii].x, pData->vtVtx[ii].y);
+//		}
+		pMesh->data_box = pMesh->mesh_box;
+
 		const SPoint* pPolygon = pData->getAttributeVertex();
-#pragma omp parallel for
-		//for (int ii = 0; ii < pData->vtVtx.size(); ii++)
-		//{
-		//	ExtendDataBox(pMesh, pData->vtVtx[ii].x, pData->vtVtx[ii].y);
-		//}
 		for (int ii = pData->getAttributeCount(TYPE_POLYGON_DATA_ATTR_VTX) - 1; ii >= 0 ; --ii)
 		{
 			ExtendDataBox(pMesh, pPolygon[ii]);
@@ -276,12 +297,14 @@ bool MapMesh::InsertBuilding(IN const stPolygonInfo * pData)
 #endif
 		pMesh->buildings.emplace_back(pData->poly_id);
 
+//#pragma omp parallel for
+//		for (int ii = 0; ii < pData->vtVtx.size(); ii++)
+//		{
+//			ExtendDataBox(pMesh, pData->vtVtx[ii].x, pData->vtVtx[ii].y);
+//		}
+		pMesh->data_box = pMesh->mesh_box;
+
 		const SPoint* pPolygon = pData->getAttributeVertex();
-#pragma omp parallel for
-		//for (int ii = 0; ii < pData->vtVtx.size(); ii++)
-		//{
-		//	ExtendDataBox(pMesh, pData->vtVtx[ii].x, pData->vtVtx[ii].y);
-		//}
 		for (int ii = pData->getAttributeCount(TYPE_POLYGON_DATA_ATTR_VTX) - 1; ii >= 0; --ii)
 		{
 			ExtendDataBox(pMesh, pPolygon[ii]);
@@ -310,7 +333,12 @@ stMeshInfo* MapMesh::GetMeshByPoint(IN const double lng, IN const double lat)
 
 	if (lng != 0.f && lat != 0.f) 
 	{
+#if defined(USE_FOREST_DATA)
+		// 숲길은 단일 메쉬고, 마지막 값으로 정의했기에 숲길을 우선 검색
+		for (map<uint64_t, stMeshInfo*>::const_reverse_iterator it = mapData.rbegin(); it != mapData.rend(); it++)
+#else
 		for (map<uint64_t, stMeshInfo*>::const_iterator it = mapData.begin(); it != mapData.end(); it++)
+#endif
 		{
 			if (lng < it->second->mesh_box.Xmin || it->second->mesh_box.Xmax < lng
 				|| lat < it->second->mesh_box.Ymin || it->second->mesh_box.Ymax < lat)
@@ -321,7 +349,7 @@ stMeshInfo* MapMesh::GetMeshByPoint(IN const double lng, IN const double lat)
 			pMesh = it->second;
 			
 			break;
-		}
+		} // for
 	}
 
 	return pMesh;
@@ -333,11 +361,15 @@ int MapMesh::GetPitInMesh(IN const double lng, IN const double lat, IN const int
 
 	if (nMaxBuff > 0 && pData != nullptr)
 	{
+#if defined(USE_FOREST_DATA)
+		// 숲길은 단일 메쉬고, 마지막 값으로 정의했기에 숲길을 우선 검색
+		for (map<uint64_t, stMeshInfo*>::const_reverse_iterator it = mapData.rbegin(); it != mapData.rend(); it++)
+#else
 		for (map<uint64_t, stMeshInfo*>::const_iterator it = mapData.begin(); it != mapData.end(); it++)
+#endif
 		{
 			if (lng < it->second->mesh_box.Xmin || it->second->mesh_box.Xmax < lng
-				|| lat < it->second->mesh_box.Ymin || it->second->mesh_box.Ymax < lat)
-			{
+				|| lat < it->second->mesh_box.Ymin || it->second->mesh_box.Ymax < lat) {
 				continue;
 			}
 
@@ -345,7 +377,7 @@ int MapMesh::GetPitInMesh(IN const double lng, IN const double lat, IN const int
 
 			if (cntMesh >= nMaxBuff)
 				break;
-		}
+		} // for
 	}
 
 	return cntMesh;
@@ -357,7 +389,12 @@ int MapMesh::GetPitInData(IN const double lng, IN const double lat, IN const int
 
 	if (nMaxBuff > 0 && pData != nullptr)
 	{
+#if defined(USE_FOREST_DATA)
+		// 숲길은 단일 메쉬고, 마지막 값으로 정의했기에 숲길을 우선 검색
+		for (map<uint64_t, stMeshInfo*>::const_reverse_iterator it = mapData.rbegin(); it != mapData.rend(); it++)
+#else
 		for (map<uint64_t, stMeshInfo*>::const_iterator it = mapData.begin(); it != mapData.end(); it++)
+#endif
 		{
 			if (lng < it->second->data_box.Xmin || it->second->data_box.Xmax < lng
 				|| lat < it->second->data_box.Ymin || it->second->data_box.Ymax < lat)
@@ -369,10 +406,40 @@ int MapMesh::GetPitInData(IN const double lng, IN const double lat, IN const int
 
 			if (cntMesh >= nMaxBuff)
 				break;
-		}
+		} // for
 	}
 
 	return cntMesh;
+}
+
+
+uint32_t MapMesh::GetPitInRegion(IN const SBox& pRegion, IN const uint32_t cntMaxBuff, OUT stMeshInfo** pMeshInfo)
+{
+	uint32_t cntPitIn = 0;
+	uint32_t cntMesh = mapData.size();
+
+	if (cntMaxBuff <= 0 || pMeshInfo == nullptr) {
+		LOG_PRINT(LOG_ERROR, "%s", "param value null");
+		return 0;
+	}
+
+#if defined(USE_FOREST_DATA)
+	// 숲길은 단일 메쉬고, 마지막 값으로 정의했기에 숲길을 우선 검색
+	for (map<uint64_t, stMeshInfo*>::const_reverse_iterator it = mapData.rbegin(); it != mapData.rend(); it++)
+#else
+	for (map<uint64_t, stMeshInfo*>::const_iterator it = mapData.begin(); it != mapData.end(); it++)
+#endif
+	{
+		if (isInPitBox(it->second->data_box, pRegion)) {
+			pMeshInfo[cntPitIn++] = it->second;
+		}
+
+		if (cntPitIn >= cntMaxBuff) {
+			break;
+		}
+	}
+
+	return cntPitIn;
 }
 
 
@@ -381,6 +448,8 @@ const uint32_t MapMesh::GetCount(void) const
 	return mapData.size();
 }
 
+
+// 성능떨어지는 코드, 가능하면 사용하지 말자 2024-01-22
 stMeshInfo * MapMesh::GetMeshData(IN const uint32_t idx)
 {
 	if (0 <= idx && idx < mapData.size())
@@ -395,6 +464,7 @@ stMeshInfo * MapMesh::GetMeshData(IN const uint32_t idx)
 	return nullptr;
 }
 
+
 void MapMesh::ExtendDataBox(IN stMeshInfo * pData, IN const double lng, IN const double lat) const
 {
 	if (pData != nullptr)
@@ -406,12 +476,14 @@ void MapMesh::ExtendDataBox(IN stMeshInfo * pData, IN const double lng, IN const
 	}
 }
 
+
 void MapMesh::ExtendDataBox(IN stMeshInfo * pData, IN const SPoint& coord) const
 {
 	if (pData != nullptr) {
 		return ExtendDataBox(pData, coord.x, coord.y);
 	}
 }
+
 
 void MapMesh::CheckNeighborMesh(void)
 {
@@ -422,7 +494,11 @@ void MapMesh::CheckNeighborMesh(void)
 	// 소수점 단위가 오차가 있을 수 있어, 10만 곱한 영역을 비교하자	
 	for (map<uint64_t, stMeshInfo*>::iterator itMe = mapData.begin(); itMe != mapData.end(); itMe++)
 	{
-		RECT rtMe = { itMe->second->mesh_box.Xmin * 100000, itMe->second->mesh_box.Ymin * 100000, itMe->second->mesh_box.Xmax * 100000, itMe->second->mesh_box.Ymax * 100000 };
+		RECT rtMe = { 
+			static_cast<int32_t>(itMe->second->mesh_box.Xmin * 100000), 
+			static_cast<int32_t>(itMe->second->mesh_box.Ymin * 100000), 
+			static_cast<int32_t>(itMe->second->mesh_box.Xmax * 100000), 
+			static_cast<int32_t>(itMe->second->mesh_box.Ymax * 100000) };
 
 		if (itMe->second->links.empty()) {
 			continue;
@@ -436,7 +512,11 @@ void MapMesh::CheckNeighborMesh(void)
 			}
 
 			bool isNeighbor = false;
-			RECT rtYou = { itYou->second->mesh_box.Xmin * 100000, itYou->second->mesh_box.Ymin * 100000, itYou->second->mesh_box.Xmax * 100000, itYou->second->mesh_box.Ymax * 100000 };
+			RECT rtYou = { 
+				static_cast<int32_t>(itYou->second->mesh_box.Xmin * 100000), 
+				static_cast<int32_t>(itYou->second->mesh_box.Ymin * 100000), 
+				static_cast<int32_t>(itYou->second->mesh_box.Xmax * 100000), 
+				static_cast<int32_t>(itYou->second->mesh_box.Ymax * 100000) };
 
 
 			// LT == old->lt, t, l 
@@ -494,10 +574,10 @@ void MapMesh::CheckNeighborMesh(void)
 
 			// Box edge
 			else {
-				rtYou.left = m_rtBox.Xmin * 100000;
-				rtYou.top = m_rtBox.Ymin * 100000;
-				rtYou.right = m_rtBox.Xmax * 100000;
-				rtYou.bottom = m_rtBox.Ymax * 100000;
+				rtYou.left = static_cast<int32_t>(m_rtBox.Xmin * 100000);
+				rtYou.top = static_cast<int32_t>(m_rtBox.Ymin * 100000);
+				rtYou.right = static_cast<int32_t>(m_rtBox.Xmax * 100000);
+				rtYou.bottom = static_cast<int32_t>(m_rtBox.Ymax * 100000);
 
 				// LT == old->lt, t, l 
 				if ((rtMe.left == rtYou.right && rtMe.top == rtYou.top) ||
@@ -579,9 +659,9 @@ void MapMesh::ArrangementMesh(void)
 			|| !it->second->wnodes.empty() || !it->second->wlinks.empty()
 #endif
 #if defined(USE_VEHICLE_DATA)
-			|| !it->second->vnodes.empty() || !it->second->vlinks.empty()
+			|| !it->second->vnodes.empty() || !it->second->vlinks.empty() || it->first == 0 // 전역메쉬(0)은 ks 저장을 위해 남겨두자
 #endif
-# if defined(USE_OPTIMAL_POINT_API)
+#if defined(USE_OPTIMAL_POINT_API) || defined(USE_MOUNTAIN_DATA)
 			|| !it->second->complexs.empty() || !it->second->buildings.empty()
 #endif
 			) {

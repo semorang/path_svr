@@ -30,14 +30,14 @@ void MapNode::Release(void)
 {
 	if (!mapData.empty())
 	{
-		for (map<uint64_t, stNodeInfo*>::iterator it = mapData.begin(); it != mapData.end(); it++)
+		for (unordered_map<uint64_t, stNodeInfo*>::iterator it = mapData.begin(); it != mapData.end(); it++)
 		{
 			delete it->second;
 			it->second = nullptr;
 		}
 
 		mapData.clear();
-		map<uint64_t, stNodeInfo*>().swap(mapData);
+		unordered_map<uint64_t, stNodeInfo*>().swap(mapData);
 	}
 
 	MapBase::Release();
@@ -59,7 +59,7 @@ int MapNode::AddData(IN const stNodeInfo * pData)
 
 bool MapNode::DeleteData(IN const KeyID keyId)
 {
-	map<uint64_t, stNodeInfo*>::iterator it = mapData.find(keyId.llid);
+	unordered_map<uint64_t, stNodeInfo*>::iterator it = mapData.find(keyId.llid);
 	if (it != mapData.end()) {
 		delete it->second;
 		it->second = nullptr;
@@ -73,7 +73,7 @@ bool MapNode::DeleteData(IN const KeyID keyId)
 
 stNodeInfo * MapNode::GetNodeById(IN const KeyID keyId)
 {
-	map<uint64_t, stNodeInfo*>::iterator it = mapData.find(keyId.llid);
+	unordered_map<uint64_t, stNodeInfo*>::iterator it = mapData.find(keyId.llid);
 	if (it != mapData.end()) {
 		return it->second;
 		//return &*mapData.find(keyId.llid)->second;

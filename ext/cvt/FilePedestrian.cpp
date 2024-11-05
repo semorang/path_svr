@@ -9,6 +9,7 @@
 #include "../utils/UserLog.h"
 #include "../utils/Strings.h"
 #include "../route/MMPoint.hpp"
+#include "../route/DataManager.h"
 
 #if defined(_WIN32) && defined(_DEBUG)
 #define new DEBUG_NEW
@@ -19,15 +20,14 @@ static char THIS_FILE[] = __FILE__;
 
 CFilePedestrian::CFilePedestrian()
 {
-	m_nFileType = TYPE_DATA_PEDESTRIAN;
+	m_nDataType = TYPE_DATA_PEDESTRIAN;
+	m_nFileType = TYPE_EXEC_NETWORK;
 }
 
 CFilePedestrian::~CFilePedestrian()
 {
 
 }
-
-static const uint32_t g_cntLogPrint = 100000;
 
 bool CFilePedestrian::ParseData(IN const char* fname)
 {
@@ -60,7 +60,7 @@ bool CFilePedestrian::ParseData(IN const char* fname)
 		static char szLinkField[128][32] = {
 			{ "U_ID" },{ "MESH_CD" },{ "NODE_ID" },{ "NODE_TYP" },{ "NODE_NM" },
 			{ "CONN_CNT" },{ "EDGE_MESH" },{ "EDGE_NODE" },{ "FCT_INFO" },{ "FCT_PHASE" },
-			{ "IO_INFO" },{ "IO_PHASE" },
+			{ "IO_INFO" },{ "IO_PHASE" },{ "ELEVATION" },
 		};
 		      
 		DBF_FIELD_INFO fieldInfo;
@@ -70,7 +70,7 @@ bool CFilePedestrian::ParseData(IN const char* fname)
 				LOG_TRACE(LOG_ERROR, "can't get dbf filed info, idx : %d ", ii);
 				return false;
 			}
-			else if (strcmp(szLinkField[ii], trim(fieldInfo.szName)) != 0) {
+			else if (strcmp(szLinkField[ii], strupper(trim(fieldInfo.szName))) != 0) {
 				LOG_TRACE(LOG_ERROR, "dbf field name not matched the expected name, filedName:%s vs exprectedName:%s", fieldInfo.szName, szLinkField[ii]);
 				return false;
 			}
@@ -90,7 +90,7 @@ bool CFilePedestrian::ParseData(IN const char* fname)
 				LOG_TRACE(LOG_ERROR, "can't get dbf filed info, idx : %d ", ii);
 				return false;
 			}
-			else if (strcmp(szLinkField[ii], trim(fieldInfo.szName)) != 0) {
+			else if (strcmp(szLinkField[ii], strupper(trim(fieldInfo.szName))) != 0) {
 				LOG_TRACE(LOG_ERROR, "dbf field name not matched the expected name, filedName:%s vs exprectedName:%s", fieldInfo.szName, szLinkField[ii]);
 				return false;
 			}
@@ -134,46 +134,39 @@ bool CFilePedestrian::ParseData(IN const char* fname)
 			SHPGeometry *pSHPObj = shpReader.GetGeometry();
 
 			if (nShpType == 1) {				// 점 일때				
-				if (!SetData_Node(idxCol, node, chsTmp))
-				{
+				if (!SetData_Node(idxCol, node, chsTmp)) {
 					LOG_TRACE(LOG_ERROR, "Error, %s", GetErrorMsg());
 					return  false;
 				}
 				node.NodeCoord = pSHPObj->point.point;
-			}
-			else if (nShpType == 2) {		 // 선 일때
-				if (!SetData_Link(idxCol, link, chsTmp))
-				{
+			} else if (nShpType == 2) {		 // 선 일때
+				if (!SetData_Link(idxCol, link, chsTmp)) {
 					LOG_TRACE(LOG_ERROR, "Error, %s", GetErrorMsg());
 					return  false;
 				}
-				if (idxCol == 0)
-				{
+				if (idxCol == 0) {
 					nPoint = SHP_GetNumPartPoints(pSHPObj, 0); //파트 0에 대한	   //선형 갯수..					 																	 
 					pPoints = SHP_GetPartPoints(pSHPObj, 0); //파트 0에 대한	     //실제선형데이터..
 
 					for (int idxObj = 0; idxObj < nPoint; idxObj++) {
 						link.LinkVertex.emplace_back(pPoints[idxObj]);
 					}
-				} 
-			}
-			else if (nShpType == 3) { // 면
+				}
+			} else if (nShpType == 3) { // 면
 				mesh.MeshID = atoi(trim(chsTmp));
 				memcpy(&mesh.meshBox, &pSHPObj->mpoint.Box, sizeof(SBox));
 			}
 		} // for
 
 
-#if defined(_USE_TEST_MESH)
-		bool isContinue = true;
-		for (const auto& item : g_arrTestMesh) {
-			if ((nShpType == 1 && item == node.MeshID) || (nShpType == 2 && item == link.MeshID)) {
-				isContinue = false;
-				break;
+		// 테스트 메쉬가 있으면 정의된 메쉬만 확인하자
+		if (g_isUseTestMesh && !g_arrTestMesh.empty()) {
+			if ((nShpType == 1) && (g_arrTestMesh.find(node.MeshID) == g_arrTestMesh.end())) {
+				continue;
+			} else if ((nShpType == 2) && (g_arrTestMesh.find(link.MeshID) == g_arrTestMesh.end())) {
+				continue;
 			}
 		}
-		if (isContinue) continue;
-#endif
 
 
 		if (nShpType == 1) {
@@ -186,18 +179,42 @@ bool CFilePedestrian::ParseData(IN const char* fname)
 			pNode->edgenode_id.nid = node.AdjEdgeNode;
 			pNode->coord = node.NodeCoord;
 
-			pNode->base.node_type = TYPE_DATA_PEDESTRIAN;
+			pNode->base.node_type = TYPE_NODE_DATA_PEDESTRIAN;
 			pNode->base.point_type = node.NodeType;
 			pNode->base.connnode_count = node.ConnectNum;
 
-			pNode->ped.facility_phase = node.FacilityPhase;
+			pNode->ped.fct_phase = node.FctPhase;
 			pNode->ped.gate_phase = node.GatePhase;
 
+			pNode->ped.name_info = (node.NodeNameIDX == 0) ? 0 : 1;
+			pNode->ped.fct_info = (node.FctNameIDX == 0) ? 0 : 1;
+			pNode->ped.gate_info = (node.GateNameIDX == 0) ? 0 : 1;
+
+#if defined(USE_FOREST_DATA) && defined(USE_PEDESTRIAN_DATA)
+			// 진/출입구 명칭 인덱스 정보
+			if ((pNode->ped.fct_info != 0) || (pNode->ped.gate_info != 0)) {
+				stExtendInfo* pInfo = new stExtendInfo();
+				pInfo->keyId = pNode->node_id;
+
+				if (pNode->ped.fct_info != 0) {
+					pInfo->vtType.emplace_back(TYPE_WNODEEX_FCT);
+					pInfo->vtValue.emplace_back(node.FctNameIDX);
+				}
+
+				if (pNode->ped.gate_info != 0) {
+					pInfo->vtType.emplace_back(TYPE_WNODEEX_IO);
+					pInfo->vtValue.emplace_back(node.GateNameIDX);
+				}
+
+				m_pDataMgr->AddNodeExData(pInfo, TYPE_DATA_PEDESTRIAN);
+			}
+#endif
+
 			// 원래의 ID와 변경된 IDX 의 매칭 테이블
-			m_mapNodeIndex.insert(pair<uint64_t, uint32_t>({ pNode->node_id.llid, m_nNodeIdx }));
+			//m_mapNodeIndex.insert(pair<uint64_t, uint32_t>({ pNode->node_id.llid, m_nNodeIdx }));
 
 			// 노드 ID를 IDX로 변경
-			pNode->node_id.nid = m_nNodeIdx++; 
+			//pNode->node_id.nid = m_nNodeIdx++; 
 
 			static uint32_t s_nMaxConnNodeNum = 0;
 			if (s_nMaxConnNodeNum < node.ConnectNum) {
@@ -208,7 +225,7 @@ bool CFilePedestrian::ParseData(IN const char* fname)
 
 			m_mapNode.insert({ pNode->node_id.llid, pNode });
 
-			if (m_nNodeIdx % g_cntLogPrint == 0) {
+			if (m_nNodeIdx++ % g_cntLogPrint == 0) {
 				LOG_TRACE(LOG_DEBUG, "LOG, node data processing, %lld / %lld", m_nNodeIdx, nRecCount);
 			}
 		}
@@ -228,15 +245,15 @@ bool CFilePedestrian::ParseData(IN const char* fname)
 
 			pLink->name_idx = link.RoadNameIDX;
 
-			pLink->base.link_type = TYPE_DATA_PEDESTRIAN;
-			pLink->ped.bycicle_type = link.BycicleType;
+			pLink->base.link_type = TYPE_LINK_DATA_PEDESTRIAN;
+			pLink->ped.bicycle_type = link.BicycleType;
 			pLink->ped.walk_type = link.WalkType;
 			pLink->ped.facility_type = link.FacilityType;
 			pLink->ped.gate_type = link.GateType;
 			pLink->ped.lane_count = link.LaneCount;
 			pLink->ped.side_walk = link.SideWalk;
 			pLink->ped.walk_charge = link.WalkCharge;
-			pLink->ped.bycicle_control = link.BycicleControl;
+			pLink->ped.bicycle_control = link.BicycleControl;
 			
 			m_mapLink.insert({ pLink->link_id.llid, pLink });
 
@@ -270,7 +287,7 @@ bool CFilePedestrian::GenServiceData()
 	map<uint32_t, stMeshInfo*>::iterator itMesh;
 	unordered_map<uint64_t, stNodeInfo*>::iterator itNode;
 	unordered_map<uint64_t, stLinkInfo*>::iterator itLink;
-
+	bool findnode;
 
 	if (m_mapNode.empty() || m_mapLink.empty()) {
 		LOG_TRACE(LOG_ERROR, "LOG, start, link s/e node indexing");
@@ -278,17 +295,21 @@ bool CFilePedestrian::GenServiceData()
 	}
 
 	LOG_TRACE(LOG_DEBUG, "LOG, start, link s/e node indexing");
+
 	LOG_TRACE(LOG_DEBUG, "LOG, start, node connected link indexing");
 
 	for (itLink = m_mapLink.begin(); itLink != m_mapLink.end(); itLink++) {
-
-		// snode ID를 IDX로 변경
-		if ((itNodeIndex = m_mapNodeIndex.find(itLink->second->snode_id.llid)) != m_mapNodeIndex.end()) {
-			itLink->second->snode_id.nid = itNodeIndex->second;
+		//// snode ID를 IDX로 변경
+		//if ((itNodeIndex = m_mapNodeIndex.find(itLink->second->snode_id.llid)) != m_mapNodeIndex.end()) {
+		//	itLink->second->snode_id.nid = itNodeIndex->second;
 
 			// snode에 접속되는 인접 노드의 정보 업데이트
-			bool findnode = false;
+			findnode = false;
 			if ((itNode = m_mapNode.find(itLink->second->snode_id.llid)) != m_mapNode.end()) {
+				// 구획 변경점 상대 정보(메쉬)가 없을 경우
+				if (itNode->second->base.point_type == TYPE_NODE_EDGE && itNode->second->base.connnode_count <= 0) {
+					continue;
+				}
 
 				for (uint32_t ii = 0; ii < itNode->second->base.connnode_count; ii++)
 				{
@@ -310,23 +331,28 @@ bool CFilePedestrian::GenServiceData()
 				LOG_TRACE(LOG_ERROR, "Failed, can't find node info what match with link snode, mesh:%d, link:%d, snode:%d", itLink->second->snode_id.tile_id, itLink->second->link_id.nid, itLink->second->snode_id.nid);
 				continue;
 			}
-		}
-		else {
-	#if !defined(_USE_TEST_MESH)
-			LOG_TRACE(LOG_ERROR, "Failed, can't find snode, mesh:%d, node:%d", itLink->second->snode_id.tile_id, itLink->second->enode_id.nid);
-	#endif
-			itLink->second->snode_id.llid = 0;
-		}
+	//	}
+	//	else {
+	//// 테스트 메쉬에서는 노드 끊김이 있을 수 있으니 무시하자
+	//		if (!g_isUseTestMesh) {
+	//			LOG_TRACE(LOG_ERROR, "Failed, can't find snode, mesh:%d, node:%d", itLink->second->snode_id.tile_id, itLink->second->enode_id.nid);
+	//		}
+	//		itLink->second->snode_id.llid = 0;
+	//	}
 
 		
 
-		// enode ID를 IDX로 변경
-		if ((itNodeIndex = m_mapNodeIndex.find(itLink->second->enode_id.llid)) != m_mapNodeIndex.end()) {
-			itLink->second->enode_id.nid = itNodeIndex->second;
+		//// enode ID를 IDX로 변경
+		//if ((itNodeIndex = m_mapNodeIndex.find(itLink->second->enode_id.llid)) != m_mapNodeIndex.end()) {
+		//	itLink->second->enode_id.nid = itNodeIndex->second;
 
 			// enode에 접속되는 노드의 접속 노드 정보 업데이트
-			bool findnode = false;
+			findnode = false;
 			if ((itNode = m_mapNode.find(itLink->second->enode_id.llid)) != m_mapNode.end()) {
+				// 구획 변경점 상대 정보(메쉬)가 없을 경우
+				if (itNode->second->base.point_type == TYPE_NODE_EDGE && itNode->second->base.connnode_count <= 0) {
+					continue;
+				}
 
 				for (uint32_t ii = 0; ii < itNode->second->base.connnode_count; ii++)
 				{
@@ -349,15 +375,15 @@ bool CFilePedestrian::GenServiceData()
 				LOG_TRACE(LOG_ERROR, "Failed, can't find node info what match with link enode, mesh:%d, link:%d, enode:%d", itLink->second->enode_id.tile_id, itLink->second->link_id.nid, itLink->second->enode_id.nid);
 				continue;
 			}
-		}
-		else {
-#if !defined(_USE_TEST_MESH)
-			LOG_TRACE(LOG_ERROR, "Failed, can't find enode, mesh:%d, node:%d", itLink->second->enode_id.tile_id, itLink->second->enode_id.nid);
-#endif
-			itLink->second->enode_id.llid = 0;
-		}
-	}
-
+//		}
+//		else {
+//// 테스트 메쉬에서는 노드 끊김이 있을 수 있으니 무시하자
+//			if (!g_isUseTestMesh) {
+//				LOG_TRACE(LOG_ERROR, "Failed, can't find enode, mesh:%d, node:%d", itLink->second->enode_id.tile_id, itLink->second->enode_id.nid);
+//			}
+//			itLink->second->enode_id.llid = 0;
+//		}
+	} // for
 
 
 	LOG_TRACE(LOG_DEBUG, "LOG, start, edge node indexing");
@@ -369,6 +395,8 @@ bool CFilePedestrian::GenServiceData()
 		}
 
 		// 구획 변교점 노드 ID를 IDX로 변경
+		// 구획변경점을 기본 사용하기에 이제는 적용하지 않는다.
+#if 0
 		if ((itNodeIndex = m_mapNodeIndex.find(itNode->second->edgenode_id.llid)) != m_mapNodeIndex.end()) {
 			itNode->second->edgenode_id.nid = itNodeIndex->second;
 		}
@@ -376,11 +404,13 @@ bool CFilePedestrian::GenServiceData()
 			LOG_TRACE(LOG_ERROR, "Failed, can't find edge node, mesh:%d, node:%d", itNode->second->edgenode_id.tile_id, itNode->second->edgenode_id.nid);
 			continue;
 		}
+#endif
 	}
 
 	
 
 	// 인덱스 매칭
+#if 0 // 인덱스로 관리 하지 않고, id를 그대로 사용하므로 인덱스 매칭 안함, 2024-01-09~ 
 	LOG_TRACE(LOG_DEBUG, "LOG, start, link s/e node index matching");
 
 	for (itLink = m_mapLink.begin(); itLink != m_mapLink.end(); itLink++)
@@ -415,14 +445,15 @@ bool CFilePedestrian::GenServiceData()
 		}
 
 		itLink->second->enode_id = itNode->second->node_id;
-	}
-
-
-
-	// 링크 결합
-	LOG_TRACE(LOG_DEBUG, "LOG, start, link merge");
+	} // for
+#endif
 
 	int32_t cntProc = 0;
+
+	// 링크 결합, 구획변경점을 기본 사용하기에 이제는 링크 결합하지 않는다.
+#if 0
+	LOG_TRACE(LOG_DEBUG, "LOG, start, link merge");
+
 	for (itLink = m_mapLink.begin(); itLink != m_mapLink.end(); itLink++)
 	{
 		MergeLink(itLink->second, &m_mapLink, &m_mapNode);
@@ -431,7 +462,7 @@ bool CFilePedestrian::GenServiceData()
 			LOG_TRACE(LOG_DEBUG, "LOG, processing, link merge: %d/%d", cntProc, m_mapLink.size());
 		}
 	}
-
+#endif
 
 
 	// 각도 설정
@@ -541,29 +572,6 @@ void CFilePedestrian::Release()
 	CFileBase::Release();
 }
 
-bool CFilePedestrian::OpenFile(IN const char* szFilePath)
-{
-	return CFileBase::OpenFile(szFilePath);
-}
-
-
-bool CFilePedestrian::SaveData(IN const char* szFilePath)
-{
-	char szFileName[MAX_PATH] = { 0, };
-	sprintf(szFileName, "%s/%s.%s", szFilePath, g_szTypeTitle[TYPE_DATA_PEDESTRIAN], g_szTypeExec[TYPE_DATA_PEDESTRIAN]);
-
-	return CFileBase::SaveData(szFileName);
-}
-
-
-bool CFilePedestrian::LoadData(IN const char* szFilePath)
-{
-	char szFileName[MAX_PATH] = { 0, };
-	sprintf(szFileName, "%s/%s.%s", szFilePath, g_szTypeTitle[TYPE_DATA_PEDESTRIAN], g_szTypeExec[TYPE_DATA_PEDESTRIAN]);
-
-	return CFileBase::LoadData(szFileName);
-}
-
 
 bool  CFilePedestrian::SetData_Node(int idx, stWalkNode &getNode_Dbf, char* colData)
 {
@@ -588,9 +596,9 @@ bool  CFilePedestrian::SetData_Node(int idx, stWalkNode &getNode_Dbf, char* colD
 		} break;
 	case 6:		getNode_Dbf.AdjEdgeMesh = atoi(trim(colData));		break;
 	case 7:		getNode_Dbf.AdjEdgeNode = atoi(trim(colData));		break;
-	case 8:		getNode_Dbf.FacilityNameIDX = AddNameDic(colData);	break;
-	case 9:		getNode_Dbf.FacilityPhase = atoi(trim(colData));
-		if (getNode_Dbf.FacilityPhase < 0 || 3 < getNode_Dbf.FacilityPhase) {
+	case 8:		getNode_Dbf.FctNameIDX = AddNameDic(colData);	break;
+	case 9:		getNode_Dbf.FctPhase = atoi(trim(colData));
+		if (getNode_Dbf.FctPhase < 0 || 3 < getNode_Dbf.FctPhase) {
 			ret = false; m_strErrMsg = "facility phase value not defined : " + string(colData);
 		} break;
 	case 10:	getNode_Dbf.GateNameIDX = AddNameDic(colData);	break;
@@ -607,14 +615,14 @@ bool  CFilePedestrian::SetData_Node(int idx, stWalkNode &getNode_Dbf, char* colD
 
 bool CFilePedestrian::SetData_Link(int idx, stWalkLink &getLink_Dbf, char* colData)
 {
-	//uint32_t ped.bycicle_type : 2; // 자전거도로 타입, 1:자전거전용, 2:보행자/차량겸용 자전거도로, 3:보행도로
+	//uint32_t ped.bicycle_type : 2; // 자전거도로 타입, 1:자전거전용, 2:보행자/차량겸용 자전거도로, 3:보행도로
 	//uint32_t ped.walk_type : 3; //보행자도로 타입, 1:복선도록, 2:차량겸용도로, 3:자전거전용도로, 4:보행전용도로, 5:가상보행도로
 	//uint32_t ped.facility_type : 4; // 시설물 타입, 0:미정의, 1:토끼굴, 2:지하보도, 3:육교, 4:고가도로, 5:교량, 6:지하철역, 7:철도, 8:중앙버스정류장, 9:지하상가, 10:건물관통도로, 11:단지도로_공원, 12:단지도로_주거시설, 13:단지도로_관광지, 14:단지도로_기타
 	//uint32_t ped.gate_type : 4; // 진입로 타입, 0:미정의, 1:경사로, 2:계단, 3:에스컬레이터, 4:계단/에스컬레이터, 5:엘리베이터, 6:단순연결로, 7:횡단보도, 8:무빙워크, 9:징검다리, 10:의사횡단
 	//uint32_t ped.lane_count : 6; // 차선수, 63
 	//uint32_t ped.side_walk : 2; // 인도(보도) 여부, 0:미조사, 1:있음, 2:없음
 	//uint32_t ped.walk_charge : 2; // 보행자도로 유료 여부, 0:무료, 1:유료
-	//uint32_t ped.bycicle_control : 2; // 자전거도로 규제 코드, 0:양방향, 1:정방향, 2:역방향, 3:통행불가
+	//uint32_t ped.bicycle_control : 2; // 자전거도로 규제 코드, 0:양방향, 1:정방향, 2:역방향, 3:통행불가
 	
 	bool ret = true;
 
@@ -624,9 +632,9 @@ bool CFilePedestrian::SetData_Link(int idx, stWalkLink &getLink_Dbf, char* colDa
 	case 1:		getLink_Dbf.MeshID = atoi(trim(colData));	break;
 	case 2:		getLink_Dbf.FromNodeID = atoi(trim(colData));		break;
 	case 3:		getLink_Dbf.ToNodeID = atoi(trim(colData));		break;
-	case 4:		getLink_Dbf.BycicleType = atoi(trim(colData));	
-		if (getLink_Dbf.BycicleType < 1 || 3 < getLink_Dbf.BycicleType) {
-			ret = false; m_strErrMsg = "Bycicle type value not defined : " + string(colData);
+	case 4:		getLink_Dbf.BicycleType = atoi(trim(colData));	
+		if (getLink_Dbf.BicycleType < 1 || 3 < getLink_Dbf.BicycleType) {
+			ret = false; m_strErrMsg = "Bicycle type value not defined : " + string(colData);
 		} break;
 	case 5:		getLink_Dbf.WalkType = atoi(trim(colData));
 		if (getLink_Dbf.WalkType < 1 || 5 < getLink_Dbf.WalkType) {
@@ -654,9 +662,9 @@ bool CFilePedestrian::SetData_Link(int idx, stWalkLink &getLink_Dbf, char* colDa
 		if (getLink_Dbf.WalkCharge < 0 || 1 < getLink_Dbf.WalkCharge) {
 			ret = false; m_strErrMsg = "walk charge value not defined : " + string(colData);
 		} break;
-	case 13:	getLink_Dbf.BycicleControl = atoi(trim(colData));
-		if (getLink_Dbf.BycicleControl < 0 || 3 < getLink_Dbf.BycicleControl) {
-			ret = false; m_strErrMsg = "bycicle control value not defined : " + string(colData);
+	case 13:	getLink_Dbf.BicycleControl = atoi(trim(colData));
+		if (getLink_Dbf.BicycleControl < 0 || 3 < getLink_Dbf.BicycleControl) {
+			ret = false; m_strErrMsg = "bicycle control value not defined : " + string(colData);
 		} break;
 
 	default:	break;

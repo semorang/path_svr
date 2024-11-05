@@ -8,27 +8,54 @@
 
 
 #if defined(USE_OPTIMAL_POINT_API)
-#define FILE_VERSION_MAJOR	1
-#define FILE_VERSION_MINOR	0
-#define FILE_VERSION_PATCH	0
+// 1.0.1 -> stEntranceInfo 구조체 필드 64bit 증가
+// 1.0.2 -> link/node type 변경, // 0:미정의, 1:숲길, 2:보행자, 3:자전거, 4:차량 -> 0:미정의, 1:숲길, 2:보행자/자전거, 3:차량
+// 1.0.2 -> poly type 변경, // 0:빌딩, 1 : 단지, 2 : 산바운더리 -> 0:미정, 1:빌딩, 2:단지, 3:산바운더리
+// 1.0.3 -> stEntranceInfo에 angle 추가
+// 1.0.4 -> 폴리곤 parts offset 데이터 사이즈 변경 uint8_t --> uint16_t
+// 1.0.5 -> 파일 명칭 및 확장자 변경
+#	define FILE_VERSION_MAJOR	1
+#	define FILE_VERSION_MINOR	0
+#	define FILE_VERSION_PATCH	5
+#elif defined(USE_ROUTING_POINT_API)
+#	if defined(USE_FOREST_DATA)
+// 1.0.3 -> 숲길 네트워크에 그룹ID 추가, 각 지점간 동일 산(동일 네트워크 연결) 여부 확인 용
+// 1.0.4 -> 정/역 확장 매니저 따로 관리하도록 기능 추가
+// 1.0.5 -> 다중 메쉬 데이터 적용 (검색위해 단일 메쉬 -> 다중 메쉬 사용)
+// 1.0.6 -> 폴리곤 parts offset 데이터 사이즈 변경 uint8_t --> uint16_t
+// 1.0.7 -> 인기도 등급 적용, uint32_t:12 --> uint32_t:4
+// 1.0.8 -> 파일 명칭 및 확장자 변경
+#	define FILE_VERSION_MAJOR	1
+#	define FILE_VERSION_MINOR	0
+#	define FILE_VERSION_PATCH	8
+#	elif defined(USE_PEDESTRIAN_DATA)
+// 1.0.1 -> 폴리곤 parts offset 데이터 사이즈 변경 uint8_t --> uint16_t
+// 1.0.2 -> 노드 명칭 정보 유무 추가
+// 1.0.3 -> 파일 명칭 및 확장자 변경
+#	define FILE_VERSION_MAJOR	1
+#	define FILE_VERSION_MINOR	0
+#	define FILE_VERSION_PATCH	3
+#	elif defined(USE_VEHICLE_DATA)
+// 0.0.1 -> 폴리곤 parts offset 데이터 사이즈 변경 uint8_t --> uint16_t
+// 0.0.2 -> TTL_ID를 포함한 차량 네트워크 V1.0.2 20240401
+// 0.0.3 -> 파일 명칭 및 확장자 변경
+#	define FILE_VERSION_MAJOR	0
+#	define FILE_VERSION_MINOR	0
+#	define FILE_VERSION_PATCH	3
+#	endif
 #else
-#define FILE_VERSION_MAJOR	1
-#define FILE_VERSION_MINOR	0
-#define FILE_VERSION_PATCH	0
-#endif
-
-
-#if !defined(USE_P2P_DATA) && !defined(USE_SAMSUNG_HEAVY)// && 1 // defined(_DEBUG)
-//#define _USE_TEST_MESH
-static const array<int, 36 > g_arrTestMesh = { 
-	185308, 185405, 185406, 185313, 185410, 185411, 185318, 185415, 185416, 186303, 186400, 186401, 186308, 186405, 186406, // 서울
-	186316, 186317, 186318, 186410, 186411, 186415, 186416, // 하남
-	186306, 186307 ,186308, 186311, 186312, 186313, // 성남
-	185306, 185307, 185311, 185312, 185316, 185317, 186301, 186302, // 과천
-	};
+#	define FILE_VERSION_MAJOR	0
+#	define FILE_VERSION_MINOR	0
+#	define FILE_VERSION_PATCH	1
 #endif
 
 #define NULL_VALUE	uint32_t(-1)
+
+#if defined(_DEBUG)
+static const uint32_t g_cntLogPrint = 100000;
+#else
+static const uint32_t g_cntLogPrint = 1000000;
+#endif
 
 struct stMesh
 {
@@ -36,45 +63,54 @@ struct stMesh
 	SBox meshBox;
 };
 
-// 파일 타입
-static char g_szTypeName[TYPE_DATA_COUNT][4] = {
-	{ "DIC" }, //TYPE_DATA_NAME, // 명칭사전
-	{ "MES" }, //TYPE_DATA_MESH, // 메쉬
-	{ "TRK" }, //TYPE_DATA_TREKKING, // 숲길
-	{ "PED" }, //TYPE_DATA_PEDESTRIAN, // 보행자/자전거
-	{ "CAR" }, //TYPE_DATA_CAR, // 자동차
-	{ "BLD" }, //TYPE_DATA_BUILDING, // 건물
-	{ "CPX" }, //TYPE_DATA_COMPLEX, // 단지
-	{ "ENT" }, //TYPE_DATA_ENTRANCE, // 입구점
-	{ "RTT" }, //TYPE_DATA_TRAFFIC, // 교통정보
-};
-
 // 파일 명
 static char g_szTypeTitle[TYPE_DATA_COUNT][16] = {
-	{ "name" }, //TYPE_DATA_NAME, // 명칭사전
+	{ "nope" }, //TYPE_DATA_NONE, // 미지정
+	{ "name" }, //TYPE_DATA_NAME, // 명칭
 	{ "mesh" }, //TYPE_DATA_MESH, // 메쉬
-	{ "trekking" }, //TYPE_DATA_TREKKING, // 숲길
+	{ "forest" }, //TYPE_DATA_TREKKING, // 숲길
 	{ "pedestrian" }, //TYPE_DATA_PEDESTRIAN, // 보행자/자전거
 	{ "vehicle" }, //TYPE_DATA_CAR, // 자동차
 	{ "building" }, //TYPE_DATA_BUILDING, // 건물
 	{ "complex" }, //TYPE_DATA_COMPLEX, // 단지
 	{ "entrance" }, //TYPE_DATA_ENTRANCE, // 입구점
 	{ "traffic" }, //TYPE_DATA_TRAFFIC, // 교통정보
+	{ "mountain" }, //TYPE_DATA_MOUNTAIN, // 산바운더리
+	{ "course" }, //TYPE_DATA_COURSE, // 코스정보
+	{ "extend" }, //TYPE_DATA_EXTEND, // 확장정보
+};
+
+// 파일 타입
+static char g_szTypeName[TYPE_EXEC_COUNT][4] = {
+	{ "NOP" }, // TYPE_EXEC_NONE = 0, // 미정의
+	{ "STR" }, // TYPE_EXEC_NAME, // 명칭
+	{ "MSH" }, // TYPE_EXEC_MESH, // 메쉬
+	{ "LNK" }, // TYPE_EXEC_LINK, // 링크
+	{ "NOD" }, // TYPE_EXEC_NODE, // 노드
+	{ "NET" }, // TYPE_EXEC_NETWORK, // 네트워크
+	{ "POL" }, // TYPE_EXEC_POLYGON, // 폴리곤
+	{ "ENT" }, // TYPE_EXEC_ENTRANCE, // 입구점
+	{ "TRF" }, // TYPE_EXEC_TRAFFIC, // 교통정보
+	{ "COS" }, // TYPE_EXEC_COURSE, // 코스정보
+	{ "IDX" }, // TYPE_EXEC_INDEX, // 인덱스정보
+	{ "EXT" }, // TYPE_EXEC_EXTEND, // 확장정보
 };
 
 // 파일 확장자
-static char g_szTypeExec[TYPE_DATA_COUNT][4] = {
-	{ "gmd" }, //TYPE_DATA_NAME, // 명칭사전
-	{ "gmt" }, //TYPE_DATA_MESH, // 메쉬
-	{ "gml" }, //TYPE_DATA_TREKKING, // 숲길
-	{ "gml" }, //TYPE_DATA_PEDESTRIAN, // 보행자/자전거
-	{ "gml" }, //TYPE_DATA_CAR, // 자동차
-	{ "gmp" }, //TYPE_DATA_BUILDING, // 건물
-	{ "gmp" }, //TYPE_DATA_COMPLEX, // 단지
-	{ "gmp" }, //TYPE_DATA_ENTRANCE, // 입구점
-	{ "gmr" }, //TYPE_DATA_TRAFFIC, // 교통정보
+static char g_szTypeExec[TYPE_EXEC_COUNT][4] = {
+	{ "nop" }, // TYPE_EXEC_NONE = 0, // 미정의
+	{ "str" }, // TYPE_EXEC_NAME, // 명칭
+	{ "msh" }, // TYPE_EXEC_MESH, // 메쉬
+	{ "lnk" }, // TYPE_EXEC_LINK, // 링크
+	{ "nod" }, // TYPE_EXEC_NODE, // 노드
+	{ "net" }, // TYPE_EXEC_NETWORK, // 네트워크
+	{ "pol" }, // TYPE_EXEC_POLYGON, // 폴리곤
+	{ "ent" }, // TYPE_EXEC_ENTRANCE, // 입구점
+	{ "trf" }, // TYPE_EXEC_TRAFFIC, // 교통정보
+	{ "cos" }, // TYPE_EXEC_COURSE, // 코스정보
+	{ "idx" }, // TYPE_EXEC_INDEX, // 인덱스정보
+	{ "ext" }, // TYPE_EXEC_EXTEND, // 확장정보
 };
-
 #pragma pack (push, 1)
 
 // 기본 정보
@@ -108,6 +144,7 @@ typedef struct _tagFileBody {
 	uint32_t idTile;	// 타일 id
 	uint32_t szData;	// 데이터 blob 사이즈 - node, link, vertex
 	union {
+		uint64_t cntData;
 		struct {
 			uint32_t cntNode;	// 노드 갯수
 			uint32_t cntLink;	// 링크 갯수
@@ -120,6 +157,11 @@ typedef struct _tagFileBody {
 			uint32_t cntComplex;	// 단지 갯수
 			uint32_t cntBuilding;	// 빌딩 갯수
 		} ent;
+		struct
+		{
+			uint32_t cntTraffic;	// 교통정보 갯수
+			uint32_t cntMatching;	// 매칭 갯수
+		} traffic;
 	};
 }FileBody;
 
@@ -140,7 +182,7 @@ typedef struct _tagFileLink {
 	uint32_t name_idx;
 	uint32_t cntVertex;
 	uint64_t sub_info;
-#if defined(USE_P2P_DATA)
+#if defined(USE_P2P_DATA) || defined(USE_MOUNTAIN_DATA)
 	uint64_t sub_ext; // HD 매칭 ID
 #endif
 }FileLink;
@@ -201,9 +243,14 @@ protected:
 	SBox m_rtBox;
 
 
+	uint32_t m_nDataType; // TYPE_DATA
 	uint32_t m_nFileType; // TYPE_DATA
 
 	char m_szDataPath[MAX_PATH];
+
+	char m_szSrcPath[MAX_PATH];
+	char m_szWorkPath[MAX_PATH];
+	char m_szDstPath[MAX_PATH];
 	
 	FileHeader m_fileHeader;
 	std::vector<FileIndex> m_vtIndex;
@@ -248,6 +295,7 @@ protected:
 
 	const char* GetErrorMsg();
 
+	bool CheckDataInMesh(IN const double x, IN const double y);
 
 public:
 	virtual bool Initialize();
@@ -275,6 +323,7 @@ public:
 
 	///////////////////////////////////////////////////////////////////////////
 	//virtual bool OpenFile(IN const vector<string>* pvtFilePath);
+	virtual bool SetPath(IN const char* szSrcPath, IN const char* szWorkPath, IN const char* szDstPath);
 	virtual bool OpenFile(IN const char* szFilePath);
 	virtual bool SaveData(IN const char* szFilePath);
 

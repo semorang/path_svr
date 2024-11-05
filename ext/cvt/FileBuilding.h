@@ -61,21 +61,13 @@ public:
 	virtual void AddDataFeild(IN const int idx, IN const int type, IN const char* colData);
 	virtual void AddDataRecord();
 
-	//virtual bool OpenFile(IN const char* szFilePath);
-	virtual bool SaveData(IN const char* szFilePath);
-
-	//virtual size_t WriteHeader(FILE* fp, FileHeader* pHeader);
-	//virtual size_t WriteIndex(FILE* fp, vector<FileIndex>* pvtFileIndex);
 	virtual size_t WriteBody(FILE* fp, IN const uint32_t fileOff);
-
-	virtual bool LoadData(IN const char* fname);
-	virtual bool LoadDataByIdx(IN const uint32_t idx);
-
 	virtual size_t ReadBody(FILE* fp);
+
+	virtual bool LoadDataByIdx(IN const uint32_t idx);
 
 	void SetFileComplex(CFileComplex* pCpx);
 	bool AddEntranceData(IN const KeyID keyId, IN const stEntranceInfo& entInfo);
-	const stBuilding* GetBuildingData(IN const KeyID id) const;
 
 	const KeyID AddStringId(IN const char* szStringId, IN const uint32_t meshId);
 	const KeyID GetIdFromStringId(IN const char* szStringId);

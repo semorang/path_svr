@@ -90,6 +90,7 @@
     <script type="text/javascript" src="script/inavimaps.js"></script>
     <script type="text/javascript" src="script/boundarys.js"></script>
     <script type="text/javascript" src="script/typenames.js"></script>
+    <script type="text/javascript" src="script/route.js"></script>
     <script type="text/javascript" src="script/search.js"></script>
     <script type="text/javascript" src="script/waypoints.js"></script>
     <script type="text/javascript" src="http://code.jquery.com/jquery-1.10.2.js"></script>
@@ -103,21 +104,11 @@
         let cnt_route = result_obj.route.data.length;
         let user_pos = [ result_obj.route.data[0].vertex_info[~~((result_obj.route.data[0].vertex_info.length) / 2)].x, result_obj.route.data[0].vertex_info[~~((result_obj.route.data[0].vertex_info.length) / 2)].y ];
         
-        var tmp_user_obj = user_obj;        
-
-        // let route_color = ["#CC0000", "#FF00DD", "#33FF00"];
-        // let route_offset = [0, 1, -1];
-        let route_color = ["#CC0000", "#008888", "#6666FF"];
-        let route_offset = [0, 2, -2];
+        var tmp_user_obj = user_obj;
 
 
         // 경로 탐색 정보
-        let typeRouteStep = 0; // 0:없음, 1:출발, 2:도착, 3:경유
         let typeRouteLine = 0; // 0:없음, 1:경로선, 2:직선
-        let click_pos;
-        let departure_pos;
-        let waypoint_pos;
-        let destination_pos;
 
         // map 사이즈 조절
         var screenHeight = window.innerHeight - 80;
@@ -808,7 +799,7 @@
             }
 
             // var pathname = 'https://api-maps.cloud.toast.com/maps/v3.0/appkeys/uuLPV7fHLk6NIVfCPnBv/searches';
-            var pathname = 'https://maps.inavi.com/maps/v3.0/appkeys/<%=javascriptkey%>/searches'
+            var pathname = 'https://dev-maps.inavi.com/maps/v3.0/appkeys/<%=javascriptkey%>/searches'
             var search2url = pathname + '?&query=' + keyword.toString() + '&reqcount=' + 10;
 
             console.log("request, search data: " + keyword)

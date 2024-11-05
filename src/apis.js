@@ -6,17 +6,15 @@ const codes = require('./codes');
 const logout = require('./logs');
 
 
-exports.distancematrix = function(key, mode, destinations) {
+exports.distancematrix = function(key, req) {
     var ret;
 
     // 사용자 키 확인
     var user = auth.checkAuth(key);
     if (user != null && user.length > 0) {
-        if (mode !== undefined && destinations !== undefined) {       
-            logout("client user:'" + user + "', req:" + JSON.stringify(destinations));
+        logout("client user:'" + user + "', req: " + JSON.stringify(req));
             
-            ret = route.gettable(mode, destinations);
-        }
+        ret = route.gettable(req);
     } else {
         var header = {
             isSuccessful: false,
@@ -41,17 +39,16 @@ exports.distancematrix = function(key, mode, destinations) {
 }
 
 
-exports.clustering = function(key, target, destinations, clusters, file, mode) {
+// exports.clustering = function(key, target, destinations, clusters, file, mode, option) {
+exports.clustering = function(key, req) {
     var ret;
-
+    
     // 사용자 키 확인
     var user = auth.checkAuth(key);
     if (user != null && user.length > 0) {
-        if (destinations !== undefined) {       
-            logout("client user:'" + user + "', req pois: " + JSON.stringify(destinations) + ", req clusters: " + clusters);
+        logout("client user:'" + user + "', req: " + JSON.stringify(req));
             
-            ret = route.getcluster(target, destinations, clusters, file, mode);
-        }
+        ret = route.getcluster(req);
     } else {
         var header = {
             isSuccessful: false,
@@ -61,8 +58,8 @@ exports.clustering = function(key, target, destinations, clusters, file, mode) {
         
         var origins;
         var clusters;
-        if (destinations) {
-            origins = destinations
+        if (req.origins) {
+            origins = req.origins
         };
         if (clusters) {
             clusters = clusters
@@ -82,7 +79,7 @@ exports.clustering = function(key, target, destinations, clusters, file, mode) {
 }
 
 
-exports.boundary = function(key, mode, destinations) {
+exports.boundary = function(key, mode, target, destinations) {
     var ret;
 
     // 사용자 키 확인
@@ -91,7 +88,7 @@ exports.boundary = function(key, mode, destinations) {
         if (mode !== undefined && destinations !== undefined) {       
             logout("client user:'" + user + "', req boundary: " + JSON.stringify(destinations));
             
-            ret = route.getboundary(mode, destinations);
+            ret = route.getboundary(mode, target, destinations);
         }
     } else {
         var header = {
@@ -119,17 +116,13 @@ exports.boundary = function(key, mode, destinations) {
 }
 
 
-exports.bestwaypoints = function(key, mode, destinations) {
+exports.bestwaypoints = function(key, req) {
     var ret;
 
     // 사용자 키 확인
     var user = auth.checkAuth(key);
     if (user != null && user.length > 0) {
-        if (mode !== undefined && destinations !== undefined) {       
-            logout("client user:'" + user + "', req:" + JSON.stringify(destinations));
-            
-            ret = route.getbestways(mode, destinations);
-        }
+        ret = route.getbestways(req);
     } else {
         var header = {
             isSuccessful: false,
@@ -138,8 +131,8 @@ exports.bestwaypoints = function(key, mode, destinations) {
         };
         
         var origins;
-        if (destinations) {
-            origins = destinations
+        if (req.origins) {
+            origins = req.origins
         };
     
         ret = {

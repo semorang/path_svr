@@ -15,6 +15,7 @@ const cfg = require('dotenv').config();
 const route = require('../src/route');
 const logout = require('../src/logs');
 const apis = require('../src/apis');
+const times = require('../src/times.js')
 // const escapeJSON = require('escape-json-noide');
 // const addon = require('bindings')('openAPI')
 
@@ -68,32 +69,6 @@ app.get('/test', function(req, res) {
 });
 
 
-
-function getElapsedTime(created) {
-    let now = Date.now();
-    // 경과시간 정보
-    let duration = moment.duration(now - created);
-    // 경과시간에 대해 문자열로 표시할 단위 옵션
-    let durationOptions = [
-        {"dur" : duration.asYears(), "option" : "년 전"},
-        {"dur" : duration.asMonths(), "option" : "개월 전"},
-        {"dur" : duration.asWeeks(), "option" : "주 전"},
-        {"dur" : duration.asDays(), "option" : "일 전"},
-        {"dur" : duration.asHours(), "option" : "시간 전"},
-        {"dur" : duration.asMinutes(), "option" : "분 전"},
-        {"dur" : duration.asSeconds(), "option" : "초 전"}];
-    
-    // 반복문으로 duration의 값을 확인해 어떤 단위로 반환할지 결정한다.
-    // ex) 0.8년전이면 "8개월 전" 반환
-    for (let durOption of durationOptions) {
-        if (durOption.dur >= 1) {
-            return Math.round(durOption.dur) + durOption.option;
-        }
-    }
-    // 분 단위로 검사해도 1 이상이 아니면(반복문에서 함수가 종료되지 않으면) "방금 전" 반환
-    return "방금 전"
-}
-
 app.get('/version', function(req, res) {
     let startTime = logout("start version info");
 
@@ -110,8 +85,8 @@ app.get('/version', function(req, res) {
             ip : cur_ip.address(),
             port : cur_port,
             pid : cur_pid,
-            start : cur_time,
-            alive : getElapsedTime(cur_time.getTime()),
+            start : start_time,
+            alive : times.getElapsedTime(start_time.getTime()),
         }
     }
 
@@ -177,7 +152,7 @@ app.get('/route', function(req, res) {
 
 
 app.get('/view/route', function(req, res) {
-    let startTime = logout("start routeview request");
+    let startTime = logout("start route(view) request");
 
     logout("client IP : " + request_ip.getClientIp(req));
     logout("client req : " + JSON.stringify(req.query));
@@ -211,7 +186,7 @@ app.get('/view/route', function(req, res) {
         }
     }
 
-    logout("end routeview request", startTime);
+    logout("end route(view) request", startTime);
 });
 
 
@@ -229,12 +204,24 @@ app.get('/api/optimalposition', function(req, res) {
     logout("client IP : " + request_ip.getClientIp(req));
     logout("client req : " + JSON.stringify(req.query));
 
-    // if (req.query.type == undefined || req.query.type == 0) {
+    let type = "0";
     if (req.query.type == undefined) {
         // 택시승하차 - 차량출입구 만 선택
         // 2,3,1,0; 
-        req.query.type = 0x00010302; // 바이트 거꾸로
-        // req.query.type = parseInt(subtype, 16);
+        type = "0x00010302"; // 바이트 거꾸로
+    } else {
+        type = req.query.type;
+    }
+
+    // if (req.query.road != undefined && parseInt(req.query.road, 10) != 0) {
+    //     // 근처 도로를 무조건 추가 => 4th에 90
+    //     // type |= 0x90000000; // 
+    // }
+
+    if (((type.length >= 8) && (type.charAt(0) === "0")) || (type.indexOf("0x") == 0)) {
+        req.query.type = parseInt(type, 16).toString();
+    } else {
+        req.query.type = type;
     }
 
     let ret = route.optimalposition(req);
@@ -256,16 +243,29 @@ app.get('/view/optimalposition', function(req, res) {
     logout("client IP : " + request_ip.getClientIp(req));
     logout("client req : " + JSON.stringify(req.query));
 
-    // if (req.query.type == undefined || req.query.type == 0) {
+    let type = "0";
     if (req.query.type == undefined) {
         // 택시승하차 - 차량출입구 만 선택
         // 2,3,1,0; 
-        req.query.type = 0x00010302; // 바이트 거꾸로
-        // req.query.type = parseInt(subtype, 16);
+        type = "0x00010302"; // 바이트 거꾸로
+    } else {
+        type = req.query.type;
     }
 
+    // if (req.query.road != undefined && parseInt(req.query.road, 10) != 0) {
+    //     // 근처 도로를 무조건 추가 => 4th에 90
+    //     // type |= 0x90000000; // 
+    // }
+
+    if (((type.length >= 8) && (type.charAt(0) === "0")) || (type.indexOf("0x") == 0)) {
+        req.query.type = parseInt(type, 16).toString();
+    } else {
+        req.query.type = type;
+    }
+
+    // view에서는 무조건 확장 결과를 전달
     if (req.query.expand == undefined) {
-        req.query.expand = 1;
+        req.query.expand = (1).toString();
     }
 
     const api = req.query.api;
@@ -287,7 +287,7 @@ app.get('/view/optimalposition', function(req, res) {
 const cur_ip = require("ip");
 const cur_port = (process.env.OPT_SVR_PORT === undefined) ? 20301 : process.env.OPT_SVR_PORT;
 const cur_pid = process.pid;
-const cur_time = new Date();
+const start_time = new Date();
 
 const server = app.listen(cur_port, function () {
     var data_path = process.env.DATA_PATH;

@@ -33,14 +33,14 @@ void MapLink::Release(void)
 {
 	if (!mapData.empty())
 	{
-		for (map<uint64_t, stLinkInfo*>::iterator it = mapData.begin(); it != mapData.end(); it++)
+		for (unordered_map<uint64_t, stLinkInfo*>::iterator it = mapData.begin(); it != mapData.end(); it++)
 		{
 			delete it->second;
 			it->second = nullptr;
 		}
 
 		mapData.clear();
-		map<uint64_t, stLinkInfo*>().swap(mapData);
+		unordered_map<uint64_t, stLinkInfo*>().swap(mapData);
 	}
 
 	MapBase::Release();
@@ -69,7 +69,7 @@ int MapLink::AddData(IN const stLinkInfo * pData)
 
 bool MapLink::DeleteData(IN const KeyID keyId)
 {
-	map<uint64_t, stLinkInfo*>::iterator it = mapData.find(keyId.llid);
+	unordered_map<uint64_t, stLinkInfo*>::iterator it = mapData.find(keyId.llid);
 	if (it != mapData.end()) {
 		delete it->second;
 		it->second = nullptr;
@@ -83,7 +83,7 @@ bool MapLink::DeleteData(IN const KeyID keyId)
 
 stLinkInfo * MapLink::GetLinkById(IN const KeyID keyId)
 {
-	map<uint64_t, stLinkInfo*>::iterator it = mapData.find(keyId.llid);
+	unordered_map<uint64_t, stLinkInfo*>::iterator it = mapData.find(keyId.llid);
 	if (it != mapData.end()) {
 		//return &*mapData.find(keyId.llid)->second;
 		return it->second;
@@ -95,7 +95,7 @@ stLinkInfo * MapLink::GetLinkById(IN const KeyID keyId)
 
 stLinkInfo * MapLink::GetLinkBySENode(IN const KeyID idx1, IN const KeyID idx2)
 {
-	for (map<uint64_t, stLinkInfo*>::iterator it = mapData.begin(); it != mapData.end(); it++)
+	for (unordered_map<uint64_t, stLinkInfo*>::iterator it = mapData.begin(); it != mapData.end(); it++)
 	{
 #if defined(USE_MULTIPROCESS)		
 		LOG_TRACE(LOG_DEBUG, "Check OpenMP thread id %d", omp_get_thread_num());

@@ -108,9 +108,17 @@ double getRealWorldDistance(IN const double slng, IN const double slat, IN const
 }
 
 
-bool getPointByDistance(IN const double slng, IN const double slat, IN OUT double& elng, IN OUT double& elat, double lDistance)
+bool getPointByDistance(IN const double slng, IN const double slat, IN OUT double& elng, IN OUT double& elat, const double lDistance)
 {
+	if ((slng == elng) && (slat == elat)) {
+		return false;
+	}
+
 	const double	totalDistance = getRealWorldDistance(slng, slat, elng, elat);
+	if (totalDistance == 0) {
+		return false;
+	}
+
 	const double	distanceRatio = (float)lDistance / totalDistance;
 
 	const double	dx = (slng - elng) * distanceRatio;

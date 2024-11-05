@@ -6,6 +6,7 @@
 
 #include "../utils/UserLog.h"
 #include "../utils/Strings.h"
+
 #include "../route/DataManager.h"
 
 #if defined(_WIN32) && defined(_DEBUG)
@@ -17,7 +18,8 @@ static char THIS_FILE[] = __FILE__;
 
 CFileName::CFileName()
 {
-	m_nFileType = TYPE_DATA_NAME;
+	m_nDataType = TYPE_DATA_NAME;
+	m_nFileType = TYPE_EXEC_NAME;
 	m_idxDic = 0;
 
 	// 인덱스 0의 명칭 초기화
@@ -74,17 +76,6 @@ uint32_t CFileName::AddData(char* pszName)
 	}
 
 	return retIdx;
-}
-
-
-bool CFileName::SaveData(IN const char* szFilePath)
-{
-	/////////////////////////////////////////
-	// name dic
-	char szFileName[MAX_PATH] = { 0, };
-	sprintf(szFileName, "%s/%s.%s", szFilePath, g_szTypeTitle[TYPE_DATA_NAME], g_szTypeExec[TYPE_DATA_NAME]);
-
-	return CFileBase::SaveData(szFileName);
 }
 
 
@@ -172,27 +163,6 @@ size_t CFileName::WriteBody(FILE* fp, IN const uint32_t fileOff)
 	}
 
 	return offFile;
-}
-
-
-bool CFileName::LoadData(IN const char* szFilePath)
-{
-	if (!m_pDataMgr) {
-		LOG_TRACE(LOG_ERROR, "Failed, container pointer null");
-		return false;
-	}
-
-	// load name dic
-	size_t offFile = 0;
-	size_t offItem = 0;
-	size_t retRead = 0;
-
-	/////////////////////////////////////////
-	// name dic
-	char szFileName[MAX_PATH] = { 0, };
-	sprintf(szFileName, "%s/%s.%s", szFilePath, g_szTypeTitle[TYPE_DATA_NAME], g_szTypeExec[TYPE_DATA_NAME]);
-
-	return CFileBase::LoadData(szFileName);
 }
 
 

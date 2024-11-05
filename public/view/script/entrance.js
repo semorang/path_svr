@@ -47,10 +47,12 @@ function getEntranceListItem(index, type, entrance) {
     var el = document.createElement('li'),
         itemStr = '<div class="circle_' + type + '" background:"blue"> <span>' + index + '</span></div>' +
             '<div class="info">' +
-            '   <span class="type"> <h5> 입구점 속성 :' +
+            '   <span class="type"> <h5 style="margin-top:10px; margin-bottom:10px"> 입구점 속성 :' +
             '       ' + getEntranceType(entrance.type) + '</h5> </span>' +
-            '   <span class="coord"> 좌표 : ' +
+            '   <span class="coord" style="margin-bottom:5px"> 좌표 : ' +
             '       ' + entrance.y.toFixed(6) + ', ' + entrance.x.toFixed(6) + ' </span>' +
+            '   <span class="coord"> 진출각도 : ' +
+            '       ' + entrance.angle + '° </span>' +
             '</div>';
 
     el.innerHTML = itemStr;

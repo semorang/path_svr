@@ -14,6 +14,7 @@ const cfg = require('dotenv').config();
 const route = require('../src/route');
 const logout = require('../src/logs');
 const apis = require('../src/apis');
+const times = require('../src/times.js')
 // const escapeJSON = require('escape-json-noide');
 // const addon = require('bindings')('openAPI')
 
@@ -53,7 +54,8 @@ app.get('/test', function(req, res) {
     logout("client IP : " + request_ip.getClientIp(req));
     logout("client req : " + JSON.stringify(req.query));
 
-    var ret = route.doroute(req, 'summary');
+    const key = null;
+    var ret = route.doroute(key, req, 'summary');
 
     if (ret.result_code == 0) {
         // logout(JSON.stringify(ret));
@@ -77,6 +79,14 @@ app.get('/version', function(req, res) {
     logout("result : " + ((ret.result_code == 0) ? "success" : "failed") + ", code : " + ret.result_code);
     if (ret.result_code != 0) {
         logout('버전 확인 실패 : ' + ret.msg);
+    } else {
+        ret.server = {
+            ip : cur_ip.address(),
+            port : cur_port,
+            pid : cur_pid,
+            start : start_time,
+            alive : times.getElapsedTime(start_time.getTime()),
+        }
     }
 
     res.send(ret);
@@ -105,7 +115,8 @@ app.get('/summary', function(req, res) {
     logout("client IP : " + request_ip.getClientIp(req));
     logout("client req : " + JSON.stringify(req.query));
 
-    var ret = route.doroute(req, 'summary');
+    const key = null;
+    var ret = route.doroute(key, req, 'summary');
 
     if (ret.result_code == 0) {
         // logout(JSON.stringify(ret));
@@ -121,12 +132,13 @@ app.get('/summary', function(req, res) {
 
 // app.get('/route', timeout('10s'), function(req, res) {
 app.get('/route', function(req, res) {
-    logout("start route request");
+    let startTime = logout("start route request");
 
     logout("client IP : " + request_ip.getClientIp(req));
     logout("client req : " + JSON.stringify(req.query));
 
-    var ret = route.doroute(req);
+    const key = null;
+    var ret = route.doroute(key, req);
 
     if (ret.header.isSuccessful == true) {
         // logout(JSON.stringify(ret));
@@ -136,12 +148,12 @@ app.get('/route', function(req, res) {
         res.send(ret);
     }
 
-    logout("end route request");
+    logout("end route request", startTime);
 });
 
 
 app.get('/api/multiroute', function(req, res) {
-    logout("start multiroute request");
+    let startTime = logout("start multiroute request");
 
     logout("client IP : " + request_ip.getClientIp(req));
     logout("client req : " + JSON.stringify(req.query));
@@ -157,7 +169,7 @@ app.get('/api/multiroute', function(req, res) {
         res.send(ret);
     }
 
-    logout("end multiroute request");
+    logout("end multiroute request", startTime);
 });
 
 
@@ -196,15 +208,23 @@ app.get('/api/path', function(req, res) {
 
 
 app.get('/api/kakaovx', function(req, res) {
-    logout("start kakaovx route request");
+    let startTime = logout("start kakaovx request");
 
     logout("client IP : " + request_ip.getClientIp(req));
     logout("client req : " + JSON.stringify(req.query));
 
     req.query.target = "kakaovx";
+    req.query.optimal = "false";
+    req.query.junction = "true"; // 숲길은 MM이 필요해 junction 사용
+    if (req.query.course_type === undefined) {
+        req.query.course_type = "1"; // 기본 등산로 탐색
+    }
+    
+    // req.query.type = "0"; // 코스 타입 //0:미정의, 1:등산, 2:걷기, 3:자전거, 4:코스
+    // req.query.course = "0"; // 코스 ID
 
     const key = (req.query.appkey != undefined) ? req.query.appkey : "kakaovx";
-    var ret = route.domultiroute(key, req, "");
+    var ret = route.domultiroute(key, req.query, "");
 
     if (ret.header.isSuccessful == true) {
         // logout(JSON.stringify(ret));
@@ -214,21 +234,29 @@ app.get('/api/kakaovx', function(req, res) {
         res.send(ret);
     }
 
-    logout("end kakaovx route request");
+    logout("end kakaovx request", startTime);
 });
 
 
 app.get('/view/kakaovx', function(req, res) {
-    logout("start kakaovx request");
+    let startTime = logout("start kakaovx(view) request");
 
     logout("client IP : " + request_ip.getClientIp(req));
     logout("client req : " + JSON.stringify(req.query));
 
     req.query.target = "kakaovx";
+    req.query.optimal = "false";
+    req.query.junction = "true"; // 숲길은 MM이 필요해 junction 사용
+    if (req.query.course_type === undefined) {
+        req.query.course_type = "1"; // 기본 등산로 탐색
+    }
+
+    // req.query.type = "0"; // 코스 타입 //0:미정의, 1:등산, 2:걷기, 3:자전거, 4:코스
+    // req.query.course = "0"; // 코스 ID
+
     const api = req.query.api;
     const key = (req.query.appkey != undefined) ? req.query.appkey : "kakaovx";
-
-    var ret = route.domultiroute(key, req, "view");
+    var ret = route.domultiroute(key, req.query, "");
 
     if (ret.header.isSuccessful == true) {
         if (api === "kakao") {
@@ -242,17 +270,20 @@ app.get('/view/kakaovx', function(req, res) {
         res.send('다중 경탐 실패, 코드 : ' + ret.header.resultCode + ', 오류 : ' + ret.header.resultMessage);
     }
 
-    logout("end kakaovx request");
+    logout("end kakaovx(view) request", startTime);
 });
 
 
 app.get('/view/route', function(req, res) {
-    logout("start routeview request");
+    let startTime = logout("start route(view) request");
 
     logout("client IP : " + request_ip.getClientIp(req));
     logout("client req : " + JSON.stringify(req.query));
 
-    var ret = route.doroute(req, 'view');
+    const key = null;
+    req.query.mobility = "0"; // 기본 걷기 모드
+
+    var ret = route.doroute(key, req, 'view');
 
     if (ret.result_code == 0) {
 
@@ -273,19 +304,18 @@ app.get('/view/route', function(req, res) {
         res.send('경탐 실패, 코드 : ' + ret.result_code + ', 오류 : ' + ret.msg);
     }
 
-    logout("end routeview request");
+    logout("end route(view) request", startTime);
 });
 
 
 app.get('/view/multiroute', function(req, res) {
-    logout("start multirouteview request");
+    let startTime = logout("start multiroute(view) request");
 
     logout("client IP : " + request_ip.getClientIp(req));
     logout("client req : " + JSON.stringify(req.query));
 
     const api = req.query.api;
     const key = null;
-    
     var ret = route.domultiroute(key, req, "view");
 
     if (ret.header.isSuccessful == true) {
@@ -293,14 +323,18 @@ app.get('/view/multiroute', function(req, res) {
             res.render(__dirname + "/../views/kakao_maps_kakaovx", {javascriptkey:apikey.KAKAOMAPAPIKEY, result:ret});
         } else if (req.query.target === "kakaovx") {
             res.render(__dirname + "/../views/inavi_maps_kakaovx", {javascriptkey:apikey.INAVIMAPAPIKEY, result:ret});
-        } else {
+        } else if (req.query.target === 'inavi') {
             res.render(__dirname + "/../views/inavi_maps_multiroute", {javascriptkey:apikey.INAVIMAPAPIKEY, result:ret});
+        } else if (req.query.target === 'p2p') {
+            res.render(__dirname + "/../views/inavi_maps_multipath", {javascriptkey:apikey.INAVIMAPAPIKEY, result:ret});
+        } else {
+            res.render(__dirname + "/../views/inavi_maps_multiroute_ex", {javascriptkey:apikey.INAVIMAPAPIKEY, result:ret});
         }
     } else {
         res.send('다중 경탐 실패, 코드 : ' + ret.header.resultCode + ', 오류 : ' + ret.header.resultMessage);
     }
 
-    logout("end multirouteview request");
+    logout("end multiroute(view) request", startTime);
 });
 
 
@@ -312,7 +346,6 @@ app.get('/view/waypoints', function(req, res) {
 
     const api = req.query.api;
     const key = null;
-    
     var ret = route.domultiroute(key, req, "view");
 
     if (ret.header.isSuccessful == true) {
@@ -330,19 +363,91 @@ app.get('/view/waypoints', function(req, res) {
 });
 
 
+app.get('/view/route_result', function(req, res) {
+    logout("start route result");
+
+    logout("client IP : " + request_ip.getClientIp(req));
+    logout("file name : " + req.query.file);
+
+    if (req.query.file != undefined) {
+        //load json file
+        var jsonBuff = fs.readFileSync(req.query.file, 'utf8');
+        var jsonReq = JSON.parse(jsonBuff);
+        logout("client req : " + JSON.stringify(jsonReq));
+
+        const target = req.query.target;
+
+        var header = {
+            isSuccessful: false,
+            resultCode: 1,
+            resultMessage: ""
+        };
+        
+        var user_info = {
+            id: 12345,
+            option: 2
+        };
+
+        var route = {
+            data: new Array,
+        }
+    
+        var ret = {
+            header: header,
+            user_info: user_info,
+            summarys: undefined,
+            route: route,
+        };
+
+        if (jsonReq.result_code == 0) {
+            ret.header.isSuccessful = true;
+            ret.header.resultCode = jsonReq.result_code;
+            ret.header.resultMessage = jsonReq.error_msg;
+
+            if (jsonReq.summarys.length > 0) {
+                ret.summarys = jsonReq.summarys;
+            }
+
+            if ((target === "inavi") || (target === "p2p")) {
+                ret.route.data.push(jsonReq.routes[0]);
+                logout("route(0) count : " + jsonReq.routes.length + ", paths : " + jsonReq.routes[0].paths.length);
+            } else { // if (target === "kakaovx") {
+                logout("route(0) count : " + jsonReq.routes.length);
+                ret.route.data.push(jsonReq.routes[0]);
+                ret.user_info = jsonReq.user_info;
+            }
+
+
+            if (target === "kakao") {
+                res.render(__dirname + "/../views/kakao_maps_route", {javascriptkey:apikey.KAKAOMAPAPIKEY, result:ret});
+            } else {
+                // res.render(__dirname + "/../views/inavi_maps_multiroute", {javascriptkey:apikey.INAVIMAPAPIKEY, result:ret});
+                res.render(__dirname + "/../views/inavi_maps_tsp", {javascriptkey:apikey.INAVIMAPAPIKEY, result:ret});
+            }
+        } else {
+            res.send('다중 경탐 실패, 코드 : ' + ret.header.resultCode + ', 오류 : ' + ret.header.resultMessage);
+        }
+    }
+
+
+    logout("end route result");
+});
+
+
 // p2p path result view
 app.get('/view/path', function(req, res) {
     logout("start pathview request");
 
     // 2p2 path 전용 옵션
+    req.query.target = "p2p";
     req.query.option = 8;
+    req.query.optimal = "false";
 
     logout("client IP : " + request_ip.getClientIp(req));
     logout("client req : " + JSON.stringify(req.query));
 
     const api = req.query.api;
     const key = null;
-    
     var ret = route.domultiroute(key, req, "view");
 
     if (ret.header.isSuccessful == true) {
@@ -360,17 +465,29 @@ app.get('/view/path', function(req, res) {
 
 
 app.get('/api/optimalposition', function(req, res) {
-    logout("start optimalposition request");
+    let startTime = logout("start optimalposition request");
 
     logout("client IP : " + request_ip.getClientIp(req));
     logout("client req : " + JSON.stringify(req.query));
 
-    // if (req.query.type == undefined || req.query.type == 0) {
+    let type = "0";
     if (req.query.type == undefined) {
         // 택시승하차 - 차량출입구 만 선택
         // 2,1,0,0; 
-        req.query.type = 0x00000102; // 바이트 거꾸로
-        // req.query.type = parseInt(subtype, 16);
+        type = "0x00000102"; // 바이트 거꾸로
+    } else {
+        type = req.query.type;
+    }
+
+    // if (req.query.road != undefined && parseInt(req.query.road, 10) != 0) {
+    //     // 근처 도로를 무조건 추가 => 4th에 90
+    //     // type |= 0x90000000; // 
+    // }
+
+    if (((type.length >= 8) && (type.charAt(0) === "0")) || (type.indexOf("0x") == 0)) {
+        req.query.type = parseInt(type, 16).toString();
+    } else {
+        req.query.type = type;
     }
 
     var ret = route.optimalposition(req);
@@ -382,26 +499,38 @@ app.get('/api/optimalposition', function(req, res) {
 
     res.send(ret);
 
-    logout("end optimalposition request");
+    logout("end optimalposition request", startTime);
 });
 
 
 app.get('/view/optimalposition', function(req, res) {
-    logout("start optimalview request");
+    let startTime = logout("start optimal(view) request");
 
     logout("client IP : " + request_ip.getClientIp(req));
     logout("client req : " + JSON.stringify(req.query));
 
-    // if (req.query.type == undefined || req.query.type == 0) {
+    let type = "0";
     if (req.query.type == undefined) {
         // 택시승하차 - 차량출입구 만 선택
         // 2,1,0,0; 
-        req.query.type = 0x00000102; // 바이트 거꾸로
-        // req.query.type = parseInt(subtype, 16);
+        type = "00000102"; // 바이트 거꾸로
+    } else {
+        type = req.query.type;
+    }
+
+    // if (req.query.road != undefined && parseInt(req.query.road, 10) != 0) {
+    //     // 근처 도로를 무조건 추가 => 4th에 90
+    //     // type |= 0x90000000; // 
+    // }
+
+    if (((type.length >= 8) && (type.charAt(0) === "0")) || (type.indexOf("0x") == 0)) {
+        req.query.type = parseInt(type, 16).toString();
+    } else {
+        req.query.type = type;
     }
 
     if (req.query.expand == undefined) {
-        req.query.expand = 1;
+        req.query.expand = (1).toString();
     }
 
     const api = req.query.api;
@@ -416,7 +545,7 @@ app.get('/view/optimalposition', function(req, res) {
         }
     }
 
-    logout("end optimalview request");
+    logout("end optimal(view) request", startTime);
 });
 
 
@@ -425,10 +554,11 @@ app.get('/api/distancematrix/appkeys/:userkey', function(req, res) {
 
     const key = req.params.userkey;
     const mode = req.query.mode;
+    const target = req.query.target;
     const destinations = req.query.origins;
 
     // distance matrix api 호출
-    const ret = apis.distancematrix(key, mode, destinations);
+    const ret = apis.distancematrix(key, mode, target, destinations);
 
     res.send(ret);
 
@@ -441,10 +571,11 @@ app.post('/api/distancematrix', function(req, res) {
 
     const key = req.headers.authorization;
     const mode = req.body.mode;
+    const target = req.body.target;
     const destinations = req.body.origins;
 
     // distance matrix api 호출
-    const ret = apis.distancematrix(key, mode, destinations);
+    const ret = apis.distancematrix(key, mode, target, destinations);
 
     res.send(ret);
 
@@ -458,10 +589,12 @@ app.get('/api/clustering/appkeys/:userkey', function(req, res) {
 
     const key = req.params.userkey;
     const mode = req.query.mode;
+    const target = req.query.target;
     const destinations = req.query.origins;
     const count = req.query.count;
+    const file = req.query.file;
 
-    const ret = apis.clustering(key, mode, destinations, count);
+    const ret = apis.clustering(key, mode, target, destinations, count, file);
 
     res.send(ret);
 
@@ -470,14 +603,59 @@ app.get('/api/clustering/appkeys/:userkey', function(req, res) {
 
 
 app.post('/api/clustering', function(req, res) {
-    logout("start clustering request");
+    logout("start clustering request" + ": " + req);
 
     const key = req.headers.authorization;
-    const mode = req.body.mode;
+    // const mode = req.body.mode;
+    const target = req.body.target;
     const destinations = req.body.origins;
-    const count = req.body.count;
+    const clusters = req.body.count;
+    const file = req.body.file;
 
-    const ret = apis.clustering(key, mode, destinations, count);
+    var mode = 0;
+    var ret;
+
+    const reqDir = process.env.DATA_PATH + "/user";
+    // const reqFile = "result_clustering.json";
+    const reqFile = "result_table.bin";
+    const filePath = reqDir + "/" + reqFile;
+
+    if (file != undefined && file.indexOf("read") >= 0) {
+        mode = 1;
+    }
+
+    if (file != undefined && file.indexOf("write") >= 0) {
+        mode = (mode == 1) ? 3 : 2;
+    }
+
+
+    // 테이블 결과 파일이 있으면 우선 사용
+    //load json file
+    // if (file != undefined && file.indexOf("read") >= 0) {
+    //     var exist = fs.existsSync(filePath);
+    //     if (exist) {
+    //         var jsonBuff = fs.readFileSync(filePath, 'utf8');
+    //         if (jsonBuff != undefined) {
+    //             ret = JSON.parse(jsonBuff);
+    //         }
+    //     }
+    // }
+
+    // if (ret != undefined && file != undefined && file.indexOf("read") >= 0) {
+    //     logout("clustering file contents : " + JSON.stringify(ret));
+    // } else {
+    //     ret = apis.clustering(key, destinations, count, file, mode);
+
+    //     // 테이블 결과를 파일로 저장
+    //     if ((ret.header.isSuccessful == true) &&
+    //         (file != undefined && file.indexOf("write") >= 0)) {
+    //             if (!fs.existsSync(reqDir)) {
+    //                 fs.mkdirSync(reqDir, '0777', true);
+    //             }
+    //             fs.writeFileSync(filePath, JSON.stringify(ret));
+    //     }
+    // }
+    ret = apis.clustering(key, target, destinations, clusters, filePath, mode);
 
     res.send(ret);
 
@@ -491,9 +669,10 @@ app.get('/api/boundary/appkeys/:userkey', function(req, res) {
 
     const key = req.params.userkey;
     const mode = req.query.mode;
+    const target = req.query.target;
     const destinations = req.query.origins;
 
-    const ret = apis.boundary(key, mode, destinations);
+    const ret = apis.boundary(key, mode, target, destinations);
 
     res.send(ret);
 
@@ -506,9 +685,10 @@ app.post('/api/boundary', function(req, res) {
 
     const key = req.headers.authorization;
     const mode = req.body.mode;
+    const target = req.body.target;
     const destinations = req.body.origins;
 
-    const ret = apis.boundary(key, mode, destinations);
+    const ret = apis.boundary(key, mode, target, destinations);
 
     res.send(ret);
 
@@ -521,10 +701,11 @@ app.get('/api/bestwaypoints/appkeys/:userkey', function(req, res) {
 
     const key = req.params.userkey;
     const mode = req.query.mode;
+    const target = req.query.target;
     const destinations = req.query.origins;
 
     // distance matrix api 호출
-    const ret = apis.bestwaypoints(key, mode, destinations);
+    const ret = apis.bestwaypoints(key, mode, target, destinations);
 
     res.send(ret);
 
@@ -537,10 +718,11 @@ app.post('/api/bestwaypoints', function(req, res) {
 
     const key = req.headers.authorization;
     const mode = req.body.mode;
+    const target = req.body.target;
     const destinations = req.body.origins;
 
     // distance matrix api 호출
-    const ret = apis.bestwaypoints(key, mode, destinations);
+    const ret = apis.bestwaypoints(key, mode, target, destinations);
 
     res.send(ret);
 
@@ -560,10 +742,12 @@ app.get('/api/createkey', function(req, res) {
     res.send('success, created key, ask to check your key to the administrator');
 });
 
+const cur_ip = require("ip");
 const cur_port = (process.env.TRK_SVR_PORT === undefined) ? 20301 : process.env.TRK_SVR_PORT;
+const cur_pid = process.pid;
+const start_time = new Date();
+
 const server = app.listen(cur_port, function () {
-    var cur_ip = require("ip");
-    var cur_pid = process.pid; //`${process.pid}`
     var data_path = process.env.DATA_PATH;
     var log_path = process.env.LOG_PATH;
     // var cur_time = cur_date.toFormat('YYYY-MM-DD HH24:MI:SS');

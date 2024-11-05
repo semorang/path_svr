@@ -70,7 +70,10 @@ void CGnKmeansClassfy::kpp(TFPoint* pts, int len, TFPoint* cent, int n_cent)
 	double sum, *d = (double*)malloc(sizeof(double) * len);
 
 	TFPoint* p, c;
-	cent[0] = pts[ rand() % len ];
+
+	srand(1000 + 49 * 2); // 매회 동일 인풋에 대한 동일 결과 출력 
+
+	cent[0] = pts[rand() % len ];
 	for (n_cluster = 1; n_cluster < n_cent; n_cluster++) {
 		sum = 0;
 		for (j = 0, p = pts; j < len; j++, p++) {

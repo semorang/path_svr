@@ -20,7 +20,7 @@
 #include "evaluator.h"
 #endif
 
-#ifndef __Cross__
+#ifndef __CROSS__
 #include "cross.h"
 #endif
 
@@ -28,21 +28,20 @@
 #include "kopt.h"
 #endif
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <assert.h>
-#include <string.h>
-#include <time.h>
-#include <vector>
+// #include <stdio.h>
+// #include <stdlib.h>
+// #include <assert.h>
+// // #include <string.h>
+// #include <time.h>
+// #include <vector>
 
-#include "../route/RoutePlan.h"
 
 class TEnvironment{
 public:
 	TEnvironment();
 	~TEnvironment();
 
-	void define(vector<stCity>& vt_cities, IN const RouteTable** ppResultTables); // global initialization
+	void define(const vector<stWaypoints>& vt_cities, const vector<vector<stDistMatrix>>& vtDistMatrix, const int compareType); // global initialization
 	void doIt(); // entry point of genetic algorithm
 	void init(); // initializes genetic algorithm
 	bool terminationCondition(); // condition to termination the genetic algorithm

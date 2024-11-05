@@ -23,5 +23,19 @@ void LOG_RELEASE(void);
 void LOG_SET_FILEPATH(const char* szFilePath, const char* szFileName);
 void LOG_SET_ID(const int id);
 void LOG_SET_LEVLE(const int lvl);
-void LOG_TRACE(LOG_LEVEL lvl, const char *fmt, ...);
+time_t LOG_TRACE(LOG_LEVEL lvl, const char *fmt, ...);
+time_t LOG_TRACE_TM(LOG_LEVEL lvl, time_t stm, const char *fmt, ...);
+time_t LOG_TRACE_EX(const char* func, const int line, LOG_LEVEL lvl, const char *fmt, ...);
 size_t TICK_COUNT();
+
+typedef struct _tagLOGTIME {
+	int year;
+	int month;
+	int day;
+	int hour;
+	int minute;
+	int second;
+	int millisecond;
+}LOGTIME;
+
+#define LOG_PRINT(lvl, fmt, ...)	LOG_TRACE_EX(__FUNCTION__, __LINE__, lvl, fmt, ##__VA_ARGS__) 

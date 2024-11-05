@@ -12,9 +12,14 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <time.h>
+#include <cstring>
 
+#include "types.h"
 #include "../shp/shpio.h" 
+#include "../tms/tms.h"
+
 using namespace std;
+
 
 #if !defined(_WIN32)
 #include <string.h>
@@ -33,27 +38,30 @@ using namespace std;
 #endif
 
 
-#define USE_ROUTE_TABLE_LEVEL	8 // 8 레벨보다 낮아지면 도로 확장이 어려워짐.
+#define USE_ROUTE_TABLE_LEVEL	7 // 7(1차선이상일반도로) 레벨보다 낮아지면 도로 확장이 어려워짐.
 //#define __USE_TEMPLETE // 템플릿 사용
 
+//#define TARGET_FOR_KAKAO_VX // 카카오VX제공
 //#define USE_OPTIMAL_POINT_API // 최적 지점 API
-#define USE_TREKKING_POINT_API // 경로 탐색 API
-#if defined(USE_OPTIMAL_POINT_API)
-//#define USE_TREKKING_DATA // 숲길 데이터
+#define USE_ROUTING_POINT_API // 경로 탐색 API
+#if defined(TARGET_FOR_KAKAO_VX)
+#	define USE_FOREST_DATA // 카카오숲길
+#	define USE_MOUNTAIN_DATA // 산바운더리 데이터
+#define USE_PEDESTRIAN_DATA // 보행자/자전거 데이터
+#elif defined(USE_OPTIMAL_POINT_API)
 //#define USE_PEDESTRIAN_DATA // 보행자/자전거 데이터
 #define USE_VEHICLE_DATA // 차량 데이터
 #define USE_BUILDING_DATA // 건물 데이터
 #define USE_COMPLEX_DATA // 단지 데이터
-#elif defined(USE_TREKKING_POINT_API)
-//#define USE_TREKKING_DATA // 숲길 데이터
-//#define USE_PEDESTRIAN_DATA // 보행자/자전거 데이터
-#define USE_VEHICLE_DATA // 차량 데이터
-#define USE_P2P_DATA // P2P 데이터
-//#define TARGET_FOR_KAKAO_VX // 카카오VX제공
+#elif defined(USE_ROUTING_POINT_API)
+//#	define USE_PEDESTRIAN_DATA // 보행자/자전거 데이터
+#	define USE_VEHICLE_DATA // 차량 데이터
+#	define USE_P2P_DATA // P2P 데이터
+//#	define define USE_SAMSUNG_HEAVY // 삼성 중공업 데이터
 #endif
 
 
-//#define USING_PED_BYCICLE_TYPE // 자전거 경로 사용(링크 속성중 자전거 속성 사용)
+//#define USING_PED_BICYCLE_TYPE // 자전거 경로 사용(링크 속성중 자전거 속성 사용)
 
 //#define USE_SHOW_ROUTE_SATATUS // 경로 탐색 진행 상태 모니터링
 
@@ -76,8 +84,9 @@ using namespace std;
 
 #define IR_PRECISION 1000.f
 
-#define SAFE_DELETE(x)		{ delete (x); (x) = nullptr; }
-#define SAFE_DELETE_ARR(x)	{ delete [] (x); (x) = nullptr; }
+#define SAFE_FREE(x)		{ if (x != nullptr) free(x); (x) = nullptr; }
+#define SAFE_DELETE(x)		{ if (x != nullptr) delete (x); (x) = nullptr; }
+#define SAFE_DELETE_ARR(x)	{ if (x != nullptr) delete [] (x); (x) = nullptr; }
 
 #if !defined(_WIN32)
 typedef struct tagRECT
@@ -91,26 +100,61 @@ typedef struct tagRECT
 
 
 #if defined(USE_P2P_DATA)
+// 0.0.4 add ttl_id & change data file names
 #define ENGINE_VERSION_MAJOR	0
 #define ENGINE_VERSION_MINOR	0
-#define ENGINE_VERSION_PATCH	3
-#elif defined(USE_TREKKING_POINT_API)
-#define ENGINE_VERSION_MAJOR	0
-#define ENGINE_VERSION_MINOR	0
-#define ENGINE_VERSION_PATCH	1
+#define ENGINE_VERSION_PATCH	4
+#define ENGINE_VERSION_BUILD	0
 #elif defined(USE_OPTIMAL_POINT_API)
 #define ENGINE_VERSION_MAJOR	1
 #define ENGINE_VERSION_MINOR	0
-#define ENGINE_VERSION_PATCH	3
+#define ENGINE_VERSION_PATCH	10
+#define ENGINE_VERSION_BUILD	0
+// 1.0.6 fix road param setting, and bycicle -> bicicle
+// 1.0.7 add optimal point angle attribute when data compile step, with data v1.0.3
+// 1.0.8 file execute name change
+// 1.0.9 change avoid road pass code type 3 -> 4
+// 1.0.10 fix optimal polygon check compare with building and complex 
+#elif defined(USE_ROUTING_POINT_API)
+#	if defined(USE_FOREST_DATA)
+// 0.0.5 add multi modal route (forest entrance + pedestrian)
+// 0.0.6 add pedestrian bike option default avoid set
+// 0.0.7 use default avoid set hiking
+// 0.0.8 add multirouting function for kvx perfomance
+// 0.0.9 fix link info vertex offset calculating
+// 0.1.0 add course routing function
+// 0.1.1 fix GetNearLinkDataByCourseId function - access nullptr
+// 0.1.2 bicycle route cost tuning
+// 0.1.3 using multi mesh for link manage & upgrade routing routine
+// 0.1.4 course id match routing apply only using course option
+// 0.1.5 course id option change route option recommended to shortest, and fix slop value when link dir nagative, population grade applyed
+// 1.0.0 add io name info, and extend search bound forest/wal 50km, course 100km, bicycle 200km
+// 1.0.1 fix to pedestrian route failed process
+#define ENGINE_VERSION_MAJOR	1
+#define ENGINE_VERSION_MINOR	0
+#define ENGINE_VERSION_PATCH	1
+#define ENGINE_VERSION_BUILD	0
+#	else // USE_PEDESTRIAN_DATA
+// 0.0.6 add charging link attribute
+// 0.0.7 fix waypoint guide-type value 3->2
+// 0.0.8 use ttl_id
+#define ENGINE_VERSION_MAJOR	0
+#define ENGINE_VERSION_MINOR	0
+#define ENGINE_VERSION_PATCH	8
+#define ENGINE_VERSION_BUILD	0
+// 0.0.4 add junction option, fix pedestrian cost value
+#	endif
 #else
 #define ENGINE_VERSION_MAJOR	1
 #define ENGINE_VERSION_MINOR	0
 #define ENGINE_VERSION_PATCH	0
+#define ENGINE_VERSION_BUILD	0
 #endif
 
+#define USE_CJSON
 
 enum NETWORKTYPE { LINK, NODE };
-enum DIRECTION { BIDIRECTION, FORWARD, REVERSE };
+enum DIRECTION { BIDIRECTION, FORWARD, DIR_POSITIVE = FORWARD, REVERSE, DIR_NAGATIVE = REVERSE };
 
 #ifdef SPoint
 static const size_t SIZE_SPOINT = sizeof(SPoint);
@@ -133,8 +177,18 @@ struct KeyID {
 		struct {
 			uint64_t nid : 32;
 			uint64_t tile_id : 30;
-			uint64_t type : 2; // 타입, 0:빌딩, 1:단지
+			uint64_t type : 2; // 타입, 0:미정, 1:빌딩, 2:단지, 3:산바운더리
+		}poly;
+		struct {
+			uint64_t nid : 32;
+			uint64_t tile_id : 30;
+			uint64_t type : 2; // 타입, 0:미정, 1:빌딩, 2:단지, 3:산바운더리
 		}ent;
+		struct
+		{
+			uint64_t dir : 2; // 0:없음, 1:정방향, 2:역방향
+			uint64_t nid : 62;
+		}trf; // traffic ks
 	};
 
 	int operator== (const KeyID rhs) const { return llid == rhs.llid; }
@@ -164,7 +218,7 @@ struct stMeshInfo {
 	vector<KeyID> vnodes;
 	vector<KeyID> vlinks;
 #endif
-# if defined(USE_OPTIMAL_POINT_API)
+#if defined(USE_OPTIMAL_POINT_API) || defined(USE_FOREST_DATA)
 	vector<KeyID> buildings;
 	vector<KeyID> complexs;
 #endif
@@ -181,7 +235,7 @@ struct stMeshInfo {
 	set<KeyID> setVNodeDuplicateCheck;
 	set<KeyID> setVLinkDuplicateCheck;
 #endif
-# if defined(USE_OPTIMAL_POINT_API)
+#if defined(USE_OPTIMAL_POINT_API) || defined(USE_MOUNTAIN_DATA)
 	set<KeyID> setBldDuplicateCheck;
 	set<KeyID> setCpxDuplicateCheck;
 #endif
@@ -204,7 +258,7 @@ struct stMeshInfo {
 		if (!vnodes.empty()) { vnodes.clear(); vector<KeyID>().swap(vnodes); }
 		if (!vlinks.empty()) { vlinks.clear(); vector<KeyID>().swap(vlinks); }
 #endif
-# if defined(USE_OPTIMAL_POINT_API)
+#if defined(USE_OPTIMAL_POINT_API) || defined(USE_MOUNTAIN_DATA)
 		if (!buildings.empty()) { buildings.clear(); vector<KeyID>().swap(buildings); }
 		if (!complexs.empty()) { complexs.clear(); vector<KeyID>().swap(complexs); }
 #endif
@@ -221,7 +275,7 @@ struct stMeshInfo {
 		if (!setVNodeDuplicateCheck.empty()) { setVNodeDuplicateCheck.clear(); set<KeyID>().swap(setVNodeDuplicateCheck); }
 		if (!setVLinkDuplicateCheck.empty()) { setVLinkDuplicateCheck.clear(); set<KeyID>().swap(setVLinkDuplicateCheck); }
 #endif
-# if defined(USE_OPTIMAL_POINT_API)
+#if defined(USE_OPTIMAL_POINT_API) || defined(USE_MOUNTAIN_DATA)
 		if (!setBldDuplicateCheck.empty()) { setBldDuplicateCheck.clear(); set<KeyID>().swap(setBldDuplicateCheck); }
 		if (!setCpxDuplicateCheck.empty()) { setCpxDuplicateCheck.clear(); set<KeyID>().swap(setCpxDuplicateCheck); }
 #endif
@@ -230,7 +284,7 @@ struct stMeshInfo {
 };
 
 typedef struct _tagstNodeBaseInfo{
-	uint32_t node_type : 3; // 0:미정의, 1:숲길, 2:보행자, 3:자전거, 4:차량
+	uint32_t node_type : 3; // 0:미정의, 1:숲길, 2:보행자/자전거, 3:차량
 	uint32_t point_type : 4; // 노드 타입, 1:교차점, 2:단점, 3:더미점, 4:구획변경점, 5:속성변화점, 6:지하철진출입, 7:철도진출입, 8:지하도진출입, 9:지하상가진출입, 10:건물진출입
 	uint32_t connnode_count : 4; // 접속 노드 수, MAX:15
 	uint32_t shared : 21;
@@ -238,28 +292,37 @@ typedef struct _tagstNodeBaseInfo{
 
 typedef struct _tagstNodeTrekkingInfo {
 	uint32_t dummy_type : 11; // node_base 공유 공간
-	uint32_t z_value : 10; // 고도 정보
-	uint32_t ped_reserved : 11; // reserved
+	uint32_t entrance : 1; // 숲길 입구점 보유 여부, 0:미정의, 1:보유(보유시, nodeInfo의 edgenode_id에 보행자길 노드ID 공유)
+	uint32_t z_value : 12; // 고도 정보 ~(4095)
+	uint32_t ent_info : 1; // 입구점 명칭, 0:없음, 1:있음
+	uint32_t mnt_info : 1; // 봉우리 명칭, 0:없음, 1:있음
+	uint32_t trk_reserved : 6; // reserved
 }stNodeTrekkingInfo;
 
 typedef struct _tagstNodePedestrianInfo {
 	uint32_t dummy_type : 11; // node_base 공유 공간
-	uint32_t facility_phase : 2; // 시설물 위상, 0:미정의, 1:지하, 2:지상, 3:지상위
+	uint32_t fct_phase : 2; // 시설물 위상, 0:미정의, 1:지하, 2:지상, 3:지상위
 	uint32_t gate_phase : 2; // 입출구 위상, 0:미정의, 1:지하, 2:지상, 3:지상위
-	uint32_t tre_reserved : 17; // reserved
+	uint32_t name_info : 1; // 노드 명칭, 0:없음, 1:있음, 실제 표지판을 기준으로 교차점 노드에 입력
+	uint32_t fct_info : 1; // 시설물 상세 명칭, 0:없음, 1:있음
+	uint32_t gate_info : 1; // 입출구 명칭, 0:없음, 1:있음
+	uint32_t ped_reserved : 14; // reserved
 }stNodePedestrianInfo;
 
 struct stNodeInfo {
 	KeyID node_id;
-	KeyID edgenode_id; //엣지노드가 있는 경우는 연결노드가 1개일 경우 밖에 없을 것 같아, connnodes와 공유해도 될듯(확인필요)
+	KeyID edgenode_id; //엣지노드가 있는 경우는 연결노드가 1개일 경우 밖에 없을 것 같아, connnodes와 공유해도 될듯(확인필요), 숲길에서는 보행자 입구점 노드ID를 공유
 	SPoint coord;
-	KeyID connnodes[8]; // 연결된 링크 ID
+	union {
+		KeyID connnodes[8]; // 연결된 링크 ID (uint64_t)
+		uint32_t connnodes_ex[16]; // 기본 8개 이상의 연결 링크를 가지는 경우 -->kakao-vx
+	};
 	uint16_t conn_attr[8];
 	uint32_t name_idx; // 명칭 인덱스
 	union {
 		uint32_t sub_info;
 		stNodeBaseInfo base;
-		stNodeTrekkingInfo tre;
+		stNodeTrekkingInfo trk;
 		stNodePedestrianInfo ped;
 	};
 
@@ -273,24 +336,24 @@ struct stNodeInfo {
 };
 
 typedef struct _tagstLinkBaseInfo {
-	uint64_t link_type : 3; // 0:미정의, 1:숲길, 2:보행자, 3:자전거, 4:차량
-	uint64_t shared : 29; // 타입별 속성 공유공간
-	uint64_t snode_ang : 16; // 360
-	uint64_t enode_ang : 16; // 360
+	uint64_t link_type : 3; // 0:미정의, 1:숲길, 2:보행자/자전거, 3:차량
+	uint64_t shared : 43; // 타입별 속성 공유공간
+	uint64_t snode_ang : 9; // 360
+	uint64_t enode_ang : 9; // 360
 }stLinkBaseInfo;
 
 typedef struct _tagstLinkPedestrianInfo {
 	uint64_t dummy_type : 3; // link_type 공유 공간
-	uint64_t bycicle_type : 2; // 자전거도로 타입, 1:자전거전용, 2:보행자/차량겸용 자전거도로, 3:보행도로
+	uint64_t bicycle_type : 2; // 자전거도로 타입, 1:자전거전용, 2:보행자/차량겸용 자전거도로, 3:보행도로
 	uint64_t walk_type : 3; //보행자도로 타입, 1:복선도록, 2:차량겸용도로, 3:자전거전용도로, 4:보행전용도로, 5:가상보행도로
 	uint64_t facility_type : 4; // 시설물 타입, 0:미정의, 1:토끼굴, 2:지하보도, 3:육교, 4:고가도로, 5:교량, 6:지하철역, 7:철도, 8:중앙버스정류장, 9:지하상가, 10:건물관통도로, 11:단지도로_공원, 12:단지도로_주거시설, 13:단지도로_관광지, 14:단지도로_기타
 	uint64_t gate_type : 4; // 진입로 타입, 0:미정의, 1:경사로, 2:계단, 3:에스컬레이터, 4:계단/에스컬레이터, 5:엘리베이터, 6:단순연결로, 7:횡단보도, 8:무빙워크, 9:징검다리, 10:의사횡단
 	uint64_t lane_count : 6; // 차선수, 63
 	uint64_t side_walk : 2; // 인도(보도) 여부, 0:미조사, 1:있음, 2:없음
 	uint64_t walk_charge : 2; // 보행자도로 유료 여부, 0:무료, 1:유료
-	uint64_t bycicle_control : 2; // 자전거도로 규제 코드, 0:양방향, 1:정방향, 2:역방향, 3:통행불가
-	uint64_t ped_reserved : 4; // reserved
-	uint64_t shared : 32; // link_ang 공유 공간
+	uint64_t bicycle_control : 2; // 자전거도로 규제 코드, 0:양방향, 1:정방향, 2:역방향, 3:통행불가
+	uint64_t ped_reserved : 18; // reserved
+	uint64_t shared : 18; // link_ang 공유 공간
 }stLinkPedestrianInfo;
 
 typedef struct _tagstLinkTrekkingInfo {
@@ -298,7 +361,6 @@ typedef struct _tagstLinkTrekkingInfo {
 	//uint64_t course_type : 3; // 0:미정의, 1 : 등산로, 2 : 둘레길, 3 : 자전거길, 4 : 종주코스
 	//uint64_t road_info : 11; // 노면정보 코드, 0:기타, 1:오솔길, 2:포장길, 3:계단, 4:교량, 5:암릉, 6:릿지, 7;사다리, 8:밧줄, 9:너덜길, 10:야자수매트, 11:데크로드
 	//uint64_t diff : 6; // 난도 0~50, (숫자가 클수록 어려움)
-	//uint64_t popular : 4; // 인기도 지수, 0-10
 	//uint64_t tre_reserved : 5; // reserved
 	//uint64_t shared : 32; // link_ang 공유 공간
 	
@@ -306,12 +368,13 @@ typedef struct _tagstLinkTrekkingInfo {
 	uint64_t course_type : 3; // 0:미정의, 1:등산로, 2:둘레길, 3:자전거길, 4:종주코스, 5:추천코스, 6:MTB코스, 7:인기코스
 	uint64_t road_info : 12; // 노면정보, 0:기타, 1:오솔길, 2:포장길, 3:계단, 4:교량, 5:암릉, 6:릿지, 7;사다리, 8:밧줄, 9:너덜길, 10:야자수매트, 11:데크로드, 12:철구조물
 	uint64_t dir_cd : 2; // 방면방향정보, 0:미정의, 1:정, 2:역
-	uint64_t diff : 4; // 난도 0~15, (숫자가 클수록 어려움)
-	uint64_t slop : 8; // 경사도 +/- 128
+	uint64_t diff : 3; // 법정탐방로 1비를를 위해 4->3비트 변경 (diff는 아직 값이 없기에), 2024-02-27 <== 난도 0~15, (숫자가 클수록 어려움)
+	uint64_t slop : 8; // 경사도 +/- 100
 	uint64_t fw_tm : 10;// 0~1023 정방향 이동 시간 (초)
 	uint64_t bw_tm : 10;// 0~1023 역방향 이동 시간 (초)
-	uint64_t popular : 12; // 인기도 지수, 0-4095 // 당장은 원래값을 쓰자... 데이터가 정리되면 %로 나타내보자
-	//uint64_t tre_reserved : 5; // reserved
+	uint64_t pop_grade : 4; // 인기도 등급, 0-10 낮을수록 인기도 높음, 인기도: 0-4095
+	uint64_t legal : 1; // 법정탐방로 여부, 0:비법정, 1:법정
+	uint64_t trk_reserved : 8; // reserved
 }stLinkTrekkingInfo;
 
 typedef struct _tagstLinkVehicleInfo {
@@ -323,7 +386,7 @@ typedef struct _tagstLinkVehicleInfo {
 	uint64_t level : 4; // 경로레벨, 0:고속도로, 1:도시고속도로, 자동차전용 국도/지방도, 2:국도, 3:지방도/일반도로8차선이상, 4:일반도로6차선이상, 5:일반도로4차선이상, 6:일반도로2차선이상, 7:일반도로1차선이상, 8:SS도로, 9:GSS도로/단지내도로/통행금지도로/비포장도로 <-- SS(교행이 어려운도로), GSS(도로폭이 매우 좁아 경유로 사용되지 말아야하고, 목적지로만 사용하는 도로)
 	uint64_t pass_code : 4;// 규제코드, 1:통행가능, 2:통행불가, 3:공사구간, 4:공사계획구간, 5:일방통행_정, 6:일방통행_역 // 5,6은 control 코드 값임.
 	uint64_t car_only : 1; // 자동차전용도로, 0:없음, 1:있음
-	uint64_t charge : 1; //유료도로, 0:없음, 1:있음
+	uint64_t charge : 1; // 유료도로, 0:없음, 1:있음
 	uint64_t tunnel : 1; // 터널, 0:없음, 1:있음
 	uint64_t under_pass : 1; // 지하차도, 0:없음, 1:있음
 	uint64_t safe_zone : 3; // 어린이보호구역, 노인보호구역, 0:없음, 1:어린이보호구역, 2:노인보호구역, 3:마을주민보호구역, 4:장애인보호구역
@@ -341,7 +404,25 @@ typedef struct _tagstLinkVehicleInfo {
 	uint64_t veh_reserved : 1; // reserved 
 	//p2p에서는 angle 공유하지 말자
 #else
-	uint64_t shared : 32; // link_ang 공유 공간
+	//uint32_t RoadNameIDX; // 도로명 인덱스
+	uint64_t weight : 1; // 중량 제한 여부,, 0:없음, 1:있음 - T(톤) 단위 
+	uint64_t height : 1; // 높이 제한 여부, , 0:없음, 1:있음 - M(미터) 단위 
+	uint64_t bridge : 1; // 교량 유무, 0:없음, 1:있음
+	uint64_t over_pass : 1; // 고가도로 유무, 0:없음, 1:있음
+	//uint32_t BusOnly : 1; // 버스전용차로 유무, 0:없음, 1~19
+	//uint32_t ExpressMode; // 고속모드 유무, 0:없음, 1:있음
+	//uint32_t ExpressModeSub; // 고속모드부가 유무, 0:없음, 1:있음
+	//uint32_t LaneInfo; // 차선정보 유무, 0:없음, 1:있음
+	//uint32_t DirInfo; // 방면정보 유무, 0:없음, 1:있음
+	//uint32_t IndicatorLane; // 차로유도차선정보 유무, 0:없음, 1:있음
+	//uint32_t IndicatorDir; // 차로유도방면정보 유무, 0:없음, 1:있음
+	uint64_t toll : 1; // 톨게이트 유무, 0:없음, 1:있음
+	//uint32_t JunctionInfo; // 확대도 유무, 0:없음, 1:있음
+	//uint32_t Tpeg; // TPEG 유무(YTN기준), 0:없음, 1:있음
+	uint64_t restriction : 3; // 진입제한 유무, 0:없음, 1:사람, 2:이륜, 3:화물, 4:택시, 5:입주민 외
+
+	uint64_t veh_reserved : 6; // 
+	uint64_t shared : 18; // link_ang 공유 공간
 #endif
 	// shared 대신 링크별 통행코드를(메모리 사이즈 절약차원) 넣으려했으나 그냥 노드의 통행코드 사용하기로 함(2022-12-12)
 	//uint64_t snode_pass : 16; // 0:통행가능(유턴불가), 1:통행가능(유턴가능), 2:통행불가 // 8자리 통행코드를 각 코드 위치별로 2비트씩 16비트에 나눠 담는다.
@@ -354,6 +435,25 @@ typedef struct _tagstLinkVehicleInfoExt {
 	uint64_t veh_ext_reserved : 32;
 }stLinkVehicleInfoExt;
 
+typedef struct _tagstLinkTrekkingInfoExt {
+	uint64_t course_type : 3; // 코스타입, 0:미정의, 1:등산로, 2:둘레길, 3:자전거길, 4:종주코스, 5:추천코스, 6:MTB코스, 7:인기코스
+	uint64_t course_cd : 20; // 코스 CD
+	uint64_t course_cnt : 5; // 코스 갯수(기본+중용), MAX 18
+	uint64_t group_id : 12; // 그룹 ID, 동일 숲길 링크 ID
+	uint64_t trk_ext_reserved : 24; // 0xFFFFFF = 16777215, 우선 메쉬로 쓰자
+}stLinkTrekkingInfoExt;
+
+typedef struct _tagstCourseInfo {
+	union {
+		uint32_t course_id;
+		struct {
+			uint32_t course_type : 3; // 코스타입, 0:미정의, 1:등산로, 2:둘레길, 3:자전거길, 4:종주코스, 5:추천코스, 6:MTB코스, 7:인기코스
+			uint32_t course_cd : 20; // 코스 CD
+			uint32_t course_reserved : 9;
+		};
+	};
+}stCourseInfo;
+
 struct stLinkInfo {
 	KeyID link_id;
 	KeyID snode_id;
@@ -364,13 +464,14 @@ struct stLinkInfo {
 		uint64_t sub_info;
 		stLinkBaseInfo base;
 		stLinkPedestrianInfo ped;
-		stLinkTrekkingInfo tre;
+		stLinkTrekkingInfo trk;
 		stLinkVehicleInfo veh;
 	};
-#if defined(USE_P2P_DATA)
+#if defined(USE_P2P_DATA) || defined(USE_MOUNTAIN_DATA)
 	union {
 		uint64_t sub_ext; // 확장 정보 // 현재는 고유 ID (mesh(6) + snode(6) + enode(6)
-		stLinkVehicleInfoExt veh_ext;
+		stLinkTrekkingInfoExt trk_ext; // 트래킹 확장
+		stLinkVehicleInfoExt veh_ext; // 차량 확장
 	};
 #endif
 	//std::vector<SPoint> vtPts;
@@ -383,7 +484,7 @@ struct stLinkInfo {
 		enode_id.llid = 0;
 		length = 0;
 		sub_info = 0;
-#if defined(USE_P2P_DATA)
+#if defined(USE_P2P_DATA) || defined(USE_MOUNTAIN_DATA)
 		sub_ext = 0;
 #endif
 		cntVtx = 0;
@@ -573,46 +674,157 @@ struct stLinkInfo {
 	}
 };
 
-struct stEntranceInfo {
-	uint32_t poly_type : 2; // 폴리곤 타입, 0:미지정, 1:빌딩, 2:단지
-	uint32_t ent_code : 4; // 입구점 타입 // 1: 차량 입구점, 2: 택시 승하차 지점(건물), 3: 택시 승하차 지점(건물군), 4: 택배 차량 하차 거점, 5: 보행자 입구점, 	6: 배달 하차점(차량, 오토바이), 7: 배달 하차점(자전거, 도보)
-	uint32_t reserved : 26;
-	double x;
-	double y;
+
+struct stExtendInfo
+{
+	KeyID keyId;
+	uint8_t cntData; // max 255
+	vector<uint8_t> vtType; // 확장 타입
+	vector<double> vtValue; // 확장 데이터
+
+	size_t read(IN FILE* fp)
+	{
+		size_t retSize = 0;
+
+		if (fp == nullptr) {
+			return retSize;
+		}
+
+		// key_id
+		if (fread(&keyId.llid, sizeof(keyId.llid), 1, fp) != 1) {
+			return 0;			
+		}
+		retSize += sizeof(keyId.llid);
+
+		// data count
+		if (fread(&cntData, sizeof(cntData), 1, fp) != 1) {
+			return 0;
+		}
+		retSize += sizeof(cntData);
+
+		// data value
+		if (cntData > 0) {
+			vtType.resize(cntData);
+			vtValue.resize(cntData);
+
+			// data type
+			if (fread(&vtType.front(), sizeof(uint8_t) * cntData, 1, fp) != 1) {
+				return 0;
+			}
+			retSize += sizeof(uint8_t) * cntData;
+
+			// data value
+			if (fread(&vtValue.front(), sizeof(double) * cntData, 1, fp) != 1) {
+				return 0;
+			}
+			retSize += sizeof(double) * cntData;
+		}
+		
+		return retSize;
+	} // size_t read(IN FILE* fp)
+
+	size_t write(IN FILE* fp)
+	{
+		size_t retSize = 0;
+
+		if (fp == nullptr) {
+			return retSize;
+		}
+
+		// key_id
+		if (fwrite(&keyId.llid, sizeof(keyId.llid), 1, fp) != 1) {
+			return 0;
+		}
+		retSize += sizeof(keyId.llid);
+
+		cntData = vtType.size();
+
+		// cnt value
+		if (fwrite(&cntData, sizeof(cntData), 1, fp) != 1) {
+			return 0;
+		}
+		retSize += sizeof(cntData);
+
+		// data type
+		if (fwrite(&vtType.front(), sizeof(int8_t) * cntData, 1, fp) != 1) {
+			return 0;
+		}
+		retSize += sizeof(int8_t) * cntData;
+
+		// data value
+		if (fwrite(&vtValue.front(), sizeof(double) * cntData, 1, fp) != 1) {
+			return 0;
+		}
+		retSize += sizeof(double) * cntData;
+
+		return retSize;
+	} // size_t write(IN FILE* fp)
 };
 
 
-struct stTrafficKey{
+struct stEntranceInfo {
 	union {
-		uint64_t llid; // mesh(6) + snode(6) + enode(6) + dir(1)
 		struct {
-			uint64_t mesh : 20;
-			uint64_t snode : 20;
-			uint64_t enode : 20;
-			uint64_t dir : 4;
+			uint32_t poly_type : 2; //  폴리곤 타입, 0:미지정(TYPE_ENT_NONE), 1:빌딩(TYPE_POLYGON_BUILDING), 2:단지(TYPE_POLYGON_COMPLEX), 3:산바운더리(TYPE_POLYGON_MOUNTAIN)
+			uint32_t ent_code : 4; // 입구점 타입 // 1:차량 입구점, 2:택시 승하차 지점(건물), 3:택시 승하차 지점(건물군), 4:택배 차량 하차 거점, 5:보행자 입구점, 	6:배달 하차점(차량, 오토바이), 7:배달 하차점(자전거, 도보), 8:숲길 입구점
+			uint32_t angle : 9; // 최근접 링크의 진출 각도
+			uint32_t reserved : 17;
+			double x;
+			double y;
+			uint64_t reserved1; 
+			uint64_t reserved2;
 		};
+		struct {
+			uint32_t poly_type : 2; // 폴리곤 타입, 0:미지정(TYPE_ENT_NONE), 1:빌딩(TYPE_POLYGON_BUILDING), 2:단지(TYPE_POLYGON_COMPLEX), 3:산바운더리(TYPE_POLYGON_MOUNTAIN)
+			uint32_t ent_code : 4; // 입구점 타입 // 1:차량 입구점, 2:택시 승하차 지점(건물), 3:택시 승하차 지점(건물군), 4:택배 차량 하차 거점, 5:보행자 입구점, 	6:배달 하차점(차량, 오토바이), 7:배달 하차점(자전거, 도보), 8:숲길 입구점
+			uint32_t ent_id : 26; // 입구점 ID // max(67108863)
+			double x;
+			double y;
+			uint64_t fnode_id; // 숲길 노드 ID
+			uint64_t wnode_id; // 보행자 노드 ID
+			//uint32_t name_idx; // 입구점 명칭 IDX
+			//uint32_t mnt_code; // 산코드
+		}mnt;
 	};
 };
 
 
-struct stTrafficInfo {
-	stTrafficKey key;
+struct stTrafficInfoKS 
+{
 	uint32_t ks_id;
-	uint32_t time_stamp; // 최종 업데이트된 시각
+	uint32_t timestamp; // 최종 업데이트된 시각
 	uint8_t speed; // 도로 주행 속도 0~255, 255일 경우는 통제, 주행불가
 
-	unordered_set<uint64_t> setLinks; // ks 링크에 매칭되는 link id -> 나중에는 메모리 관리를 위해 포인터로 관리하자!!
+	// link_id = mesh + link + dir
+	unordered_set<uint64_t> setLinks; // ks 링크에 매칭되는 link_id -> 나중에는 메모리 관리를 위해 포인터로 관리하자!!
+	
+	stTrafficInfoKS() {
+		ks_id = 0;
+		timestamp = 0;
+		speed = 255;
+	}
 };
 
 
-#define POLYGON_DATA_ATTR_MAX		5
-typedef enum {
-	TYPE_POLYGON_DATA_ATTR_PART = 0,// 폴리곤 파트 인덱스
-	TYPE_POLYGON_DATA_ATTR_VTX,		// 폴리곤 버텍스
-	TYPE_POLYGON_DATA_ATTR_ENT,		// 입구점 정보
-	TYPE_POLYGON_DATA_ATTR_LINK,	// 단지내 도로 ID
-	TYPE_POLYGON_DATA_ATTR_MESH		// 중첩 메쉬
-}TYPE_POLYGON_DATA_ATTR;
+struct stTrafficInfoTTL
+{
+	uint32_t ttl_nid;
+	uint32_t timestamp; // 최종 업데이트된 시각
+	uint8_t speed; // 도로 주행 속도 0~255, 255일 경우는 통제, 주행불가
+
+	uint8_t dir; // ttl 방향 (정/역)
+	uint32_t link_nid; // ttl 링크에 매칭되는 link id
+
+	stTrafficInfoTTL() {
+		ttl_nid = 0;
+		timestamp = 0;
+		speed = 255;
+
+		dir = 0;
+		link_nid = 0;
+	}
+};
+
 
 struct stPolygonInfo {
 public:
@@ -632,14 +844,15 @@ public:
 		struct {
 			uint64_t code : 4; // 건물 종별 코드, ~9
 			uint64_t sd_sgg_code : 8; // 시도/시군구 코드 MAX 65535
-			uint64_t reserved : 52;
+			uint64_t name_idx : 32; // 명칭 인덱스
+			uint64_t reserved : 20;
 		}cpx;
 	};
 
 private:
 	std::array<uint32_t, POLYGON_DATA_ATTR_MAX> arrAttrCnt = { 0, };
 
-	uint8_t* pPts; // 폴리곤 파트 인덱스
+	uint16_t* pPts; // 폴리곤 파트 인덱스
 	SPoint* pVtx; // 폴리곤 버텍스
 	stEntranceInfo* pEnt; // 입구점 정보
 	KeyID* pLnk; // 단지내 도로 ID
@@ -686,7 +899,7 @@ public:
 		return ret;
 	}
 
-	const uint8_t* getAttributeParts() const {
+	const uint16_t* getAttributeParts() const {
 		return pPts;
 	}
 
@@ -718,8 +931,8 @@ public:
 		case TYPE_POLYGON_DATA_ATTR_PART:
 		{
 			SAFE_DELETE_ARR(pPts);
-			pPts = new uint8_t[cntData];
-			memcpy(pPts, pData, cntData * sizeof(uint8_t));
+			pPts = new uint16_t[cntData];
+			memcpy(pPts, pData, cntData * sizeof(uint16_t));
 		}
 		break;
 
@@ -778,9 +991,9 @@ public:
 		case TYPE_POLYGON_DATA_ATTR_PART:
 		{
 			SAFE_DELETE_ARR(pPts);
-			pPts = new uint8_t[cntData];
-			if (fread(pPts, cntData * sizeof(uint8_t), 1, fp)) {
-				retRead = cntData * sizeof(uint8_t);
+			pPts = new uint16_t[cntData];
+			if (fread(pPts, cntData * sizeof(uint16_t), 1, fp)) {
+				retRead = cntData * sizeof(uint16_t);
 			}
 		}
 		break;
@@ -843,8 +1056,8 @@ public:
 		switch (typeAttr) {
 		case TYPE_POLYGON_DATA_ATTR_PART:
 		{
-			if (fwrite(pPts, arrAttrCnt[typeAttr] * sizeof(uint8_t), 1, fp)) {
-				retWrite = arrAttrCnt[typeAttr] * sizeof(uint8_t);
+			if (fwrite(pPts, arrAttrCnt[typeAttr] * sizeof(uint16_t), 1, fp)) {
+				retWrite = arrAttrCnt[typeAttr] * sizeof(uint16_t);
 			}
 		}
 		break;
@@ -934,194 +1147,7 @@ public:
 //	}
 //};
 
-// 데이터 파일 구분
-typedef enum {
-	TYPE_DATA_NAME, // 명칭사전
-	TYPE_DATA_MESH, // 메쉬
-	TYPE_DATA_TREKKING, // 숲길
-	TYPE_DATA_PEDESTRIAN, // 보행자/자전거
-	TYPE_DATA_VEHICLE, // 자동차
-	TYPE_DATA_BUILDING, // 건물
-	TYPE_DATA_COMPLEX, // 단지
-	TYPE_DATA_ENTRANCE, // 입구점
-	TYPE_DATA_TRAFFIC, // 교통정보
-	TYPE_DATA_COUNT,
-}TYPE_DATA;
 
-
-// 숲길 데이터
-typedef enum {
-	TYPE_TRE_NONE = 0, // 미지정
-	TYPE_TRE_HIKING, // 등산로
-	TYPE_TRE_TRAIL, // 둘레길
-	TYPE_TRE_BIKE, // 자전거길
-	TYPE_TRE_CROSS, // 종주길
-	TYPE_TRE_RECOMMENDED, // 추천길
-	TYPE_TRE_MTB, // MTB코스
-	TYPE_TRE_POPULAR, // 인기코스
-	TYPE_TRE_COUNT,
-}TYPE_TREKKING;
-
-
-
-// 보행자/자전거 데이터
-
-typedef enum {
-	TYPE_WALK_SIDE = 1, // 복선도록
-	TYPE_WALK_WITH_CAR, // 차량겸용도로
-	TYPE_WALK_WITH_BYC, // 자전거전용도로 -- 우선은 보행 불가 지역으로 이해하자
-	TYPE_WALK_ONLY, // 보행전용도로
-	TYPE_WALK_THROUGH, //가상보행도로
-}TYPE_WALK;
-
-typedef enum {
-	TYPE_BYC_ONLY = 1, // 자전거 전용
-	TYPE_BYC_WITH_CAR, // 보행자/차량겸용 자전거도로
-	TYPE_BYC_WITH_WALK, // 보행도로 -- 우선은 자전거 통과 불가 지역으로 이해하자
-}TYPE_BYCICLE;
-
-
-typedef enum {
-	TYPE_NODE_COROSS = 1, // 교차첨
-	TYPE_NODE_END, // 단점
-	TYPE_NODE_DUMMY, // 더미점
-	TYPE_NODE_EDGE, // 구획변교점
-	TYPE_NODE_ATTRIBUTE, // 속성변화점
-	TYPE_NODE_SUBWAY, // 지하철 진출입
-	TYPE_NODE_UNDERPASS, // 지하도 진출입
-	TYPE_NODE_UNDERGROUND_MALL, // 지하상가 진출입
-	TYPE_NODE_BUILDING, // 건물 진출입
-}TYPE_NODE;
-
-
-
-typedef enum {
-	ROUTE_TYPE_NONE = 0, // 미정의
-	ROUTE_TYPE_TREKKING, // 숲길
-	ROUTE_TYPE_PEDESTRIAN, // 보행자
-	ROUTE_TYPE_BIKE, // 자전거
-	ROUTE_TYPE_KICKBOARD, // 킥보드
-	ROUTE_TYPE_MOTOCYCLE, // 모터사이클
-	ROUTE_TYPE_VEHICLE, // 차량
-}ROUTE_TYPE;
-
-
-typedef enum {
-	ROUTE_OPT_SHORTEST = 0, // 최단거리
-	ROUTE_OPT_RECOMMENDED, // 추천
-	ROUTE_OPT_COMFORTABLE, // 편안한
-	ROUTE_OPT_FASTEST, // 최소시간
-	ROUTE_OPT_MAINROAD, // 큰길
-	ROUTE_OPT_PEDESTRIAN, // 보행자 전용
-	ROUTE_OPT_TRAIL, // 둘레길 전용
-	ROUTE_OPT_BIKE, // 자전거 전용
-	ROUTE_OPT_AUTOMATION, // 자율주행 전용
-}ROUTE_OPTION;
-
-
-typedef enum {
-	ROUTE_AVOID_NONE = 0,
-	//ROUTE_AVOID_HIKING = 1, // 등산로
-	//ROUTE_AVOID_TRAIL = 2, // 둘레길
-	//ROUTE_AVOID_BIKE = 4, // 자전거
-	//ROUTE_AVOID_CROSS = 8, // 종주길
-
-	ROUTE_AVOID_ALLEY = 1,
-	ROUTE_AVOID_PAVE = 2,
-	ROUTE_AVOID_STAIRS = 4,
-	ROUTE_AVOID_BRIDGE = 8,
-	ROUTE_AVOID_ROCK = 16,
-	ROUTE_AVOID_RIDGE = 32,
-	ROUTE_AVOID_LADDER = 64,
-	ROUTE_AVOID_ROPE = 128,
-	ROUTE_AVOID_TATTERED = 256,
-	ROUTE_AVOID_PALM = 512,
-	ROUTE_AVOID_DECK = 1024,
-	// 0:미정의, 1 : 등산로, 2 : 둘레길, 3 : 자전거길, 4 : 종주코스
-	// 1:오솔길(1), 2:포장길(2), 3:계단(4), 4:교량(8), 5:암릉(16), 6:릿지(32), 7:사다리(64), 8:밧줄(128), 9:너덜길(256), 10:야자수매트(512), 11:데크로드(1024)
-}ROUTE_AVOID;
-
-// 링크 서브 타입
-typedef enum {
-	TYPE_SUBINFO_NONE = 0, // 미지정
-	TYPE_SUBINFO_FTYPE, // 시설물 타입
-	TYPE_SUBINFO_GTYPE, // 진입로 타입
-}TYPE_SUBINFO;
-
-// 건물 종별 코드
-typedef enum {
-	TYPE_BUILDING_NOT = 0,//미지정
-	TYPE_BUILDING_APT, //아파트
-	TYPE_BUILDING_SCH, //학교
-	TYPE_BUILDING_OFT, //오피스텔
-	TYPE_BUILDING_B01, //공공기관
-	TYPE_BUILDING_B02, //치안기관
-	TYPE_BUILDING_B03, //공원
-	TYPE_BUILDING_B04, //교육기관
-	TYPE_BUILDING_B05, //언론기관
-	TYPE_BUILDING_B06, //금융기관
-	TYPE_BUILDING_B07, //문화
-	TYPE_BUILDING_B08, //관광
-	TYPE_BUILDING_B09, //레져
-	TYPE_BUILDING_B10, //음식점
-	TYPE_BUILDING_B11, //편의
-	TYPE_BUILDING_B12, //복지
-	TYPE_BUILDING_B13, //기업
-	TYPE_BUILDING_B14, //농공시설
-	TYPE_BUILDING_B15, //자동차관련
-	TYPE_BUILDING_B16, //교통시설
-	TYPE_BUILDING_B17, //지하철시설
-	TYPE_BUILDING_B18, //도로시설
-	TYPE_BUILDING_B19, //주택관련
-	TYPE_BUILDING_ETC, //주택외건물
-	TYPE_BUILDING_E2D, //주택외건물2D
-	TYPE_BUILDING_IND, //공업단지내건물
-	TYPE_BUILDING_STA, //기차역
-	TYPE_BUILDING_APC, //주상복합
-	TYPE_BUILDING_ROH, //연립주택
-	TYPE_BUILDING_APL, //아파트형공장
-	TYPE_BUILDING_APS, //아파트 상가
-	TYPE_BUILDING_MAX_CNT,
-}TYPE_BUILDING;
-
-typedef enum {
-	TYPE_BLD_NAME_NOT = 0, // 명칭 사전 인덱스
-	TYPE_BLD_NAME_INT, // 정수 '123'
-	TYPE_BLD_NAME_ENG, // 영문 'A'
-	TYPE_BLD_NAME_DIC, // 명칭 사전
-}TYPE_BLD_NAME;
-
-typedef enum {
-	TYPE_COMPLEX_NOT = 0, //미지정
-	TYPE_COMPLEX_APC,	// 주상복합단지
-	TYPE_COMPLEX_APL,	// 아파트형공장단지
-	TYPE_COMPLEX_APT,	// 아파트단지
-	TYPE_COMPLEX_B01,	// 공공기관단지
-	TYPE_COMPLEX_B04,	// 교육기관단지
-	TYPE_COMPLEX_B11,	// 편의시설단지
-	TYPE_COMPLEX_ETC,	// 기타단지
-	TYPE_COMPLEX_OFT,	// 오피스텔단지
-	TYPE_COMPLEX_ROH,	// 연립주택단지
-	TYPE_COMPLEX_SCH,	// 학교단지
-	TYPE_COMPLEX_MAX_CNT,
-}TYPE_COMPLEX;
-
-typedef enum {
-	TYPE_ENT_NONE = 0, // 미지정
-	TYPE_ENT_BUILDING, // 빌딩입구점
-	TYPE_ENT_COMPLEX, // 단지입구점
-	TYPE_ENT_CPX_ROAD, // 단지내도로
-	TYPE_ENT_NEAR_ROAD, // 최근접도로
-}TYPE_ENTRANCE;
-
-typedef enum {
-	TYPE_LINK_MATCH_NONE = 0, // 미지정
-	TYPE_LINK_MATCH_CARSTOP, // 차량 승하자
-	TYPE_LINK_MATCH_CARSTOP_EX, // 차량 승하자 + 단지내도로(건물입구점 재확인시, 단지도로에 매칭된 입구점을 확인하기 위해 포함)
-	TYPE_LINK_MATCH_CARENTRANCE, // 차량 진출입 전용
-	TYPE_LINK_MATCH_FOR_TABLE, // 방문지 테이블용 , 2차선 이상만
-	TYPE_LINK_MATCH_FOR_HD, // P2P HD 경로 탐색 용, sd-hd 매칭되는 링크만 선택
-}TYPE_LINK_MATCH;
 
 struct INDEXED {
 	uint32_t meshID;
@@ -1262,94 +1288,6 @@ struct stLinkContent {
 };
 
 
-typedef enum {
-	ROUTE_TARGET_DEFAULT = 0, // default
-	ROUTE_TARGET_INAVI, // for inavi
-	ROUTE_TARGET_KAKAOVX, // for kakaovx
-} ROUTE_TARGET;
-
-typedef enum {
-	LINK_GUIDE_TYPE_DEFAULT = 0, // 일반
-	LINK_GUIDE_TYPE_DEPARTURE, // 출발지
-	LINK_GUIDE_TYPE_WAYPOINT, // 경유지
-	LINK_GUIDE_TYPE_DESTINATION, // 도착지
-	LINK_GUIDE_TYPE_DEPARTURE_WAYPOINT, // 출발지-경유지
-	LINK_GUIDE_TYPE_DEPARTURE_DESTINATION, // 출발지-도착지
-	LINK_GUIDE_TYPE_WAYPOINT_WAYPOINT, // 경유지-경유지
-	LINK_GUIDE_TYPE_WAYPOINT_DESTINATION, // 경유지-도착지
-} LINK_GUIDE_TYPE;
-
-typedef enum {
-	ROUTE_RESULT_SUCCESS = 0,				//0		성공
-
-	ROUTE_RESULT_FAILED = 1,				//1		탐색 실패	내부 오류에 의한 실패
-	ROUTE_RESULT_FAILED_SAME_ROUTE = 2,		//2		스마트 재탐색 적용	기존 경로와 동일
-	ROUTE_RESULT_FAILED_WRONG_PARAM = 10,	//10	잘 못된 파라미터, 필수 파라미터 체크
-	ROUTE_RESULT_FAILED_SET_MEMORY = 50,	//50	탐색 확장 관련 메모리 할당 오류	탐색 초기화 관련
-	ROUTE_RESULT_FAILED_READ_DATA = 51,		//51	탐색 관련 데이터(지도, 옵션 등) 파일 읽기 실패	탐색 초기화 관련
-	ROUTE_RESULT_FAILED_SET_START = 70,		//70	출발지가 프로젝션이 안되거나, 잘못된 출발지
-	ROUTE_RESULT_FAILED_SET_VIA = 71,		//71	경유지가 프로젝션이 안되거나, 잘못된 경유지
-	ROUTE_RESULT_FAILED_SET_END = 72,		//72	목적지가 프로젝션이 안되거나, 잘못된 목적지
-	ROUTE_RESULT_FAILED_DIST_OVER = 90,		//90	탐색 가능 거리 초과, 직선거리 15km 이내 허용
-	ROUTE_RESULT_FAILED_TIME_OVER = 91,		//91	탐색 시간 초과	10초 이상
-	ROUTE_RESULT_FAILED_NODE_OVER = 92,		//92	확장 가능 Node 개수 초과
-	ROUTE_RESULT_FAILED_EXPEND = 93,		//93	확장 실패
-
-
-// 	resultCode	resultMessage	비고	설명
-// 0		공통	성공
-// 100	Result Not Found	검색 전용	결과 없음
-// 101	Argument Error	공통	파라미터 오류
-// 102	Internal Server Error	공통	서버 오류
-// 103	Different Map Version	검색 전용	지도 버전 다름
-// 104	StyleID already exists	검색 전용	이미 동일한 StyleID가 있음
-// 201	Searching for Security	검색 전용	POI 보안시설물
-// 202	Longitude/Latitude	검색 전용	경위도
-// 203	Mobile Phone Number	검색 전용	전화번호 (Mobile)
-// 204	Invalid Query	검색 전용	서버 오류
-// 205	POI not in given Admin	검색 전용	결과 없음 (지역설정)
-// 206	POI not in given Area	검색 전용	결과 없음 (영역설정)
-// 207	POI not in given Category	검색 전용	결과 없음 (분류설정)
-// 208	Neighbor Search Only	검색 전용	결과 없음 (주변검색만입력)
-// 209	Neighbor Search not Found	검색 전용	결과 없음 (주변 + 키워드 검색 결과 없음)
-// 300	AppKey Error	공통	AppKey 인증 오류
-// 400	Taxi Fare Info not Found	검색 전용	택시 요금 정보 없음
-// 401	AreaCode Convert Fail	검색 전용	지역코드 변환 실패
-// 501	Unknown Fail	탐색 전용	실패(unknown)
-// 502	Apply Smart Re-navigation	탐색 전용	Smart재탐색 적용
-// 503	Canceled navigation by user	탐색 전용	사용자에 의한 탐색 취소
-// 504	Error due to Checksum	탐색 전용	체크섬 오류
-// 517	Memory allocation failure	탐색 전용	메모리 할당 실패
-// 518	File open failure	탐색 전용	파일 열기 실패
-// 519	File read failure	탐색 전용	파일 읽기 실패
-// 520	File write failure	탐색 전용	파일 쓰기 실패
-// 521	Socket connection failure	탐색 전용	소켓 연결 실패
-// 532	Request parameter is invalid	탐색 전용	요청 파라미터가 유효하지 않음
-// 533	The starting point is not selected, or the wrong starting point	탐색 전용	출발지가 선택되지 않았거나, 잘못된 출발지
-// 534	Destination is not selected or wrong destination	탐색 전용	목적지가 선택되지 않았거나, 잘못된 목적지
-// 535	Wrong stopover	탐색 전용	잘못된 경유지
-// 536	Link Projection failure	탐색 전용	Link Projection 실패 (네트워크(도로망)이 없는 경우 등)
-// 537	Exceeding the navigational distance (1000km, walking navigation: 20km)	탐색 전용	탐색 가능 거리 초과(1000km, 도보 탐색 : 20km)
-// 538	Exceeds the number of expandable nodes	탐색 전용	확장 가능 노드 수 초과
-// 539	Expansion failure	탐색 전용	확장 실패
-// 540	Expansion failure due to inactivity or traffic control	탐색 전용	특별한 사정이나 교통 통제로 인한 확장 실패
-// 541	Expansion failure due to vehicle height/weight restrictions near the starting point	탐색 전용	출발지 근처의 차량 높이/중량 제한으로 확장 실패
-// 542	Expansion failed due to a part-time curfew near the departure point	탐색 전용	출발지 근처의 시간제 통행금지로 인해 확장 실패
-// 543	The destination is a physical island road, and there are no established ferry routes.	탐색 전용	목적지가 물리적 섬도로이며, 구축된 페리 항로가 없음
-// 544	The departure or destination is a logical (transportation) island, and there are more than one destination	탐색 전용	출발 또는 목적지가 논리적(교통) 섬이며, 목적지가 2개 이상인 경우
-// 545	No data requested	탐색 전용	요청한 데이터가 없음
-}ROUTE_RESULT;
-
-
-typedef enum {
-	OPTIMAL_RESULT_SUCCESS = 0,					// 성공
-
-	OPTIMAL_RESULT_FAILED = 100,				// 실패
-	OPTIMAL_RESULT_FAILED_WRONG_PARAM = 101,	// 파라미터 오류
-	OPTIMAL_RESULT_FAILED_SERVER_ERROR = 102,	// 서버 오류
-}OPTIMAL_RESULT;
-
-
 typedef struct _tagRouteResultLink {
 	KeyID linkId;
 	KeyID nodeId;
@@ -1371,30 +1309,25 @@ typedef struct _tagRouteResultLinkEx {
 	uint32_t rtime : 17; // remain time // 최대 86400 > 31h
 	uint32_t angle : 9; // 진출 각도 // 360도 방식
 	uint32_t dir : 1; // 링크 방향성, 0:정방향, 1:역방향 // MAP API 결과에 맞추기 위해 변경
-	uint32_t type : 4; // 링크 안내 타입, 0:일반, 1:S출발지링크, 2:E도착지링크, 3:V경유지링크, 4:SE출발지-도착지, 5:SV출발지-경유지, 6:VV경유지-경유지, 7, VE경유지-도착지
+	uint32_t guide_type : 4; // 링크 안내 타입, 0:일반, 1:S출발지링크, 2:E도착지링크, 3:V경유지링크, 4:SE출발지-도착지, 5:SV출발지-경유지, 6:VV경유지-경유지, 7, VE경유지-도착지
 	uint32_t reserved : 2;
+#if defined(USE_VEHICLE_DATA)
+	uint8_t speed; // 속도
+	uint8_t speed_type : 4; // 속도 타입, 0:미정의, 1:ttl, 2:ks, 3:static
+	uint8_t speed_level : 4; // 도로 레벨,// 경로레벨, 0:고속도로, 1:도시고속도로, 자동차전용 국도/지방도, 2:국도, 3:지방도/일반도로8차선이상, 4:일반도로6차선이상, 5:일반도로4차선이상, 6:일반도로2차선이상, 7:일반도로1차선이상, 8:SS도로, 9:GSS도로/단지내도로/통행금지도로/비포장도로
+#endif
 }RouteResultLinkEx;
 
 typedef struct _tagRouteResultLinkMatchInfo {
-	KeyID StartLinkId; // 시작 링크 ID
-	SPoint StartMatchCoord; // 링크와 직교 접점 좌표
-	int32_t StartLinkSplitIdx; // 링크와 직교 접점 좌표의 링크 버텍스 idx
-	int32_t StartLinkDist; // 직교 접점에서 노드까지의 거리
-	vector<SPoint> StartLinkVtx; // 시작점에서 노드까지의 버텍스
-
 	SPoint Coord; // 좌표
 	KeyID LinkId; // 링크 ID
 	SPoint MatchCoord; // 링크와 직교 접점 좌표
+	int32_t LinkDataType; // 0:미정의, 1:숲길, 2:보행자/자전거, 3:자동차 // 안씀 --> 0:미정의, 1:명칭사전, 2:메쉬, 3:숲길, 4:보행자/자전거, 5:자동차, 6:건물, 7:단지, 8:입구점, 9:교통정보, 10:산바운더리, 11:코스정보
 	int32_t LinkSplitIdx; // 링크와 직교 접점 좌표의 링크 버텍스 idx
 	int32_t LinkDist; // 직교 접점에서 노드까지의 거리
 	vector<SPoint> LinkVtx; // 좌표점에서 s버텍스
 
-	~_tagRouteResultLinkMatchInfo() {
-		if (!StartLinkVtx.empty()) {
-			StartLinkVtx.clear();
-			vector<SPoint>().swap(StartLinkVtx);
-		}
-		
+	~_tagRouteResultLinkMatchInfo() {	
 		if (!LinkVtx.empty()) {
 			LinkVtx.clear();
 			vector<SPoint>().swap(LinkVtx);
@@ -1405,6 +1338,7 @@ typedef struct _tagRouteResultLinkMatchInfo {
 		memset(&Coord, 0x00, sizeof(Coord));
 		LinkId.llid = 0;		
 		memset(&MatchCoord, 0x00, sizeof(MatchCoord));
+		LinkDataType = 0;
 		LinkSplitIdx = 0;
 		LinkDist = 0;
 
@@ -1415,15 +1349,10 @@ typedef struct _tagRouteResultLinkMatchInfo {
 	}
 
 	_tagRouteResultLinkMatchInfo& operator=(const _tagRouteResultLinkMatchInfo& rhs) {
-		StartLinkId = rhs.StartLinkId; // 시작 링크 ID
-		StartMatchCoord = rhs.StartMatchCoord; // 링크와 직교 접점 좌표
-		StartLinkSplitIdx = rhs.StartLinkSplitIdx; // 링크와 직교 접점 좌표의 링크 버텍스 idx
-		StartLinkDist = rhs.StartLinkDist; // 직교 접점에서 노드까지의 거리
-		StartLinkVtx.assign(rhs.StartLinkVtx.begin(), rhs.StartLinkVtx.end()); // 시작점에서 노드까지의 버텍스
-
 		Coord = rhs.Coord; // 좌표
 		LinkId = rhs.LinkId; // 링크 ID
 		MatchCoord = rhs.MatchCoord; // 링크와 직교 접점 좌표
+		LinkDataType = rhs.LinkDataType;
 		LinkSplitIdx = rhs.LinkSplitIdx; // 링크와 직교 접점 좌표의 링크 버텍스 idx
 		LinkDist = rhs.LinkDist; // 직교 접점에서 노드까지의 거리
 		LinkVtx.assign(rhs.LinkVtx.begin(), rhs.LinkVtx.end()); // 좌표점에서 s버텍스
@@ -1447,6 +1376,7 @@ typedef struct _tagRouteResultInfo {
 
 	uint32_t RouteOption; // 경로 옵션
 	uint32_t RouteAvoid; // 경로 회피
+	uint32_t RouteMobility; // 이동체
 
 	RouteResultLinkMatchInfo StartResultLink;
 	RouteResultLinkMatchInfo EndResultLink;
@@ -1469,6 +1399,7 @@ typedef struct _tagRouteResultInfo {
 
 		RouteOption = 0;
 		RouteAvoid = 0;
+		RouteMobility = 0;
 
 		StartResultLink.Init();
 		EndResultLink.Init();
@@ -1494,3 +1425,113 @@ typedef struct _tagRouteResultInfo {
 	}// Init()
 
 }RouteResultInfo;
+
+
+typedef struct _tagstDistrict
+{
+	int32_t id; // 클러스터 ID
+	double dist; // 예상 거리
+	int32_t time; // 예상 시간
+	uint32_t etd; // 출발 예상 시간
+	uint32_t eta; // 도착 예상 시간
+	SPoint center; // 무게 중심
+
+	vector<int32_t> vtPois;
+	vector<SPoint> vtCoord;
+	vector<SPoint> vtBorder;
+	vector<int32_t> vtTimes;
+	vector<int32_t> vtDistances;
+
+	_tagstDistrict()
+	{
+		id = 0;
+		dist = 0.f;
+		time = 0.f;
+		etd = 0;
+		eta = 0;
+	}
+}stDistrict;
+
+
+typedef struct _tagTspOptions
+{
+	int32_t userId;
+	int32_t fileCache;
+	int32_t target;
+
+	int32_t algorithm;
+	int32_t geneSize;
+	int32_t individualSize;
+	int32_t loopCount;
+	int32_t seed; // 랜덤 seed
+	int32_t compareType;
+
+	int32_t positionLock; // 지점 고정, 0:미사용, 1:출발지 고정, 2:도착지 고정, 3:출발지-도착지 고정, 4:출발지 회귀
+
+	_tagTspOptions()
+	{
+		userId = 0;
+		fileCache = 0;
+		target = 0;
+
+		algorithm = TYPE_TSP_ALGORITHM_TSP_GA;
+		geneSize = 0;
+		individualSize = 100;
+		loopCount = 1000;
+		seed = 10000;// 1000 + 49 * 2;
+		compareType = TYPE_TSP_VALUE_DIST;
+
+		positionLock = TYPE_TSP_LOCK_NONE;
+	}
+}TspOptions;
+
+
+
+typedef struct _tagClusteringOptions
+{
+	int32_t userId;
+	int32_t fileCache; // 파일 캐쉬, 0:미사용, 1:읽기, 2:쓰기, 3:읽기-쓰기
+
+	int32_t algorithm;
+	int32_t geneSize;
+	int32_t individualSize;
+	int32_t loopCount;
+	int32_t seed; // 랜덤 seed
+	int32_t compareType;
+	
+	int32_t divisionType; // 분배 타입, 0:갯수균등, 1:거리균등, 2:시간균등
+
+	int32_t limitCluster; // 최대 배차(클러스터링) 차량 수
+	int32_t limitValue; // 차량당 최대 운행 가능 값, 거리(미터)/시간(초)-분으로 입력받아 초로 변환
+	int32_t limitDeviation; // 차량당 최대 운행 정보 편차
+
+	int32_t reservation; // 예약 시각
+	int32_t reservationType; // 예약 타입, 0:미사용, 1:출발시간, 2:도착시간
+
+	int32_t positionLock; // 지점 고정, 0:미사용, 1:출발지 고정, 2:도착지 고정, 3:출발지-도착지 고정, 4:출발지 회귀
+
+
+	_tagClusteringOptions()
+	{
+		userId = 0;
+		fileCache = 0;
+
+		algorithm = TYPE_TSP_ALGORITHM_TSP;
+		geneSize = 0;
+		individualSize = 100;
+		loopCount = 1000;
+		seed = 10000;// 1000 + 49 * 2;
+		compareType = TYPE_TSP_VALUE_DIST;
+
+		divisionType = 0;
+
+		limitCluster = 0;
+		limitValue = 0;
+		limitDeviation = 0;
+
+		reservation = 0;
+		reservationType = 0;
+
+		positionLock = TYPE_TSP_LOCK_NONE;
+	}
+}ClusteringOptions;

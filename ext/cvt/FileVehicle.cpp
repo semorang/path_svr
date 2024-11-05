@@ -21,15 +21,14 @@ static char THIS_FILE[] = __FILE__;
 
 CFileVehicle::CFileVehicle()
 {
-	m_nFileType = TYPE_DATA_VEHICLE;
+	m_nDataType = TYPE_DATA_VEHICLE;
+	m_nFileType = TYPE_EXEC_NETWORK;
 }
 
 CFileVehicle::~CFileVehicle()
 {
 
 }
-
-static const uint32_t g_cntLogPrint = 100000;
 
 bool CFileVehicle::ParseData(IN const char* fname)
 {
@@ -41,7 +40,7 @@ bool CFileVehicle::ParseData(IN const char* fname)
 	m_nNodeIdx = 0;
 
 	if (!shpReader.Open(fname)) {
-		LOG_TRACE(LOG_ERROR, "Error, can't Find shp File!");
+		LOG_TRACE(LOG_ERROR, "Error, can't Find shp File: %s", fname);
 		return false;
 	}
 
@@ -75,13 +74,13 @@ bool CFileVehicle::ParseData(IN const char* fname)
 	// 다른 데이터에도 추가해 주자
 	if (strstr(fname, "VLINK") != nullptr) {
 #if defined(USE_P2P_DATA)
-		static char szLinkField[128][26] = {
+		static char szLinkField[128][29] = {
 			{ "MESH" },{ "SNODE_ID" },{ "ENODE_ID" },{ "ROAD_K" },{ "ROAD_NUM" },
 			{ "LANE_NUM" },{ "LINK_K" },{ "LEVEL" }, {"MAXSPEED"},{ "ROAD_DK1" },
 			{ "ROAD_DK2" },{ "ROAD_DK3" },{ "PASS_CODE" },{ "K_CONTROL" },{ "EXPRESS" },
 			{ "CHARGE" },{ "SAFE_Z" },{ "ROAD_NM" },{ "MAX_W" },{ "MAX_H" },
 			{ "BRIDGE" },{ "TUNNEL" },{ "OVER_P" },{ "UNDER_P" },{ "HD_FLAG" },
-			{ "LINK_LEN" },{ "REMARK" },
+			{ "LINK_LEN" },{ "TTLID_P" },{ "TTLID_N" },{ "REMARK" },
 		};
 #elif defined(USE_SAMSUNG_HEAVY)
 		static char szLinkField[128][35] = {
@@ -102,7 +101,7 @@ bool CFileVehicle::ParseData(IN const char* fname)
 		//	{ "통행코드6" },{ "접속노드7" },{ "각도7" },{ "통행코드7" },{ "접속노드8" },
 		//	{ "각도8" },{ "통행코드8" },
 		//};
-#else
+#elif defined(USE_OPTIMAL_POINT_API)
 		static char szLinkField[128][32] = {
 			{ "MESH" },{ "SNODE_ID" },{ "ENODE_ID" },{ "ROAD_K" },{ "ROAD_NUM" },
 			{ "N_SR" },{ "SR_K1" },{ "SR_NUM1" },{ "SR_K2" },{ "SR_NUM2" },
@@ -110,6 +109,18 @@ bool CFileVehicle::ParseData(IN const char* fname)
 			{ "ROAD_DK1" },{ "ROAD_DK2" },{ "ROAD_DK3" },{ "PASS_CODE" },{ "K_CONTROL" },
 			{ "EXPRESS" },{ "CHARGE" },{ "SAFE_Z" },{ "ROAD_NM" },{ "TUNNEL" },
 			{ "UNDER_P" },{ "LINK_LEN" },
+		};
+#else
+		static char szLinkField[128][44] = {
+			{ "MESH" },{ "SNODE_ID" },{ "ENODE_ID" },{ "ROAD_K" },{ "ROAD_NUM" },
+			{ "N_SR" },{ "SR_K1" },{ "SR_NUM1" },{ "SR_K2" },{ "SR_NUM2" }, // 10
+			{ "SR_K3" },{ "SR_NUM3" },{ "LANE_NUM" },{ "LINK_K" },{ "LEVEL" },
+			{ "ROAD_DK1" },{ "ROAD_DK2" },{ "ROAD_DK3" },{ "PASS_CODE" },{ "K_CONTROL" }, // 20
+			{ "EXPRESS" },{ "CHARGE" },{ "SAFE_Z" },{ "ROAD_NM" },{ "MAX_W" },
+			{ "MAX_H" }, { "BRIDGE" },{ "TUNNEL" },{ "OVER_P" },{ "UNDER_P" }, // 30
+			{ "BUS_ONLY" },{ "EXP_MD" },{ "EXP_MDIN" },{ "LANE_INFO" },{ "DIRECTION" },
+			{ "IND_LANE" },{ "IND_DIR" },{ "TG_INFO" },{ "J_VIEW" },{ "TPEG" }, // 40
+			{ "ENTRY_R" },{ "LINK_LEN" },{ "TTLID_P" },{ "TTLID_N" } // 44
 		};
 #endif
 
@@ -120,7 +131,7 @@ bool CFileVehicle::ParseData(IN const char* fname)
 				LOG_TRACE(LOG_ERROR, "can't get dbf filed info, idx : %d ", ii);
 				return false;
 			}
-			else if (strcmp(szLinkField[ii], trim(fieldInfo.szName)) != 0) {
+			else if (strcmp(szLinkField[ii], strupper(trim(fieldInfo.szName))) != 0) {
 				LOG_TRACE(LOG_ERROR, "dbf field name not matched the expected name, filedName:%s vs exprectedName:%s", fieldInfo.szName, szLinkField[ii]);
 				return false;
 			}
@@ -149,8 +160,21 @@ bool CFileVehicle::ParseData(IN const char* fname)
 
 
 	//데이터 얻기
-	LOG_TRACE(LOG_DEBUG, "LOG, start, raw data parsing file : %s", fname);
+	LOG_TRACE(LOG_DEBUG, "LOG, start, raw data parsing file : %s, cnt : %d", fname, nRecCount);
 
+
+	FILE* fpNodeLinkMatching = nullptr;
+	char szNodeToLinkMatching[MAX_PATH] = { 0, };
+
+	if (nShpType == 2) { // link
+		// 중간 데이터 생성
+		sprintf(szNodeToLinkMatching, "%s/%s", m_szWorkPath, "node-link-matching.bin");
+		fpNodeLinkMatching = fopen(szNodeToLinkMatching, "wb");
+		if (!fpNodeLinkMatching) {
+			LOG_TRACE(LOG_ERROR, "Error, can't create node to link matching File!, %s", szNodeToLinkMatching);
+			return false;
+		}
+	}
 
 	for (int idxRec = 0; idxRec < nRecCount; idxRec++) {
 		stWalkMesh mesh = { 0, };
@@ -163,6 +187,19 @@ bool CFileVehicle::ParseData(IN const char* fname)
 			continue;
 		}
 
+#if	!defined(USE_SAMSUNG_HEAVY)
+		// 테스트 메쉬가 있으면 정의된 메쉬만 확인하자
+		if (g_isUseTestMesh && !g_arrTestMesh.empty()) {
+			memset(chsTmp, 0x00, sizeof(chsTmp));
+			shpReader.GetDataAsString(0, chsTmp, 60);  //nLabelIdxToRead 번째 필드 값을 chsTmp로 12byte 읽어옴.			
+			int meshId = atoi(trim(chsTmp));
+			if (g_arrTestMesh.find(meshId) == g_arrTestMesh.end()) {
+				continue;
+			}
+		}
+#endif
+
+
 		//Setting DBF Data
 		for (int idxCol = 0; idxCol < colCnt; idxCol++) {
 			memset(chsTmp, 0x00, sizeof(chsTmp));
@@ -170,12 +207,12 @@ bool CFileVehicle::ParseData(IN const char* fname)
 
 			SHPGeometry *pSHPObj = shpReader.GetGeometry();
 
-			if (nShpType == 1) {				// 점 일때				
+			if (nShpType == 1) {				// 점 일때
 				if (!SetData_Node(idxCol, node, chsTmp))
 				{
 					LOG_TRACE(LOG_ERROR, "Error, %s", GetErrorMsg());
 					return  false;
-				}				
+				}
 				if (idxCol == 0) {
 #if defined(USE_P2P_DATA) && defined(USE_PROJ4_LIB)
 					translateUTM52NtoWGS84(pSHPObj->point.point.x, pSHPObj->point.point.y, node.NodeCoord.x, node.NodeCoord.y);
@@ -192,7 +229,7 @@ bool CFileVehicle::ParseData(IN const char* fname)
 				}
 				if (idxCol == 0)
 				{
-					nPoint = SHP_GetNumPartPoints(pSHPObj, 0); //파트 0에 대한	   //선형 갯수..					 																	 
+					nPoint = SHP_GetNumPartPoints(pSHPObj, 0); //파트 0에 대한	   //선형 갯수..
 					pPoints = SHP_GetPartPoints(pSHPObj, 0); //파트 0에 대한	     //실제선형데이터..
 
 					for (int idxObj = 0; idxObj < nPoint; idxObj++) {
@@ -215,18 +252,6 @@ bool CFileVehicle::ParseData(IN const char* fname)
 		} // for
 
 
-#if defined(_USE_TEST_MESH)
-		bool isContinue = true;
-		for (const auto& item : g_arrTestMesh) {
-			if ((nShpType == 1 && item == node.MeshID) || (nShpType == 2 && item == link.MeshID)) {
-				isContinue = false;
-				break;
-			}
-		}
-		if (isContinue) continue;
-#endif
-
-
 		if (nShpType == 1) {
 			// NODE
 			stNodeInfo* pNode = new stNodeInfo;
@@ -238,7 +263,7 @@ bool CFileVehicle::ParseData(IN const char* fname)
 			pNode->coord = node.NodeCoord;
 			pNode->name_idx = node.CrossNameIDX;
 
-			pNode->base.node_type = TYPE_DATA_VEHICLE;
+			pNode->base.node_type = TYPE_NODE_DATA_VEHICLE;
 			pNode->base.point_type = node.NodeType;
 			pNode->base.connnode_count = node.ConnectNum;
 
@@ -256,8 +281,6 @@ bool CFileVehicle::ParseData(IN const char* fname)
 			// 노드 ID를 IDX로 변경
 			//pNode->node_id.nid = m_nNodeIdx++;
 
-			m_nNodeIdx++;
-
 			static uint32_t s_nMaxConnNodeNum = 0;
 			if (s_nMaxConnNodeNum < node.ConnectNum) {
 				s_nMaxConnNodeNum = node.ConnectNum;
@@ -267,7 +290,7 @@ bool CFileVehicle::ParseData(IN const char* fname)
 
 			m_mapNode.insert({ pNode->node_id.llid, pNode });
 
-			if (m_nNodeIdx % g_cntLogPrint == 0) {
+			if (m_nNodeIdx++ % g_cntLogPrint == 0) {
 				LOG_TRACE(LOG_DEBUG, "LOG, node data processing, %lld / %lld", m_nNodeIdx, nRecCount);
 			}
 		}
@@ -277,9 +300,9 @@ bool CFileVehicle::ParseData(IN const char* fname)
 			pLink->link_id.tile_id = link.MeshID;
 			pLink->link_id.nid = m_nLinkIdx++; // 링크 ID를 IDX로 변경
 			pLink->snode_id.tile_id = link.MeshID;
-			pLink->snode_id.nid = link.FromNodeID;
+			pLink->snode_id.nid = link.SNodeID;
 			pLink->enode_id.tile_id = link.MeshID;
-			pLink->enode_id.nid = link.ToNodeID;
+			pLink->enode_id.nid = link.ENodeID;
 
 			pLink->length = link.LinkLen;
 			//pLink->vtPts.assign(link.LinkVertex.begin(), link.LinkVertex.end());
@@ -287,7 +310,7 @@ bool CFileVehicle::ParseData(IN const char* fname)
 
 			pLink->name_idx = link.RoadNameIDX;
 
-			pLink->base.link_type = TYPE_DATA_VEHICLE;
+			pLink->base.link_type = TYPE_LINK_DATA_VEHICLE;
 			pLink->veh.road_type = link.RoadType;
 			pLink->veh.lane_cnt = min((int)link.LaneCount, 15); // 최대 3bit
 			pLink->veh.link_type = link.LinkType;
@@ -295,47 +318,71 @@ bool CFileVehicle::ParseData(IN const char* fname)
 #if defined(USE_OPTIMAL_POINT_API)
 			pLink->veh.link_dtype = link.DetailCode3 != 3 ? link.DetailCode3 : 0;
 #else
-			pLink->veh.link_dtype = link.DetailCode3; // uint64_t link_dtype : 3; // 링크세부종별(dk3), 0:미정의, 1:고가도로,지하차도 옆길, 2:비포장도로, 3:단지내도로, 4:터널, 5:지하도로
+			pLink->veh.link_dtype = link.DetailCode3; // 링크세부종별(dk3), 0:미정의, 1:고가도로,지하차도 옆길, 2:비포장도로, 3:단지내도로, 4:터널, 5:지하도로
 #endif
 			pLink->veh.level = link.Level;
 			if (link.ControlCode == 2) {//  2:통행불가
 				pLink->veh.pass_code = 2;
 				pLink->link_id.dir = 3;
-			}
-			else if (link.ControlCode == 4) { // 4:일방통행_정
+			} else if (link.ControlCode == 4) { // 4:일방통행_정
 				pLink->veh.pass_code = 5;
 				pLink->link_id.dir = 1;
-			}
-			else if (link.ControlCode == 5) { // 5:일방통행_역
+			} else if (link.ControlCode == 5) { // 5:일방통행_역
 				pLink->veh.pass_code = 6;
 				pLink->link_id.dir = 2;
 			}
 			else {
 				pLink->veh.pass_code = link.PassCode;
 			}
-			pLink->veh.car_only = link.CarOnly == 2 ? 1 : 0; // 값 변경
-			pLink->veh.charge = link.Charge == 2 ? 1 : 0; // 값 변경
-			pLink->veh.safe_zone = link.SafeZone;
-
-			// 터널
-			pLink->veh.tunnel = link.Tunnel;
-
-			// 지하차도
-			pLink->veh.under_pass = link.UnderPass;
-
+			pLink->veh.car_only = link.CarOnly == 2 ? 0 : 1; // 자동차 전용
+			pLink->veh.charge = link.Charge == 2 ? 0 : 1; // 유료도로
+			pLink->veh.safe_zone = (link.SafeZone < 1 || 4 < link.SafeZone) ? 0 : link.SafeZone; // 보호구역
+			pLink->veh.tunnel = link.Tunnel == 0 ? 0 : 1; // 터널
+			pLink->veh.under_pass = link.UnderPass == 0 ? 0 : 1; // 지하차도
 
 #if defined(USE_P2P_DATA)
-			//pLink->sub_ext = (link.MeshID * 1000000000000) + (link.FromNodeID * 1000000) + link.ToNodeID; // 원본 ID 사용, (snode 6자리 + enode 6자리)
+			//pLink->sub_ext = (link.MeshID * 1000000000000) + (link.SNodeID * 1000000) + link.ENodeID; // 원본 ID 사용, (snode 6자리 + enode 6자리)
 
 			pLink->veh.speed_f = pLink->veh.speed_b = link.MaxSpeed;
-			pLink->veh.weight = link.MaxW;
-			pLink->veh.height = link.MaxH;
+			pLink->veh.weight = link.MaxWeight;
+			pLink->veh.height = link.MaxHeight;
 			pLink->veh.bridge = link.Bridge;
 			pLink->veh.over_pass = link.OverPass;
 			pLink->veh.hd_flag = link.HdFlag;
+#else			
+			pLink->veh.weight = link.MaxWeight == 0 ? 0 : 1; // 높이 제한	
+			pLink->veh.height = link.MaxHeight == 0 ? 0 : 1; // 무게 제한			
+			pLink->veh.bridge = link.Bridge == 0 ? 0 : 1; // 교량			
+			pLink->veh.under_pass = link.UnderPass == 0 ? 0 : 1; // 지하차도
+			pLink->veh.toll = link.TollInfo == 0 ? 0 : 1; // 톨게이트
+			pLink->veh.restriction = (link.EntryRestriction < 1 || 5 < link.EntryRestriction) ? 0 : link.EntryRestriction;// 진입 제한
 #endif
 
 			m_mapLink.insert({ pLink->link_id.llid, pLink });
+
+			// 현재(2024-07) 까지는 7레벨 이하의 도로는 교통정보 미제공하므로 등록하지 말자
+			if ((link.TTLID_P > 0 || link.TTLID_N > 0) && pLink->veh.level < 7) {
+				// add ttl traffic data 
+				int32_t ttl_nid = link.TTLID_P % TILEID_BYTE_COUNT;
+				m_pDataMgr->AddTrafficTTLData(ttl_nid, pLink->link_id.tile_id, pLink->link_id.nid, DIR_POSITIVE); // TTL 정
+
+				ttl_nid = link.TTLID_N % TILEID_BYTE_COUNT;
+				m_pDataMgr->AddTrafficTTLData(ttl_nid, pLink->link_id.tile_id, pLink->link_id.nid, DIR_NAGATIVE); // TTL 역
+			}
+
+
+			// 중간 데이터 생성
+			// mesh_id + snode_id + enode_id, link_nid
+			if (fpNodeLinkMatching) {
+				// write mesh_id + snode_id + enode_id
+				sprintf(szNodeToLinkMatching, "%06d%06d%06d", pLink->link_id.tile_id, pLink->snode_id.nid, pLink->enode_id.nid);
+				uint64_t nodeId = atoll(szNodeToLinkMatching);
+				if (!fwrite(&nodeId, sizeof(nodeId), 1, fpNodeLinkMatching)) {
+					LOG_TRACE(LOG_WARNING, "ERROR, node_id write failed for node_id to link_id matching file write, value:%s", szNodeToLinkMatching);
+				} else if (!fwrite(&pLink->link_id.llid, sizeof(pLink->link_id.llid), 1, fpNodeLinkMatching)) {
+					LOG_TRACE(LOG_WARNING, "ERROR, link_id write failed for node_id to link_id matching file write, value:%lld", pLink->link_id.llid);
+				}
+			}
 
 			if (m_nLinkIdx % g_cntLogPrint == 0) {
 				LOG_TRACE(LOG_DEBUG, "LOG, link data processing, %lld / %lld", m_nLinkIdx, nRecCount);
@@ -355,8 +402,11 @@ bool CFileVehicle::ParseData(IN const char* fname)
 	releaseProj4();
 #endif
 
-	shpReader.Close();
+	if (fpNodeLinkMatching) {
+		fclose(fpNodeLinkMatching);
+	}
 
+	shpReader.Close();
 
 	if (!m_mapNode.empty() && !m_mapLink.empty()) {
 		return GenServiceData();
@@ -371,7 +421,7 @@ bool CFileVehicle::GenServiceData()
 	map<uint32_t, stMeshInfo*>::iterator itMesh;
 	unordered_map<uint64_t, stNodeInfo*>::iterator itNode;
 	unordered_map<uint64_t, stLinkInfo*>::iterator itLink;
-
+	bool findnode;
 
 	if (m_mapNode.empty() || m_mapLink.empty()) {
 		LOG_TRACE(LOG_ERROR, "Failed, node link data empty, node cnt:%d, link cnt:%d", m_mapNode.size(), m_mapLink.size());
@@ -381,7 +431,6 @@ bool CFileVehicle::GenServiceData()
 	LOG_TRACE(LOG_DEBUG, "LOG, start, link s/e node indexing");
 
 	LOG_TRACE(LOG_DEBUG, "LOG, start, node connected link indexing");
-	bool findnode;
 
 	// 노드의 통행 코드를 링크에 적용
 	// 노드의 통행코드가 노드ID로 저장되어 있어, 노드 ID를 IDX로 변경하기 전에 우선 진행해야 함
@@ -541,7 +590,7 @@ bool CFileVehicle::GenServiceData()
 		//	LOG_TRACE(LOG_WARNING, "Failed, can't find edge node, mesh:%d, node:%d", itNode->second->edgenode_id.tile_id, itNode->second->edgenode_id.nid);
 		//	continue;
 		//}
-	}
+	} // for
 
 
 	uint32_t cntReversLinkVtx = 0;
@@ -619,7 +668,7 @@ bool CFileVehicle::GenServiceData()
 			LOG_TRACE(LOG_ERROR, "Failed, link vertex ordering with s/e node miss match, mesh:%d, link:%d", itLink->second->link_id.tile_id, itLink->second->link_id.nid);
 			continue;
 		}
-	}
+	} // for
 
 	if (cntReversLinkVtx > 0) {
 		LOG_TRACE(LOG_DEBUG, "LOG, link vertex re-matching with s/e node total count:%d", cntReversLinkVtx);
@@ -725,10 +774,7 @@ bool CFileVehicle::GenServiceData()
 			//	LOG_TRACE(LOG_DEBUG, "add new mesh, when mesh info not exist, mesh:%d, link:%d", pMeshExt->mesh_id.tile_id, itLink->second->link_id.nid);
 			//}
 		}
-
-		m_pDataMgr->AddTrafficLinkData(itLink->second);
 	}
-
 
 
 	LOG_TRACE(LOG_DEBUG, "LOG, finished");
@@ -755,33 +801,10 @@ bool CFileVehicle::Initialize()
 	return CFileBase::Initialize();
 }
 
+
 void CFileVehicle::Release()
 {
 	CFileBase::Release();
-}
-
-
-bool CFileVehicle::OpenFile(IN const char* szFilePath)
-{
-	return CFileBase::OpenFile(szFilePath);
-}
-
-
-bool CFileVehicle::SaveData(IN const char* szFilePath)
-{
-	char szFileName[MAX_PATH] = { 0, };
-	sprintf(szFileName, "%s/%s.%s", szFilePath, g_szTypeTitle[TYPE_DATA_VEHICLE], g_szTypeExec[TYPE_DATA_VEHICLE]);
-
-	return CFileBase::SaveData(szFileName);
-}
-
-
-bool CFileVehicle::LoadData(IN const char* szFilePath)
-{
-	char szFileName[MAX_PATH] = { 0, };
-	sprintf(szFileName, "%s/%s.%s", szFilePath, g_szTypeTitle[TYPE_DATA_VEHICLE], g_szTypeExec[TYPE_DATA_VEHICLE]);
-
-	return CFileBase::LoadData(szFileName);
 }
 
 
@@ -790,6 +813,34 @@ bool  CFileVehicle::SetData_Node(int idx, stVehicleNode &getNode_Dbf, char* colD
 	bool ret = true;
 	switch (idx)
 	{
+#if	defined(USE_SAMSUNG_HEAVY)
+	case 0:		break; // SN
+	case 1:		getNode_Dbf.MeshID = atoi(trim(colData));	break; // ID --> MESH
+	case 2:		getNode_Dbf.NodeID = atoi(trim(colData));	break; // NUMBE --> NODE_ID
+	case 3:		getNode_Dbf.CrossNameIDX = AddNameDic(colData);	break; // NAME1 --> CROSSNAME
+	case 4: {	trim(colData); // 노드종류 --> NODE_K
+		if (strcmp(colData, "교차점") == 0) getNode_Dbf.NodeType = TYPE_NODE_COROSS; // 교차점
+		else if (strcmp(colData, "통행금지점") == 0) getNode_Dbf.NodeType = TYPE_NODE_END; // 단점		
+		else if (strcmp(colData, "속성변화점") == 0) getNode_Dbf.NodeType = TYPE_NODE_ATTRIBUTE; // 속성변화점
+		else { ret = false; m_strErrMsg = "node type value not defined : " + string(colData); }
+		} break;
+	case 5:		break; // NAME1_1
+	case 6:		break; // NAME2
+	case 7:		getNode_Dbf.ConnectNum = atoi(trim(colData)); // 접속링크수 --> CN_NUM
+		if (getNode_Dbf.ConnectNum < 0 || 8 < getNode_Dbf.ConnectNum) {
+			ret = false; m_strErrMsg = "connected node count not defined : " + string(colData);
+		} break;
+	case 8:	case 11: case 14: case 17: case 20: case 23: case 26: case 29: // 접속노드1~8
+		getNode_Dbf.ConnectAttr[(idx - 8) / 3].NodeID.tile_id = getNode_Dbf.MeshID;
+		getNode_Dbf.ConnectAttr[(idx - 8) / 3].NodeID.nid = atoi(trim(colData)); break;
+	case 9:	case 12: case 15: case 18: case 21: case 24: case 27: case 30: // 각도1~8
+		getNode_Dbf.ConnectAttr[(idx - 10) / 3].Angle = atoi(trim(colData)); break;
+	case 10: case 13: case 16: case 19: case 22: case 25: case 28: case 31: // 통행코드1~8
+		//if (getNode_Dbf.NodeType == TYPE_NODE_END && idx == 10) { // 통행금지점-단점 ==> 유턴 허용 구간으로 정의
+		//	strcpy(colData, "10000000");
+		//}
+		getNode_Dbf.ConnectAttr[(idx - 9) / 3].PassCode = setPassCode(trim(colData)); break;
+#else
 	case 0:		getNode_Dbf.MeshID = atoi(trim(colData));	break;
 	case 1:		getNode_Dbf.NodeID = atoi(trim(colData));	break;
 	case 2:		getNode_Dbf.NodeType = atoi(trim(colData));
@@ -810,6 +861,8 @@ bool  CFileVehicle::SetData_Node(int idx, stVehicleNode &getNode_Dbf, char* colD
 	case 8:	case 11: case 14: case 17: case 20: case 23: case 26: case 29:
 		getNode_Dbf.ConnectAttr[(idx - 8) / 3].Angle = atoi(trim(colData)); break;
 	case 30:		getNode_Dbf.CrossNameIDX = AddNameDic(colData);	break;
+#endif // #if	defined(USE_SAMSUNG_HEAVY)
+
 	default:	break;
 	}
 
@@ -824,8 +877,8 @@ bool CFileVehicle::SetData_Link(int idx, stVehicleLink &getLink_Dbf, char* colDa
 	{
 #if defined(USE_P2P_DATA)
 	case  0:		getLink_Dbf.MeshID = atoi(trim(colData));	break; // MESH
-	case  1:		getLink_Dbf.FromNodeID = atoi(trim(colData));		break; // SNODE_ID
-	case  2:		getLink_Dbf.ToNodeID = atoi(trim(colData));		break; // ENODE_ID
+	case  1:		getLink_Dbf.SNodeID = atoi(trim(colData));		break; // SNODE_ID
+	case  2:		getLink_Dbf.ENodeID = atoi(trim(colData));		break; // ENODE_ID
 	case  3:		getLink_Dbf.RoadType = atoi(trim(colData));		break; // ROAD_K
 	case  4:		getLink_Dbf.RoadNum = atoi(trim(colData));		break; // ROAD_NUM
 	case  5:		getLink_Dbf.LaneCount = atoi(trim(colData)); //  // LANE_NUM
@@ -844,19 +897,56 @@ bool CFileVehicle::SetData_Link(int idx, stVehicleLink &getLink_Dbf, char* colDa
 	case 15:		getLink_Dbf.Charge = atoi(trim(colData));		break; // CHARGE
 	case 16:		getLink_Dbf.SafeZone = atoi(trim(colData));		break; // SAFE_Z
 	case 17:		getLink_Dbf.RoadNameIDX = AddNameDic(colData);	break; // ROAD_NM
-	case 18:		getLink_Dbf.MaxW = atoi(trim(colData));		break; // MAX_W
-	case 19:		getLink_Dbf.MaxH = atoi(trim(colData));		break; // MAX_H
+	case 18:		getLink_Dbf.MaxWeight = atoi(trim(colData));		break; // MAX_W
+	case 19:		getLink_Dbf.MaxHeight = atoi(trim(colData));		break; // MAX_H
 	case 20:		getLink_Dbf.Bridge = atoi(trim(colData));		break; // BRIDGE
 	case 21:		getLink_Dbf.Tunnel = atoi(trim(colData));		break; // TUNNEL
 	case 22:		getLink_Dbf.OverPass = atoi(trim(colData));		break; // OVER_P
 	case 23:		getLink_Dbf.UnderPass = atoi(trim(colData));		break; // UNDER_P
 	case 24:		getLink_Dbf.HdFlag = atoi(trim(colData));		break; // HD_FLAG
 	case 25:		getLink_Dbf.LinkLen = atoi(trim(colData));		break; // LINK_LEN
-#else
-	//case 0:		getLink_Dbf.LinkID = atoi(trim(&colData[6]));	break;
+	case 26:		getLink_Dbf.TTLID_P = atoll(trim(colData));		break; // TTLID_P
+	case 27:		getLink_Dbf.TTLID_N = atoll(trim(colData));		break; // TTLID_N
+#elif defined(USE_SAMSUNG_HEAVY)
+	case 0:		break; // SN
+	case 1:		getLink_Dbf.MeshID = atoi(trim(colData));	break; // ID -> MESH
+	case 2:		getLink_Dbf.SNodeID = atoi(trim(colData));		break; // Node1 -> SNODE_ID
+	case 3:		getLink_Dbf.ENodeID = atoi(trim(colData));		break; // Node2 -> ENODE_ID
+	case 4:		break; // 관리자
+	case 5:		getLink_Dbf.RoadType = atoi(trim(colData));		break; // 도로종별 -> ROAD_K
+	case 6:		getLink_Dbf.RoadNum = atoi(trim(colData));		break; // 노선번호 -> ROAD_NUM
+	case 7:		getLink_Dbf.SubRoadType1 = atoi(trim(colData));		break; // 중용1 -> SR_K1
+	case 8:		getLink_Dbf.SubRoadNum1 = atoi(trim(colData));		break; // 중용번호1 -> SRNUM1
+	case 9:		getLink_Dbf.SubRoadType2 = atoi(trim(colData));		break; // 중용2 -> SR_K2
+	case 10:		getLink_Dbf.SubRoadNum2 = atoi(trim(colData));		break; // 중용번호2 -> SRNUM2
+	case 11:		getLink_Dbf.SubRoadType3 = atoi(trim(colData));		break; // 중용3 -> SR_K3
+	case 12:		getLink_Dbf.SubRoadNum3 = atoi(trim(colData));		break; // 중용번호3 -> SRNUM3
+	case 13:		break; // 중용4 -> SR_K4
+	case 14:		break; // 중용번호4 -> SRNUM4
+	case 15:		break; // 중용5 -> SR_K5
+	case 16:		break; // 중용번호5 -> SRNUM5
+	case 17:		break; // 중용6 -> SR_K6
+	case 18:		break; // 중용번호6 -> SRNUM6
+	case 19:		getLink_Dbf.Charge = atoi(trim(colData));		break; // 유료 -> CHARGE
+	case 20:		getLink_Dbf.PassCode = atoi(trim(colData));		break; // 통행여부 -> PASS_CODE
+	case 21:		getLink_Dbf.ControlCode = atoi(trim(colData));		break; // 일방 -> K_CONTROL
+	case 22:		break; // 도로폭
+	case 23:		getLink_Dbf.LaneCount = atoi(trim(colData));	break; // 차선수 --> LANE_NUM
+	case 24:		getLink_Dbf.LinkType = atoi(trim(colData));	break; // 링크종별 --> LINK_K
+	case 25:		getLink_Dbf.Level = atoi(trim(colData));		break; // 레벨치 --> LEVEL
+	case 26:		break; // 링크내속성
+	case 27:		getLink_Dbf.LinkLen = atof(trim(colData));		break; // 링크길이 --> LINK_LEN
+	case 28:		break; // 보간점수 --> VERTEX_CNT
+	case 29:		getLink_Dbf.CarOnly = atof(trim(colData));		break; // 전용 --> EXPRESS
+	case 30:		break; // 특수차 --> 
+	case 31:		getLink_Dbf.SafeZone = atof(trim(colData));		break; // 스쿨존 --> SAFE_Z
+	case 32:		break; // 기타속성 --> 
+	case 33:		break; // 속성명칭1 --> 
+	case 34:		break; // 속성명칭2 --> 
+#elif defined(USE_OPTIMAL_POINT_API)
 	case 0:		getLink_Dbf.MeshID = atoi(trim(colData));	break;
-	case 1:		getLink_Dbf.FromNodeID = atoi(trim(colData));		break;
-	case 2:		getLink_Dbf.ToNodeID = atoi(trim(colData));		break;
+	case 1:		getLink_Dbf.SNodeID = atoi(trim(colData));		break;
+	case 2:		getLink_Dbf.ENodeID = atoi(trim(colData));		break;
 	case 3:		getLink_Dbf.RoadType = atoi(trim(colData));		break;
 	case 4:		getLink_Dbf.RoadNum = atoi(trim(colData));		break;
 	case 5:		getLink_Dbf.SubRoadCount = atoi(trim(colData));		break;
@@ -866,10 +956,7 @@ bool CFileVehicle::SetData_Link(int idx, stVehicleLink &getLink_Dbf, char* colDa
 	case 9:		getLink_Dbf.SubRoadNum2 = atoi(trim(colData));		break;
 	case 10:		getLink_Dbf.SubRoadType3 = atoi(trim(colData));		break;
 	case 11:		getLink_Dbf.SubRoadNum3 = atoi(trim(colData));		break;
-	case 12:		getLink_Dbf.LaneCount = atoi(trim(colData));
-		if (getLink_Dbf.LaneCount < 0 || 32 < getLink_Dbf.LaneCount) {
-			ret = false; m_strErrMsg = "lane count value not defined : " + string(colData);
-		} break;
+	case 12:		getLink_Dbf.LaneCount = atoi(trim(colData));	break;
 	case 13:		getLink_Dbf.LinkType = atoi(trim(colData));		break;
 	case 14:		getLink_Dbf.Level = atoi(trim(colData));		break;
 	case 15:		getLink_Dbf.DetailCode1 = atoi(trim(colData));		break;
@@ -884,6 +971,53 @@ bool CFileVehicle::SetData_Link(int idx, stVehicleLink &getLink_Dbf, char* colDa
 	case 24:		getLink_Dbf.Tunnel = atoi(trim(colData));		break;
 	case 25:		getLink_Dbf.UnderPass = atoi(trim(colData));		break;
 	case 26:		getLink_Dbf.LinkLen = atof(trim(colData));		break;
+#else
+	case 0:		getLink_Dbf.MeshID = atoi(trim(colData));	break;
+	case 1:		getLink_Dbf.SNodeID = atoi(trim(colData));		break;
+	case 2:		getLink_Dbf.ENodeID = atoi(trim(colData));		break;
+	case 3:		getLink_Dbf.RoadType = atoi(trim(colData));		break;
+	case 4:		getLink_Dbf.RoadNum = atoi(trim(colData));		break;
+	case 5:		getLink_Dbf.SubRoadCount = atoi(trim(colData));		break;
+	case 6:		getLink_Dbf.SubRoadType1 = atoi(trim(colData));		break;
+	case 7:		getLink_Dbf.SubRoadNum1 = atoi(trim(colData));		break;
+	case 8:		getLink_Dbf.SubRoadType2 = atoi(trim(colData));		break;
+	case 9:		getLink_Dbf.SubRoadNum2 = atoi(trim(colData));		break;
+	case 10:		getLink_Dbf.SubRoadType3 = atoi(trim(colData));		break;
+	case 11:		getLink_Dbf.SubRoadNum3 = atoi(trim(colData));		break;
+	case 12:		getLink_Dbf.LaneCount = atoi(trim(colData));	break;
+	case 13:		getLink_Dbf.LinkType = atoi(trim(colData));		break;
+	case 14:		getLink_Dbf.Level = atoi(trim(colData));		break;
+	case 15:		getLink_Dbf.DetailCode1 = atoi(trim(colData));		break;
+	case 16:		getLink_Dbf.DetailCode2 = atoi(trim(colData));		break;
+	case 17:		getLink_Dbf.DetailCode3 = atoi(trim(colData));		break;
+	case 18:		getLink_Dbf.PassCode = atoi(trim(colData));		break;
+	case 19:		getLink_Dbf.ControlCode = atoi(trim(colData));		break;
+	case 20:		getLink_Dbf.CarOnly = atoi(trim(colData));		break;
+	case 21:		getLink_Dbf.Charge = atoi(trim(colData));		break;
+	case 22:		getLink_Dbf.SafeZone = atoi(trim(colData));		break;
+	case 23:		getLink_Dbf.RoadNameIDX = AddNameDic(colData);	break;
+
+	// 아래로, 경로 최적화 차량 네트워크 v1.0.2
+	case 24:		getLink_Dbf.MaxWeight = atoi(trim(colData));		break;
+	case 25:		getLink_Dbf.MaxHeight = atoi(trim(colData));		break;
+	case 26:		getLink_Dbf.Bridge = atoi(trim(colData));	break;
+	case 27:		getLink_Dbf.Tunnel = atoi(trim(colData));		break;
+	case 28:		getLink_Dbf.OverPass = atoi(trim(colData));		break;
+	case 29:		getLink_Dbf.UnderPass = atoi(trim(colData));		break;
+	case 30:		getLink_Dbf.BusOnly = atoi(trim(colData));		break;
+	case 31:		getLink_Dbf.ExpressMode = atoi(trim(colData));		break;
+	case 32:		getLink_Dbf.ExpressModeSub = atoi(trim(colData));		break;
+	case 33:		getLink_Dbf.LaneInfo = atoi(trim(colData));		break;
+	case 34:		getLink_Dbf.DirInfo = atoi(trim(colData));		break;
+	case 35:		getLink_Dbf.IndicatorLane = atoi(trim(colData));		break;
+	case 36:		getLink_Dbf.IndicatorDir = atoi(trim(colData));		break;
+	case 37:		getLink_Dbf.TollInfo= atoi(trim(colData));		break;
+	case 38:		getLink_Dbf.JunctionInfo = atoi(trim(colData));	break;
+	case 39:		getLink_Dbf.Tpeg = atoi(trim(colData));		break;
+	case 40:		getLink_Dbf.EntryRestriction = atoi(trim(colData));		break;
+	case 41:		getLink_Dbf.LinkLen = atof(trim(colData));		break;
+	case 42:		getLink_Dbf.TTLID_P = atoll(trim(colData));		break; //_tcstoui64_l(strSearch, NULL, 10, NULL) };
+	case 43:		getLink_Dbf.TTLID_N = atoll(trim(colData));		break; //_tcstoui64_l(strSearch, NULL, 10, NULL) };
 #endif // #if defined(USE_P2P_DATA)
 
 	default:	break;
@@ -928,11 +1062,13 @@ const uint16_t getPassCode(IN const uint16_t currentLinkPassCode, IN const int32
 
 static const int maxProcessDepth = 3;
 
-const bool getNextPassCode(IN const KeyID currentLinkId, IN const KeyID nextLinkId, IN const stNodeInfo* pNode, IN const int32_t processDepth, IN CDataManager* pDataMgr)
+const int32_t getNextPassCode(IN const KeyID currentLinkId, IN const KeyID nextLinkId, IN const stNodeInfo* pNode, IN const int32_t processDepth, IN CDataManager* pDataMgr)
 {
-	bool retPass = false;
+	int32_t retPass = PASS_CODE_DISABLE;
 
-	if (currentLinkId.llid != NULL_VALUE && nextLinkId.llid != NULL_VALUE && pNode) {
+	if (pNode && pNode->base.point_type == TYPE_NODE_EDGE) {
+		retPass = PASS_CODE_ENABLE;
+	} else if (currentLinkId.llid != NULL_VALUE && nextLinkId.llid != NULL_VALUE && pNode) {
 		// 링크의 통행 코드
 		int16_t codeLinkPass = 0;
 
@@ -947,7 +1083,7 @@ const bool getNextPassCode(IN const KeyID currentLinkId, IN const KeyID nextLink
 			if (pNode->connnodes[ii] == currentLinkId) {
 				idxCurrentLinkPass = ii;
 			}
-			else if (pNode->connnodes[ii] == nextLinkId) {
+			if (pNode->connnodes[ii] == nextLinkId) {
 				idxNextLinkPass = ii;
 			}
 		}
@@ -966,7 +1102,7 @@ const bool getNextPassCode(IN const KeyID currentLinkId, IN const KeyID nextLink
 			// 통행 코드 확인
 			if (codeLinkPass == 0) {
 				// 전방향 통과 가능
-				retPass = true;
+				retPass = PASS_CODE_ENABLE;
 			}
 			else { // if (codeLinkPass != 0) {
 				   // 현재 링크 패스 인덱스로부터 다음 링크의 패스 인덱스 계산
@@ -975,15 +1111,13 @@ const bool getNextPassCode(IN const KeyID currentLinkId, IN const KeyID nextLink
 					idxCurrentPass %= (pNode->base.connnode_count);
 				}
 
-				if (getPassCode(codeLinkPass, idxCurrentPass) != 2) {
-					retPass = true;
-				}
+				retPass = getPassCode(codeLinkPass, idxCurrentPass);
 			}
 		}		
 	}
 
 	// 지정된 depth 만큼 추적
-	if ((retPass == true) && (pDataMgr != nullptr) && (0 <= processDepth) && (processDepth < maxProcessDepth)) {
+	if ((retPass != PASS_CODE_DISABLE) && (pDataMgr != nullptr) && (0 < processDepth) && (processDepth < maxProcessDepth)) {
 		stLinkInfo* pNextLink = nullptr;
 		stNodeInfo* pNextNode = nullptr;
 		KeyID nextNodeId = { 0 };
@@ -1007,7 +1141,7 @@ const bool getNextPassCode(IN const KeyID currentLinkId, IN const KeyID nextLink
 				nextNodeId = pNextLink->snode_id;
 			}
 			else {
-				retPass = false;
+				retPass = PASS_CODE_DISABLE;
 			}
 
 			if (nextNodeId.llid != 0) {
@@ -1018,7 +1152,7 @@ const bool getNextPassCode(IN const KeyID currentLinkId, IN const KeyID nextLink
 		// 출발지의 방향성으로 설정시, 진출이 불가한 (다음 링크에서 회전 불가 등) 경우 확인
 		if (pNextNode && (pNextNode->base.connnode_count >= 1)) {
 			for (int ii = 0; ii < pNextNode->base.connnode_count; ii++) {
-				if ((retPass = getNextPassCode(nextLinkId, pNextNode->connnodes[ii], pNextNode, processDepth + 1)) == true) {
+				if ((retPass = getNextPassCode(nextLinkId, pNextNode->connnodes[ii], pNextNode, processDepth + 1)) != PASS_CODE_DISABLE) {
 					break;
 				}
 			} // for
@@ -1029,9 +1163,43 @@ const bool getNextPassCode(IN const KeyID currentLinkId, IN const KeyID nextLink
 }
 
 
-const bool getPrevPassCode(IN const KeyID currentLinkId, IN const KeyID prevLinkId, IN const stNodeInfo* pNode, IN const int32_t processDepth, IN CDataManager* pDataMgr)
+// 대상 노드의 링크가 진출 가능한지 확인 
+const int32_t getNextPassCode(IN const stNodeInfo* pNode, IN const KeyID nextLinkId, IN CDataManager* pDataMgr)
 {
-	bool retPass = false;
+	int32_t retPass = PASS_CODE_DISABLE;
+
+	if (nextLinkId.llid != NULL_VALUE && pNode) {
+		stLinkInfo* pNextLink = nullptr;
+
+		for (int ii = 0; ii < pNode->base.connnode_count; ii++) {
+			pNextLink = pDataMgr->GetLinkDataById(nextLinkId, pNode->base.node_type);
+
+			if (pNextLink != nullptr) {
+				// 양방의 경우, 현재 링크 노드의 반대 노드 구하기
+				// 일방의 경우에는 현재 링크가 다음 노드로 진입 가능한지 여부 확인
+				if (pNextLink->veh.pass_code == 1) { // 양방향
+					retPass = PASS_CODE_ENABLE; //진출 가능
+				}
+				else if ((pNextLink->veh.pass_code == 5) && (pNextLink->snode_id == pNode->node_id)) { // 정
+					retPass = PASS_CODE_ENABLE; //진출 가능
+				}
+				else if ((pNextLink->veh.pass_code == 6) && (pNextLink->enode_id == pNode->node_id)) { // 역
+					retPass = PASS_CODE_ENABLE; //진출 가능
+				}
+				else {
+					retPass = PASS_CODE_DISABLE;
+				}
+			}
+		}
+	}
+
+	return retPass;
+}
+
+
+const int32_t getPrevPassCode(IN const KeyID currentLinkId, IN const KeyID prevLinkId, IN const stNodeInfo* pNode, IN const int32_t processDepth, IN CDataManager* pDataMgr)
+{
+	int32_t retPass = PASS_CODE_DISABLE;
 
 	if (currentLinkId.llid != NULL_VALUE && prevLinkId.llid != NULL_VALUE && pNode) {
 		// 링크의 통행 코드
@@ -1046,10 +1214,10 @@ const bool getPrevPassCode(IN const KeyID currentLinkId, IN const KeyID prevLink
 
 		for (int ii = 0; ii < pNode->base.connnode_count; ii++) {
 			if (pNode->connnodes[ii] == prevLinkId) {
-				idxCurrentLinkPass = ii;
-			}
-			else if (pNode->connnodes[ii] == currentLinkId) {
 				idxPrevLinkPass = ii;
+			}
+			if (pNode->connnodes[ii] == currentLinkId) {
+				idxCurrentLinkPass = ii;
 			}
 		}
 
@@ -1059,32 +1227,30 @@ const bool getPrevPassCode(IN const KeyID currentLinkId, IN const KeyID prevLink
 		else {
 			// 통행코드는 자신의 현재 위치(링크) 다음 방향 값을 첫 인덱스를 시작해 자신을 가장 마지막 인덱스로 구성함.
 			// 그러나 요청되는 다음 인덱스는 노드 연결 구성시 정북 기준 순으로 저장되므로 요청된 인덱스의 순서 변경이 필요함
-			idxLinkPassOffset = (pNode->base.connnode_count - 1) - idxCurrentLinkPass;
+			idxLinkPassOffset = (pNode->base.connnode_count - 1) - idxPrevLinkPass;
 
-			codeLinkPass = pNode->conn_attr[idxCurrentLinkPass];
+			codeLinkPass = pNode->conn_attr[idxPrevLinkPass];
 
 
 			// 통행 코드 확인
 			if (codeLinkPass == 0) {
 				// 전방향 통과 가능
-				retPass = true;
+				retPass = PASS_CODE_ENABLE;
 			}
 			else { // if (codeLinkPass != 0) {
 				   // 현재 링크 패스 인덱스로부터 다음 링크의 패스 인덱스 계산
-				int idxCurrentPass = (idxLinkPassOffset + idxPrevLinkPass);
+				int idxCurrentPass = (idxLinkPassOffset + idxCurrentLinkPass);
 				if (idxCurrentPass >= pNode->base.connnode_count) {
 					idxCurrentPass %= (pNode->base.connnode_count);
 				}
 
-				if (getPassCode(codeLinkPass, idxCurrentPass) != 2) {
-					retPass = true;
-				}
+				retPass = getPassCode(codeLinkPass, idxCurrentPass);
 			}
 		}
 	}
 
 	// 지정된 depth 만큼 역 추적
-	if ((retPass == true) && (pDataMgr != nullptr) && (0 <= processDepth) && (processDepth < maxProcessDepth)) {
+	if ((retPass != PASS_CODE_DISABLE) && (pDataMgr != nullptr) && (0 < processDepth) && (processDepth < maxProcessDepth)) {
 		stLinkInfo* pPrevLink = nullptr;
 		stNodeInfo* pPrevNode = nullptr;
 		KeyID prevNodeId = { 0 };
@@ -1104,7 +1270,7 @@ const bool getPrevPassCode(IN const KeyID currentLinkId, IN const KeyID prevLink
 			} else if ((pPrevLink->veh.pass_code == 6) && (pPrevLink->snode_id == pNode->node_id)) { // 역
 				prevNodeId = pPrevLink->enode_id;
 			} else {
-				retPass = false;
+				retPass = PASS_CODE_DISABLE;
 			}
 
 			if (prevNodeId.llid != 0) {
@@ -1115,11 +1281,45 @@ const bool getPrevPassCode(IN const KeyID currentLinkId, IN const KeyID prevLink
 		// 목적지의 방향성으로 설정시, 진입이 불가한 (이전 링크에서 회전 불가 등) 경우 확인
 		if (pPrevNode && (pPrevNode->base.connnode_count >= 1)) {
 			for (int ii = 0; ii < pPrevNode->base.connnode_count; ii++) {
-				if ((retPass = getPrevPassCode(prevLinkId, pPrevNode->connnodes[ii], pPrevNode, processDepth + 1)) == true) {
+				if ((retPass = getPrevPassCode(prevLinkId, pPrevNode->connnodes[ii], pPrevNode, processDepth + 1)) != PASS_CODE_DISABLE) {
 					break;
 				}
 			} // for
 		}		
+	}
+
+	return retPass;
+}
+
+
+// 대상 노드로 이전 링크가 진입 가능한지 확인 
+const int32_t getPrevPassCode(IN const stNodeInfo* pNode, IN const KeyID prevLinkId, IN CDataManager* pDataMgr)
+{
+	int32_t retPass = PASS_CODE_DISABLE;
+
+	if (prevLinkId.llid != NULL_VALUE && pNode) {
+		stLinkInfo* pPrevLink = nullptr;
+
+		for (int ii = 0; ii < pNode->base.connnode_count; ii++) {
+			pPrevLink = pDataMgr->GetLinkDataById(prevLinkId, pNode->base.node_type);
+
+			if (pPrevLink != nullptr) {
+				// 양방의 경우, 현재 링크 노드의 반대 노드 구하기
+				// 일방의 경우에는 다음 링크가 현재 노드로 진입 가능한지 여부 확인
+				if (pPrevLink->veh.pass_code == 1) { // 양방향
+					retPass = PASS_CODE_ENABLE; //진입 가능
+				}
+				else if ((pPrevLink->veh.pass_code == 5) && (pPrevLink->enode_id == pNode->node_id)) { // 정
+					retPass = PASS_CODE_ENABLE; //진입 가능
+				}
+				else if ((pPrevLink->veh.pass_code == 6) && (pPrevLink->snode_id == pNode->node_id)) { // 역
+					retPass = PASS_CODE_ENABLE; //진입 가능
+				}
+				else {
+					retPass = PASS_CODE_DISABLE; // 진입 불가
+				}
+			}
+		}
 	}
 
 	return retPass;

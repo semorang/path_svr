@@ -8,9 +8,10 @@
 #ifndef __EVALUATOR__
 #include "evaluator.h"
 #endif
-#include <math.h>
-#include <iostream>
-using namespace std;
+
+// #include <math.h>
+// #include <iostream>
+// using namespace std;
 
 TEvaluator::TEvaluator() {
 	Ncity = 0;
@@ -19,15 +20,15 @@ TEvaluator::TEvaluator() {
 
 TEvaluator::~TEvaluator() {}
 
-void TEvaluator::setInstance(vector<stCity>& vt_cities, IN const RouteTable** ppResultTables) {
-	Ncity = vt_cities.size();
+void TEvaluator::setInstance(const vector<stWaypoints>& vtCities, const vector<vector<stDistMatrix>>& vtDistMatrix, const int compareType) {
+	Ncity = vtCities.size();
 	fNearNumMax = Ncity - 1;
 	x.resize(Ncity);
 	y.resize(Ncity);
 	vector<int> checkedN(Ncity);
 	for (int i = 0; i < Ncity; ++i) {
-		x[i] = vt_cities[i].x * 1000;
-		y[i] = vt_cities[i].y * 1000;
+		x[i] = vtCities[i].x * 1000;
+		y[i] = vtCities[i].y * 1000;
 	} //for
 
 	fEdgeDis.clear();
@@ -44,15 +45,27 @@ void TEvaluator::setInstance(vector<stCity>& vt_cities, IN const RouteTable** pp
 
 
 #if 1 // using provide table
-	std::cout << fEdgeDis.size() << " " << fEdgeDis[0].size() << std::endl;
+	// std::cout << fEdgeDis.size() << " " << fEdgeDis[0].size() << std::endl;
+	printf("%d %d\n", fEdgeDis.size(), fEdgeDis[0].size());
 	for (int i = 0; i < Ncity; ++i) {
 		for (int j = 0; j < Ncity; ++j) {
-			if (ppResultTables/* && ppResultTables[i] && ppResultTables[i][j]*/) {
-				if (i < j) 
-					fEdgeDis[i][j] = ppResultTables[i][j].nTotalDist;
-				else 
-					fEdgeDis[i][j] = ppResultTables[j][i].nTotalDist;
-				//fEdgeDis[i][j] = ppResultTables[i][j].nTotalTime;
+			if (!vtDistMatrix.empty()/* && ppResultTables[i] && ppResultTables[i][j]*/) {
+				if (compareType == TYPE_TSP_VALUE_DIST) {
+					if (i < j) 
+						fEdgeDis[i][j] = vtDistMatrix[i][j].nTotalDist;
+					else 
+						fEdgeDis[i][j] = vtDistMatrix[j][i].nTotalDist;
+				} else if (compareType == TYPE_TSP_VALUE_TIME) {
+					if (i < j) 
+						fEdgeDis[i][j] = vtDistMatrix[i][j].nTotalTime;
+					else 
+						fEdgeDis[i][j] = vtDistMatrix[j][i].nTotalTime;
+				} else {
+					if (i < j) 
+						fEdgeDis[i][j] = vtDistMatrix[i][j].dbTotalCost;
+					else 
+						fEdgeDis[i][j] = vtDistMatrix[j][i].dbTotalCost;
+				}
 			}
 			else {
 				fEdgeDis[i][j] = (int)(sqrt((x[i] - x[j])*(x[i] - x[j]) + (y[i] - y[j])*(y[i] - y[j])) + 0.5);

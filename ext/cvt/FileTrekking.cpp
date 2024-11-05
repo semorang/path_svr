@@ -21,15 +21,14 @@ static char THIS_FILE[] = __FILE__;
 
 CFileTrekking::CFileTrekking()
 {
-	m_nFileType = TYPE_DATA_TREKKING;
+	m_nDataType = TYPE_DATA_TREKKING;
+	m_nFileType = TYPE_EXEC_NETWORK;
 }
 
 CFileTrekking::~CFileTrekking()
 {
 
 }
-
-static const uint32_t g_cntLogPrint = 100000;
 
 bool CFileTrekking::ParseData(IN const char* fname)
 {
@@ -80,7 +79,7 @@ bool CFileTrekking::ParseData(IN const char* fname)
 				LOG_TRACE(LOG_ERROR, "can't get dbf filed info, idx : %d ", ii);
 				return false;
 			}
-			else if (strcmp(szLinkField[ii], trim(fieldInfo.szName)) != 0) {
+			else if (strcmp(szLinkField[ii], strupper(trim(fieldInfo.szName))) != 0) {
 				LOG_TRACE(LOG_ERROR, "dbf field name not matched the expected name, filedName:%s vs exprectedName:%s", fieldInfo.szName, szLinkField[ii]);
 				return false;
 			}
@@ -106,7 +105,7 @@ bool CFileTrekking::ParseData(IN const char* fname)
 				LOG_TRACE(LOG_ERROR, "can't get dbf filed info, idx : %d ", ii);
 				return false;
 			}
-			else if (strcmp(szLinkField[ii], trim(fieldInfo.szName)) != 0) {
+			else if (strcmp(szLinkField[ii], strupper(trim(fieldInfo.szName))) != 0) {
 				LOG_TRACE(LOG_ERROR, "dbf field name not matched the expected name, filedName:%s vs exprectedName:%s", fieldInfo.szName, szLinkField[ii]);
 				return false;
 			}
@@ -167,16 +166,14 @@ bool CFileTrekking::ParseData(IN const char* fname)
 		} // for
 
 
-#if defined(_USE_TEST_MESH)
-		bool isContinue = true;
-		for (const auto& item : g_arrTestMesh) {
-			if ((nShpType == 1 && item == node.MeshID) || (nShpType == 2 && item == link.MeshID)) {
-				isContinue = false;
-				break;
+		// 테스트 메쉬가 있으면 정의된 메쉬만 확인하자
+		if (g_isUseTestMesh && !g_arrTestMesh.empty()) {
+			if ((nShpType == 1) && (g_arrTestMesh.find(node.MeshID) == g_arrTestMesh.end())) {
+				continue;
+			} else if ((nShpType == 2) && (g_arrTestMesh.find(link.MeshID) == g_arrTestMesh.end())) {
+				continue;
 			}
 		}
-		if (isContinue) continue;
-#endif
 
 
 		if (nShpType == 1) {
@@ -189,23 +186,26 @@ bool CFileTrekking::ParseData(IN const char* fname)
 			pNode->edgenode_id.nid = node.AdjEdgeNode;
 			pNode->coord = node.NodeCoord;
 
-			pNode->base.node_type = TYPE_DATA_TREKKING;
+			pNode->base.node_type = TYPE_NODE_DATA_TREKKING;
 			pNode->base.point_type = node.NodeType;
 			pNode->base.connnode_count = node.ConnectNum;
 
-			pNode->tre.z_value = node.Zvalue;
+			pNode->trk.z_value = node.Zvalue;
 			//for (int ii = 0; ii < pNode->connnode_count; ii++)
 			//{
 			//	pNode->connnodes[ii].tile_id = node.MeshID;
 			//	pNode->connnodes[ii].nid = node.ConnNode[ii];
 			//}
 
+			// ID를 그대로 사용
+			/*
 			// 원래의 ID와 변경된 IDX 의 매칭 테이블
 			m_mapNodeIndex.insert(pair<uint64_t, uint32_t>({ pNode->node_id.llid, m_nNodeIdx }));
 
 			// 노드 ID를 IDX로 변경
 			pNode->node_id.nid = m_nNodeIdx++; 
-
+			*/
+			
 			static uint32_t s_nMaxConnNodeNum = 0;
 			if (s_nMaxConnNodeNum < node.ConnectNum) {
 				s_nMaxConnNodeNum = node.ConnectNum;
@@ -215,7 +215,7 @@ bool CFileTrekking::ParseData(IN const char* fname)
 
 			m_mapNode.insert({ pNode->node_id.llid, pNode });
 
-			if (m_nNodeIdx % g_cntLogPrint == 0) {
+			if (m_nNodeIdx++ % g_cntLogPrint == 0) {
 				LOG_TRACE(LOG_DEBUG, "LOG, node data processing, %lld / %lld", m_nNodeIdx, nRecCount);
 			}
 		}
@@ -234,8 +234,8 @@ bool CFileTrekking::ParseData(IN const char* fname)
 			//pLink->vtPts.assign(link.LinkVertex.begin(), link.LinkVertex.end());
 			pLink->setVertex(&link.LinkVertex.front(), link.LinkVertex.size());
 
-			pLink->base.link_type = TYPE_DATA_TREKKING;
-			pLink->tre.course_type = link.CourseType;
+			pLink->base.link_type = TYPE_LINK_DATA_TREKKING;
+			pLink->trk.course_type = link.CourseType;
 			if (link.RoadInfo[0] > 0) {
 				for (int ii = 0; ii < 6; ii++) {
 					if (link.RoadInfo[ii] > 0) {
@@ -247,25 +247,25 @@ bool CFileTrekking::ParseData(IN const char* fname)
 						//{
 						//	int test = 0;
 						//}
-						pLink->tre.road_info |= (1 << (link.RoadInfo[ii] - 1));
+						pLink->trk.road_info |= (1 << (link.RoadInfo[ii] - 1));
 					}
 				}
 			}
 			else {
-				pLink->tre.road_info = 0;
+				pLink->trk.road_info = 0;
 			}
 			if (link.Diff > 0) {
-				pLink->tre.diff = link.Diff;
+				pLink->trk.diff = link.Diff;
 			}
 			else {
-				pLink->tre.diff = 0;
+				pLink->trk.diff = 0;
 			}
-			pLink->tre.diff = link.Diff;
+			pLink->trk.diff = link.Diff;
 			if (link.Popular > 0) {
-				pLink->tre.popular = link.Popular;
+				pLink->trk.pop_grade = link.Popular;
 			}
 			else {
-				pLink->tre.popular = 0;
+				pLink->trk.pop_grade = 10;
 			}
 			
 			m_mapLink.insert({ pLink->link_id.llid, pLink });
@@ -304,6 +304,8 @@ bool CFileTrekking::GenServiceData()
 	LOG_TRACE(LOG_DEBUG, "LOG, start, link s/e node indexing");
 	LOG_TRACE(LOG_DEBUG, "LOG, start, node connected link indexing");
 
+	// 구획변경점을 기본 사용하기에 이제는 적용하지 않는다.
+#if 0
 	for (itLink = m_mapLink.begin(); itLink != m_mapLink.end(); itLink++) {
 
 		// snode ID를 IDX로 변경
@@ -314,8 +316,7 @@ bool CFileTrekking::GenServiceData()
 			bool findnode = false;
 			if ((itNode = m_mapNode.find(itLink->second->snode_id.llid)) != m_mapNode.end()) {
 
-				for (uint32_t ii = 0; ii < itNode->second->base.connnode_count; ii++)
-				{
+				for (uint32_t ii = 0; ii < itNode->second->base.connnode_count; ii++) {
 					if (itNode->second->connnodes[ii].llid == 0) {
 						itNode->second->connnodes[ii] = itLink->second->link_id;
 
@@ -323,26 +324,24 @@ bool CFileTrekking::GenServiceData()
 						break;
 					}
 				}
-			}
-			else {
+			} else {
 				LOG_TRACE(LOG_ERROR, "Failed, can't find node info what match with link snode, mesh:%d, link:%d, snode:%d", itLink->second->snode_id.tile_id, itLink->second->link_id.nid, itLink->second->snode_id.nid);
 				continue;
 			}
 
-			if (!findnode)
-			{
+			if (!findnode) {
 				LOG_TRACE(LOG_ERROR, "Failed, can't find connected node info what match with link snode, mesh:%d, link:%d, snode:%d", itLink->second->snode_id.tile_id, itLink->second->link_id.nid, itLink->second->snode_id.nid);
 				continue;
 			}
-		}
-		else {
-	#if !defined(_USE_TEST_MESH)
-			LOG_TRACE(LOG_ERROR, "Failed, can't find snode, mesh:%d, node:%d", itLink->second->snode_id.tile_id, itLink->second->enode_id.nid);
-	#endif
+		} else {
+			// 테스트 메쉬에서는 노드 끊김이 있을 수 있으니 무시하자
+			if (!g_isUseTestMesh) {
+				LOG_TRACE(LOG_ERROR, "Failed, can't find snode, mesh:%d, node:%d", itLink->second->snode_id.tile_id, itLink->second->enode_id.nid);
+			}
 			itLink->second->snode_id.llid = 0;
 		}
 
-		
+
 
 		// enode ID를 IDX로 변경
 		if ((itNodeIndex = m_mapNodeIndex.find(itLink->second->enode_id.llid)) != m_mapNodeIndex.end()) {
@@ -352,8 +351,7 @@ bool CFileTrekking::GenServiceData()
 			bool findnode = false;
 			if ((itNode = m_mapNode.find(itLink->second->enode_id.llid)) != m_mapNode.end()) {
 
-				for (int ii = 0; ii < itNode->second->base.connnode_count; ii++)
-				{
+				for (int ii = 0; ii < itNode->second->base.connnode_count; ii++) {
 					if (itNode->second->connnodes[ii].llid == 0) {
 						itNode->second->connnodes[ii] = itLink->second->link_id;
 
@@ -361,25 +359,24 @@ bool CFileTrekking::GenServiceData()
 						break;
 					}
 				}
-			}
-			else {
+			} else {
 				LOG_TRACE(LOG_ERROR, "Failed, can't find node info what match with link enode, mesh:%d, link:%d, enode:%d", itLink->second->enode_id.tile_id, itLink->second->link_id.nid, itLink->second->enode_id.nid);
 				continue;
 			}
 
-			if (!findnode)
-			{
+			if (!findnode) {
 				LOG_TRACE(LOG_ERROR, "Failed, can't find node info what match with link enode, mesh:%d, link:%d, enode:%d", itLink->second->enode_id.tile_id, itLink->second->link_id.nid, itLink->second->enode_id.nid);
 				continue;
 			}
-		}
-		else {
-#if !defined(_USE_TEST_MESH)
-			LOG_TRACE(LOG_ERROR, "Failed, can't find enode, mesh:%d, node:%d", itLink->second->enode_id.tile_id, itLink->second->enode_id.nid);
-#endif
+		} else {
+			// 테스트 메쉬에서는 노드 끊김이 있을 수 있으니 무시하자
+			if (!g_isUseTestMesh) {
+				LOG_TRACE(LOG_ERROR, "Failed, can't find enode, mesh:%d, node:%d", itLink->second->enode_id.tile_id, itLink->second->enode_id.nid);
+			}
 			itLink->second->enode_id.llid = 0;
 		}
 	}
+#endif
 
 
 
@@ -390,8 +387,8 @@ bool CFileTrekking::GenServiceData()
 		if (itNode->second->edgenode_id.llid <= 0) {
 			continue;
 		}
-
-		// 구획 변교점 노드 ID를 IDX로 변경
+		// 구획 변교점 노드 ID를 IDX로 변경, // 구획변경점을 기본 사용하기에 이제는 적용하지 않는다.
+#if 0
 		if ((itNodeIndex = m_mapNodeIndex.find(itNode->second->edgenode_id.llid)) != m_mapNodeIndex.end()) {
 			itNode->second->edgenode_id.nid = itNodeIndex->second;
 		}
@@ -399,6 +396,7 @@ bool CFileTrekking::GenServiceData()
 			LOG_TRACE(LOG_ERROR, "Failed, can't find edge node, mesh:%d, node:%d", itNode->second->edgenode_id.tile_id, itNode->second->edgenode_id.nid);
 			continue;
 		}
+#endif
 	}
 
 	
@@ -483,12 +481,12 @@ bool CFileTrekking::GenServiceData()
 		LOG_TRACE(LOG_DEBUG, "LOG, link vertex re-matching with s/e node total count:%d", cntReversLinkVtx);
 	}
 	
+	int32_t cntProc = 0;
 
-
-	// 링크 결합
+	// 링크 결합, 구획변경점을 기본 사용하기에 이제는 링크 결합하지 않는다.
+#if 0
 	LOG_TRACE(LOG_DEBUG, "LOG, start, link merge");
 
-	int32_t cntProc = 0;
 	for (itLink = m_mapLink.begin(); itLink != m_mapLink.end(); itLink++)
 	{
 		MergeLink(itLink->second, &m_mapLink, &m_mapNode);
@@ -497,7 +495,7 @@ bool CFileTrekking::GenServiceData()
 			LOG_TRACE(LOG_DEBUG, "LOG, processing, link merge: %d/%d", cntProc, m_mapLink.size());
 		}
 	}
-
+#endif
 
 
 	// 각도 설정
@@ -603,33 +601,10 @@ bool CFileTrekking::Initialize()
 	return CFileBase::Initialize();
 }
 
+
 void CFileTrekking::Release()
 {
 	CFileBase::Release();
-}
-
-
-bool CFileTrekking::OpenFile(IN const char* szFilePath)
-{
-	return CFileBase::OpenFile(szFilePath);
-}
-
-
-bool CFileTrekking::SaveData(IN const char* szFilePath)
-{
-	char szFileName[MAX_PATH] = { 0, };
-	sprintf(szFileName, "%s/%s.%s", szFilePath, g_szTypeTitle[TYPE_DATA_TREKKING], g_szTypeExec[TYPE_DATA_TREKKING]);
-
-	return CFileBase::SaveData(szFileName);
-}
-
-
-bool CFileTrekking::LoadData(IN const char* szFilePath)
-{
-	char szFileName[MAX_PATH] = { 0, };
-	sprintf(szFileName, "%s/%s.%s", szFilePath, g_szTypeTitle[TYPE_DATA_TREKKING], g_szTypeExec[TYPE_DATA_TREKKING]);
-
-	return CFileBase::LoadData(szFileName);
 }
 
 

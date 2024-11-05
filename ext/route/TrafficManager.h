@@ -10,11 +10,32 @@
 #include "DataManager.h"
 
 #pragma pack (push, 1)
-typedef struct {
-	uint32_t kslink_id;
+
+typedef enum
+{
+	TYPE_TRAFFIC_TTL_ID = 10001,
+	TYPE_TRAFFIC_KS_ID = 10003,
+};
+
+typedef struct
+{
 	uint32_t timestamp;
-	uint8_t bySpeed;
-}stRealtimeTrafficDataItem;
+	uint32_t type;
+	uint32_t size;
+}stTrafficDataHeader;
+
+typedef struct
+{
+	uint64_t id;
+	uint8_t speed;
+}stTrafficTTLItem;
+
+typedef struct
+{
+	uint32_t id;
+	uint32_t time;
+	uint8_t speed;
+}stTrafficKSItem;
 #pragma pack (pop)
 
 
@@ -30,10 +51,7 @@ protected:
 
 private:
 	uint64_t currentTimestamp;
-
 	MapTraffic* m_pMapTraffic;
-
-	std::unordered_map<uint32_t, stRealtimeTrafficDataItem> umap_RealTrafficInfo;
 
 protected:
 	
@@ -47,10 +65,11 @@ public:
 
 	void SetDataMgr(IN CDataManager* pDataMgr);
 
-	size_t LoadData(IN const char* szFileName);
-	size_t Update(IN const uint64_t timestamp);
+	bool LoadData(IN const char* szFilePath);
+	size_t Update(IN const char* szFileName, IN const int type, IN const uint32_t timestamp = 0);
 
-
-
+private:
+	bool ParsingTTL(IN FILE* fp, IN const int32_t size, IN OUT uint32_t& timestamp);
+	bool ParsingKS(IN FILE* fp, IN const int32_t size, IN OUT uint32_t& timestamp);
 };
 

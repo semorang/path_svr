@@ -5,14 +5,14 @@
  *       author: Shujia Liu
  */
 
-#ifndef __Cross__
-#define __Cross__
+#ifndef __CROSS__
+#define __CROSS__
 
 #ifndef __RAND__
 #include "randomize.h"
 #endif
 
-#ifndef __Sort__
+#ifndef __SORT__
 #include "sort.h"
 #endif
 

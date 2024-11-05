@@ -70,9 +70,14 @@ exports.optimalposition = function(req) {
     let lat = req.query.lat;
     let type = 0;
     let count = 0;
-    
     let expand = 0;
-    if (req.query.type != undefined) {
+    let option = 0;
+    
+    if (req.query.type == undefined) {
+        // ÌÉùÏãúÏäπÌïòÏ∞® - Ï∞®ÎüâÏ∂úÏûÖÍµ¨ Îßå ÏÑ†ÌÉù
+        // 2,3,1,0; 
+        type = 0x00010302; // Î∞îÏù¥Ìä∏ Í±∞Íæ∏Î°ú
+    } else {
         type = parseInt(req.query.type)
     }
 
@@ -82,6 +87,10 @@ exports.optimalposition = function(req) {
 
     if (req.query.expand != undefined) {
         expand = parseInt(req.query.expand)
+    }
+
+    if (req.query.road != undefined) {
+        option = parseInt(req.query.road);
     }
 
     if (lng == undefined || lat == undefined) {
@@ -95,7 +104,7 @@ exports.optimalposition = function(req) {
         }
     }
 
-    let res = addon.getoptimalposition(parseFloat(lng), parseFloat(lat), type, count, expand);
+    let res = addon.getoptimalposition(parseFloat(lng), parseFloat(lat), type, count, expand, option);
     res = JSON.parse(res);
 
     if (res.result_code == 0) {
@@ -121,237 +130,69 @@ exports.optimalposition = function(req) {
 }
 
 
-exports.doroute = function(req, option) {
+// Îã®Ïùº Í≤ΩÎ°ú ÏòµÏÖòÏùÑ ÏßÄÏõê
+exports.doroute = function(key, req, expend) {
     addon.logout("start routing");
 
     var querystring = require('querystring');
+    var ret;
 
-    const id = req.query.id;
-    const departure = req.query.start;
-    const destination = req.query.end;
-    const waypoint = req.query.via;
-    const route_option = (req.query.option === undefined) ? 0 : parseInt(req.query.option);
-    const is_sum = (option == 'summary') ? true : false;
-    const is_view = (option == 'view') ? true : false;
-    const target = (req.query.target === undefined) ? '' : req.query.target;
+    // ÏÇ¨Ïö©Ïûê ÌÇ§ ÌôïÏù∏
+    var user = auth.checkAuth(key);
+    if (user === null || user.length <= 0) {
+        var header = {
+            isSuccessful: false,
+            resultCode: codes.ERROR_CODES.RESULT_APPKEY_ERROR,
+            resultMessage: codes.getErrMsg(codes.ERROR_CODES.RESULT_APPKEY_ERROR)
+        };
+    
+        ret = {
+            header: header,
+            user_info: req,
+        };
 
-    var header = {
+        logout("key error: " + JSON.stringify(ret));
+        return ret;
+    }
+
+    logout("user: " + user + ", req: " + JSON.stringify(req));
+
+    const id = req.id;
+    let departure = req.start;
+    let destination = req.end;
+    const waypoint = req.via;
+    const waypoints = req.vias;
+    const option = (req.option === undefined) ? 0 : parseInt(req.option);
+    const avoid = (req.avoid === undefined) ? 0 : parseInt(req.avoid);
+    const mobility = (req.mobility === undefined) ? 0 : parseInt(req.mobility);
+    const is_sum = (expend !== undefined && expend == 'summary') ? true : false;
+    const is_optimal = (req.optimal !== undefined && req.optimal != 'false') ? true : false; // ÏµúÏ†ÅÏßÄÏ†ê ÏÇ¨Ïö©, p2pÎäî Î¨¥Ïãú
+    const target = (req.target === undefined) ? '' : req.target;
+    const typeMatch = (target === 'kakaovx') ? 6 : 0;
+    const is_junction = (req.junction !== undefined && req.junction == 'true') ? true : false;
+
+    // header
+    var ret_header = {
         isSuccessful: false,
         resultCode: codes.ERROR_CODES.ROUTE_RESULT_FAILED,
         resultMessage: ""
     };
     
-    var user_info = {
-        id: id,
-        option: route_option
-    };
-
-    var route = {
-        data: new Array,
-    }
+    // user info
+    var ret_user_info = req;
 
     var ret = {
-        header: header,
-        user_info: user_info,
-        route: route,
+        header: ret_header,
+        user_info: ret_user_info,
     };
 
 
-    // √‚πﬂ¡ˆ
-    if (departure == undefined ||
-        destination == undefined) {
-            logout("client request query not correct" + util.inspect(req.query, false, null, true));
-            ret.header.isSuccessful = false;
-            ret.header.resultCode = codes.ERROR_CODES.ROUTE_RESULT_FAILED_WRONG_PARAM;
-            ret.header.resultMessage = codes.getErrMsg(ret.result_code);
-            logout("route result : failed, msg " + ret.header.resultMessage);
-            return ret;
-        }
-
-    // addon.setdeparture(126.92644, 37.57990);
-    // addon.setdestination(126.94755,37.51116);
-
-    // addon.logout("set departure");
-    let coordStart = departure.split(',');
-    if (coordStart.length != 2) {
-        logout("start location query not correct" + util.inspect(coordStart, false, null, true));
-        ret.header.isSuccessful = false;
-        ret.header.resultCode = codes.ERROR_CODES.ROUTE_RESULT_FAILED_SET_START;
-        ret.header.resultMessage = codes.getErrMsg(ret.result_code);
-        logout("route result : failed, msg " + ret.header.resultMessage);
-        return ret;
-    }
-    addon.setdeparture(parseFloat(coordStart[0]), parseFloat(coordStart[1]), true);
-
-    // µµ¬¯¡ˆ
-    // addon.logout("set destination");
-    let coordEnd = destination.split(',');
-    if (coordEnd.length != 2) {
-        logout("end location query not correct" + util.inspect(coordEnd, false, null, true));
-        ret.header.isSuccessful = false;
-        ret.header.resultCode = codes.ERROR_CODES.ROUTE_RESULT_FAILED_SET_END;
-        ret.header.resultMessage = codes.getErrMsg(ret.result_code);
-        logout("route result : failed, msg " + ret.header.resultMessage);
-        return ret;
-    }
-    addon.setdestination(parseFloat(coordEnd[0]), parseFloat(coordEnd[1]), true);
-
-    // ∞Ê¿Ø¡ˆ
-    let coordVia;
-    if (waypoint != undefined) {
-        coordVia = waypoint.split(',');
-        if (coordVia.length != 2) {
-            logout("via location query not correct" + util.inspect(coordVia, false, null, true));
-            ret.header.isSuccessful = false;
-            ret.header.resultCode = codes.ERROR_CODES.ROUTE_RESULT_FAILED_SET_VIA;
-            ret.header.resultMessage = codes.getErrMsg(ret.result_code);
-            logout("route result : failed, msg " + ret.header.resultMessage);
-            return ret;
-        }
-        addon.setwaypoint(parseFloat(coordVia[0]), parseFloat(coordVia[1]), true);
-    }
-
-    ret.user_info.start = { x: parseFloat(coordStart[0]), y: parseFloat(coordStart[1]) }
-    ret.user_info.end =  { x: parseFloat(coordEnd[0]), y: parseFloat(coordEnd[1]) }
-    if (coordVia != undefined) {
-        ret.user_info.via = { x: parseFloat(coordVia[0]), y: parseFloat(coordVia[1]) }
-    }
-
-
-    // addon.logout("do routing");
-    var res = addon.doroute(parseInt(route_option), 0);
-    logout("find result : " + res.result + ", msg : " + res.msg);
-
-    if (res.result == 0) {
-        if (is_sum) {
-            res = addon.getsummary();
-        } else if ((target === "inavi") || (target === "p2p")) {
-            res = addon.getmultiroute_for_inavi();
-            res = JSON.parse(res);
-        } else if (target === "kakaovx") {
-            res = addon.getroute(2); // 2:for kakaovx
-        } else if (is_view) {
-            res = addon.getview();
-        } else {
-            res = addon.getroute();
-            res = JSON.parse(res);
-        }
-        
-        ret.header.isSuccessful = true;
-        ret.header.resultCode = res.result_code;
-        ret.header.resultMessage = codes.getErrMsg(ret.header.resultCode);
-
-        if (is_sum) {
-            ;
-        } else if ((target === "inavi") || (target === "p2p")) {
-            ret.route.data.push(res.routes[0]);
-            logout("route count : " + res.routes.length + ", paths : " + res.routes[0].paths.length);
-        } else if (is_view) {
-            ret.route.data.push(res.routes);
-        } else {
-            ret.route.data.push(res.routes);
-        }
-
-        ret.header.isSuccessful = true;
-        ret.header.resultCode = res.result_code;
-        ret.header.resultMessage = codes.getErrMsg(ret.header.resultCode);
-    }
-    else {
-        ret.header.isSuccessful = false;
-        ret.header.resultCode = res.result;
-        ret.header.resultMessage = codes.getErrMsg(ret.header.resultCode);
-        
-        logout("routing failed : " + ret.header.resultCode + ", msg : " + ret.header.resultMessage);
-    }
-
-    addon.releaseroute();
-
-    addon.logout("end routing");
-
-    return ret;
-}
-
-exports.domultiroute = function(key, req, option) {
-    addon.logout("start multi routing");
-
-    var querystring = require('querystring');
-
-    const id = req.query.id;
-    let departure = req.query.start;
-    let destination = req.query.end;
-    const waypoint = req.query.via;
-    const waypoints = req.query.vias;
-    const route_option = (req.query.option === undefined) ? -1 : parseInt(req.query.option);
-    const is_sum = (option == 'summary') ? true : false;
-    const is_view = (option == 'view') ? true : false;
-    const is_optimal = (route_option !== 8) ? true : false; // √÷¿˚¡ˆ¡° ªÁøÎ, p2p¥¬ π´Ω√
-    const target = (req.query.target === undefined) ? '' : req.query.target;
-    
-    var header = {
-        isSuccessful: false,
-        resultCode: codes.ERROR_CODES.ROUTE_RESULT_FAILED,
-        resultMessage: ""
-    };
-    
-    var user_info = {
-        id: id,
-    };
-
-    if (route_option >= 0) {
-        user_info.option = route_option;
-    }
-
-    var summarys = {
-        summarys: undefined,
-    }
-
-    var ret = {
-        header: header,
-        user_info: user_info,
-        summarys: summarys,
-    };
-
-    if (req.query.target === 'kakaovx') {
-        // ªÁøÎ¿⁄ ≈∞ »Æ¿Œ
-        var user = auth.checkAuth(key);
-        if (user == null || user.length <= 0 || user !== 'kakaovx') {
-            ret.header.resultCode = codes.ERROR_CODES.RESULT_APPKEY_ERROR;
-            ret.header.resultMessage = codes.getErrMsg(codes.ERROR_CODES.RESULT_APPKEY_ERROR);
-            logout("client key error : " + JSON.stringify(ret));
-            return ret;
-        }
-
-        if (departure == undefined || destination == undefined) {
-            var kakaovxDef = codes.getDefaultPosition("kakaovx");
-            if (kakaovxDef.departure != undefined && kakaovxDef.destination != undefined) {
-                departure = kakaovxDef.departure;
-                destination = kakaovxDef.destination;
-            }
-        }
-    }
-    else if (req.query.target === 'p2p') {
-        if (departure == undefined || destination == undefined) {
-            var p2pDef = codes.getDefaultPosition("p2p");
-            if (p2pDef.departure != undefined && p2pDef.destination != undefined) {
-                departure = p2pDef.departure;
-                destination = p2pDef.destination;
-            }
-        }
-    }
-
-
-    let tickStart = 0;
-    let tickEnd = 0;
-    if (target === 'p2p') {
-        tickStart = logout("start p2p route tick-count");
-    }
-
-    // √‚πﬂ¡ˆ
+    // Ï∂úÎ∞úÏßÄ
     if (departure == undefined || destination == undefined) {
-        logout("client request query not correct" + util.inspect(req.query, false, null, true));
+        logout("client request query not correct" + util.inspect(req, false, null, true));
         ret.header.resultCode = codes.ERROR_CODES.ROUTE_RESULT_FAILED_WRONG_PARAM;
         ret.header.resultMessage = codes.getErrMsg(ret.header.resultCode);
-        logout("route result : failed(" + ret.result_code + "), msg : " + ret.header.resultMessage);
+        logout("route result : failed(" + ret.resultCode + "), msg : " + ret.header.resultMessage);
         return ret;
     }
 
@@ -362,30 +203,30 @@ exports.domultiroute = function(key, req, option) {
     let coordStart = departure.split(',');
     if (coordStart.length != 2) {
         logout("start location query not correct" + util.inspect(coordStart, false, null, true));
-        ret.header.result_code = codes.ERROR_CODES.ROUTE_RESULT_FAILED_SET_START;
-        ret.header.resultMessage = codes.getErrMsg(ret.header.result_code);
+        ret.header.resultCode = codes.ERROR_CODES.ROUTE_RESULT_FAILED_SET_START;
+        ret.header.resultMessage = codes.getErrMsg(ret.header.resultCode);
         logout("route result : failed, msg " + ret.msg);
         return ret;
     }
-    addon.setdeparture(parseFloat(coordStart[0]), parseFloat(coordStart[1]), is_optimal);
+    // addon.setdeparture(parseFloat(coordStart[0]), parseFloat(coordStart[1]), is_optimal, typeMatch);
 
-    // µµ¬¯¡ˆ
+    // ÎèÑÏ∞©ÏßÄ
     // addon.logout("set destination");
     let coordEnd = destination.split(',');
     if (coordEnd.length != 2) {
         logout("end location query not correct" + util.inspect(coordEnd, false, null, true));
-        ret.header.result_code = codes.ERROR_CODES.ROUTE_RESULT_FAILED_SET_END;
-        ret.header.resultMessage = codes.getErrMsg(ret.header.result_code);
+        ret.header.resultCode = codes.ERROR_CODES.ROUTE_RESULT_FAILED_SET_END;
+        ret.header.resultMessage = codes.getErrMsg(ret.header.resultCode);
         logout("route result : failed, msg " + ret.msg);
         return ret;
     }
-    addon.setdestination(parseFloat(coordEnd[0]), parseFloat(coordEnd[1]), is_optimal);
+    // addon.setdestination(parseFloat(coordEnd[0]), parseFloat(coordEnd[1]), is_optimal, typeMatch);
 
 
     ret.user_info.start = { x: parseFloat(coordStart[0]), y: parseFloat(coordStart[1]) }
     ret.user_info.end =  { x: parseFloat(coordEnd[0]), y: parseFloat(coordEnd[1]) }
 
-    // ∞Ê¿Ø¡ˆ
+    // Í≤ΩÏú†ÏßÄ
     let coordVia;
     if (waypoints != undefined && Array.isArray(waypoints)) {
         ret.user_info.vias = new Array();
@@ -393,12 +234,12 @@ exports.domultiroute = function(key, req, option) {
             coordVia = coord.split(',');
             if (coordVia.length != 2) {
                 logout("via location query not correct" + util.inspect(coordVia, false, null, true));
-                ret.header.result_code = codes.ERROR_CODES.ROUTE_RESULT_FAILED_SET_VIA;
-                ret.header.resultMessage = codes.getErrMsg(ret.header.result_code);
+                ret.header.resultCode = codes.ERROR_CODES.ROUTE_RESULT_FAILED_SET_VIA;
+                ret.header.resultMessage = codes.getErrMsg(ret.header.resultCode);
                 logout("route result : failed, msg " + ret.msg);
                 return ret;
             }
-            addon.setwaypoint(parseFloat(coordVia[0]), parseFloat(coordVia[1]), is_optimal);
+            // addon.setwaypoint(parseFloat(coordVia[0]), parseFloat(coordVia[1]), is_optimal, typeMatch);
 
             if (coordVia != undefined) {
                 ret.user_info.vias.push({ x: parseFloat(coordVia[0]), y: parseFloat(coordVia[1]) });
@@ -414,12 +255,12 @@ exports.domultiroute = function(key, req, option) {
         
         if (coordVia.length != 2) {
             logout("via location query not correct" + util.inspect(coordVia, false, null, true));
-            ret.header.result_code = codes.ERROR_CODES.ROUTE_RESULT_FAILED_SET_VIA;
-            ret.header.resultMessage = codes.getErrMsg(ret.header.result_code);
+            ret.header.resultCode = codes.ERROR_CODES.ROUTE_RESULT_FAILED_SET_VIA;
+            ret.header.resultMessage = codes.getErrMsg(ret.header.resultCode);
             logout("route result : failed, msg " + ret.msg);
             return ret;
         }
-        addon.setwaypoint(parseFloat(coordVia[0]), parseFloat(coordVia[1]), is_optimal);
+        // addon.setwaypoint(parseFloat(coordVia[0]), parseFloat(coordVia[1]), is_optimal, typeMatch);
 
         if (coordVia != undefined) {
             ret.user_info.vias = new Array();
@@ -428,57 +269,83 @@ exports.domultiroute = function(key, req, option) {
     } 
 
 
-    // ∞Ê∑Œ ø…º«/»∏««
+    // Í≤ΩÎ°ú ÏòµÏÖò/ÌöåÌîº
     // const route_cnt = 3;
     // let route_opt = [codes.ROUTE_OPTIONS.ROUTE_OPT_SHORTEST, codes.ROUTE_OPTIONS.ROUTE_OPT_RECOMMENDED, codes.ROUTE_OPTIONS.ROUTE_OPT_TRAIL];
     // let route_void = [codes.ROUTE_AVOIDS.ROUTE_OPT_NONE, codes.ROUTE_AVOIDS.ROUTE_OPT_PALM, codes.ROUTE_AVOIDS.ROUTE_OPT_BRIDGE];
 
-    // ∆Æ∑π≈∑
+    // Ìä∏Î†àÌÇπ
     // const route_cnt = 2;
-    // let route_opt = [2, 7]; // ∫∏«‡¿⁄, ¿⁄¿¸∞≈
+    // let route_opt = [2, 7]; // Î≥¥ÌñâÏûê, ÏûêÏ†ÑÍ±∞
     // let route_void = [0, 0]; // bridge
 
     let route_cnt = 1;
-    let route_opt = [route_option];
-    let route_void = [0];
+    let route_opt = [option];
+    let route_avoid = [avoid];
+    let route_mobility = mobility;
     
     // var route_cnt = 2;
     // var route_opt = [codes.ROUTE_OPTIONS.ROUTE_OPT_SHORTEST, codes.ROUTE_OPTIONS.ROUTE_OPT_TRAIL];
     // var route_void = [codes.ROUTE_AVOIDS.ROUTE_OPT_NONE, codes.ROUTE_AVOIDS.ROUTE_OPT_BRIDGE];
 
-    if ((target === "kakaovx") && (route_option < 0 || route_option > 3)){
-        route_cnt = 4;
-        route_opt = [codes.ROUTE_OPTIONS.ROUTE_OPT_RECOMMENDED, codes.ROUTE_OPTIONS.ROUTE_OPT_FASTEST, codes.ROUTE_OPTIONS.ROUTE_OPT_SHORTEST, codes.ROUTE_OPTIONS.ROUTE_OPT_COMFORTABLE];
-        route_void = [codes.ROUTE_AVOIDS.ROUTE_AVOID_NONE, codes.ROUTE_AVOIDS.ROUTE_AVOID_NONE, codes.ROUTE_AVOIDS.ROUTE_AVOID_NONE, codes.ROUTE_AVOIDS.ROUTE_AVOID_NONE];    
-   }
+    if ((target === "kakaovx") && (option <= 0 || option > 3)){
+        route_cnt = 3;
+        route_opt = [codes.ROUTE_OPTIONS.ROUTE_OPT_RECOMMENDED, codes.ROUTE_OPTIONS.ROUTE_OPT_SHORTEST, codes.ROUTE_OPTIONS.ROUTE_OPT_COMFORTABLE];
+        route_avoid = [avoid, avoid, avoid]; 
+        // if (route_avoid == 0) {
+        //     var route_avoids = // codes.ROUTE_AVOIDS_TRK.ROUTE_AVOID_HIKING | 
+        //     codes.ROUTE_AVOIDS_TRK.ROUTE_AVOID_TRAIL | 
+        //     codes.ROUTE_AVOIDS_TRK.ROUTE_AVOID_BIKE | 
+        //     codes.ROUTE_AVOIDS_TRK.ROUTE_AVOID_CROSS |
+        //     codes.ROUTE_AVOIDS_TRK.ROUTE_AVOID_RECOMMEND | 
+        //     codes.ROUTE_AVOIDS_TRK.ROUTE_AVOID_MTB | 
+        //     codes.ROUTE_AVOIDS_TRK.ROUTE_AVOID_POPULAR; // 126
+            
+        //     route_avoid = [route_avoids, route_avoids, route_avoids];
+        // } else {
+        //     route_avoid = [avoid, avoid, avoid]; 
+        // }
+        addon.addrouteoption(route_opt[0], route_avoid[0], route_mobility);
+        addon.addrouteoption(route_opt[1], route_avoid[1], route_mobility);
+        addon.addrouteoption(route_opt[2], route_avoid[2], route_mobility);
+    } else {
+        addon.addrouteoption(route_opt[0], route_avoid[0], route_mobility);
+    }
 
-    logout("route info, cnt:" + route_cnt + ", opt:" + route_opt + ", avoid:" + route_void + ", target:" + target);
+    logout("route info, cnt:" + route_cnt + ", opt:" + route_opt + ", avoid:" + route_avoid + ", mobility: " + mobility + ", target:" + target);
 
-
-    // ≈∏∞Ÿ∫∞∑Œ º”º∫¿Ã ¿œ∫Œ ∫Ø∞Êµ .
+    // ÌÉÄÍ≤üÎ≥ÑÎ°ú ÏÜçÏÑ±Ïù¥ ÏùºÎ∂Ä Î≥ÄÍ≤ΩÎê®.
     if (is_sum) {
         ;
     } else if ((target === "inavi") || (target === "p2p")) {
-        // inavi maps apiø°º≠¥¬ route æ∆∑° data « µÂ∏¶ ∂« µ÷º≠ route∏¶ ∞¸∏Æ
+        // inavi maps apiÏóêÏÑúÎäî route ÏïÑÎûò data ÌïÑÎìúÎ•º Îòê Îë¨ÏÑú routeÎ•º Í¥ÄÎ¶¨
         ret.route = new Object;
         ret.route.data = new Array;
     } else {
-        // ±◊ø‹¥¬ routes∑Œ ≈Î«’ ∞¸∏Æ
+        // Í∑∏Ïô∏Îäî routesÎ°ú ÌÜµÌï© Í¥ÄÎ¶¨
         ret.routes = new Array;
     }
 
+
+    addon.setdeparture(ret.user_info.start.x, ret.user_info.start.y, is_optimal, typeMatch);
+    addon.setdestination(ret.user_info.end.x, ret.user_info.end.y, is_optimal, typeMatch);
+    if (ret.user_info.vias !== undefined) {
+        ret.user_info.vias.forEach(via => {
+            addon.setwaypoint(via.x, via.y, is_optimal, typeMatch);
+        });
+    }
+    
     for(ii=0; ii<route_cnt; ii++) {
-        var res = addon.doroute(route_opt[ii], route_void[ii]);
+        var res = addon.doroute(route_opt[ii], route_avoid[ii], route_mobility);
 
         if (res.result == 0) {
             if (is_sum) {
                 res = addon.getsummary();
             } else if ((target === "inavi") || (target === "p2p")) {
-                res = addon.getmultiroute_for_inavi();
-            } else if (target === "kakaovx") {
-                res = addon.getmultiroute(2); // 2:for kakaovx
+                res = addon.getmapsroute();
             } else {
-                res = addon.getmultiroute();
+                // logout("--------------route request junction, type: " + typeof(is_junction) + ", value : " + is_junction + ", Number: " + Number(is_junction) + ", Boolean: " + Boolean(is_junction));
+                res = addon.getroute(is_junction);
             }
             res = JSON.parse(res);
 
@@ -493,9 +360,9 @@ exports.domultiroute = function(key, req, option) {
                     ;
                 } else if ((target === "inavi") || (target === "p2p")) {
                     ret.route.data.push(res.routes[0]);
-                    logout("route("+ii+") count : " + res.routes.length + ", paths : " + res.routes[0].paths.length);
+                    logout("route.data["+ii+"] count : " + res.routes.length + ", paths : " + res.routes[0].paths.length);
                 } else { // if (target === "kakaovx") {
-                    logout("route("+ii+") count : " + res.routes.length);
+                    logout("routes["+ii+"] count : " + res.routes.length);
                     ret.routes.push(res.routes[0]);
                 }
             }
@@ -509,9 +376,287 @@ exports.domultiroute = function(key, req, option) {
             ret.header.isSuccessful = false;
             ret.header.resultCode = res.result;
             ret.header.resultMessage = codes.getErrMsg(ret.header.resultCode);
-        }        
+        }
+
+        addon.releaseroute();
     } // for
 
+    logout("end routing, count: " + route_cnt + ", result(" + ret.header.resultCode + '), ' + ret.header.resultMessage);
+
+    return ret;
+}
+
+
+// Îã§Ï§ë Í≤ΩÎ°ú ÏòµÏÖòÏùÑ ÏßÄÏõê
+exports.domultiroute = function(key, req, expend) {
+    addon.logout("start multi routing");
+
+    var querystring = require('querystring');
+    var ret;
+
+    // ÏÇ¨Ïö©Ïûê ÌÇ§ ÌôïÏù∏
+    var user = auth.checkAuth(key);
+    if (user === null || user.length <= 0) {
+        var header = {
+            isSuccessful: false,
+            resultCode: codes.ERROR_CODES.RESULT_APPKEY_ERROR,
+            resultMessage: codes.getErrMsg(codes.ERROR_CODES.RESULT_APPKEY_ERROR)
+        };
+    
+        ret = {
+            header: header,
+            user_info: req,
+        };
+
+        logout("key error: " + JSON.stringify(ret));
+        return ret;
+    }
+
+    logout("user: " + user + ", req: " + JSON.stringify(req));
+
+    const id = req.id;
+    let departure = req.start;
+    let destination = req.end;
+    const waypoint = req.via;
+    const waypoints = req.vias;
+    const option = (req.option === undefined) ? 0 : parseInt(req.option);
+    const avoid = (req.avoid === undefined) ? 0 : parseInt(req.avoid);
+    const mobility = (req.mobility === undefined) ? 0 : parseInt(req.mobility);
+    const course_type = (req.course_type === undefined) ? 0 : parseInt(req.course_type);
+    const course_id = ((req.course_id === undefined) || (req.course_id.length <= 0)) ? 0 : parseInt(req.course_id);
+    const is_sum = (expend !== undefined && expend == 'summary') ? true : false;
+    const is_optimal = (req.optimal !== undefined && req.optimal != 'false') ? true : false; // ÏµúÏ†ÅÏßÄÏ†ê ÏÇ¨Ïö©, p2pÎäî Î¨¥Ïãú
+    const target = (req.target === undefined) ? '' : req.target;
+    const typeMatch = (target === 'kakaovx') ? 6 : 0;
+    const is_junction = (req.junction !== undefined && req.junction == 'true') ? true : false;
+
+    // header
+    var ret_header = {
+        isSuccessful: false,
+        resultCode: codes.ERROR_CODES.ROUTE_RESULT_FAILED,
+        resultMessage: ""
+    };
+    
+    var ret_user_info = {
+        id: id,
+    };
+
+    if (option >= 0) {
+        ret_user_info.option = option;
+    }
+
+    var summarys = {
+        summarys: undefined,
+    }
+
+    var ret = {
+        header: ret_header,
+        user_info: ret_user_info,
+    };
+
+
+    let tickStart = 0;
+    let tickEnd = 0;
+    if (target === 'p2p') {
+        tickStart = logout("start p2p route tick-count");
+    }
+
+    // Ï∂úÎ∞úÏßÄ
+    if (departure == undefined || destination == undefined) {
+        logout("client request query not correct" + util.inspect(req, false, null, true));
+        ret.header.resultCode = codes.ERROR_CODES.ROUTE_RESULT_FAILED_WRONG_PARAM;
+        ret.header.resultMessage = codes.getErrMsg(ret.header.resultCode);
+        logout("route result : failed(" + ret.resultCode + "), msg : " + ret.header.resultMessage);
+        return ret;
+    }
+
+    // addon.setdeparture(126.92644, 37.57990);
+    // addon.setdestination(126.94755,37.51116);
+
+    // addon.logout("set departure");
+    let coordStart = departure.split(',');
+    if (coordStart.length != 2) {
+        logout("start location query not correct" + util.inspect(coordStart, false, null, true));
+        ret.header.resultCode = codes.ERROR_CODES.ROUTE_RESULT_FAILED_SET_START;
+        ret.header.resultMessage = codes.getErrMsg(ret.header.resultCode);
+        logout("route result : failed, msg " + ret.msg);
+        return ret;
+    }
+    // addon.setdeparture(parseFloat(coordStart[0]), parseFloat(coordStart[1]), is_optimal, typeMatch);
+
+    // ÎèÑÏ∞©ÏßÄ
+    // addon.logout("set destination");
+    let coordEnd = destination.split(',');
+    if (coordEnd.length != 2) {
+        logout("end location query not correct" + util.inspect(coordEnd, false, null, true));
+        ret.header.resultCode = codes.ERROR_CODES.ROUTE_RESULT_FAILED_SET_END;
+        ret.header.resultMessage = codes.getErrMsg(ret.header.resultCode);
+        logout("route result : failed, msg " + ret.msg);
+        return ret;
+    }
+    // addon.setdestination(parseFloat(coordEnd[0]), parseFloat(coordEnd[1]), is_optimal, typeMatch);
+
+
+    ret.user_info.start = { x: parseFloat(coordStart[0]), y: parseFloat(coordStart[1]) }
+    ret.user_info.end =  { x: parseFloat(coordEnd[0]), y: parseFloat(coordEnd[1]) }
+
+    // Í≤ΩÏú†ÏßÄ
+    let coordVia;
+    if (waypoints != undefined && Array.isArray(waypoints)) {
+        ret.user_info.vias = new Array();
+        waypoints.forEach(coord => {
+            coordVia = coord.split(',');
+            if (coordVia.length != 2) {
+                logout("via location query not correct" + util.inspect(coordVia, false, null, true));
+                ret.header.resultCode = codes.ERROR_CODES.ROUTE_RESULT_FAILED_SET_VIA;
+                ret.header.resultMessage = codes.getErrMsg(ret.header.resultCode);
+                logout("route result : failed, msg " + ret.msg);
+                return ret;
+            }
+            // addon.setwaypoint(parseFloat(coordVia[0]), parseFloat(coordVia[1]), is_optimal, typeMatch);
+
+            if (coordVia != undefined) {
+                ret.user_info.vias.push({ x: parseFloat(coordVia[0]), y: parseFloat(coordVia[1]) });
+            }
+        });
+    }
+    else if ((waypoint != undefined) || (waypoints != undefined)) {
+        if (waypoint != undefined) {
+            coordVia = waypoint.split(',');
+        } else {
+            coordVia = waypoints.split(',');
+        }
+        
+        if (coordVia.length != 2) {
+            logout("via location query not correct" + util.inspect(coordVia, false, null, true));
+            ret.header.resultCode = codes.ERROR_CODES.ROUTE_RESULT_FAILED_SET_VIA;
+            ret.header.resultMessage = codes.getErrMsg(ret.header.resultCode);
+            logout("route result : failed, msg " + ret.msg);
+            return ret;
+        }
+        // addon.setwaypoint(parseFloat(coordVia[0]), parseFloat(coordVia[1]), is_optimal, typeMatch);
+
+        if (coordVia != undefined) {
+            ret.user_info.vias = new Array();
+            ret.user_info.vias.push({ x: parseFloat(coordVia[0]), y: parseFloat(coordVia[1]) });
+        }
+    } 
+
+
+    // Í≤ΩÎ°ú ÏòµÏÖò/ÌöåÌîº
+    // const route_cnt = 3;
+    // let route_opt = [codes.ROUTE_OPTIONS.ROUTE_OPT_SHORTEST, codes.ROUTE_OPTIONS.ROUTE_OPT_RECOMMENDED, codes.ROUTE_OPTIONS.ROUTE_OPT_TRAIL];
+    // let route_void = [codes.ROUTE_AVOIDS.ROUTE_OPT_NONE, codes.ROUTE_AVOIDS.ROUTE_OPT_PALM, codes.ROUTE_AVOIDS.ROUTE_OPT_BRIDGE];
+
+    // Ìä∏Î†àÌÇπ
+    // const route_cnt = 2;
+    // let route_opt = [2, 7]; // Î≥¥ÌñâÏûê, ÏûêÏ†ÑÍ±∞
+    // let route_void = [0, 0]; // bridge
+
+    let route_cnt = 1;
+    let route_opt = [option];
+    let route_avoid = [avoid];
+    let route_mobility = mobility;
+    let route_subopt = 0;
+    // var route_cnt = 2;
+    // var route_opt = [codes.ROUTE_OPTIONS.ROUTE_OPT_SHORTEST, codes.ROUTE_OPTIONS.ROUTE_OPT_TRAIL];
+    // var route_void = [codes.ROUTE_AVOIDS.ROUTE_OPT_NONE, codes.ROUTE_AVOIDS.ROUTE_OPT_BRIDGE];
+
+    if ((target === "kakaovx") && (option <= 0 || option > 3)){
+        route_cnt = 3;
+        route_opt = [codes.ROUTE_OPTIONS.ROUTE_OPT_RECOMMENDED, codes.ROUTE_OPTIONS.ROUTE_OPT_SHORTEST, codes.ROUTE_OPTIONS.ROUTE_OPT_COMFORTABLE];
+        if (route_avoid == codes.ROUTE_AVOIDS_TRK.ROUTE_AVOID_NONE) {
+            var route_avoids = codes.ROUTE_AVOIDS_TRK.ROUTE_AVOID_NONE;
+            // codes.ROUTE_AVOIDS_TRK.ROUTE_AVOID_HIKING | 
+            // codes.ROUTE_AVOIDS_TRK.ROUTE_AVOID_TRAIL | 
+            // codes.ROUTE_AVOIDS_TRK.ROUTE_AVOID_BIKE | 
+            // codes.ROUTE_AVOIDS_TRK.ROUTE_AVOID_CROSS |
+            // codes.ROUTE_AVOIDS_TRK.ROUTE_AVOID_RECOMMEND | 
+            // codes.ROUTE_AVOIDS_TRK.ROUTE_AVOID_MTB | 
+            // codes.ROUTE_AVOIDS_TRK.ROUTE_AVOID_POPULAR; // 126
+            
+            route_avoid = [route_avoids, route_avoids, route_avoids];
+        } else {
+            route_avoid = [avoid, avoid, avoid]; 
+        }
+
+        if (course_id != 0 ) {
+            route_cnt = 1; // ÏΩîÏä§ ÌÉêÏÉâÏùÄ Îã®Ïùº ÌÉêÏÉâÏúºÎ°ú ÏßÑÌñâ
+        } else {
+            if (course_type == 3) // ÏΩîÏä§IDÏóÜÎäî ÏûêÏ†ÑÍ±∞ÌÉêÏÉâÏùº Í≤ΩÏö∞, ÏïÑÏù¥ÎÇòÎπÑÏùò ÏûêÏ†ÑÍ±∞ Í≤ΩÎ°úÌÉêÏÉâ ÏÇ¨Ïö©
+            route_mobility = 2; // ÏûêÏ†ÑÍ±∞
+        }
+    }
+
+    logout("multiroute info, cnt:" + route_cnt + ", opt:" + route_opt + ", avoid:" + route_avoid + ", mobility: " + route_mobility + ", subopt: " + route_subopt + ", target:" + target);
+
+    // ÌÉÄÍ≤üÎ≥ÑÎ°ú ÏÜçÏÑ±Ïù¥ ÏùºÎ∂Ä Î≥ÄÍ≤ΩÎê®.
+    if (is_sum) {
+        ;
+    } else if ((target === "inavi") || (target === "p2p")) {
+        // inavi maps apiÏóêÏÑúÎäî route ÏïÑÎûò data ÌïÑÎìúÎ•º Îòê Îë¨ÏÑú routeÎ•º Í¥ÄÎ¶¨
+        ret.route = new Object;
+        ret.route.data = new Array;
+    } else {
+        // Í∑∏Ïô∏Îäî routesÎ°ú ÌÜµÌï© Í¥ÄÎ¶¨
+        ret.routes = new Array;
+    }
+
+    if (route_cnt > 1) {
+        addon.addrouteoption(route_opt[0], route_avoid[0], route_mobility);
+        addon.addrouteoption(route_opt[1], route_avoid[1], route_mobility);
+        addon.addrouteoption(route_opt[2], route_avoid[2], route_mobility);
+    } else {
+        addon.addrouteoption(route_opt[0], route_avoid[0], route_mobility);
+    }
+    addon.setroutesuboption(course_type, course_id);
+
+
+    addon.setdeparture(ret.user_info.start.x, ret.user_info.start.y, is_optimal, typeMatch);
+    addon.setdestination(ret.user_info.end.x, ret.user_info.end.y, is_optimal, typeMatch);
+    if (ret.user_info.vias !== undefined) {
+        ret.user_info.vias.forEach(via => {
+            addon.setwaypoint(via.x, via.y, is_optimal, typeMatch);
+        });
+    }
+
+    var res = addon.domultiroute(route_cnt);
+
+    if (res.result == 0) {
+        if (is_sum) {
+            res = addon.getsummary();
+        } else if ((target === "inavi") || (target === "p2p")) {
+            res = addon.getmapsroute();
+        } else {
+            // logout("--------------route request junction, type: " + typeof(is_junction) + ", value : " + is_junction + ", Number: " + Number(is_junction) + ", Boolean: " + Boolean(is_junction));
+            res = addon.getmultiroute(is_junction);
+        }
+        res = JSON.parse(res);
+
+        if (res.result_code == 0) {
+            ret.header.isSuccessful = true;
+            ret.header.resultCode = res.result_code;
+            ret.header.resultMessage = codes.getErrMsg(ret.header.resultCode);
+
+            if (is_sum) {
+                ;
+            } else if ((target === "inavi") || (target === "p2p")) {
+                ret.route.data = res.routes;
+            } else { // if (target === "kakaovx") {
+                ret.routes = res.routes;
+            }
+        }
+        else {
+            ret.header.isSuccessful = false;
+            ret.header.resultCode = res.result_code;
+            ret.header.resultMessage = codes.getErrMsg(ret.header.resultCode);
+        }
+    }
+    else {
+        ret.header.isSuccessful = false;
+        ret.header.resultCode = res.result;
+        ret.header.resultMessage = codes.getErrMsg(ret.header.resultCode);
+    }
 
     addon.releaseroute();
     
@@ -534,14 +679,14 @@ exports.domultiroute = function(key, req, option) {
     return ret;
 }
 
-exports.gettable = function(mode, destinations) {
 
-    addon.logout("start table");
+// distance matrix
+exports.gettable = function(req) {
 
-    const count = destinations.length;
-    
-    const is_optimal = false;
-    const type_match = 4; //TYPE_LINK_MATCH_FOR_TABLE; // √÷¿˚¡ˆ¡° ªÁøÎ
+    addon.logout("start distance matrix");
+
+    var res = addon.gettable(JSON.stringify(req));
+    res = JSON.parse(res);
 
     var header = {
         isSuccessful: false,
@@ -549,59 +694,17 @@ exports.gettable = function(mode, destinations) {
         resultMessage: ""
     };
 
-    var rows = {
-        elements: new Array,
-    };
-
     var ret = {
         header: header,
-        origins: destinations,
-        rows: rows,
+        mode: (req.mode != undefined) ? req.mode : "driving",
+        origins: (req.origins != undefined) ? req.origins : null,
+        rows: null,
     };
-
-
-    var cntDestinations = 0;
-    destinations.forEach(element => {
-        let coord = element.split(',');
-        if (coord.length != 2) {
-            logout("request location query not correct" + util.inspect(coord, false, null, true));
-            ret.header.isSuccessful = false;
-            ret.header.resultCode = codes.ERROR_CODES.ROUTE_RESULT_FAILED_SET_START;
-            ret.header.resultMessage = codes.getErrMsg(ret.result_code);
-            logout("route result : failed, msg " + ret.header.resultMessage);
-        } else {
-            var lng = parseFloat(coord[0]);
-            var lat = parseFloat(coord[1]);
-            if (checkcoord(lng, lat) != true) {
-                logout("invalid coord, lng: " + lng + ", lat: " + lat);
-            } else {
-                // departure
-                if (cntDestinations == 0) {
-                    addon.setdeparture(lng, lat, is_optimal, type_match);
-                }
-                // destination 
-                else if (cntDestinations == count - 1) {
-                    addon.setdestination(lng, lat, is_optimal, type_match);
-                }
-                // via
-                else {
-                    addon.setwaypoint(lng, lat, is_optimal, type_match);
-                }
-
-                cntDestinations++;
-            }
-        }
-    });
-
-
-    var res = addon.gettable(cntDestinations);
-    res = JSON.parse(res);
 
     if (res.result_code == 0) {
         ret.header.isSuccessful = true;
         ret.header.resultCode = res.result_code;
         ret.header.resultMessage = codes.getErrMsg(ret.header.resultCode);
-
         ret.rows = res.rows;
     } else {
         ret.header.isSuccessful = false;
@@ -609,14 +712,13 @@ exports.gettable = function(mode, destinations) {
         ret.header.resultMessage = codes.getErrMsg(ret.header.resultCode);
     }
 
-    addon.releaseroute();
-    
-    addon.logout("end table");
+    addon.logout("end distance matrix");
 
     return ret;
 }
 
 
+// Í≤ΩÌÉê ÏΩîÏä§Ìä∏ ÏÑ§Ï†ï
 exports.setdatacost = function(key, mode, base, cost) {
 
     addon.logout("start set data cost");
@@ -671,15 +773,35 @@ exports.setdatacost = function(key, mode, base, cost) {
 }
 
 
-exports.getcluster = function(target, destinations, clusters, file, mode) {
+// ÌÅ¥Îü¨Ïä§ÌÑ∞ÎßÅ
+exports.getcluster = function(req) {
+    var res = codes.ERROR_CODES.ROUTE_RESULT_FAILED;
 
-    addon.logout("start clustering");
+    if (req.tsp == undefined) {
+        var tsp = {
+            seed: 10000,
+            algorithm: 0,
+            compare_type: 1,
+        };
+        req.tsp = tsp;
+    }
 
-    const cntPois = destinations.length;
-    const cntClusters = clusters;
-    
-    const is_optimal = false;
-    const type_match = 4; //TYPE_LINK_MATCH_FOR_TABLE; // √÷¿˚¡ˆ¡° ªÁøÎ
+    if (req.clust == undefined) {
+        var clust = {
+            seed: 10006,
+            algorithm: 3,
+            compare_type : 1,
+        };
+        req.clust = clust;
+    }
+
+    if ((req.target === undefined) && (req.target === 'geoyoung')) {
+        res = addon.getcluster_for_geoyoung(JSON.stringify(req));
+    } else {
+        res = addon.getcluster(JSON.stringify(req));
+    }
+
+    res = JSON.parse(res);
 
     var header = {
         isSuccessful: false,
@@ -689,60 +811,17 @@ exports.getcluster = function(target, destinations, clusters, file, mode) {
 
     var ret = {
         header: header,
-        origins: destinations,
-        clusters: clusters,
+        mode: (req.mode != undefined) ? req.mode : "clustering",
+        origins: (req.origins != undefined) ? req.origins : null,
+        summary: null,
+        clusters: null,
     };
-
-    var cntDestinations = 0;
-    destinations.forEach(element => {
-        let coord = element.split(',');
-        if (coord.length != 2) {
-            logout("request location query not correct" + util.inspect(coord, false, null, true));
-            ret.header.isSuccessful = false;
-            ret.header.resultCode = codes.ERROR_CODES.ROUTE_RESULT_FAILED_SET_START;
-            ret.header.resultMessage = codes.getErrMsg(ret.result_code);
-            logout("route result : failed, msg " + ret.header.resultMessage);
-        } else {
-            var lng = parseFloat(coord[0]);
-            var lat = parseFloat(coord[1]);
-            if (checkcoord(lng, lat) != true) {
-                logout("invalid coord, lng: " + lng + ", lat: " + lat);
-            } else {
-                // departure
-                if (cntDestinations == 0) {
-                    addon.setdeparture(lng, lat, is_optimal, type_match);
-                }
-                // destination 
-                else if (cntDestinations == (cntPois - 1)) {
-                    addon.setdestination(lng, lat, is_optimal, type_match);
-                }
-                // via
-                else {
-                    addon.setwaypoint(lng, lat, is_optimal, type_match);
-                }
-
-                cntDestinations++;
-            }
-        }
-    });
-
-    var res = codes.ERROR_CODES.ROUTE_RESULT_FAILED;
-
-    if (target === 'geoyoung') {
-        res = addon.getcluster_for_geoyoung(cntClusters);
-    }
-    else if (file != undefined && mode != undefined && file.length > 0 && mode >= 1) {
-        res = addon.getcluster(cntClusters, cntPois, file, mode);
-    } else {
-        res = addon.getcluster(cntClusters);
-    }
-    res = JSON.parse(res);
 
     if (res.result_code == 0) {
         ret.header.isSuccessful = true;
         ret.header.resultCode = res.result_code;
         ret.header.resultMessage = codes.getErrMsg(ret.header.resultCode);
-
+        ret.summary = res.summary;
         ret.clusters = res.clusters;
     } else {
         ret.header.isSuccessful = false;
@@ -750,19 +829,17 @@ exports.getcluster = function(target, destinations, clusters, file, mode) {
         ret.header.resultMessage = codes.getErrMsg(ret.header.resultCode);
     }
 
-    addon.releaseroute();
-    
-    addon.logout("end clustering");
-
     return ret;
 }
 
 
-exports.getboundary = function(mode, destinations) {
+exports.getboundary = function(mode, in_target, destinations) {
 
     addon.logout("start boundary");
 
-     var header = {
+    const target = (in_target === undefined) ? '' : req.query.target;
+
+    var header = {
         isSuccessful: false,
         resultCode: codes.ERROR_CODES.ROUTE_RESULT_FAILED,
         resultMessage: ""
@@ -801,14 +878,13 @@ exports.getboundary = function(mode, destinations) {
 }
 
 
-exports.getbestways = function(mode, destinations) {
+// ÌÅ¥Îü¨Ïä§ÌÑ∞ÎßÅ ÏòÅÏó≠
+exports.getbestways = function(req) {
+    var res = codes.ERROR_CODES.ROUTE_RESULT_FAILED;
 
-    addon.logout("start bestways");
+    res = addon.getwaypoints(JSON.stringify(req));
 
-    const count = destinations.length;
-    
-    const is_optimal = false;
-    const type_match = 4; //TYPE_LINK_MATCH_FOR_TABLE; // √÷¿˚¡ˆ¡° ªÁøÎ
+    res = JSON.parse(res);
 
     var header = {
         isSuccessful: false,
@@ -816,69 +892,31 @@ exports.getbestways = function(mode, destinations) {
         resultMessage: ""
     };
 
-    var waypoints = {
-        waypoints: new Array,
-    };
-
     var ret = {
         header: header,
-        origins: destinations,
-        waypoints: waypoints,
+        mode: (req.mode != undefined) ? req.mode : "tsp",
+        origins: (req.origins != undefined) ? req.origins : null,
+        summary: null,
+        waypoints: null,
     };
 
-    var tspOpt = 0;
-    if (mode !== 'tsp') {
-        tspOpt = 1; // using original path
-    }
-
-    var cntDestinations = 0;
-    destinations.forEach(element => {
-        let coord = element.split(',');
-        if (coord.length != 2) {
-            logout("request location query not correct" + util.inspect(coord, false, null, true));
-            ret.header.isSuccessful = false;
-            ret.header.resultCode = codes.ERROR_CODES.ROUTE_RESULT_FAILED_SET_START;
-            ret.header.resultMessage = codes.getErrMsg(ret.result_code);
-            logout("route result : failed, msg " + ret.header.resultMessage);
-        } else {
-            var lng = parseFloat(coord[0]);
-            var lat = parseFloat(coord[1]);
-            if (checkcoord(lng, lat) != true) {
-                logout("invalid coord, lng: " + lng + ", lat: " + lat);
-            } else {
-                // departure
-                if (cntDestinations == 0) {
-                    addon.setdeparture(lng, lat, is_optimal, type_match);
-                }
-                // destination 
-                else if (cntDestinations == (count - 1)) {
-                    addon.setdestination(lng, lat, is_optimal, type_match);
-                }
-                // via
-                else {
-                    addon.setwaypoint(lng, lat, is_optimal, type_match);
-                }
-
-                cntDestinations++;
-            }
-        }
-    });
-
-
-    var res = addon.getwaypoints(tspOpt, cntDestinations);
-    res = JSON.parse(res);
+    // let type_match = 4; //TYPE_LINK_MATCH_FOR_TABLE; // ÏµúÏ†ÅÏßÄÏ†ê ÏÇ¨Ïö©
+    // if (target === "samsung_heavy") {
+    //     type_match = 0; // TYPE_LINK_MATCH_NONE
+    // }
 
     if (res.result_code == 0) {
         ret.header.isSuccessful = true;
         ret.header.resultCode = res.result_code;
         ret.header.resultMessage = codes.getErrMsg(ret.header.resultCode);
 
+        ret.summary = res.symmary;
         ret.waypoints = res.waypoints;
-
+        
         // add web route view url
         if (res.url != undefined && res.url.length > 0) {
             ret.url = res.url;
-        }       
+        }
     } else {
         ret.header.isSuccessful = false;
         ret.header.resultCode = res.result_code;
@@ -886,8 +924,10 @@ exports.getbestways = function(mode, destinations) {
     }
 
     addon.releaseroute();
-    
-    addon.logout("end bestways");
 
     return ret;
+}
+
+exports.updatetraffic = function(file, path, timestamp) {
+    addon.updatetraffic(file, path, timestamp);
 }

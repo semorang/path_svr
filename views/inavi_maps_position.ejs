@@ -209,7 +209,7 @@
             params.set('posX', pos.lng)
             params.set('posY', pos.lat)
             // var pathname = 'https://api-maps.cloud.toast.com/maps/v3.0/appkeys/<%=javascriptkey%>/searchEntryPoint';
-            var pathname = 'https://maps.inavi.com/maps/v3.0/appkeys/<%=javascriptkey%>/searchEntryPoint';
+            var pathname = 'https://dev-maps.inavi.com/maps/v3.0/appkeys/<%=javascriptkey%>/searchEntryPoint';
             var move2url = pathname + '?' + params.toString();
 
             console.log("request pig datas")
@@ -449,7 +449,7 @@
             }
 
             // var pathname = 'https://api-maps.cloud.toast.com/maps/v3.0/appkeys/uuLPV7fHLk6NIVfCPnBv/searches';
-            var pathname = 'https://maps.inavi.com/maps/v3.0/appkeys/<%=javascriptkey%>/searches'
+            var pathname = 'https://dev-maps.inavi.com/maps/v3.0/appkeys/<%=javascriptkey%>/searches'
             var search2url = pathname + '?&query=' + keyword.toString() + '&reqcount=' + 10;
 
             console.log("request, search data: " + keyword)

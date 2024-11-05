@@ -18,17 +18,48 @@ static char THIS_FILE[] = __FILE__;
 #endif
 
 
+static int32_t biggestMeshId = 0;
+static int32_t smallestMeshId = INT_MAX;
+
+bool g_isUseTestMesh = false;
+
+unordered_set<int32_t> g_arrTestMesh = {
+	185402, 185407, 185412, 185417, 186402, 186407, 186412, 186417,
+	185401, 185406, 185411, 185416, 186401, 186406, 186411, 186416,
+	185400, 185405, 185410, 185415, 186400, 186405, 186410, 186415, // 서울
+	185303, 185308, 185313, 185318, 186303, 186308, 186313, 186318, // 성남
+	185302, 185307, 185312, 185317, 186302, 186307, 186312, 186317, // 하남
+	185301, 185306, 185311, 185316, 186301, 186306, 186311, 186316, // 과천
+	185300, 185305, 185310, 185315, 186300, 186305, 186310, 186315, // 청계산
+	185203, 185208, 185213, 185218, 186203, 186208, 186213, 186218, // 백운산
+	185202, 185207, 185212, 185217, 186202, 186207, 186212, 186217,
+	185201, 185206, 185211, 185216, 186201, 186206, 186211, 186216,
+	// 50
+
+#if defined(USE_FOREST_DATA)
+	// 설악산 - 78
+	232612, 232613, 232710, 232711, 232712, 232713, 232810, 232811, 232812, 232813, 242110,
+	232617, 232618, 232715, 232716, 232717, 232718, 232815, 232816, 232817, 232818,
+	242115, 233602, 233603, 233700, 233701, 233702, 233703, 233800, 233801, 233802,
+	233803, 243100, 233607, 233608, 233750, 233705, 233706, 233707, 233708, 233805,
+	233806, 233807, 233808, 243105, 233612, 233613, 233710, 233711, 233712, 233713,
+	233810, 233811, 233812, 233813, 243110, 233617, 233618, 233715, 233716, 233717,
+	233718, 233815, 233816, 233817, 233818, 243115, 234602, 234603, 234700, 234701,
+	234702, 234703, 234800, 234801, 234802, 234803, 244100,
+#endif
+};
+
+
 CFileMesh::CFileMesh()
 {
-	m_nFileType = TYPE_DATA_MESH;
+	m_nDataType = TYPE_DATA_MESH;
+	m_nFileType = TYPE_EXEC_MESH;
 }
 
 CFileMesh::~CFileMesh()
 {
 
 }
-
-static const uint32_t g_cntLogPrint = 100000;
 
 bool CFileMesh::ParseData(IN const char* fname)
 {
@@ -64,7 +95,7 @@ bool CFileMesh::ParseData(IN const char* fname)
 				LOG_TRACE(LOG_ERROR, "can't get dbf filed info, idx : %d ", ii);
 				return false;
 			}
-			else if (strcmp(szLinkField[ii], trim(fieldInfo.szName)) != 0) {
+			else if (strcmp(szLinkField[ii], strupper(trim(fieldInfo.szName))) != 0) {
 				LOG_TRACE(LOG_ERROR, "dbf field name not matched the expected name, filedName:%s vs exprectedName:%s", fieldInfo.szName, szLinkField[ii]);
 				return false;
 			}
@@ -107,6 +138,14 @@ bool CFileMesh::ParseData(IN const char* fname)
 				if (idxCol == 0) { // id
 					mesh.MeshID = atoi(trim(chsTmp));
 					memcpy(&mesh.meshBox, &pSHPObj->mpoint.Box, sizeof(SBox));
+
+					if (smallestMeshId > mesh.MeshID) {
+						smallestMeshId = mesh.MeshID;
+					}
+
+					if (biggestMeshId < mesh.MeshID) {
+						biggestMeshId = mesh.MeshID;
+					}
 				}
 				else if (idxCol == 1) { // 인접 메쉬들
 					char *pDat = chsTmp;
@@ -126,16 +165,12 @@ bool CFileMesh::ParseData(IN const char* fname)
 		} // for
 
 
-#if defined(_USE_TEST_MESH)
-		bool isContinue = true;
-		for (const auto& item : g_arrTestMesh) {
-			if (item == mesh.MeshID) {
-				isContinue = false;
-				break;
+		// 테스트 메쉬가 있으면 정의된 메쉬만 확인하자
+		if (g_isUseTestMesh && !g_arrTestMesh.empty()) {
+			if (g_arrTestMesh.find(mesh.MeshID) == g_arrTestMesh.end()) {
+				continue;
 			}
 		}
-		if (isContinue) continue;
-#endif
 
 
 		if (nShpType == 3) {
@@ -151,6 +186,11 @@ bool CFileMesh::ParseData(IN const char* fname)
 		}
 	} // for
 
+	if (g_isUseTestMesh) {
+		LOG_TRACE(LOG_DEBUG, "LOG, Using test mesh option, test mesh cnt : %d", g_arrTestMesh.size());
+	}
+	LOG_TRACE(LOG_DEBUG, "LOG, min-max mesh_id: %d - %d, added cnt : %d", smallestMeshId, biggestMeshId, m_mapMesh.size());
+
 	shpReader.Close();
 
 	return GenServiceData();
@@ -163,8 +203,7 @@ bool CFileMesh::GenServiceData()
 
 
 	// 근접 메쉬 확인
-	LOG_TRACE(LOG_DEBUG, "LOG, start, check mesh neighbor");
-
+	//LOG_TRACE(LOG_DEBUG, "LOG, start, check mesh neighbor");
 	// 이제는 메쉬 shp에 이웃 메쉬 정보가 있으니 따로 처리할 필요 없음 (2022-11-24)
 	//SetNeighborMesh();
 
@@ -220,15 +259,6 @@ bool CFileMesh::AddIndexData(IN const FileIndex& pData)
 	return false;
 }
 #endif // #if defined(USE_DATA_CACHE)
-
-
-bool CFileMesh::SaveData(IN const char* szFilePath)
-{
-	char szFileName[MAX_PATH] = { 0, };
-	sprintf(szFileName, "%s/%s.%s", szFilePath, g_szTypeTitle[TYPE_DATA_MESH], g_szTypeExec[TYPE_DATA_MESH]);
-
-	return CFileBase::SaveData(szFileName);
-}
 
 
 size_t CFileMesh::WriteIndex(FILE* fp)
@@ -380,15 +410,6 @@ size_t CFileMesh::WriteBody(FILE* fp, IN const uint32_t fileOff)
 	LOG_TRACE(LOG_DEBUG, "Save data, mesh cnt:%d", GetMeshCount());
 
 	return offFile;
-}
-
-
-bool CFileMesh::LoadData(IN const char* szFilePath)
-{
-	char szFileName[MAX_PATH] = { 0, };
-	sprintf(szFileName, "%s/%s.%s", szFilePath, g_szTypeTitle[TYPE_DATA_MESH], g_szTypeExec[TYPE_DATA_MESH]);
-
-	return CFileBase::LoadData(szFileName);
 }
 
 

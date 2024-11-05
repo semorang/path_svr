@@ -21,8 +21,9 @@ static char THIS_FILE[] = __FILE__;
 
 CFileComplex::CFileComplex()
 {
+	m_nDataType = TYPE_DATA_COMPLEX;
+	m_nFileType = TYPE_EXEC_POLYGON;
 	m_nCpxIdx = 0;
-	m_nFileType = TYPE_DATA_COMPLEX;
 }
 
 CFileComplex::~CFileComplex()
@@ -32,8 +33,6 @@ CFileComplex::~CFileComplex()
 		unordered_map<uint64_t, stComplex>().swap(m_mapComplex);
 	}
 }
-
-static const uint32_t g_cntLogPrint = 1000;
 
 bool CFileComplex::ParseData(IN const char* fname)
 {
@@ -89,7 +88,7 @@ bool CFileComplex::ParseData(IN const char* fname)
 				LOG_TRACE(LOG_ERROR, "can't get dbf filed info, idx : %d ", ii);
 				return false;
 			}
-			else if (strcmp(szComplexField[ii], trim(fieldInfo.szName)) != 0) {
+			else if (strcmp(szComplexField[ii], strupper(trim(fieldInfo.szName))) != 0) {
 				LOG_TRACE(LOG_ERROR, "dbf field name not matched the expected name, filedName:%s vs exprectedName:%s", fieldInfo.szName, szComplexField[ii]);
 				return false;
 			}
@@ -132,13 +131,11 @@ bool CFileComplex::ParseData(IN const char* fname)
 
 			if (nShpType == 3) { // 면
 				memcpy(&complex.Box, &pSHPObj->polygon.Box, sizeof(SBox));
-				if (!SetData_Complex(idxCol, complex, chsTmp))
-				{
+				if (!SetData_Complex(idxCol, complex, chsTmp)) {
 					LOG_TRACE(LOG_ERROR, "Error, %s", GetErrorMsg());
 					break;
 				}
-				if (idxCol == 0)
-				{
+				if (idxCol == 0) {
 					//nPoint = SHP_GetNumPartPoints(pSHPObj, 0); //파트 0에 대한	   //선형 갯수..					 																	 
 					pPoints = SHP_GetPartPoints(pSHPObj, 0); //파트 0에 대한	     //실제선형데이터..
 
@@ -147,8 +144,7 @@ bool CFileComplex::ParseData(IN const char* fname)
 				}
 
 				ret = true;
-			}
-			else {
+			} else {
 				LOG_TRACE(LOG_ERROR, "Unknown type, type:%s", nShpType);
 				break;
 			}
@@ -159,16 +155,12 @@ bool CFileComplex::ParseData(IN const char* fname)
 		}
 
 
-#if defined(_USE_TEST_MESH)
-		bool isContinue = true;
-		for (const auto& item : g_arrTestMesh) {
-			if (item == complex.MeshID) {
-				isContinue = false;
-				break;
+		// 테스트 메쉬가 있으면 정의된 메쉬만 확인하자
+		if (g_isUseTestMesh && !g_arrTestMesh.empty()) {
+			if (g_arrTestMesh.find(complex.MeshID) == g_arrTestMesh.end()) {
+				continue;
 			}
 		}
-		if (isContinue) continue;
-#endif
 
 
 		strKey = complex.CpxId + complex.SdSggCode;
@@ -178,7 +170,7 @@ bool CFileComplex::ParseData(IN const char* fname)
 			break;
 		}
 
-		complex.keyCpx.ent.type = 1; // 타입, 0:빌딩, 1:단지
+		complex.keyCpx.poly.type = TYPE_POLYGON_COMPLEX; // 폴리곤 타입, 0:미지정, 1:빌딩, 2:단지, 3:산바운더리
 
 		if (m_mapComplex.find(complex.keyCpx.llid) != m_mapComplex.end()) {
 			// 중복
@@ -308,15 +300,6 @@ void CFileComplex::AddDataFeild(IN const int idx, IN const int type, IN const ch
 void CFileComplex::AddDataRecord()
 {
 
-}
-
-
-bool CFileComplex::LoadData(IN const char* szFilePath)
-{
-	char szFileName[MAX_PATH] = { 0, };
-	sprintf(szFileName, "%s/%s.%s", szFilePath, g_szTypeTitle[TYPE_DATA_COMPLEX], g_szTypeExec[TYPE_DATA_COMPLEX]);
-
-	return CFileBase::LoadData(szFileName);
 }
 
 
@@ -684,94 +667,6 @@ void CFileComplex::Release()
 
 	CFileBase::Release();
 }
-
-
-bool CFileComplex::SaveData(IN const char* szFilePath)
-{
-	char szFileName[MAX_PATH] = { 0, };
-	sprintf(szFileName, "%s/%s.%s", szFilePath, g_szTypeTitle[TYPE_DATA_COMPLEX], g_szTypeExec[TYPE_DATA_COMPLEX]);
-
-	return CFileBase::SaveData(szFileName);
-}
-
-
-//size_t CFileComplex::WriteHeader(FILE* fp, FileHeader* pHeader)
-//{
-//	FileBase stFileBase = { 0, };
-//	size_t offFile = 0;
-//	size_t retWrite = 0;
-//	size_t retRead = 0;
-//	const size_t sizeHeader = sizeof(FileHeader);
-//
-//	if (!fp || !pHeader) {
-//		LOG_TRACE(LOG_ERROR, "Failed, input param null, fp:%p, pHeader:%p", fp, pHeader);
-//		return 0;
-//	}
-//
-//	memcpy(&pHeader->rtMap, GetMeshRegion(), sizeof(pHeader->rtMap));
-//	pHeader->cntIndex = GetMeshCount();
-//	pHeader->offIndex = sizeHeader;
-//	pHeader->offBody = sizeHeader + sizeof(FileIndex) * pHeader->cntIndex;
-//
-//	if ((retWrite = fwrite(pHeader, sizeHeader, 1, fp)) != 1)
-//	{
-//		LOG_TRACE(LOG_ERROR, "Failed, can't write header, written:%d", retWrite);
-//		fclose(fp);
-//		return 0;
-//	}
-//	offFile += sizeHeader;
-//
-//	LOG_TRACE(LOG_DEBUG, "Save data, header, mesh cnt:%lld", pHeader->cntIndex);
-//
-//	return offFile;
-//}
-
-
-//size_t CFileComplex::WriteIndex(FILE* fp, vector<FileIndex>* pvtFileIndex)
-//{
-//	size_t offFile = 0;
-//	size_t retWrite = 0;
-//	size_t retRead = 0;
-//	const size_t sizeIndex = sizeof(FileIndex);
-//	FileIndex fileIndex;
-//	stMeshInfo* pMesh = nullptr;
-//
-//	if (!fp || !pvtFileIndex) {
-//		LOG_TRACE(LOG_ERROR, "Failed, input param null, fp:%p, pHeader:%p", fp, pvtFileIndex);
-//		return 0;
-//	}
-//
-//	for (uint32_t idx = 0; idx < GetMeshCount(); idx++)
-//	{
-//		pMesh = GetMeshData(idx);
-//		if (!pMesh)
-//		{
-//			LOG_TRACE(LOG_ERROR, "Failed, can't access mesh, idx:%d", idx);
-//			return 0;
-//		}
-//
-//		fileIndex.idxTile = idx;
-//		fileIndex.idTile = pMesh->mesh_id.tile_id;
-//		memcpy(&fileIndex.rtTile, &pMesh->mesh_box, sizeof(fileIndex.rtTile));
-//		memcpy(&fileIndex.rtData, &pMesh->data_box, sizeof(fileIndex.rtData));
-//		fileIndex.szBody = 0;
-//		fileIndex.offBody = 0;
-//
-//		if ((retWrite = fwrite(&fileIndex, sizeIndex, 1, fp)) != 1)
-//		{
-//			LOG_TRACE(LOG_ERROR, "Failed, can't write index[%d], written:%d", idx, retWrite);
-//			return 0;
-//		}
-//		offFile += sizeIndex;
-//
-//		// add body data info buff
-//		pvtFileIndex->push_back(fileIndex);
-//	}
-//
-//	LOG_TRACE(LOG_DEBUG, "Save data, mesh index, mesh cnt:%lld", pvtFileIndex->size());
-//
-//	return offFile;
-//}
 
 
 size_t CFileComplex::WriteBody(FILE* fp, IN const uint32_t fileOff)
@@ -1217,9 +1112,9 @@ const KeyID CFileComplex::AddStringId(IN const char* szStringId, IN const uint32
 
 	if (szStringId && ((retKey = GetIdFromStringId(szStringId)).llid == NULL_VALUE)) {
 		string strId(szStringId);
-		retKey.ent.nid = m_nCpxIdx++;
-		retKey.ent.tile_id = meshId;
-		retKey.ent.type = 1; // complex
+		retKey.poly.nid = m_nCpxIdx++;
+		retKey.poly.tile_id = meshId;
+		retKey.poly.type = TYPE_POLYGON_COMPLEX; // complex
 
 		m_mapStringId.emplace(strId, retKey);
 	}

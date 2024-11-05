@@ -30,20 +30,17 @@ public:
 	virtual void AddDataFeild(IN const int idx, IN const int type, IN const char* colData);
 	virtual void AddDataRecord();
 
-	virtual bool SaveData(IN const char* szFilePath);
-
-	//virtual size_t WriteBase(FILE* fp);
-	//virtual size_t WriteHeader(FILE* fp);
 	virtual size_t WriteIndex(FILE* fp);
 	virtual size_t WriteBody(FILE* fp, IN const uint32_t fileOff);
 
-	///////////////////////////////////////////////////////////////////////////
-	virtual bool LoadData(IN const char* szFilePath);
-
-	//virtual size_t ReadBase(FILE* fp);
-	//virtual size_t ReadHeader(FILE* fp);
 	virtual size_t ReadIndex(FILE* fp);
 	virtual size_t ReadBody(FILE* fp);
 
 };
 
+
+
+//#if !defined(USE_P2P_DATA) && !defined(USE_SAMSUNG_HEAVY)// && 1 // defined(_DEBUG)
+extern bool g_isUseTestMesh;
+extern unordered_set<int32_t> g_arrTestMesh;
+//#endif

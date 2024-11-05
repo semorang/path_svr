@@ -42,18 +42,315 @@ static pthread_mutex_t g_mutex_log = PTHREAD_MUTEX_INITIALIZER;
 static int g_mutex_try = 0;
 static const int MAX_MUTEX_TRY = 1000;
 
+LOGTIME g_current_time;
+
+
+time_t getLogTime(LOGTIME& logTime)
+{
+	time_t retEpochTime = 0;
+
 #if defined(_WIN32)
 #ifndef int64_t
 #define int64_t __int64
 #endif
-static SYSTEMTIME g_tmCurrent = {0,};
-// SYSTEMTIME st;
-static SYSTEMTIME g_tmNow;
+	SYSTEMTIME sysNow;
+	GetLocalTime(&sysNow);
+
+	logTime.year = sysNow.wYear;
+	logTime.month = sysNow.wMonth;
+	logTime.day = sysNow.wDay;
+	logTime.hour = sysNow.wHour;
+	logTime.minute = sysNow.wMinute;
+	logTime.second = sysNow.wSecond;
+	logTime.millisecond = sysNow.wMilliseconds;
+
+	struct tm tmNow;
+	tmNow.tm_year = sysNow.wYear - 1900;
+	tmNow.tm_mon = sysNow.wMonth - 1;
+	tmNow.tm_mday = sysNow.wDay;
+	tmNow.tm_hour = sysNow.wHour;
+	tmNow.tm_min = sysNow.wMinute;
+	tmNow.tm_sec = sysNow.wSecond;
+
+	retEpochTime = mktime(&tmNow) * 1000 + sysNow.wMilliseconds;
 #else
-static struct tm g_tmCurrent = {0,};
-static struct timespec g_specific_time;
-static struct tm* g_tmNow;
+	struct timespec g_specific_time;
+	struct tm* tmNow;
+
+	clock_gettime(CLOCK_REALTIME, &g_specific_time);
+	tmNow = localtime(&g_specific_time.tv_sec);
+
+	logTime.year = tmNow->tm_year + 1900;
+	logTime.month = tmNow->tm_mon + 1;
+	logTime.day = tmNow->tm_mday;
+	logTime.hour = tmNow->tm_hour;
+	logTime.minute = tmNow->tm_min;
+	logTime.second = tmNow->tm_sec;
+	logTime.millisecond = floor(g_specific_time.tv_nsec / 1.0e6);
+
+	retEpochTime = g_specific_time.tv_sec * 1000 + logTime.millisecond;
 #endif
+
+	return retEpochTime;
+}
+
+
+#if defined(_WIN32)
+void log_print_head(const int lvl, char* buff, const LOGTIME& logtime)
+#else
+void log_print_head(const int lvl, const LOGTIME& logtime)
+#endif
+{
+	if (lvl == LOG_DEBUG_CONTINUE) {
+		if (g_bUseFileLog && g_fpFileLog) {
+			//g_fpFileLog[0] = '\0';
+		} else {
+#if defined(_WIN32)
+			g_szMsg[0] = '\0';
+			buff[0] = '\0';
+#endif
+		}
+	} else {
+		if (g_bUseFileLog && g_fpFileLog) {
+			fprintf(g_fpFileLog, "[%02d:%02d:%02d:%03d]", logtime.hour, logtime.minute, logtime.second, logtime.millisecond);
+		} else {
+#if defined(_WIN32)
+			sprintf_s(g_szMsg, MAX_BUFF, "[%04d-%02d-%02d %02d:%02d:%02d:%03d]", logtime.year, logtime.month, logtime.day, logtime.hour, logtime.minute, logtime.second, logtime.millisecond);
+#else
+			printf("[%04d-%02d-%02d %02d:%02d:%02d:%03d]", logtime.year, logtime.month, logtime.day, logtime.hour, logtime.minute, logtime.second, logtime.millisecond);
+#endif
+		}
+
+		// log id
+		if (g_nId > 0) {
+			if (g_bUseFileLog && g_fpFileLog) {
+				fprintf(g_fpFileLog, "[%d]", g_nId);
+			} else {
+#if defined(_WIN32)
+				sprintf_s(buff, MAX_BUFF, "[%d]", g_nId);
+				strcat_s(g_szMsg, MAX_BUFF, buff);
+#else
+				printf("[%d]", g_nId);
+#endif
+			}
+		}
+
+		// log level
+		if (lvl == LOG_ERROR) {
+			if (g_bUseFileLog && g_fpFileLog) {
+				fprintf(g_fpFileLog, " error: ");
+			} else {
+#if defined(_WIN32)
+				strcat_s(g_szMsg, MAX_BUFF, " error: ");
+#else
+				printf(" error: ");
+#endif
+			}
+		} else if (lvl == LOG_WARNING) {
+			if (g_bUseFileLog && g_fpFileLog) {
+				fprintf(g_fpFileLog, " warning: ");
+			} else {
+#if defined(_WIN32)
+				strcat_s(g_szMsg, MAX_BUFF, " warning: ");
+#else
+				printf(" warning: ");
+#endif
+			}
+		}
+	} // if (lvl != LOG_DEBUG_LINE)
+
+	  // char *s, c;
+	  // int i;
+	  // double f;
+	  // int64_t l;
+}
+
+
+#if defined(_WIN32)
+void log_print_body(const int lvl, char* buff, const char* fmt)
+#else
+void log_print_body(const int lvl, const char* fmt)
+#endif
+{
+
+	// 	//if ((lvl == LOG_INFO) || (lvl == LOG_ERROR))
+	// 	{
+	// 		va_start(list, fmt);
+	//
+	// 		if (g_fpFileLog) {
+	// #if defined(_WIN32)
+	// 		sprintf(g_szMsg, "[%04d-%02d-%02d %02d:%02d:%02d:%03d]", lt.wYear, lt.wMonth, lt.wDay, lt.wHour, lt.wMinute, lt.wSecond, lt.wMilliseconds);
+	// #else
+	// 		sprintf(g_szMsg, "[%04d-%02d-%02d %02d:%02d:%02d:%03d]", g_tmNow->tm_year + 1900, g_tmNow->tm_mon + 1, g_tmNow->tm_mday, g_tmNow->tm_hour, g_tmNow->tm_min, g_tmNow->tm_sec, millsec);
+	// #endif
+	// 		} else {
+	// #if defined(_WIN32)
+	// 		sprintf(g_szMsg, "[%04d-%02d-%02d %02d:%02d:%02d:%03d]", lt.wYear, lt.wMonth, lt.wDay, lt.wHour, lt.wMinute, lt.wSecond, lt.wMilliseconds);
+	// #else
+	// 		printf("[%04d-%02d-%02d %02d:%02d:%02d:%03d]", g_tmNow->tm_year + 1900, g_tmNow->tm_mon + 1, g_tmNow->tm_mday, g_tmNow->tm_hour, g_tmNow->tm_min, g_tmNow->tm_sec, millsec);
+	// #endif
+	// 		}
+	//
+	// 		while (*fmt)
+	// 		{
+	// 			if (*fmt != '%')
+	// 			{
+	// 				if (g_fpFileLog) {
+	// 					g_szMsg[strlen(g_szMsg)] = *fmt;
+	// 				} else {
+	// #if defined(_WIN32)
+	// 					g_szMsg[strlen(g_szMsg)] = *fmt;
+	// #else
+	// 					putc(*fmt, stdout);
+	// #endif
+	// 				}
+	// 			}
+	// 			else
+	// 			{
+	// 				switch (*++fmt)
+	// 				{
+	// 				case 's':
+	// 					/* set r as the next char in list (string) */
+	// 					s = va_arg(list, char *);
+	// 					if (g_fpFileLog) {
+	// 						strcat(g_szMsg, s);
+	// 					} else {
+	// #if defined(_WIN32)
+	// 						strcat(g_szMsg, s);
+	// #else
+	// 						printf("%s", s);
+	// #endif
+	// 					}
+	// 					break;
+	//
+	// 				case 'd':
+	// 					i = va_arg(list, int);
+	// 					if (g_fpFileLog) {
+	// 						sprintf(g_szBuff, "%d", i);
+	// 						strcat(g_szMsg, g_szBuff);
+	// 					} else {
+	// #if defined(_WIN32)
+	// 						sprintf(g_szBuff, "%d", i);
+	// 						strcat(g_szMsg, g_szBuff);
+	// #else
+	// 						printf("%d", i);
+	// #endif
+	// 					}
+	// 					break;
+	//
+	// 				case 'f':
+	// 					f = va_arg(list, double);
+	// 					if (g_fpFileLog) {
+	// 						sprintf(g_szBuff, "%f", f);
+	// 						strcat(g_szMsg, g_szBuff);
+	// 					} else {
+	// #if defined(_WIN32)
+	// 						sprintf(g_szBuff, "%f", f);
+	// 						strcat(g_szMsg, g_szBuff);
+	// #else
+	// 						printf("%f", f);
+	// #endif
+	// 					}
+	// 					break;
+	//
+	// 				case 'l':
+	// 					if ((*(fmt + 1)) == '6' && (*(fmt + 2)) == '4' && (*(fmt + 2)) == 'd')
+	// 						fmt += 3;
+	// 					else if ((*(fmt + 1)) == 'l' && (*(fmt + 2)) == 'd')
+	// 						fmt += 2;
+	// 					else if ((*(fmt + 2)) == 'd')
+	// 						++fmt;
+	// 					l = va_arg(list, int64_t);
+	// 					if (g_fpFileLog) {
+	// 						sprintf(g_szBuff, "%lld", l);
+	// 						strcat(g_szMsg, g_szBuff);
+	// 					} else {
+	// #if defined(_WIN32)
+	// 						sprintf(g_szBuff, "%lld", l);
+	// 						strcat(g_szMsg, g_szBuff);
+	// #else
+	// 						printf("%lld", l);
+	// #endif
+	// 					}
+	// 					break;
+	//
+	// 				case 'c':
+	// 					c = va_arg(list, int);
+	// 					if (g_fpFileLog) {
+	// 						sprintf(g_szBuff, "%c", c);
+	// 						strcat(g_szMsg, g_szBuff);
+	// 					} else {
+	// #if defined(_WIN32)
+	// 						sprintf(g_szBuff, "%c", c);
+	// 						strcat(g_szMsg, g_szBuff);
+	// #else
+	// 						printf("%c", c);
+	// #endif
+	// 					}
+	// 					break;
+	//
+	// 				default:
+	// 					if (g_fpFileLog) {
+	// 					} else {
+	// 	#if defined(_WIN32)
+	//
+	// 	#else
+	// 						putc(*fmt, stdout);
+	// 	#endif
+	// 					}
+	// 					break;
+	// 				}
+	// 			}
+	// 			++fmt;
+	// 		}
+	// 		va_end(list);
+	// 	}
+	//
+	// 	if (g_fpFileLog) {
+	// 		strcat(g_szMsg, "\n");
+	// 		fwrite(g_szMsg, strlen(g_szMsg), 1, g_fpFileLog);
+	// 	} else {
+	// #if defined(_WIN32)
+	// 	strcat(g_szMsg, "\n");
+	// 	#if _MSC_VER > 1900
+	// 		printf(g_szMsg);
+	// 		OutputDebugStringA(g_szMsg);
+	// 	#else
+	// 		printf(g_szMsg);
+	// 	#endif
+	// #else
+	// 	printf("\n");
+	// 	fflush(stdout);
+	// #endif
+	// 	}
+}
+
+void log_print_tail(const int lvl)
+{
+	if (g_bUseFileLog && g_fpFileLog) {
+		if (lvl != LOG_DEBUG_LINE && lvl != LOG_DEBUG_CONTINUE) {
+			fprintf(g_fpFileLog, "\n");
+		}
+		fflush(g_fpFileLog);
+	} else {
+#if defined(_WIN32)
+		if (lvl != LOG_DEBUG_LINE && lvl != LOG_DEBUG_CONTINUE) {
+			strcat_s(g_szMsg, MAX_BUFF, "\n");
+		}
+#if _MSC_VER >= 1900
+		printf(g_szMsg);
+		OutputDebugStringA(g_szMsg);
+#else
+		printf(g_szMsg);
+#endif
+#else
+		if (lvl != LOG_DEBUG_LINE && lvl != LOG_DEBUG_CONTINUE) {
+			printf("\n");
+		}
+		fflush(stdout);
+#endif
+	}
+}
 
 
 void LOG_INITIALIZE(void)
@@ -66,6 +363,7 @@ void LOG_INITIALIZE(void)
 #endif
 }
 
+
 void LOG_RELEASE(void)
 {
 	g_mutex_try = 0;
@@ -76,6 +374,7 @@ void LOG_RELEASE(void)
 #endif
 }
 
+
 void LOG_SET_ID(const int id)
 {
 	g_nId = id;
@@ -84,11 +383,13 @@ void LOG_SET_ID(const int id)
 	printf("Log id set, id:%d\n", g_nId);
 }
 
+
 void LOG_SET_LEVLE(const int lvl)
 {
 	printf("Log level change, %d -> %d\n", g_nPrintLogLevel, lvl);
 	g_nPrintLogLevel = lvl;
 }
+
 
 void LOG_SET_FILEPATH(const char* szFilePath, const char* szFileName)
 {
@@ -96,33 +397,15 @@ void LOG_SET_FILEPATH(const char* szFilePath, const char* szFileName)
 		return;
 	}
 
-
-#if defined(_WIN32)
-	// GetSystemTime(&st);
-	GetLocalTime(&g_tmNow);
-#else
-	// time_t timer = time(NULL);
-	// struct tm* g_tmNow = localtime(&timer);
-	clock_gettime(CLOCK_REALTIME, &g_specific_time);
-	g_tmNow = localtime(&g_specific_time.tv_sec);
-	// int millsec = g_specific_time.tv_nsec;
-	// millsec = floor(g_specific_time.tv_nsec / 1.0e6);
-#endif
-
-
-
+	LOGTIME logNow;
+	time_t tEpochTime = getLogTime(logNow);
 
 	// make new file
-#if defined(_WIN32)
-	if ((g_tmCurrent.wYear != g_tmNow.wYear ||
-		g_tmCurrent.wMonth != g_tmNow.wMonth ||
-		g_tmCurrent.wDay != g_tmNow.wDay))
-#else
-	if ((g_tmCurrent.tm_year != g_tmNow->tm_year ||
-		g_tmCurrent.tm_mon != g_tmNow->tm_mon ||
-		g_tmCurrent.tm_mday != g_tmNow->tm_mday))
-#endif
+	if ((g_current_time.year != logNow.year) || (g_current_time.month != logNow.month) || (g_current_time.day != logNow.day))
 	{
+		// update date
+		memcpy(&g_current_time, &logNow, sizeof(logNow));
+
 #if defined(_WIN32)
 		// check directory created
 		if (_access_s(szFilePath, 0) != 0) {
@@ -132,9 +415,6 @@ void LOG_SET_FILEPATH(const char* szFilePath, const char* szFileName)
 				return;
 			}
 		}
-
-		// update date
-		memcpy(&g_tmCurrent, &g_tmNow, sizeof(g_tmCurrent));
 #else
 		// check directory created
 		if (access(szFilePath, W_OK) != 0) {
@@ -144,17 +424,10 @@ void LOG_SET_FILEPATH(const char* szFilePath, const char* szFileName)
 				return;
 			}
 		}
-
-		// update date
-		memcpy(&g_tmCurrent, g_tmNow, sizeof(g_tmCurrent));
 #endif
 
 		char szFilePathName[PATH_MAX] = {0,};
-#if defined(_WIN32)
-		sprintf(szFilePathName, "%s/%s_%04d-%02d-%02d.txt", szFilePath, szFileName, g_tmNow.wYear, g_tmNow.wMonth, g_tmNow.wDay);
-#else
-		sprintf(szFilePathName, "%s/%s_%04d-%02d-%02d.txt", szFilePath, szFileName, g_tmNow->tm_year + 1900, g_tmNow->tm_mon + 1, g_tmNow->tm_mday);
-#endif
+		sprintf(szFilePathName, "%s/%s_%04d-%02d-%02d.txt", szFilePath, szFileName, logNow.year, logNow.month, logNow.day);
 
 		// file close
 		if (g_fpFileLog) {
@@ -189,13 +462,29 @@ void LOG_SET_FILEPATH(const char* szFilePath, const char* szFileName)
 //#define LOG_TRACE(LOG_LEVEL lvl, char *fmt, ...)	LOG_PRINT(lvl, __FUNCTION__, __LINE__, fmt, ...)
 //void LOG_PRINT(LOG_LEVEL lvl, const char* strFuc, const int nLine, char *fmt, ...)
 
-void LOG_TRACE(LOG_LEVEL lvl, const char *fmt, ...)
+
+time_t LOG_TRACE_EX(const char* func, const int line, LOG_LEVEL lvl, const char *fmt, ...)
 {
+	time_t tEpochTime = 0;
+
 	if (g_nPrintLogLevel < lvl) {
-		return;
+		return tEpochTime;
+	}
+}
+
+
+time_t LOG_TRACE(LOG_LEVEL lvl, const char *fmt, ...)
+{
+	time_t retEpochTime = 0;
+
+	if (g_nPrintLogLevel < lvl) {
+		return retEpochTime;
 	}
 
+	// lock
 #if defined(_WIN32)
+	char szBuff[MAX_BUFF] = { 0, };
+
 	// EnterCriticalSection(&g_mutex_log);
 	for (; TryEnterCriticalSection(&g_mutex_log) != TRUE; ) 
 #else
@@ -224,44 +513,22 @@ void LOG_TRACE(LOG_LEVEL lvl, const char *fmt, ...)
 #else
 			pthread_mutex_unlock(&g_mutex_log);
 #endif
-			return;
+			return retEpochTime;
 		}
 	} // for
 
 
-#if defined(_WIN32)
-#ifndef int64_t
-#define int64_t __int64
-#endif
-	//SYSTEMTIME st;
-	// GetSystemTime(&st);
-	GetLocalTime(&g_tmNow);
-	char szBuff[MAX_BUFF] = {0,};
-#else
-	// time_t timer = time(NULL);
-	// struct tm* g_tmNow = localtime(&timer);
-	clock_gettime(CLOCK_REALTIME, &g_specific_time);
-	g_tmNow = localtime(&g_specific_time.tv_sec);
-	// int millsec = g_specific_time.tv_nsec;
-	int millsec = floor(g_specific_time.tv_nsec / 1.0e6);
-#endif
+	// get current time
+	LOGTIME logNow;
+	retEpochTime = getLogTime(logNow);
 
 
 	// check date
 	if (g_bUseFileLog && 
-#if defined(_WIN32)
-		(g_tmCurrent.wYear != g_tmNow.wYear || g_tmCurrent.wMonth != g_tmNow.wMonth || g_tmCurrent.wDay != g_tmNow.wDay))
-#else
-		(g_tmCurrent.tm_year != g_tmNow->tm_year || g_tmCurrent.tm_mon != g_tmNow->tm_mon || g_tmCurrent.tm_mday != g_tmNow->tm_mday))
-#endif
+		((g_current_time.year != logNow.year) || (g_current_time.month != logNow.month) || (g_current_time.day != logNow.day)))
 	{
 		char szChangeDateLog[PATH_MAX] = {0,};
-		sprintf(szChangeDateLog, "Log file change date: %04d-%02d-%02d => %04d-%02d-%02d\n",
-#if defined(_WIN32)
-		g_tmCurrent.wYear, g_tmCurrent.wMonth, g_tmCurrent.wDay, g_tmNow.wYear, g_tmNow.wMonth, g_tmNow.wDay);
-#else
-		g_tmCurrent.tm_year, g_tmCurrent.tm_mon, g_tmCurrent.tm_mday, g_tmNow->tm_year, g_tmNow->tm_mon, g_tmNow->tm_mday);
-#endif
+		sprintf(szChangeDateLog, "Log file change date: %04d-%02d-%02d => %04d-%02d-%02d\n", g_current_time.year, g_current_time.month, g_current_time.day, logNow.year, logNow.month, logNow.day);
 		printf(szChangeDateLog);
 		// LOG_TRACE(LOG_DEBUG, szChangeDateLog);
 
@@ -269,79 +536,12 @@ void LOG_TRACE(LOG_LEVEL lvl, const char *fmt, ...)
 	}
 
 
-	if (lvl == LOG_DEBUG_CONTINUE) {
-		if (g_bUseFileLog && g_fpFileLog) {
-			//g_fpFileLog[0] = '\0';
-		}
-		else {
-#if defined(_WIN32)
-			g_szMsg[0] = '\0';
-			szBuff[0] = '\0';
-#endif
-		}
-	} else {
-		if (g_bUseFileLog && g_fpFileLog) {
-#if defined(_WIN32)
-			fprintf(g_fpFileLog, "[%02d:%02d:%02d:%03d]", g_tmNow.wHour, g_tmNow.wMinute, g_tmNow.wSecond, g_tmNow.wMilliseconds);
-#else
-			fprintf(g_fpFileLog, "[%02d:%02d:%02d:%03d]", g_tmNow->tm_hour, g_tmNow->tm_min, g_tmNow->tm_sec, millsec);
-#endif
-		}
-		else {
-#if defined(_WIN32)
-			sprintf_s(g_szMsg, MAX_BUFF, "[%04d-%02d-%02d %02d:%02d:%02d:%03d]", g_tmNow.wYear, g_tmNow.wMonth, g_tmNow.wDay, g_tmNow.wHour, g_tmNow.wMinute, g_tmNow.wSecond, g_tmNow.wMilliseconds);
-#else
-			printf("[%04d-%02d-%02d %02d:%02d:%02d:%03d]", g_tmNow->tm_year + 1900, g_tmNow->tm_mon + 1, g_tmNow->tm_mday, g_tmNow->tm_hour, g_tmNow->tm_min, g_tmNow->tm_sec, millsec);
-#endif
-		}
+	// print head
+	log_print_head(lvl, szBuff, logNow);
+	
 
-		// log id
-		if (g_nId > 0) {
-			if (g_bUseFileLog && g_fpFileLog) {
-				fprintf(g_fpFileLog, "[%d]", g_nId);
-			}
-			else {
-#if defined(_WIN32)
-				sprintf_s(szBuff, MAX_BUFF, "[%d]", g_nId);
-				strcat_s(g_szMsg, MAX_BUFF, szBuff);
-#else
-				printf("[%d]", g_nId);
-#endif
-			}
-		}
-
-		// log level
-		if (lvl == LOG_ERROR) {
-			if (g_bUseFileLog && g_fpFileLog) {
-				fprintf(g_fpFileLog, " error: ");
-			}
-			else {
-#if defined(_WIN32)
-				strcat_s(g_szMsg, MAX_BUFF, " error: ");
-#else
-				printf(" error: ");
-#endif
-			}
-		}
-		else if (lvl == LOG_WARNING) {
-			if (g_bUseFileLog && g_fpFileLog) {
-				fprintf(g_fpFileLog, " warning: ");
-			}
-			else {
-#if defined(_WIN32)
-				strcat_s(g_szMsg, MAX_BUFF, " warning: ");
-#else
-				printf(" warning: ");
-#endif
-			}
-		}
-	} // if (lvl != LOG_DEBUG_LINE)
-
-	// char *s, c;
-	// int i;
-	// double f;
-	// int64_t l;
-
+	// print body
+	//log_print_body();
 	va_start(g_list, fmt);
 	if (g_bUseFileLog && g_fpFileLog) {
 		vfprintf(g_fpFileLog, fmt, g_list);
@@ -356,189 +556,124 @@ void LOG_TRACE(LOG_LEVEL lvl, const char *fmt, ...)
 	va_end(g_list);
 
 
-	if (g_bUseFileLog && g_fpFileLog) {
-		if (lvl != LOG_DEBUG_LINE && lvl != LOG_DEBUG_CONTINUE) {
-			fprintf(g_fpFileLog, "\n");
-		}
-		fflush(g_fpFileLog);
-	} else {
-#if defined(_WIN32)
-		if (lvl != LOG_DEBUG_LINE && lvl != LOG_DEBUG_CONTINUE) {
-			strcat_s(g_szMsg, MAX_BUFF, "\n");
-		}
-	#if _MSC_VER >= 1900
-		printf(g_szMsg);
-		OutputDebugStringA(g_szMsg);
-	#else
-		printf(g_szMsg);
-	#endif
-#else
-		if (lvl != LOG_DEBUG_LINE && lvl != LOG_DEBUG_CONTINUE) {
-			printf("\n");
-		}
-		fflush(stdout);
-#endif
-	}
+	// print tail
+	log_print_tail(lvl);
 
 
-// 	//if ((lvl == LOG_INFO) || (lvl == LOG_ERROR))
-// 	{
-// 		va_start(list, fmt);
-
-// 		if (g_fpFileLog) {
-// #if defined(_WIN32)
-// 		sprintf(g_szMsg, "[%04d-%02d-%02d %02d:%02d:%02d:%03d]", lt.wYear, lt.wMonth, lt.wDay, lt.wHour, lt.wMinute, lt.wSecond, lt.wMilliseconds);
-// #else
-// 		sprintf(g_szMsg, "[%04d-%02d-%02d %02d:%02d:%02d:%03d]", g_tmNow->tm_year + 1900, g_tmNow->tm_mon + 1, g_tmNow->tm_mday, g_tmNow->tm_hour, g_tmNow->tm_min, g_tmNow->tm_sec, millsec);
-// #endif
-// 		} else {
-// #if defined(_WIN32)
-// 		sprintf(g_szMsg, "[%04d-%02d-%02d %02d:%02d:%02d:%03d]", lt.wYear, lt.wMonth, lt.wDay, lt.wHour, lt.wMinute, lt.wSecond, lt.wMilliseconds);
-// #else
-// 		printf("[%04d-%02d-%02d %02d:%02d:%02d:%03d]", g_tmNow->tm_year + 1900, g_tmNow->tm_mon + 1, g_tmNow->tm_mday, g_tmNow->tm_hour, g_tmNow->tm_min, g_tmNow->tm_sec, millsec);
-// #endif
-// 		}
-
-// 		while (*fmt)
-// 		{
-// 			if (*fmt != '%')
-// 			{
-// 				if (g_fpFileLog) {
-// 					g_szMsg[strlen(g_szMsg)] = *fmt;
-// 				} else {
-// #if defined(_WIN32)
-// 					g_szMsg[strlen(g_szMsg)] = *fmt;
-// #else
-// 					putc(*fmt, stdout);
-// #endif
-// 				}
-// 			}
-// 			else
-// 			{
-// 				switch (*++fmt)
-// 				{
-// 				case 's':
-// 					/* set r as the next char in list (string) */
-// 					s = va_arg(list, char *);
-// 					if (g_fpFileLog) {
-// 						strcat(g_szMsg, s);
-// 					} else {
-// #if defined(_WIN32)
-// 						strcat(g_szMsg, s);
-// #else
-// 						printf("%s", s);
-// #endif
-// 					}
-// 					break;
-
-// 				case 'd':
-// 					i = va_arg(list, int);
-// 					if (g_fpFileLog) {
-// 						sprintf(g_szBuff, "%d", i);
-// 						strcat(g_szMsg, g_szBuff);
-// 					} else {
-// #if defined(_WIN32)
-// 						sprintf(g_szBuff, "%d", i);
-// 						strcat(g_szMsg, g_szBuff);
-// #else
-// 						printf("%d", i);
-// #endif
-// 					}
-// 					break;
-
-// 				case 'f':
-// 					f = va_arg(list, double);
-// 					if (g_fpFileLog) {
-// 						sprintf(g_szBuff, "%f", f);
-// 						strcat(g_szMsg, g_szBuff);
-// 					} else {
-// #if defined(_WIN32)
-// 						sprintf(g_szBuff, "%f", f);
-// 						strcat(g_szMsg, g_szBuff);
-// #else
-// 						printf("%f", f);
-// #endif
-// 					}
-// 					break;
-
-// 				case 'l':
-// 					if ((*(fmt + 1)) == '6' && (*(fmt + 2)) == '4' && (*(fmt + 2)) == 'd')
-// 						fmt += 3;
-// 					else if ((*(fmt + 1)) == 'l' && (*(fmt + 2)) == 'd')
-// 						fmt += 2;
-// 					else if ((*(fmt + 2)) == 'd')
-// 						++fmt;
-// 					l = va_arg(list, int64_t);
-// 					if (g_fpFileLog) {
-// 						sprintf(g_szBuff, "%lld", l);
-// 						strcat(g_szMsg, g_szBuff);
-// 					} else {
-// #if defined(_WIN32)
-// 						sprintf(g_szBuff, "%lld", l);
-// 						strcat(g_szMsg, g_szBuff);
-// #else
-// 						printf("%lld", l);
-// #endif
-// 					}
-// 					break;
-
-// 				case 'c':
-// 					c = va_arg(list, int);
-// 					if (g_fpFileLog) {
-// 						sprintf(g_szBuff, "%c", c);
-// 						strcat(g_szMsg, g_szBuff);
-// 					} else {
-// #if defined(_WIN32)
-// 						sprintf(g_szBuff, "%c", c);
-// 						strcat(g_szMsg, g_szBuff);
-// #else
-// 						printf("%c", c);
-// #endif
-// 					}
-// 					break;
-
-// 				default:
-// 					if (g_fpFileLog) {
-// 					} else {
-// 	#if defined(_WIN32)
-
-// 	#else
-// 						putc(*fmt, stdout);
-// 	#endif
-// 					}
-// 					break;
-// 				}
-// 			}
-// 			++fmt;
-// 		}
-// 		va_end(list);
-// 	}
-
-// 	if (g_fpFileLog) {
-// 		strcat(g_szMsg, "\n");
-// 		fwrite(g_szMsg, strlen(g_szMsg), 1, g_fpFileLog);
-// 	} else {
-// #if defined(_WIN32)
-// 	strcat(g_szMsg, "\n");
-// 	#if _MSC_VER > 1900
-// 		printf(g_szMsg);
-// 		OutputDebugStringA(g_szMsg);
-// 	#else
-// 		printf(g_szMsg);
-// 	#endif
-// #else
-// 	printf("\n");
-// 	fflush(stdout);
-// #endif
-// 	}
-
+	// unlock
 	g_mutex_try = 0;
 #if defined(_WIN32)	
 	LeaveCriticalSection(&g_mutex_log);
 #else
 	pthread_mutex_unlock(&g_mutex_log);
 #endif
+
+	return retEpochTime;
 }
+
+
+time_t LOG_TRACE_TM(LOG_LEVEL lvl, time_t tm, const char *fmt, ...)
+{
+	time_t retEpochTime = 0;
+
+	if (g_nPrintLogLevel < lvl) {
+		return retEpochTime;
+	}
+
+
+	// lock
+#if defined(_WIN32)
+	char szBuff[MAX_BUFF] = { 0, };
+
+	// EnterCriticalSection(&g_mutex_log);
+	for (; TryEnterCriticalSection(&g_mutex_log) != TRUE; )
+#else
+	// pthread_mutex_lock();
+	for (; !pthread_mutex_trylock(&g_mutex_log) != 0; )
+#endif
+	{
+#if defined(_WIN32)
+		Sleep(1); // 1ms
+#else
+		usleep(1000); // 1ms
+#endif
+
+		// try 1 sec
+		if (g_mutex_try++ >= MAX_MUTEX_TRY) {
+			printf("LOG Error, wait count over than %d times, will return, pid:%d\n", g_mutex_try, omp_get_thread_num());
+
+			va_start(g_list, fmt);
+			vprintf(fmt, g_list);
+			printf("\n");
+			va_end(g_list);
+
+			g_mutex_try = 0;
+#if defined(_WIN32)	
+			LeaveCriticalSection(&g_mutex_log);
+#else
+			pthread_mutex_unlock(&g_mutex_log);
+#endif
+			return retEpochTime;
+		}
+	} // for
+
+
+	  // get current time
+	LOGTIME logNow;
+	retEpochTime = getLogTime(logNow);
+
+
+	// check date
+	if (g_bUseFileLog &&
+		((g_current_time.year != logNow.year) || (g_current_time.month != logNow.month) || (g_current_time.day != logNow.day))) {
+		char szChangeDateLog[PATH_MAX] = { 0, };
+		sprintf(szChangeDateLog, "Log file change date: %04d-%02d-%02d => %04d-%02d-%02d\n", g_current_time.year, g_current_time.month, g_current_time.day, logNow.year, logNow.month, logNow.day);
+		printf(szChangeDateLog);
+		// LOG_TRACE(LOG_DEBUG, szChangeDateLog);
+
+		LOG_SET_FILEPATH(g_szFilePath, g_szFileName);
+	}
+
+
+	// print header
+#if defined(_WIN32)
+	log_print_head(lvl, szBuff, logNow);
+#else
+	log_print_head(lvl, logNow);
+#endif
+
+
+	// print body
+	//log_print_body(lvl, szBuff, fmt);
+	va_start(g_list, fmt);
+	if (g_bUseFileLog && g_fpFileLog) {
+		vfprintf(g_fpFileLog, fmt, g_list);
+	} else {
+#if defined(_WIN32)
+		vsprintf(szBuff, fmt, g_list);
+		strcat_s(g_szMsg, MAX_BUFF, szBuff);
+#else
+		vprintf(fmt, g_list);
+#endif
+	}
+	va_end(g_list);
+
+
+	// print tail
+	log_print_tail(lvl);
+
+
+	// unlock
+	g_mutex_try = 0;
+#if defined(_WIN32)	
+	LeaveCriticalSection(&g_mutex_log);
+#else
+	pthread_mutex_unlock(&g_mutex_log);
+#endif
+
+	return retEpochTime;
+}
+
 
 size_t TICK_COUNT()
 {

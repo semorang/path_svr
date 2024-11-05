@@ -1,8 +1,10 @@
 #pragma once
 
-// #define USE_PROJ4_LIB // PROJ4 라이브러리, 컴파일 시에만 사용
-
 #include "../include/MapDef.h"
+
+#if defined(USE_P2P_DATA)
+// #define USE_PROJ4_LIB // PROJ4 라이브러리, 컴파일 시에만 사용
+#endif
 
 // 시계방향. // CW
 bool isRightSide(IN const SPoint* P1, IN const SPoint* P2, IN const SPoint* P3); //const
@@ -14,7 +16,7 @@ double get_road_slope(long x1, long y1, long z1, long x2, long y2, long z2);
 double get_road_slope(int32_t dist, int32_t height);
 
 double getRealWorldDistance(IN const double slng, IN const double slat, IN const double elng, IN const double elat);
-bool getPointByDistance(IN const double slng, IN const double slat, IN OUT double& elng, IN OUT double& elat, double lDistance);
+bool getPointByDistance(IN const double slng, IN const double slat, IN OUT double& elng, IN OUT double& elat, const double lDistance);
 
 bool isInBox(IN const double lon, IN const double lat, IN const SBox& inBox, IN const double inMargin = 0);
 bool isInPitBox(IN const SBox& fromBox, IN const SBox& inBox);

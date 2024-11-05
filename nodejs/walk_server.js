@@ -7,6 +7,8 @@ const cors = require('cors'); // CORS 오류 해소
 const cfg = require('dotenv').config();
 // const addon = require('./build/Release/trekking_route.node');
 var route = require('../src/route');
+const logout = require('../src/logs');
+const times = require('../src/times.js')
 // const escapeJSON = require('escape-json-noide');
 // const addon = require('bindings')('openAPI')
 // const cur_port = (process.env.SERVER_PORT === undefined) ? 20301 : process.env.SERVER_PORT;
@@ -69,12 +71,20 @@ app.get('/version', function(req, res) {
 
     var ret = route.version();
 
-    if (ret.result_code == 0) {
-        res.send(ret);
+    logout("result : " + ((ret.result_code == 0) ? "success" : "failed") + ", code : " + ret.result_code);
+    if (ret.result_code != 0) {
+        logout('버전 확인 실패 : ' + ret.msg);
+    } else {
+        ret.server = {
+            ip : cur_ip.address(),
+            port : cur_port,
+            pid : cur_pid,
+            start : start_time,
+            alive : times.getElapsedTime(start_time.getTime()),
+        }
     }
-    else{
-        res.send('버전 확인 실패, 코드 : ' + ret.result_code + ', 오류 : ' + ret.msg);
-    }
+
+    res.send(ret);
 });
 
 
@@ -171,12 +181,13 @@ app.get('/routeview', function(req, res) {
     logout("end routeview request");
 });
 
-
+const cur_ip = require("ip");
 const cur_port = (process.env.PED_SVR_PORT === undefined) ? 77777 : process.env.PED_SVR_PORT;
+const cur_pid = process.pid;
+const start_time = new Date();
+
 const server = app.listen(cur_port, function () {
-    var cur_ip = require("ip");
     var cur_date = new Date();
-    var cur_pid = process.pid; //`${process.pid}`
     // var cur_time = cur_date.toFormat('YYYY-MM-DD HH24:MI:SS');
     logout("[" + cur_date + "] start walk route server response at " + cur_ip.address() + ":" + cur_port);
     logout("[" + cur_date + "] OS : " + os.type());

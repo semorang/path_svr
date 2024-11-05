@@ -17,10 +17,13 @@ double ConvexHull_Cross(SPoint *O, SPoint *A, SPoint *B)
 	return (A->x - O->x) * (B->y - O->y) - (A->y - O->y) * (B->x - O->x);
 }
 
-void ConvexHull(IN vector<SPoint> &p, OUT vector<SPoint> &q)
+void ConvexHull(IN vector<SPoint> &r, OUT vector<SPoint> &q)
 {
-	if (p.size() > 1)
+	if (r.size() > 1)
 	{
+		vector<SPoint> p(r.size());
+		p.assign(r.begin(), r.end());
+
 		qsort(&p[0], p.size(), sizeof(SPoint), SPointCompare);
 
 		// 동일 데이터 제거
@@ -36,6 +39,10 @@ void ConvexHull(IN vector<SPoint> &p, OUT vector<SPoint> &q)
 		if (p.size() != vtTmp.size()) {
 			p.clear();
 			p.assign(vtTmp.begin(), vtTmp.end());
+		}
+
+		if (p.size() <= 1) {
+			return;
 		}
 
 		int n = p.size(), k = 0;

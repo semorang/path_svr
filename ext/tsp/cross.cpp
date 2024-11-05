@@ -5,7 +5,7 @@
  *       author: Shujia Liu
  */
 
-#ifndef __Cross__
+#ifndef __CROSS__
 #include "cross.h"
 #endif
 
@@ -693,7 +693,9 @@ void TCross::makeUnit(){
 		}
 		if( flag == 0 ) break;
 
-		while(1){
+		// 무한 루프 오류, 임시 처리
+		int cnt_loop = 0;
+		while(1){ // loop
 			segNum = fPosiSeg[ p1 ];
 			fSegUnit[ segNum ] = fNumOfUnit;
 
@@ -709,6 +711,11 @@ void TCross::makeUnit(){
 
 			p_pre = p2;
 			p1 = p_next;
+
+			if (cnt_loop > 100) {
+				printf("cross::makeUnit, exit loop\n");
+				break;
+			}
 		}
 	}
 

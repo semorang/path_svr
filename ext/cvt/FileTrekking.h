@@ -66,9 +66,5 @@ public:
 	virtual bool GenServiceData();
 	virtual void AddDataFeild(IN const int idx, IN const int type, IN const char* colData);
 	virtual void AddDataRecord();
-	
-	virtual bool OpenFile(IN const char* szFilePath);
-	virtual bool SaveData(IN const char* szFilePath);
-	virtual bool LoadData(IN const char* szFilePath);
 };
 

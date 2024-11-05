@@ -8,7 +8,7 @@
 #include "../utils/UserLog.h"
 #include "../utils/GeoTools.h"
 #include "../utils/CatmullRom.h"
-#include "../utils/convexhull.h"
+//#include "../utils/convexhull.h"
 
 #define VLINK 1
 
@@ -23,16 +23,17 @@ CRouteManager::CRouteManager()
 {
 	m_pDataMgr = nullptr;
 	m_pRoutePlan = new CRoutePlan();
+	m_pTmsMgr = new CTMSManager();
 
+	Initialize();
 
-	memset(&m_ptDeparture, 0x00, sizeof(SPoint));
-	memset(&m_ptNewDeparture, 0x00, sizeof(SPoint));
-	//memset(m_ptWaypoint, 0x00, sizeof(SPoint) * 10);
-	memset(&m_ptDestination, 0x00, sizeof(SPoint));
-	memset(&m_ptNewDestination, 0x00, sizeof(SPoint));
+	m_vtRouteOpt.clear();
+	vector<uint32_t>().swap(m_vtRouteOpt);
+	m_vtAvoidOpt.clear();
+	vector<uint32_t>().swap(m_vtAvoidOpt);
 
-	m_nRouteOpt = 0;
-	m_nAvoidOpt = 0;
+	m_nMobilityOpt = 0;
+	m_routeSubOpt.option = 0;
 
 	m_nDepartureDirIgnore = 0;
 	m_nWaypointDirIgnore = 0;
@@ -44,9 +45,8 @@ CRouteManager::~CRouteManager()
 {
 	Release();
 
-	if (m_pRoutePlan) {
-		delete m_pRoutePlan;
-	}
+	SAFE_DELETE(m_pRoutePlan);
+	SAFE_DELETE(m_pTmsMgr);
 }
 
 
@@ -56,12 +56,21 @@ bool CRouteManager::Initialize(void)
 		m_pRoutePlan->Initialize();
 	}
 
+	if (m_pTmsMgr) {
+		m_pTmsMgr->Initialize();
+	}
+
 	m_routeResult.Init();
 
 	InitPoints();
 
-	m_nRouteOpt = 0;
-	m_nAvoidOpt = 0;
+	m_vtRouteOpt.clear();
+	vector<uint32_t>().swap(m_vtRouteOpt);
+	m_vtAvoidOpt.clear();
+	vector<uint32_t>().swap(m_vtAvoidOpt);
+
+	m_nMobilityOpt = 0;
+	m_routeSubOpt.option = 0;
 
 	m_nDepartureDirIgnore = 0;
 	m_nWaypointDirIgnore = 0;
@@ -74,6 +83,10 @@ void CRouteManager::Release(void)
 {
 	if (m_pRoutePlan) {
 		m_pRoutePlan->Release();
+	}
+
+	if (m_pTmsMgr) {
+		m_pTmsMgr->Release();
 	}
 
 	if (!m_vtRouteInfo.empty()) {
@@ -100,50 +113,65 @@ void CRouteManager::SetDataMgr(CDataManager* pDataMgr)
 
 void CRouteManager::InitPoints(void)
 {
-	memset(&m_ptDeparture, 0x00, sizeof(m_ptDeparture));
-	memset(&m_ptNewDeparture, 0x00, sizeof(m_ptNewDeparture));
-	if (!m_ptWaypoints.empty()) {
-		m_ptWaypoints.clear();
-		vector<SPoint>().swap(m_ptWaypoints);
+	m_linkDeparture.init();
+	m_linkDestination.init();
+	if (!m_linkWaypoints.empty()) {
+		m_linkWaypoints.clear();
+		vector<RouteLinkInfo>().swap(m_linkWaypoints);
+	}
+}
+
+
+int getCourseLinkMatchType(IN const stRouteSubOption subOption)
+{
+	int trkMatchType = TYPE_LINK_MATCH_NONE;
+
+	if (subOption.mnt.course_id == 0) {
+		if (subOption.mnt.course_type == TYPE_TRE_HIKING) { // 등산로
+			trkMatchType = TYPE_TRE_HIKING;
+		} else if (subOption.mnt.course_type == TYPE_TRE_TRAIL) { // 걷기길
+			trkMatchType = TYPE_TRE_TRAIL;
+		} else if (subOption.mnt.course_type == TYPE_TRE_BIKE) { // 자전거길
+			trkMatchType = TYPE_TRE_BIKE;
+		} else if (subOption.mnt.course_type == TYPE_TRE_CROSS) { // 코스
+			trkMatchType = TYPE_TRE_CROSS;
+		} else {
+			trkMatchType = TYPE_TRE_HIKING; // 등산로
+		}
+
+		//if (subOption.mnt.course_type == 1) { // 등산로
+		//	trkMatchType = TYPE_TRE_HIKING;
+		//}
+		//else if (subOption.mnt.course_type == 2) { // 둘레길
+		//	trkMatchType = TYPE_TRE_TRAIL;
+		//}
+		//else if (subOption.mnt.course_type == 3) { // 자전거길
+		//	trkMatchType = TYPE_TRE_BIKE;
+		//}
+		//else if (subOption.mnt.course_type == 4) { // 종주길
+		//	trkMatchType = TYPE_TRE_CROSS;
+		//}
+		//else if (subOption.mnt.course_type == 5) { // 추천길
+		//	trkMatchType = TYPE_TRE_RECOMMENDED;
+		//}
+		//else if (subOption.mnt.course_type == 6) { // MTB
+		//	trkMatchType = TYPE_TRE_MTB;
+		//}
+		//else if (subOption.mnt.course_type == 7) { // 인기길
+		//	trkMatchType = TYPE_TRE_POPULAR;
+		//}
+		//else {
+		//	trkMatchType = TYPE_TRE_HIKING; // 등산로
+		//}
 	}
 
-	memset(&m_ptDestination, 0x00, sizeof(m_ptDestination));
-	memset(&m_ptNewDestination, 0x00, sizeof(m_ptNewDestination));
-	if (!m_ptNewWaypoints.empty()) {
-		m_ptNewWaypoints.clear();
-		vector<SPoint>().swap(m_ptNewWaypoints);
-	}
-
-	keyDeparture.llid = NULL_VALUE;
-	keyDestination.llid = NULL_VALUE;
-	if (!keyWaypoints.empty()) {
-		keyWaypoints.clear();
-		vector<KeyID>().swap(keyWaypoints);
-	}
+	return trkMatchType;
 }
 
 
 KeyID CRouteManager::SetDeparture(IN const double lng, IN const double lat, IN const int matchType)
 {
-	if (m_pDataMgr != nullptr) {
-		double retDist = INT_MAX;
-		m_ptDeparture.x = m_ptNewDeparture.x = lng;
-		m_ptDeparture.y = m_ptNewDeparture.y = lat;
-
-		for(int ii=0; ii< MAX_SEARCH_RANGE; ii++) {
-			stLinkInfo* pLink = m_pDataMgr->GetLinkDataByPointAround(lng, lat, searchRange[ii], m_ptNewDeparture.x, m_ptNewDeparture.y, retDist, matchType);
-			if (pLink) {
-				keyDeparture = pLink->link_id;
-
-				if (ii > 0) {
-					LOG_TRACE(LOG_DEBUG, "departure projection, link_id:%d, range_lv:%d, dist:%d", keyDeparture.nid, ii, retDist);
-				}
-				break;
-			}
-		} // for
-	}
-
-	return keyDeparture;
+	return SetPosition(lng, lat, matchType, m_linkDeparture);
 }
 
 
@@ -151,29 +179,10 @@ KeyID CRouteManager::SetWaypoint(IN const double lng, IN const double lat, IN co
 {
 	KeyID keyWaypoint = { NULL_VALUE };
 
-	if (m_pDataMgr != nullptr) {
-		if (m_ptWaypoints.size() < MAX_WAYPOINT)
-		{
-			double retDist = INT_MAX;
-			SPoint waypoint = { lng, lat };
-			m_ptWaypoints.emplace_back(waypoint);
-
-			for (int ii = 0; ii< MAX_SEARCH_RANGE; ii++) {
-				stLinkInfo* pLink = m_pDataMgr->GetLinkDataByPointAround(lng, lat, searchRange[ii], waypoint.x, waypoint.y, retDist, matchType);
-				if (pLink) {
-					keyWaypoint = pLink->link_id;
-
-					if (ii > 0) {
-						LOG_TRACE(LOG_DEBUG, "waypoint projection, link_id:%d, idx:%d, range_lv:%d, dist:%.1f", keyWaypoint.nid, keyWaypoints.size(), ii, retDist);
-					}
-
-					break;
-				}
-			} // for
-
-			keyWaypoints.emplace_back(keyWaypoint);
-			m_ptNewWaypoints.emplace_back(waypoint);
-		}
+	if (m_linkWaypoints.size() < MAX_WAYPOINT) {
+		RouteLinkInfo linkWaypoint;
+		keyWaypoint = SetPosition(lng, lat, matchType, linkWaypoint);
+		m_linkWaypoints.emplace_back(linkWaypoint);
 	}
 
 	return keyWaypoint;
@@ -182,33 +191,86 @@ KeyID CRouteManager::SetWaypoint(IN const double lng, IN const double lat, IN co
 
 KeyID CRouteManager::SetDestination(IN const double lng, IN const double lat, IN const int matchType)
 {
-	if (m_pDataMgr != nullptr) {
-		double retDist = INT_MAX;
-		m_ptDestination.x = m_ptNewDestination.x = lng;
-		m_ptDestination.y = m_ptNewDestination.y = lat;
-
-		for(int ii=0; ii< MAX_SEARCH_RANGE; ii++) {
-
-			stLinkInfo* pLink = m_pDataMgr->GetLinkDataByPointAround(lng, lat, searchRange[ii], m_ptNewDestination.x, m_ptNewDestination.y, retDist, matchType);
-			if (pLink) {
-				keyDestination = pLink->link_id;
-
-				if (ii > 0) {
-					LOG_TRACE(LOG_DEBUG, "destination projection, link_id:%d, range_lv:%d, dist:%d", keyDestination.nid, ii, retDist);
-				}
-				break;
-			}
-		} // for
-	}
-
-	return keyDestination;
+	return SetPosition(lng, lat, matchType, m_linkDestination);
 }
 
 
-void CRouteManager::SetRouteOption(IN const uint32_t route, IN const uint32_t avoid)
+void CRouteManager::SetRouteOption(IN const vector<uint32_t>& options, IN const vector<uint32_t>& avoids, IN const uint32_t mobility)
 {
-	m_nRouteOpt = route;
-	m_nAvoidOpt = avoid;
+	m_vtRouteOpt.clear();
+	m_vtRouteOpt.assign(options.begin(), options.end());
+	m_vtAvoidOpt.clear();
+	m_vtAvoidOpt.assign(avoids.begin(), avoids.end());
+	m_nMobilityOpt = mobility;
+}
+
+
+void CRouteManager::AddRouteOption(IN const uint32_t option, IN const uint32_t avoid, IN const uint32_t mobility)
+{
+	m_vtRouteOpt.push_back(option);
+	m_vtAvoidOpt.push_back(avoid);
+	m_nMobilityOpt = mobility;
+}
+
+
+void CRouteManager::SetRouteSubOption(IN const uint64_t sub)
+{
+	m_routeSubOpt.option = sub;
+
+#if defined(USE_FOREST_DATA)
+	if (m_routeSubOpt.mnt.course_type != 0 && m_vtAvoidOpt[0] == 0) {
+		if (m_routeSubOpt.mnt.course_type == TYPE_TRE_TRAIL) { // 걷기 - 보행자길 사용
+			m_nMobilityOpt = TYPE_MOBILITY_PEDESTRIAN;
+		}
+		else if (m_routeSubOpt.mnt.course_type == TYPE_TRE_BIKE) { // 3:자전거길 - 보행자길 사용
+			m_nMobilityOpt = TYPE_MOBILITY_BICYCLE;
+		}
+	}
+	//if (m_routeSubOpt.mnt.course_type != 0 && m_vtAvoidOpt[0] == 0) {
+	//	// 코스 타입 //0:미정의, 1:등산로, 2:둘레길, 3:자전거길, 4:종주코스, 5:추천코스, 6:MTB코스, 7:인기코스
+	//	m_vtAvoidOpt[0] = ROUTE_AVOID_HIKING | ROUTE_AVOID_TRAIL | ROUTE_AVOID_BIKE | ROUTE_AVOID_CROSS | ROUTE_AVOID_RECOMMEND | ROUTE_AVOID_MTB | ROUTE_AVOID_POPULAR;
+	//		if () {
+	//			m_nMobilityOpt = TYPE_MOBILITY_BICYCLE;
+	//			m_vtAvoidOpt[0] = ROUTE_AVOID_NONE;
+	//		}
+	//		else { // 코스 탐색은 숲길 자전거 네트워크 사용
+	//			m_vtAvoidOpt[0] -= ROUTE_AVOID_BIKE;
+	//		}
+
+	//	if (m_routeSubOpt.mnt.course_type == 1) { // 1:등산로
+	//		m_vtAvoidOpt[0] -= ROUTE_AVOID_HIKING;
+	//	} else if (m_routeSubOpt.mnt.course_type == 2) { // 2:둘레길
+	//		m_vtAvoidOpt[0] -= ROUTE_AVOID_TRAIL;
+	//	}
+	//	else if (m_routeSubOpt.mnt.course_type == 3) { // 3:자전거길, 보행자길 사용
+	//		if (m_routeSubOpt.mnt.course_id == 0) {
+	//			m_nMobilityOpt = TYPE_MOBILITY_BICYCLE;
+	//			m_vtAvoidOpt[0] = ROUTE_AVOID_NONE;
+	//		}
+	//		else { // 코스 탐색은 숲길 자전거 네트워크 사용
+	//			m_vtAvoidOpt[0] -= ROUTE_AVOID_BIKE;
+	//		}
+	//	}
+	//	else if (m_routeSubOpt.mnt.course_type == 4) { // 4:종주코스
+	//		m_vtAvoidOpt[0] -= ROUTE_AVOID_CROSS;
+	//	}
+	//	else if (m_routeSubOpt.mnt.course_type == 5) { // 5:추천코스
+	//		m_vtAvoidOpt[0] -= ROUTE_AVOID_RECOMMEND;
+	//	}
+	//	else if (m_routeSubOpt.mnt.course_type == 6) { // 6:MTB코스, 보행자길 사용
+	//		if (m_routeSubOpt.mnt.course_id == 0) {
+	//			m_nMobilityOpt = TYPE_MOBILITY_BICYCLE;
+	//			m_vtAvoidOpt[0] = ROUTE_AVOID_NONE;
+	//		}
+	//		else { // 코스 탐색은 숲길 자전거 네트워크 사용
+	//			m_vtAvoidOpt[0] -= ROUTE_AVOID_MTB;
+	//		}
+	//	}
+	//	else if (m_routeSubOpt.mnt.course_type == 7) { // 7:인기코스
+	//		m_vtAvoidOpt[0] -= ROUTE_AVOID_POPULAR;
+	//	}
+	//}
+#endif
 }
 
 
@@ -220,19 +282,19 @@ void CRouteManager::SetRouteDirOption(IN const uint32_t departuretDir, IN const 
 }
 
 
-void CRouteManager::SetRouteCost(IN const uint32_t type, IN const DataCost* pCost)
+void CRouteManager::SetRouteCost(IN const uint32_t type, IN const DataCost* pCost, IN const uint32_t cntCost)
 {
-	m_pRoutePlan->SetRouteCost(type, pCost);
+	m_pRoutePlan->SetRouteCost(type, pCost, cntCost);
 }
 
 
-int CRouteManager::GetWayPointCount(void)
+const int CRouteManager::GetWayPointCount(void) const
 {
-	return m_ptWaypoints.size();
+	return m_linkWaypoints.size();
 }
 
 
-KeyID CRouteManager::GetPositionLink(IN const double lng, IN const double lat, IN const int matchType)
+KeyID CRouteManager::GetPositionLink(IN const double lng, IN const double lat, IN const int32_t matchType, IN const int32_t dataType)
 {
 	KeyID retKey = {NULL_VALUE};
 
@@ -241,12 +303,12 @@ KeyID CRouteManager::GetPositionLink(IN const double lng, IN const double lat, I
 		SPoint newPos;
 
 		for (int ii = 0; ii< MAX_SEARCH_RANGE; ii++) {
-			stLinkInfo* pLink = m_pDataMgr->GetLinkDataByPointAround(lng, lat, searchRange[ii], newPos.x, newPos.y, retDist, matchType);
+			stLinkInfo* pLink = m_pDataMgr->GetLinkDataByPointAround(lng, lat, searchRange[ii], newPos.x, newPos.y, retDist, matchType, dataType);
 			if (pLink) {
-				keyDestination = pLink->link_id;
+				retKey = pLink->link_id;
 
 				if (ii > 0) {
-					LOG_TRACE(LOG_DEBUG, "location link projection, link id:%d, range level:%d, dist:%d", keyDestination.nid, ii, retDist);
+					LOG_TRACE(LOG_DEBUG, "location link projection, link id:%d, range level:%d, dist:%d", retKey.nid, ii, retDist);
 				}
 				break;
 			}
@@ -257,36 +319,44 @@ KeyID CRouteManager::GetPositionLink(IN const double lng, IN const double lat, I
 }
 
 
-SPoint* CRouteManager::GetDeparture(void)
+const SPoint* CRouteManager::GetDeparture(bool useMatch)
 {
-	if (m_ptDeparture.x == 0 || m_ptDeparture.y == 0)
-	{
-		return nullptr;
+	if ((useMatch == true) && (m_linkDeparture.MatchCoord.has())){
+		return &m_linkDeparture.MatchCoord;
+	} else if (m_linkDeparture.Coord.has()) {
+		return &m_linkDeparture.Coord;
 	}
-	return &m_ptDeparture;
+	return nullptr;
 }
 
-SPoint* CRouteManager::GetWaypoint(IN const uint32_t idx)
+const SPoint* CRouteManager::GetWaypoint(IN const uint32_t idx, bool useMatch)
 {
-	if (MAX_WAYPOINT <= idx)
-	{
+	if (MAX_WAYPOINT <= idx) {
 		return nullptr;
 	}
 
-	if (m_ptWaypoints[idx].x == 0 || m_ptWaypoints[idx].y == 0)
-	{
-		return nullptr;
+	if ((useMatch == true) && (m_linkWaypoints[idx].MatchCoord.has())) {
+		return &m_linkWaypoints[idx].MatchCoord;
+	} else if (m_linkWaypoints[idx].Coord.has()) {
+		return &m_linkWaypoints[idx].Coord;
 	}
-	return &m_ptWaypoints[idx];
+	return nullptr;
 }
 
-SPoint* CRouteManager::GetDestination(void)
+const SPoint* CRouteManager::GetDestination(bool useMatch)
 {
-	if (m_ptDestination.x == 0 || m_ptDestination.y == 0)
-	{
-		return nullptr;
+	if ((useMatch == true) && (m_linkDestination.MatchCoord.has())) {
+		return &m_linkDestination.MatchCoord;
+	} else if (m_linkDestination.Coord.has()) {
+		return &m_linkDestination.Coord;
 	}
-	return &m_ptDestination;
+	return nullptr;
+}
+
+
+const uint32_t CRouteManager::GetRouteResultsCount(void) const
+{
+	return m_vtRouteResult.size();
 }
 
 
@@ -296,15 +366,9 @@ const RouteResultInfo* CRouteManager::GetRouteResult(void) const
 }
 
 
-const uint32_t CRouteManager::GetRouteResultsCount(void) const
+const RouteResultInfo* CRouteManager::GetMultiRouteResult(IN const uint32_t idx) const
 {
-	return m_vtRouteInfo.size();
-}
-
-
-const RouteResultInfo* CRouteManager::GetRouteResults(IN const uint32_t idx) const
-{
-	if (idx < m_vtRouteInfo.size()) {
+	if (idx < m_vtRouteResult.size()) {
 		return &m_vtRouteResult[idx];
 	}
 
@@ -312,49 +376,49 @@ const RouteResultInfo* CRouteManager::GetRouteResults(IN const uint32_t idx) con
 }
 
 
-#if defined(USE_TSP_MODULE)
-bool CRouteManager::GetBestWaypointResult(IN TspOptions* pOpt, IN const RouteTable** ppResultTables, OUT vector<uint32_t>& vtBestWaypoints)
+const vector<RouteResultInfo>* CRouteManager::GetMultiRouteResults(void) const
 {
-#if !defined(USE_REAL_ROUTE_TSP)
-	vector<stCity> vtRawData;
-#else
-	struct stWaypoints {
-		int nId;
-		double x;
-		double y;
-	};
+	if (!m_vtRouteResult.empty()) {
+		return &m_vtRouteResult;
+	}
+
+	return nullptr;
+}
+
+
+#if defined(USE_TSP_MODULE)
+int CRouteManager::GetBestWaypointResult(IN const TspOptions* pOpt, IN const vector<vector<stDistMatrix>>& vtDistMatrix, OUT vector<uint32_t>& vtBestWaypoints, OUT double& dist, OUT int32_t& time)
+{
+	int ret = -1;
+
 	vector<stWaypoints> vtRawData;
-#endif
 
 	int32_t idx = 0;
 
-	if (m_ptDeparture.has()) {
-		vtRawData.push_back({ idx++, m_ptDeparture.x, m_ptDeparture.y });
+	if (m_linkDeparture.Coord.has()) {
+		vtRawData.push_back({ idx++, m_linkDeparture.Coord.x, m_linkDeparture.Coord.y });
 	}
 
-	for (vector<SPoint>::iterator it = m_ptWaypoints.begin(); it != m_ptWaypoints.end(); it++) {
-		vtRawData.push_back({ idx++, it->x, it->y });
+	for (vector<RouteLinkInfo>::iterator it = m_linkWaypoints.begin(); it != m_linkWaypoints.end(); it++) {
+		vtRawData.push_back({ idx++, it->Coord.x, it->Coord.y });
 	}
 
-	if (m_ptDestination.has()) {
-		vtRawData.push_back({ idx++, m_ptDestination.x, m_ptDestination.y });
+	if (m_linkDestination.Coord.has()) {
+		vtRawData.push_back({ idx++, m_linkDestination.Coord.x, m_linkDestination.Coord.y });
 	}
 
+#if 0
 	LOG_TRACE(LOG_DEBUG, "start, best waypoint result, cnt:%d", vtRawData.size());
 
-
-	vector<int32_t> vtViaResult;
-	vtViaResult.reserve(vtRawData.size());
-
 	if (pOpt->algorityhmType == 1) {
-		for (const auto & coord : vtRawData) {
-			vtViaResult.emplace_back(coord.nId);
+		for (const auto& coord : vtRawData) {
+			vtBestWaypoints.emplace_back(coord.nId);
 		}
 	}
 	else if (pOpt->algorityhmType == 2) {
 		//auto result = mst_manhattan_branch_and_bound2(ppResultTables, vtRawData.size(), 0);
 		auto result = mst_manhattan_branch_and_bound(ppResultTables, vtRawData.size(), 0);
-		vtViaResult.assign(result.path.begin(), result.path.end());
+		vtBestWaypoints.assign(result.path.begin(), result.path.end());
 	}
 #if !defined(USE_REAL_ROUTE_TSP)
 	else if (pOpt->algorityhmType == 3) {
@@ -373,7 +437,7 @@ bool CRouteManager::GetBestWaypointResult(IN TspOptions* pOpt, IN const RouteTab
 		LOG_TRACE(LOG_DEBUG, "end, best waypoint result");
 		env.printOn(0);
 
-		env.getBest(vtViaResult);
+		env.getBest(vtBestWaypoints);
 	}
 #endif // #if !defined(USE_REAL_ROUTE_TSP)
 	else {
@@ -399,12 +463,14 @@ bool CRouteManager::GetBestWaypointResult(IN TspOptions* pOpt, IN const RouteTab
 			} // for jj
 		} // for ii
 #endif
-		newWorld.SetCostTable(ppResultTables, maxGene);
-		
+
+		int cntUsableGene = maxGene;
+		newWorld.SetCostTable(ppResultTables, cntUsableGene);
+
 		// 신세계
 		newWorld.Genesis(maxGene, maxPopulation);
 
-		const uint32_t MAX_SAME_RESULT = 500;// maxGeneration; // 같은 값으로 100회 이상 진행되면 최적값에 수렴하는것으로 판단하고 종료
+		const uint32_t MAX_SAME_RESULT = maxGene * 10; // 500;// maxGeneration; // 같은 값으로 100회 이상 진행되면 최적값에 수렴하는것으로 판단하고 종료
 		uint32_t repeatGeneration = 0;
 		double topCost = DBL_MAX;
 		double bestCost = DBL_MAX;
@@ -422,7 +488,7 @@ bool CRouteManager::GetBestWaypointResult(IN TspOptions* pOpt, IN const RouteTab
 			else if (topCost == bestCost) {
 				repeatGeneration++;
 				if (MAX_SAME_RESULT < repeatGeneration) {
-					LOG_TRACE(LOG_DEBUG, "best result fitness value repeating %d count, finish generation.", repeatGeneration);
+					LOG_TRACE(LOG_DEBUG, "best result fitness value:%.3f, repeating count:%d", newWorld.GetBestDist(), repeatGeneration);
 					break;
 				}
 			}
@@ -435,22 +501,22 @@ bool CRouteManager::GetBestWaypointResult(IN TspOptions* pOpt, IN const RouteTab
 			// 자식 생성
 			newWorld.Crossover(pairs);
 			//newWorld.Print();
-		}
+		} // for
 
-		newWorld.GetBest(vtViaResult);
+		newWorld.GetBest(vtBestWaypoints);
 	}
 	
-	if (vtRawData.size() != vtViaResult.size()) {
-		LOG_TRACE(LOG_DEBUG, "result count not match with orignal count, ori:%d != ret:%d", vtRawData.size(), vtViaResult.size());
-		return false;
+	if (vtRawData.size() != vtBestWaypoints.size()) {
+		LOG_TRACE(LOG_DEBUG, "result count not match with orignal count, ori:%d != ret:%d", vtRawData.size(), vtBestWaypoints.size());
+		return ret;
 	}
 
-	LOG_TRACE(LOG_DEBUG_LINE, "index  :", vtViaResult.size());
-	for (idx = 0; idx < vtViaResult.size(); idx++)
+	LOG_TRACE(LOG_DEBUG_LINE, "index  :", vtBestWaypoints.size());
+	for (idx = 0; idx < vtBestWaypoints.size(); idx++)
 	{
-		LOG_TRACE(LOG_DEBUG_CONTINUE, "%3d|", idx);
+		LOG_TRACE(LOG_DEBUG_CONTINUE, "%3d| ", idx);
 	}
-	LOG_TRACE(LOG_DEBUG_CONTINUE, " => \n", vtViaResult.size());
+	LOG_TRACE(LOG_DEBUG_CONTINUE, " => \n", vtBestWaypoints.size());
 
 	uint32_t totalDist = 0;
 	uint32_t idxFirst = 0;
@@ -458,9 +524,10 @@ bool CRouteManager::GetBestWaypointResult(IN TspOptions* pOpt, IN const RouteTab
 	idx = 0;
 
 	LOG_TRACE(LOG_DEBUG_LINE, "result :");
-	for (const auto& item : vtViaResult)
+	for (const auto& item : vtBestWaypoints)
 	{
 		LOG_TRACE(LOG_DEBUG_CONTINUE, "%3d>", item); //→
+		
 		if (idx >= 1) {
 			totalDist += ppResultTables[idxPrev][item].nTotalDist;
 		}
@@ -471,94 +538,296 @@ bool CRouteManager::GetBestWaypointResult(IN TspOptions* pOpt, IN const RouteTab
 		idxPrev = item;
 		idx++;
 	}
-	totalDist += ppResultTables[idxPrev][idxFirst].nTotalDist;
-	LOG_TRACE(LOG_DEBUG_CONTINUE, "%d => %d\n", idxFirst, totalDist);
 
+	// 원점 회귀 확인
+	if ((pOpt->firstFix >= 0) && (pOpt->recursive)) {
+		totalDist += ppResultTables[idxPrev][idxFirst].nTotalDist;
+		LOG_TRACE(LOG_DEBUG_CONTINUE, " %d => %d\n", idxFirst, totalDist);
+	} else {
+		LOG_TRACE(LOG_DEBUG_CONTINUE, "\n");
+	}
+#else
+	m_pTmsMgr->GetBestway(pOpt, vtDistMatrix, vtRawData, vtBestWaypoints, dist, time);
+#endif
 	// 기존 포인터 삭제
 	InitPoints();
 
+	int oldIdx = 0;
+	int newIdx = 0;
 
-	int curIdx = 0;
-	int wayType = 1;// 원점 회귀:1, 아닌지:0 에 따라 갯수 변경됨
+	for (oldIdx = 0; oldIdx < vtRawData.size(); oldIdx++) {
+		newIdx = vtBestWaypoints[oldIdx];
 
-	vtBestWaypoints.clear();
-	
-	vtBestWaypoints.reserve(vtRawData.size());
-	
+		if (oldIdx == 0) {
+			// 첫번째값을 출발지로 변경
+			LOG_TRACE(LOG_DEBUG, "departure will change, idx(%d) %.5f, %.5f -> idx(%d) %.5f, %.5f",
+				oldIdx, vtRawData[oldIdx].x, vtRawData[oldIdx].y,
+				newIdx, vtRawData[newIdx].x, vtRawData[newIdx].y);
 
-	// 첫번째값을 출발지로 변경
-	int newIdx = vtViaResult[curIdx];
+			SetDeparture(vtRawData[newIdx].x, vtRawData[newIdx].y);
+		} else if (oldIdx == vtRawData.size() - 1) {
+			// 마지막값을 목적지로 변경
+			LOG_TRACE(LOG_DEBUG, "destination will change, idx(%d) %.5f, %.5f -> idx(%d) %.5f, %.5f",
+				oldIdx, vtRawData[oldIdx].x, vtRawData[oldIdx].y,
+				newIdx, vtRawData[newIdx].x, vtRawData[newIdx].y);
 
-	LOG_TRACE(LOG_DEBUG, "departure will change, idx(%d) %.5f, %.5f -> idx(%d) %.5f, %.5f",
-		curIdx, vtRawData[curIdx].x, vtRawData[curIdx].y,
-		newIdx, vtRawData[newIdx].x, vtRawData[newIdx].y);
+			SetDestination(vtRawData[newIdx].x, vtRawData[newIdx].y);
+		} else {
+			// 경유지 변경
+			LOG_TRACE(LOG_DEBUG, "waypoint will change, idx(%d) %.5f, %.5f -> idx(%d) %.5f, %.5f",
+				oldIdx, vtRawData[oldIdx].x, vtRawData[oldIdx].y,
+				newIdx, vtRawData[newIdx].x, vtRawData[newIdx].y);
 
-	SetDeparture(vtRawData[newIdx].x, vtRawData[newIdx].y);
-
-	vtBestWaypoints.emplace_back(newIdx);
-	curIdx++;
-
-
-	// 경유지 변경
-	for (int ii = 1; ii <= vtViaResult.size() - 2; ii++) {
-		newIdx = vtViaResult[ii];
-
-		LOG_TRACE(LOG_DEBUG, "waypoint will change, idx(%d) %.5f, %.5f -> idx(%d) %.5f, %.5f",
-			ii, vtRawData[ii].x, vtRawData[ii].y,
-			newIdx, vtRawData[newIdx].x, vtRawData[newIdx].y);
-
-		SetWaypoint(vtRawData[newIdx].x, vtRawData[newIdx].y);
-
-		vtBestWaypoints.emplace_back(newIdx);
-		curIdx++;
+			SetWaypoint(vtRawData[newIdx].x, vtRawData[newIdx].y);
+		}
 	}
 
-	// 마지막값을 목적지로 변경
-	newIdx = vtViaResult[curIdx];
+	ret = ROUTE_RESULT_SUCCESS;
 
-	LOG_TRACE(LOG_DEBUG, "destination will change, idx(%d) %.5f, %.5f -> idx(%d) %.5f, %.5f",
-		curIdx, vtRawData[curIdx].x, vtRawData[curIdx].y,
-		newIdx, vtRawData[newIdx].x, vtRawData[newIdx].y);
-
-	SetDestination(vtRawData[newIdx].x, vtRawData[newIdx].y);
-
-	vtBestWaypoints.emplace_back(newIdx);
-	curIdx++;
-	
-	return true;
+	return ret;
 }
 #endif // #if defined(USE_TSP_MODULE)
 
 
-int CRouteManager::Route(/*packet*/)
+int CRouteManager::Route(const int opt/*packet*/)
 {
 	int ret = -1;
 
-	ret = SingleRoute();
+	if (opt != 0) {
+		ret = MultiRoute();
+	}
+	else {
+		ret = SingleRoute();
+	}
 
 	return ret;
 }
+
 
 int CRouteManager::SingleRoute()
 {
 	int ret = -1;
 
-
+#if defined(USE_MOUNTAIN_DATA)
+	if (m_routeSubOpt.mnt.course_id != 0) {
+		ret = DoCourse();
+	} else {
+		ret = DoComplexRouting();
+	}
+#else
 	ret = DoRouting();
+#endif
 
 	return ret;
 }
 
-int CRouteManager::Table(TspOptions* pOpt, IN RouteTable** ppResultTables, OUT vector<uint32_t>& vtBestWaypoints)
+
+const int CRouteManager::GetCandidateRoute(void)
+{
+	int cntRoutes = m_vtRouteResult.size();
+	for (int ii = 0; ii < cntRoutes; ii++) {
+		vector<RouteLinkInfo> vtMPP;
+		m_pRoutePlan->GetMostProbableLink(&m_vtRouteResult[ii], vtMPP);
+
+		for (const auto& candidateLink : vtMPP) {
+
+		}
+
+		int ret = -1;
+		const uint32_t uid = 12345678;
+		const int32_t maxRouteCount = 2; // 3;
+		const int32_t newRouteCount = min(maxRouteCount, vtMPP.size());
+
+		RequestRouteInfo reqInfos[maxRouteCount];
+		vector<RouteInfo> vtRouteInfos[maxRouteCount];
+		vector<RouteResultInfo> vtRouteResults[maxRouteCount];
+		CRoutePlan routePlans[maxRouteCount];
+
+//#if defined(USE_MULTIPROCESS)
+//#pragma omp parallel for
+//#endif
+		for (int jj = 0; jj < newRouteCount; jj++) {
+			routePlans[jj].Initialize();
+			routePlans[jj].SetDataMgr(m_pDataMgr);
+			routePlans[jj].SetRouteCost(m_pRoutePlan->GetRouteCost());
+
+			reqInfos[jj].RequestId = uid;
+			reqInfos[jj].RouteOption = m_vtRouteOpt[ii];
+			reqInfos[jj].AvoidOption = m_vtAvoidOpt[ii];
+			reqInfos[jj].MobilityOption = m_nMobilityOpt;
+			reqInfos[jj].RouteSubOption = m_routeSubOpt;
+			reqInfos[jj].StartDirIgnore = m_nDepartureDirIgnore;
+			reqInfos[jj].WayDirIgnore = m_nWaypointDirIgnore;
+			reqInfos[jj].EndDirIgnore = m_nDestinationDirIgnore;
+
+			RouteLinkInfo linkInfo;
+			// 시작 지점 정보 변경
+			// start 
+			
+			linkInfo.init();
+			linkInfo.KeyType = TYPE_KEY_LINK;
+			linkInfo.LinkDataType = m_linkDeparture.LinkDataType;
+			linkInfo.LinkId = vtMPP[jj].LinkId;
+			linkInfo.Coord = vtMPP[jj].Coord;
+			linkInfo.MatchCoord = vtMPP[jj].Coord;
+			//linkInfo.Payed; // 유료 링크
+			linkInfo.LinkSplitIdx = 0; // 링크와 직교 접점 좌표의 링크 버텍스 idx
+			linkInfo.LinkDistToS = 0; // s로의 거리
+			linkInfo.LinkDistToE = 0; // e로의 거리
+			linkInfo.LinkDir = vtMPP[jj].LinkDir;
+			linkInfo.LinkGuideType = LINK_GUIDE_TYPE_DEPARTURE;
+			vector<SPoint> LinkVtxToS; // 좌표점에서 s버텍스, 종료링크의 경우는 FromS로 이해할것
+			vector<SPoint> LinkVtxToE; // 좌표점에서 e버텍스, 종료링크의 경우는 FromS로 이해할것
+
+			reqInfos[jj].vtPoints.emplace_back(vtMPP[jj].Coord);
+			reqInfos[jj].vtKeyId.emplace_back(vtMPP[jj].LinkId);
+			reqInfos[jj].vtKeyType.emplace_back(TYPE_KEY_LINK); // 기본은 링크 매칭
+#if defined(USE_PEDESTRIAN_DATA)
+#if defined(USE_MOUNTAIN_DATA)
+			if (m_linkDeparture.LinkDataType == TYPE_LINK_DATA_TREKKING) { // 링크 속성으로 데이터 타입 변경
+				reqInfos[jj].vtLinkDataType.emplace_back(TYPE_LINK_DATA_TREKKING);
+			} else
+#endif
+			{
+				reqInfos[jj].vtLinkDataType.emplace_back(TYPE_LINK_DATA_PEDESTRIAN);
+			}
+#else
+			reqInfos[jj].vtLinkDataType.emplace_back(TYPE_LINK_DATA_VEHICLE);
+#endif
+
+			// 위 벡터들 통합
+			reqInfos[jj].vtPointsInfo.emplace_back(linkInfo);
+
+
+			// waypoint
+			for (const auto& waypoint : m_linkWaypoints) {
+				reqInfos[jj].vtPoints.emplace_back(waypoint.Coord);
+				reqInfos[jj].vtKeyId.emplace_back(waypoint.LinkId);
+				reqInfos[jj].vtKeyType.emplace_back(TYPE_KEY_LINK); // 기본은 링크 매칭
+#if defined(USE_PEDESTRIAN_DATA)
+#if defined(USE_MOUNTAIN_DATA)
+				if (waypoint.LinkDataType == TYPE_LINK_DATA_TREKKING) { // 링크 속성으로 데이터 타입 변경
+					reqInfos[jj].vtLinkDataType.emplace_back(TYPE_LINK_DATA_TREKKING);
+				} else
+#endif
+				{
+					reqInfos[jj].vtLinkDataType.emplace_back(TYPE_LINK_DATA_PEDESTRIAN);
+				}
+#else
+				reqInfos[jj].vtLinkDataType.emplace_back(TYPE_LINK_DATA_VEHICLE);
+#endif
+
+				// 위 벡터들 통합
+				reqInfos[jj].vtPointsInfo.emplace_back(waypoint);
+			} // for
+
+			// end
+			reqInfos[jj].vtPoints.emplace_back(m_linkDestination.Coord);
+			reqInfos[jj].vtKeyId.emplace_back(m_linkDestination.LinkId);
+			reqInfos[jj].vtKeyType.emplace_back(TYPE_KEY_LINK); // 기본은 링크 매칭
+#if defined(USE_PEDESTRIAN_DATA)
+#if defined(USE_MOUNTAIN_DATA)
+			if (m_linkDestination.LinkDataType == TYPE_LINK_DATA_TREKKING) { // 링크 속성으로 데이터 타입 변경
+				reqInfos[jj].vtLinkDataType.emplace_back(TYPE_LINK_DATA_TREKKING);
+			} else
+#endif
+			{
+				reqInfos[jj].vtLinkDataType.emplace_back(TYPE_LINK_DATA_PEDESTRIAN);
+			}
+#else
+			reqInfos[jj].vtLinkDataType.emplace_back(TYPE_LINK_DATA_VEHICLE);
+#endif
+
+			// 위 벡터들 통합
+			reqInfos[jj].vtPointsInfo.emplace_back(m_linkDestination);
+
+
+			KeyID keyId = { 0, };
+
+			vtRouteInfos[jj].resize(reqInfos[jj].vtPoints.size());
+			vtRouteResults[jj].resize(reqInfos[jj].vtPoints.size() - 1);
+
+			if ((ret = m_pRoutePlan->DoRoutes(&reqInfos[jj], &vtRouteInfos[jj], &vtRouteResults[jj])) == ROUTE_RESULT_SUCCESS) {
+
+				int idxNewRouteResult = m_vtRouteResult.size();
+				int cntNewRouteResult = idxNewRouteResult + 1;
+				m_vtRouteResult.resize(cntNewRouteResult);
+
+				m_vtRouteResult[idxNewRouteResult].Init();
+
+				m_vtRouteResult[idxNewRouteResult].ResultCode = vtRouteResults[jj][0].ResultCode; // 경로 결과 코드, 0:성공, 1~:실패
+
+				m_vtRouteResult[idxNewRouteResult].RequestMode = vtRouteResults[jj][0].RequestMode; // 요청 모드
+				m_vtRouteResult[idxNewRouteResult].RequestId = vtRouteResults[jj][0].RequestId; // 요청 ID
+
+				m_vtRouteResult[idxNewRouteResult].RouteOption = vtRouteResults[jj][0].RouteOption; // 경로 옵션
+				m_vtRouteResult[idxNewRouteResult].RouteAvoid = vtRouteResults[jj][0].RouteAvoid; // 경로 회피
+
+				m_vtRouteResult[idxNewRouteResult].StartResultLink = vtRouteResults[jj][vtRouteResults[jj].size() - 1].StartResultLink;
+				m_vtRouteResult[idxNewRouteResult].EndResultLink = vtRouteResults[jj][0].EndResultLink;
+
+				RouteSummary summary;
+				for (const auto& route : vtRouteResults[jj]) {
+					// summarys
+					if (route.LinkInfo.empty()) {
+						continue; // 이종간 경로 탐색 무시된 케이스
+					}
+
+					summary.TotalDist = route.TotalLinkDist;
+					summary.TotalTime = route.TotalLinkTime;
+					m_vtRouteResult[idxNewRouteResult].RouteSummarys.emplace_back(summary);
+
+					// 경로선
+					boxMerge(m_vtRouteResult[idxNewRouteResult].RouteBox, route.RouteBox);
+					linkMerge(m_vtRouteResult[idxNewRouteResult].LinkVertex, route.LinkVertex);
+
+					m_vtRouteResult[idxNewRouteResult].LinkInfo.reserve(m_vtRouteResult[idxNewRouteResult].LinkInfo.size() + route.LinkInfo.size());
+					for (const auto& link : route.LinkInfo) {
+						// 경유지가 있을 경우, 전체 경로를 합치면, 개별 offset 및 거리, 시간이 누적되어 변경되어야 함.
+						// 작업 추가 필요
+						m_vtRouteResult[idxNewRouteResult].LinkInfo.emplace_back(link);
+					} // for
+
+					m_vtRouteResult[idxNewRouteResult].TotalLinkDist += route.TotalLinkDist; // 경로 전체 거리
+					m_vtRouteResult[idxNewRouteResult].TotalLinkCount += route.TotalLinkCount; // 경로 전체 링크 수
+					m_vtRouteResult[idxNewRouteResult].TotalLinkTime += route.TotalLinkTime;; // 경로 전체 소요 시간 (초)
+				} // for
+			}
+		} // for
+	} // for
+
+	return 0;
+}
+
+
+int CRouteManager::MultiRoute(const int opt/*packet*/)
 {
 	int ret = -1;
 
-#if defined(USE_TSP_MODULE)
-	ret = DoTabulate(pOpt, ppResultTables, vtBestWaypoints);
-#endif 
+	const int reqCount = m_vtRouteOpt.size();
+
+#if defined(USE_MOUNTAIN_DATA)
+	if (m_routeSubOpt.mnt.course_id != 0) {
+		ret = DoCourse();
+	}
+	else {
+		//int options[reqCount] = { ROUTE_OPT_RECOMMENDED, ROUTE_OPT_SHORTEST, ROUTE_OPT_COMFORTABLE };
+		//int avoids[reqCount] = { 126, 126, 126 };
+		ret = DoMultiComplexRouting(reqCount/*, options, avoids*/);
+	}
+#else
+	//const int reqCount = 3;
+	//int options[reqCount] = { ROUTE_OPT_RECOMMENDED,ROUTE_OPT_SHORTEST,ROUTE_OPT_COMFORTABLE };
+	//int avoids[reqCount] = { 30, 30, 30 };
+	//const int reqCount = ROUTE_OPT_COUNT;// 5;
+	//int options[reqCount] = { ROUTE_OPT_SHORTEST, ROUTE_OPT_RECOMMENDED, ROUTE_OPT_COMFORTABLE, ROUTE_OPT_FASTEST, ROUTE_OPT_MAINROAD };
+	//int avoids[reqCount] = { 0, 0, 0, 0, 0 };
+	ret = DoMultiRouting(reqCount/*, options, avoids*/);
+#endif
 
 	return ret;
 }
+
 
 int CRouteManager::DoRouting(/*Packet*/)
 {
@@ -568,36 +837,89 @@ int CRouteManager::DoRouting(/*Packet*/)
 
 	m_routeResult.Init();
 
-	if (m_ptWaypoints.empty()) {
-		if ((ret = m_pRoutePlan->DoRoute(uid, m_ptDeparture, m_ptDestination, keyDeparture, keyDestination, m_nRouteOpt, m_nAvoidOpt, m_nDepartureDirIgnore, m_nDestinationDirIgnore, &m_routeResult)) == ROUTE_RESULT_SUCCESS)
+#if 0
+	if (m_linkWaypoints.empty()) {
+		if ((ret = m_pRoutePlan->DoRoute(uid, m_linkDeparture.Coord, m_linkDestination.Coord, m_linkDeparture.LinkId, m_linkDestination.LinkId, m_nRouteOpt, m_nAvoidOpt, m_nDepartureDirIgnore, m_nDestinationDirIgnore, &m_routeResult)) == ROUTE_RESULT_SUCCESS)
 		{
 			;
 		}
 	}
-	else {
+	else
+#endif
+	{
 		RequestRouteInfo reqInfo;
 		reqInfo.RequestId = uid;
-		reqInfo.RouteOption = m_nRouteOpt;
-		reqInfo.AvoidOption = m_nAvoidOpt;
+		reqInfo.RouteOption = m_vtRouteOpt[0];
+		reqInfo.AvoidOption = m_vtAvoidOpt[0];
+		reqInfo.MobilityOption = m_nMobilityOpt;
+		reqInfo.RouteSubOption = m_routeSubOpt;
 		reqInfo.StartDirIgnore = m_nDepartureDirIgnore;
 		reqInfo.WayDirIgnore = m_nWaypointDirIgnore;
 		reqInfo.EndDirIgnore = m_nDestinationDirIgnore;
 
 		// start 
-		reqInfo.vtPoints.emplace_back(m_ptDeparture);
-		reqInfo.vtIdLinks.emplace_back(keyDeparture);
+		reqInfo.vtPoints.emplace_back(m_linkDeparture.Coord);
+		reqInfo.vtKeyId.emplace_back(m_linkDeparture.LinkId);
+#if defined(USE_MOUNTAIN_DATA)
+		if (m_linkDestination.LinkDataType == TYPE_LINK_DATA_TREKKING) { // 링크 속성으로 데이터 타입 변경
+			reqInfo.vtLinkDataType.emplace_back(TYPE_LINK_DATA_TREKKING);
+		}
+		else {
+			reqInfo.vtLinkDataType.emplace_back(TYPE_LINK_DATA_PEDESTRIAN);
+		}
+#elif defined(USE_PEDESTRIAN_DATA)
+		reqInfo.vtLinkDataType.emplace_back(TYPE_LINK_DATA_PEDESTRIAN);
+#elif defined(USE_VEHICLE_DATA)
+		reqInfo.vtLinkDataType.emplace_back(TYPE_DATA_VEHICLE);
+#endif
+		reqInfo.vtKeyType.emplace_back(TYPE_KEY_LINK); // 기본은 링크 매칭
+
+		// 위 벡터들 통합
+		reqInfo.vtPointsInfo.emplace_back(m_linkDeparture);
 
 		// waypoint
-		if (!m_ptWaypoints.empty()) {
-			for (int ii = 0; ii < m_ptWaypoints.size(); ii++) {
-				reqInfo.vtPoints.emplace_back(m_ptWaypoints[ii]);
-				reqInfo.vtIdLinks.emplace_back(keyWaypoints[ii]);
-			}
+		if (!m_linkWaypoints.empty()) {
+			for (const auto& via : m_linkWaypoints) { //(int ii = 0; ii < m_linkWaypoints.size(); ii++) {
+				reqInfo.vtPoints.emplace_back(via.Coord);
+				reqInfo.vtKeyId.emplace_back(via.LinkId);
+#if defined(USE_MOUNTAIN_DATA)
+				if (via.LinkDataType == TYPE_LINK_DATA_TREKKING) { // 링크 속성으로 데이터 타입 변경
+					reqInfo.vtLinkDataType.emplace_back(TYPE_LINK_DATA_TREKKING);
+				}
+				else {
+					reqInfo.vtLinkDataType.emplace_back(TYPE_LINK_DATA_PEDESTRIAN);
+				}
+#elif defined(USE_PEDESTRIAN_DATA)
+				reqInfo.vtLinkDataType.emplace_back(TYPE_LINK_DATA_PEDESTRIAN);
+#elif defined(USE_VEHICLE_DATA)
+				reqInfo.vtLinkDataType.emplace_back(TYPE_DATA_VEHICLE);
+#endif
+				reqInfo.vtKeyType.emplace_back(TYPE_KEY_LINK); // 기본은 링크 매칭
+
+				// 위 벡터들 통합
+				reqInfo.vtPointsInfo.emplace_back(via);
+			} // for
 		}
 
 		// end
-		reqInfo.vtPoints.emplace_back(m_ptDestination);
-		reqInfo.vtIdLinks.emplace_back(keyDestination);
+		reqInfo.vtPoints.emplace_back(m_linkDestination.Coord);
+		reqInfo.vtKeyId.emplace_back(m_linkDestination.LinkId);
+#if defined(USE_MOUNTAIN_DATA)
+		if (m_linkDestination.LinkDataType == TYPE_LINK_DATA_TREKKING) { // 링크 속성으로 데이터 타입 변경
+			reqInfo.vtLinkDataType.emplace_back(TYPE_LINK_DATA_TREKKING);
+		}
+		else {
+			reqInfo.vtLinkDataType.emplace_back(TYPE_LINK_DATA_PEDESTRIAN);
+		}
+#elif defined(USE_PEDESTRIAN_DATA)
+		reqInfo.vtLinkDataType.emplace_back(TYPE_LINK_DATA_PEDESTRIAN);
+#elif defined(USE_VEHICLE_DATA)
+		reqInfo.vtLinkDataType.emplace_back(TYPE_DATA_VEHICLE);
+#endif
+		reqInfo.vtKeyType.emplace_back(TYPE_KEY_LINK); // 기본은 링크 매칭
+													   
+		// 위 벡터들 통합
+		reqInfo.vtPointsInfo.emplace_back(m_linkDestination);
 
 
 		if (!m_vtRouteInfo.empty()) {
@@ -610,7 +932,7 @@ int CRouteManager::DoRouting(/*Packet*/)
 			vector<RouteResultInfo>().swap(m_vtRouteResult);
 		}
 
-		if ((ret = m_pRoutePlan->DoRoutes(&reqInfo, &m_vtRouteInfo, &m_vtRouteResult)) == 0)
+		if ((ret = m_pRoutePlan->DoRoutes(&reqInfo, &m_vtRouteInfo, &m_vtRouteResult)) == ROUTE_RESULT_SUCCESS)
 		{
 			m_routeResult.ResultCode = m_vtRouteResult[0].ResultCode; // 경로 결과 코드, 0:성공, 1~:실패
 
@@ -625,27 +947,27 @@ int CRouteManager::DoRouting(/*Packet*/)
 
 			RouteSummary summary;
 			// for (int ii = m_vtRouteResult.size() - 1; ii >= 0; --ii) {
-			for (int ii = 0; ii < m_vtRouteResult.size(); ii++) {
+			for (const auto& route : m_vtRouteResult) {
 				// summarys
-				summary.TotalDist = m_vtRouteResult[ii].TotalLinkDist;
-				summary.TotalTime = m_vtRouteResult[ii].TotalLinkTime;
+				summary.TotalDist = route.TotalLinkDist;
+				summary.TotalTime = route.TotalLinkTime;
 				m_routeResult.RouteSummarys.emplace_back(summary);
 
 				// 경로선
-				boxMerge(m_routeResult.RouteBox, m_vtRouteResult[ii].RouteBox);
-				linkMerge(m_routeResult.LinkVertex, m_vtRouteResult[ii].LinkVertex);
+				boxMerge(m_routeResult.RouteBox, route.RouteBox);
+				linkMerge(m_routeResult.LinkVertex, route.LinkVertex);
 
-				m_routeResult.LinkInfo.reserve(m_routeResult.LinkInfo.size() + m_vtRouteResult[ii].LinkInfo.size());
-				for (int jj = 0; jj < m_vtRouteResult[ii].LinkInfo.size(); jj++) {
+				m_routeResult.LinkInfo.reserve(m_routeResult.LinkInfo.size() + route.LinkInfo.size());
+				for (const auto& link : route.LinkInfo) {
 					// 경유지가 있을 경우, 전체 경로를 합치면, 개별 offset 및 거리, 시간이 누적되어 변경되어야 함.
 					// 작업 추가 필요
-					m_routeResult.LinkInfo.emplace_back(m_vtRouteResult[ii].LinkInfo[jj]);
-				}
+					m_routeResult.LinkInfo.emplace_back(link);
+				} // for
 
-				m_routeResult.TotalLinkDist += m_vtRouteResult[ii].TotalLinkDist; // 경로 전체 거리
-				m_routeResult.TotalLinkCount += m_vtRouteResult[ii].TotalLinkCount; // 경로 전체 링크 수
-				m_routeResult.TotalLinkTime += m_vtRouteResult[ii].TotalLinkTime;; // 경로 전체 소요 시간 (초)
-			}
+				m_routeResult.TotalLinkDist += route.TotalLinkDist; // 경로 전체 거리
+				m_routeResult.TotalLinkCount += route.TotalLinkCount; // 경로 전체 링크 수
+				m_routeResult.TotalLinkTime += route.TotalLinkTime;; // 경로 전체 소요 시간 (초)
+			} // for
 		}
 	}
 
@@ -653,7 +975,195 @@ int CRouteManager::DoRouting(/*Packet*/)
 }
 
 
-int CRouteManager::GetTable(OUT RouteTable** ppResultTables)
+int CRouteManager::DoMultiRouting(IN const int32_t routeCount/*, IN const int32_t routeOptions[], IN const int32_t routeAvoids[]*/)
+{
+	int ret = -1;
+
+	const uint32_t uid = 12345678;
+	const int32_t route_count = 5; // 최대치
+
+	RequestRouteInfo reqInfos[route_count];
+
+	vector<RouteInfo> vtRouteInfos[route_count];
+	vector<RouteResultInfo> vtRouteResults[route_count];
+
+	//vector<int32_t> routeOptions;
+	//vector<uint32_t> routeAvoids;
+
+	CRoutePlan routePlans[route_count];
+
+	m_vtRouteResult.resize(routeCount);
+
+#if defined(USE_MULTIPROCESS)
+#pragma omp parallel for
+#endif
+	for (int ii = 0; ii < routeCount; ii++) {
+		routePlans[ii].Initialize();
+		routePlans[ii].SetDataMgr(m_pDataMgr);
+		routePlans[ii].SetRouteCost(m_pRoutePlan->GetRouteCost());
+
+		reqInfos[ii].RequestId = uid;
+		reqInfos[ii].RouteOption = m_vtRouteOpt[ii];
+		reqInfos[ii].AvoidOption = m_vtAvoidOpt[ii];
+		reqInfos[ii].MobilityOption = m_nMobilityOpt;
+		reqInfos[ii].RouteSubOption = m_routeSubOpt;
+		reqInfos[ii].StartDirIgnore = m_nDepartureDirIgnore;
+		reqInfos[ii].WayDirIgnore = m_nWaypointDirIgnore;
+		reqInfos[ii].EndDirIgnore = m_nDestinationDirIgnore;
+
+		// start 
+		reqInfos[ii].vtPoints.emplace_back(m_linkDeparture.Coord);
+		reqInfos[ii].vtKeyId.emplace_back(m_linkDeparture.LinkId);
+		reqInfos[ii].vtKeyType.emplace_back(TYPE_KEY_LINK); // 기본은 링크 매칭
+#if defined(USE_PEDESTRIAN_DATA)
+#if defined(USE_MOUNTAIN_DATA)
+		if (m_linkDeparture.LinkDataType == TYPE_LINK_DATA_TREKKING) { // 링크 속성으로 데이터 타입 변경
+			reqInfos[ii].vtLinkDataType.emplace_back(TYPE_LINK_DATA_TREKKING);
+		}
+		else
+#endif
+		{
+			reqInfos[ii].vtLinkDataType.emplace_back(TYPE_LINK_DATA_PEDESTRIAN);
+		}
+#else
+		reqInfos[ii].vtLinkDataType.emplace_back(TYPE_LINK_DATA_VEHICLE);
+#endif
+
+		// 위 벡터들 통합
+		reqInfos[ii].vtPointsInfo.emplace_back(m_linkDeparture);
+
+
+		// waypoint
+		for (const auto& waypoint : m_linkWaypoints) {
+			reqInfos[ii].vtPoints.emplace_back(waypoint.Coord);
+			reqInfos[ii].vtKeyId.emplace_back(waypoint.LinkId);
+			reqInfos[ii].vtKeyType.emplace_back(TYPE_KEY_LINK); // 기본은 링크 매칭
+#if defined(USE_PEDESTRIAN_DATA)
+#if defined(USE_MOUNTAIN_DATA)
+			if (waypoint.LinkDataType == TYPE_LINK_DATA_TREKKING) { // 링크 속성으로 데이터 타입 변경
+				reqInfos[ii].vtLinkDataType.emplace_back(TYPE_LINK_DATA_TREKKING);
+			}
+			else
+#endif
+			{
+				reqInfos[ii].vtLinkDataType.emplace_back(TYPE_LINK_DATA_PEDESTRIAN);
+			}
+#else
+			reqInfos[ii].vtLinkDataType.emplace_back(TYPE_LINK_DATA_VEHICLE);
+#endif
+
+			// 위 벡터들 통합
+			reqInfos[ii].vtPointsInfo.emplace_back(waypoint);
+		} // for
+
+			// end
+		reqInfos[ii].vtPoints.emplace_back(m_linkDestination.Coord);
+		reqInfos[ii].vtKeyId.emplace_back(m_linkDestination.LinkId);
+		reqInfos[ii].vtKeyType.emplace_back(TYPE_KEY_LINK); // 기본은 링크 매칭
+#if defined(USE_PEDESTRIAN_DATA)
+#if defined(USE_MOUNTAIN_DATA)
+		if (m_linkDestination.LinkDataType == TYPE_LINK_DATA_TREKKING) { // 링크 속성으로 데이터 타입 변경
+			reqInfos[ii].vtLinkDataType.emplace_back(TYPE_LINK_DATA_TREKKING);
+		}
+		else
+#endif
+		{
+			reqInfos[ii].vtLinkDataType.emplace_back(TYPE_LINK_DATA_PEDESTRIAN);
+		}
+#else
+		reqInfos[ii].vtLinkDataType.emplace_back(TYPE_LINK_DATA_VEHICLE);
+#endif
+
+		// 위 벡터들 통합
+		reqInfos[ii].vtPointsInfo.emplace_back(m_linkDestination);
+
+
+		KeyID keyId = { 0, };
+
+		vtRouteInfos[ii].resize(reqInfos[ii].vtPoints.size());
+		vtRouteResults[ii].resize(reqInfos[ii].vtPoints.size() - 1);
+
+		if ((ret = m_pRoutePlan->DoRoutes(&reqInfos[ii], &vtRouteInfos[ii], &vtRouteResults[ii])) == ROUTE_RESULT_SUCCESS) {
+			m_vtRouteResult[ii].Init();
+
+			m_vtRouteResult[ii].ResultCode = vtRouteResults[ii][0].ResultCode; // 경로 결과 코드, 0:성공, 1~:실패
+
+			m_vtRouteResult[ii].RequestMode = vtRouteResults[ii][0].RequestMode; // 요청 모드
+			m_vtRouteResult[ii].RequestId = vtRouteResults[ii][0].RequestId; // 요청 ID
+
+			m_vtRouteResult[ii].RouteOption = vtRouteResults[ii][0].RouteOption; // 경로 옵션
+			m_vtRouteResult[ii].RouteAvoid = vtRouteResults[ii][0].RouteAvoid; // 경로 회피
+
+			m_vtRouteResult[ii].StartResultLink = vtRouteResults[ii][vtRouteResults[ii].size() - 1].StartResultLink;
+			m_vtRouteResult[ii].EndResultLink = vtRouteResults[ii][0].EndResultLink;
+
+			RouteSummary summary;
+			// for (int ii = m_vtRouteResult.size() - 1; ii >= 0; --ii) {
+			for (const auto& route : vtRouteResults[ii]) {
+				// summarys
+				if (route.LinkInfo.empty()) {
+					continue; // 이종간 경로 탐색 무시된 케이스
+				}
+
+				summary.TotalDist = route.TotalLinkDist;
+				summary.TotalTime = route.TotalLinkTime;
+				m_vtRouteResult[ii].RouteSummarys.emplace_back(summary);
+
+				// 경로선
+				boxMerge(m_vtRouteResult[ii].RouteBox, route.RouteBox);
+				linkMerge(m_vtRouteResult[ii].LinkVertex, route.LinkVertex);
+
+				m_vtRouteResult[ii].LinkInfo.reserve(m_vtRouteResult[ii].LinkInfo.size() + route.LinkInfo.size());
+				for (const auto& link : route.LinkInfo) {
+					// 경유지가 있을 경우, 전체 경로를 합치면, 개별 offset 및 거리, 시간이 누적되어 변경되어야 함.
+					// 작업 추가 필요
+					m_vtRouteResult[ii].LinkInfo.emplace_back(link);
+				} // for
+
+				m_vtRouteResult[ii].TotalLinkDist += route.TotalLinkDist; // 경로 전체 거리
+				m_vtRouteResult[ii].TotalLinkCount += route.TotalLinkCount; // 경로 전체 링크 수
+				m_vtRouteResult[ii].TotalLinkTime += route.TotalLinkTime;; // 경로 전체 소요 시간 (초)
+			} // for
+		}
+	} // for
+
+	return ret;
+}
+
+
+int insertLinkCourseInfo(IN IN CDataManager* pDataMgr, IN const KeyID linkId, IN const int32_t linkType, OUT vector<unordered_set<uint32_t>>& vtCourse)
+{
+	int cntCourse = 0;
+
+#if defined(USE_FOREST_DATA)
+	// 코스 ID 매칭 확인
+	stLinkInfo* pLinkCourse = nullptr;
+	unordered_set<uint32_t> setCourse;
+
+	if (pDataMgr == nullptr || linkId.llid == 0) {
+		return cntCourse;
+	}
+
+	if ((linkType == TYPE_LINK_DATA_TREKKING) && (linkId.llid != 0)) {
+		if ((pLinkCourse = pDataMgr->GetFLinkDataById(linkId)) != nullptr) {
+			if (pLinkCourse->trk_ext.course_cnt > 0) {
+				set<uint32_t>* pSet = pDataMgr->GetCourseByLink(pLinkCourse->link_id.llid);
+				for (const auto& course : *pSet) {
+					setCourse.emplace(course);
+					cntCourse++;
+				}
+			}
+		}
+	}
+
+	vtCourse.emplace_back(setCourse);
+#endif
+
+	return cntCourse;
+}
+
+
+int CRouteManager::DoComplexRouting(/*Packet*/)
 {
 	int ret = -1;
 
@@ -663,31 +1173,666 @@ int CRouteManager::GetTable(OUT RouteTable** ppResultTables)
 
 	RequestRouteInfo reqInfo;
 	reqInfo.RequestId = uid;
-	reqInfo.RouteOption = m_nRouteOpt;
-	reqInfo.AvoidOption = m_nAvoidOpt;
+	reqInfo.RouteOption = m_vtRouteOpt[0];
+	reqInfo.AvoidOption = m_vtAvoidOpt[0];
+	reqInfo.MobilityOption = m_nMobilityOpt;
+	reqInfo.RouteSubOption = m_routeSubOpt;
 	reqInfo.StartDirIgnore = m_nDepartureDirIgnore;
 	reqInfo.WayDirIgnore = m_nWaypointDirIgnore;
 	reqInfo.EndDirIgnore = m_nDestinationDirIgnore;
 
 	// start 
-	reqInfo.vtPoints.emplace_back(m_ptDeparture);
-	reqInfo.vtIdLinks.emplace_back(keyDeparture);
+	reqInfo.vtPoints.emplace_back(m_linkDeparture.Coord);
+	reqInfo.vtKeyId.emplace_back(m_linkDeparture.LinkId);
+	reqInfo.vtKeyType.emplace_back(TYPE_KEY_LINK); // 기본은 링크 매칭
+#if defined(USE_FOREST_DATA)
+	if (m_linkDeparture.LinkDataType == TYPE_LINK_DATA_TREKKING) { // 링크 속성으로 데이터 타입 변경
+		reqInfo.vtLinkDataType.emplace_back(TYPE_LINK_DATA_TREKKING);
+	} else {
+		reqInfo.vtLinkDataType.emplace_back(TYPE_LINK_DATA_PEDESTRIAN);
+	}
+
+	// 코스 ID 매칭 확인
+	insertLinkCourseInfo(m_pDataMgr, m_linkDeparture.LinkId, m_linkDeparture.LinkDataType, reqInfo.vtCourse);
+#endif
+
+	// 위 벡터들 통합
+	reqInfo.vtPointsInfo.emplace_back(m_linkDeparture);
+
 
 	// waypoint
-	if (!m_ptWaypoints.empty()) {
-		for (int ii = 0; ii < m_ptWaypoints.size(); ii++) {
-			reqInfo.vtPoints.emplace_back(m_ptWaypoints[ii]);
-			reqInfo.vtIdLinks.emplace_back(keyWaypoints[ii]);
+	for (const auto& waypoint : m_linkWaypoints) {
+		reqInfo.vtPoints.emplace_back(waypoint.Coord);
+		reqInfo.vtKeyId.emplace_back(waypoint.LinkId);
+		reqInfo.vtKeyType.emplace_back(TYPE_KEY_LINK); // 기본은 링크 매칭
+#if defined(USE_FOREST_DATA)
+		if (waypoint.LinkDataType == TYPE_LINK_DATA_TREKKING) { // 링크 속성으로 데이터 타입 변경
+			reqInfo.vtLinkDataType.emplace_back(TYPE_LINK_DATA_TREKKING);
+		}
+		else {
+			reqInfo.vtLinkDataType.emplace_back(TYPE_LINK_DATA_PEDESTRIAN);
+		}
+
+		// 코스 ID 매칭 확인
+		insertLinkCourseInfo(m_pDataMgr, waypoint.LinkId, waypoint.LinkDataType, reqInfo.vtCourse);
+#endif
+
+		// 위 벡터들 통합
+		reqInfo.vtPointsInfo.emplace_back(waypoint);
+	} // for
+
+
+	// end
+	reqInfo.vtPoints.emplace_back(m_linkDestination.Coord);
+	reqInfo.vtKeyId.emplace_back(m_linkDestination.LinkId);
+	reqInfo.vtKeyType.emplace_back(TYPE_KEY_LINK); // 기본은 링크 매칭
+#if defined(USE_FOREST_DATA)
+	if (m_linkDestination.LinkDataType == TYPE_LINK_DATA_TREKKING) { // 링크 속성으로 데이터 타입 변경
+		reqInfo.vtLinkDataType.emplace_back(TYPE_LINK_DATA_TREKKING);
+	} else {
+		reqInfo.vtLinkDataType.emplace_back(TYPE_LINK_DATA_PEDESTRIAN);
+	}
+
+	// 코스 ID 매칭 확인
+	insertLinkCourseInfo(m_pDataMgr, m_linkDestination.LinkId, m_linkDestination.LinkDataType, reqInfo.vtCourse);
+#endif
+
+	// 위 벡터들 통합
+	reqInfo.vtPointsInfo.emplace_back(m_linkDestination);
+
+
+	if (!m_vtRouteInfo.empty()) {
+		m_vtRouteInfo.clear();
+		vector<RouteInfo>().swap(m_vtRouteInfo);
+	}
+
+	if (!m_vtRouteResult.empty()) {
+		m_vtRouteResult.clear();
+		vector<RouteResultInfo>().swap(m_vtRouteResult);
+	}
+
+
+	m_vtRouteInfo.resize(reqInfo.vtPoints.size());
+	m_vtRouteResult.resize(reqInfo.vtPoints.size() - 1);
+
+	// 입구점 여부 확인 필요 
+	//vector<ComplexPointInfo> vtComplexPointInfo(reqInfo.vtPoints.size());
+
+
+
+	// 숲길인데 산바운더리 입구점이 없으면 링크 확장으로 입구점 검색
+	m_pRoutePlan->DoEdgeRoute(&reqInfo, m_vtRouteInfo/*, vtComplexPointInfo*/);
+
+
+	// 경탐 수행
+
+#if 0 // 각 지점간 이종 링크의 가장 가까운 입구점을 찾아 경유지로 선정하고 경로 탐색 
+	KeyID keyId = { 0, };
+	RequestRouteInfo reqInfoNew;
+
+	// 각 지점간 이종 링크 경유 확인 (숲길-보행자도로)
+	InitPoints();
+	
+	reqInfoNew.RequestId = reqInfo.RequestId;
+	reqInfoNew.RouteOption = reqInfo.RouteOption;
+	reqInfoNew.AvoidOption = reqInfo.AvoidOption;
+	reqInfoNew.StartDirIgnore = reqInfo.StartDirIgnore;
+	reqInfoNew.WayDirIgnore = reqInfo.WayDirIgnore;
+	reqInfoNew.EndDirIgnore = reqInfo.EndDirIgnore;
+
+	for (int ii = 0; ii < reqInfo.vtPoints.size(); ii++) {
+		reqInfoNew.vtPoints.push_back({ reqInfo.vtPoints[ii].x, reqInfo.vtPoints[ii].y });
+		reqInfoNew.vtKeyType.emplace_back(reqInfo.vtKeyType[ii]); // node type
+		reqInfoNew.vtKeyId.emplace_back(reqInfo.vtKeyId[ii]);
+		reqInfoNew.vtLinkDataType.emplace_back(reqInfo.vtLinkDataType[ii]);
+
+		// 마지막이면 
+		if (ii == reqInfo.vtPoints.size() - 1) {
+			continue;
+		}
+
+		// 입구점 계산 무시 케이스 (보행자-보행자, 동일 산 바운더리)
+		//if (vtComplexRouteInfo[ii].optimalPointInfo.nType == vtOptPoint[ii + 1].nType) {
+		if (((reqInfo.vtLinkDataType[ii] == TYPE_LINK_DATA_PEDESTRIAN) && (reqInfo.vtLinkDataType[ii + 1] == TYPE_LINK_DATA_PEDESTRIAN)) ||
+			((reqInfo.vtLinkDataType[ii] == TYPE_LINK_DATA_TREKKING) && (reqInfo.vtLinkDataType[ii + 1] == TYPE_LINK_DATA_TREKKING) &&
+			 (vtComplexRouteInfo[ii].optimalPointInfo.id != 0) && (vtComplexRouteInfo[ii].optimalPointInfo.id == vtComplexRouteInfo[ii + 1].optimalPointInfo.id))) {
+			continue;
+		}
+
+		// 동일 산 바운더리 무시, 현재 데이터에 산코드(MNT)가 누락되어 우선 미사용
+		//if (vtComplexRouteInfo[ii].optimalPointInfo.id == vtOptPoint[ii + 1].id) {
+		//	continue;
+		//}
+
+		// 첫번째 지점이 입구점 보유 시, 두 지점간 가장 가까운 입구점 계산
+		double dwDistMin = INT_MAX;
+		int idxMin = -1;
+		int idxNow = 0;
+		for (const auto& ent : vtComplexRouteInfo[ii].optimalPointInfo.vtEntryPoint) {
+			double dwDistS = getRealWorldDistance(reqInfo.vtPoints[ii].x, reqInfo.vtPoints[ii].y, ent.x, ent.y);
+			double dwDistE = getRealWorldDistance(ent.x, ent.y, reqInfo.vtPoints[ii+1].x, reqInfo.vtPoints[ii+1].y);
+
+			if (dwDistS + dwDistE < dwDistMin) {
+				dwDistMin = dwDistS + dwDistE;
+				idxMin = idxNow;
+			}
+			idxNow++;
+		}
+
+		// 가까운 입구점을 경유지로 추가
+		if (idxMin >= 0) {
+			// 첫번째 지점과 링크 타입이 다를 경우, 첫번째 링크에 맞는 링크 매칭 한번, 현재 링크에 맞는 매칭 한번, 총 2개의 링크를 셋 한다.
+			//keyId = GetPositionLink(vtComplexRouteInfo[ii].optimalPointInfo.vtEntryPoint[idxMin].x, vtComplexRouteInfo[ii].optimalPointInfo.vtEntryPoint[idxMin].y, TYPE_OPTIMAL_ENTRANCE_MOUNTAIN, TYPE_LINK_DATA_TREKKING);
+			keyId.tile_id = g_forestMeshId;
+			keyId.nid = vtComplexRouteInfo[ii].optimalPointInfo.vtEntryPoint[idxMin].nID_1;
+			keyId.dir = 0;
+			if (keyId.llid != NOT_USE) {
+				reqInfoNew.vtPoints.push_back({ vtComplexRouteInfo[ii].optimalPointInfo.vtEntryPoint[idxMin].x, vtComplexRouteInfo[ii].optimalPointInfo.vtEntryPoint[idxMin].y });
+				reqInfoNew.vtKeyType.emplace_back(TYPE_KEY_NODE); // node type
+				reqInfoNew.vtKeyId.emplace_back(keyId);
+				reqInfoNew.vtLinkDataType.emplace_back(TYPE_LINK_DATA_TREKKING);
+			}
+
+			//keyId = GetPositionLink(vtComplexRouteInfo[ii].optimalPointInfo.vtEntryPoint[idxMin].x, vtComplexRouteInfo[ii].optimalPointInfo.vtEntryPoint[idxMin].y, TYPE_OPTIMAL_ENTRANCE_MOUNTAIN, TYPE_LINK_DATA_PEDESTRIAN);
+			keyId.tile_id = vtComplexRouteInfo[ii].optimalPointInfo.vtEntryPoint[idxMin].nID_2 / 100000;
+			keyId.nid = vtComplexRouteInfo[ii].optimalPointInfo.vtEntryPoint[idxMin].nID_2 % 100000;
+			keyId.dir = 0;
+			if (keyId.llid != NOT_USE) {
+				reqInfoNew.vtPoints.push_back({ vtComplexRouteInfo[ii].optimalPointInfo.vtEntryPoint[idxMin].x, vtComplexRouteInfo[ii].optimalPointInfo.vtEntryPoint[idxMin].y });
+				reqInfoNew.vtKeyType.emplace_back(TYPE_KEY_NODE); // node type
+				reqInfoNew.vtKeyId.emplace_back(keyId);
+				reqInfoNew.vtLinkDataType.emplace_back(TYPE_LINK_DATA_PEDESTRIAN);
+			}
+		}
+
+		// 두번째 지점도 입구점을 보유 시, 두 지점간 가장 가까운 입구점 계산
+		dwDistMin = INT_MAX;
+		idxMin = -1;
+		idxNow = 0;
+		for (const auto& ent : vtComplexRouteInfo[ii + 1].optimalPointInfo.vtEntryPoint) {
+			double dwDistS = getRealWorldDistance(reqInfo.vtPoints[ii + 1].x, reqInfo.vtPoints[ii + 1].y, ent.x, ent.y);
+			double dwDistE = getRealWorldDistance(ent.x, ent.y, reqInfo.vtPoints[ii].x, reqInfo.vtPoints[ii].y);
+
+			if (dwDistS + dwDistE < dwDistMin) {
+				dwDistMin = dwDistS + dwDistE;
+				idxMin = idxNow;
+			}
+			idxNow++;
+		}
+
+		// 가까운 입구점을 경유지로 추가
+		if (idxMin >= 0) {
+			// 첫번째 지점과 링크 타입이 다를 경우, 첫번째 링크에 맞는 링크 매칭 한번, 현재 링크에 맞는 매칭 한번, 총 2개의 링크를 셋 한다.
+			//keyId = GetPositionLink(vtOptPoint[ii+1].vtEntryPoint[idxMin].x, vtOptPoint[ii+1].vtEntryPoint[idxMin].y, TYPE_OPTIMAL_ENTRANCE_NONE, TYPE_LINK_DATA_PEDESTRIAN);
+			keyId.tile_id = vtComplexRouteInfo[ii + 1].optimalPointInfo.vtEntryPoint[idxMin].nID_2 / 100000;
+			keyId.nid = vtComplexRouteInfo[ii + 1].optimalPointInfo.vtEntryPoint[idxMin].nID_2 % 100000;
+			keyId.dir = 0;
+			if (keyId.llid != NOT_USE) {
+				reqInfoNew.vtPoints.push_back({ vtComplexRouteInfo[ii + 1].optimalPointInfo.vtEntryPoint[idxMin].x, vtComplexRouteInfo[ii + 1].optimalPointInfo.vtEntryPoint[idxMin].y });
+				reqInfoNew.vtKeyType.emplace_back(TYPE_KEY_NODE); // node type
+				reqInfoNew.vtKeyId.emplace_back(keyId);
+				reqInfoNew.vtLinkDataType.emplace_back(TYPE_LINK_DATA_PEDESTRIAN);
+			}
+
+			//keyId = GetPositionLink(vtOptPoint[ii+1].vtEntryPoint[idxMin].x, vtOptPoint[ii+1].vtEntryPoint[idxMin].y, TYPE_OPTIMAL_ENTRANCE_MOUNTAIN, TYPE_LINK_DATA_TREKKING);
+			keyId.tile_id = g_forestMeshId;
+			keyId.nid = vtComplexRouteInfo[ii + 1].optimalPointInfo.vtEntryPoint[idxMin].nID_1;
+			keyId.dir = 0;
+			if (keyId.llid != NOT_USE) {
+				reqInfoNew.vtPoints.push_back({ vtComplexRouteInfo[ii + 1].optimalPointInfo.vtEntryPoint[idxMin].x, vtComplexRouteInfo[ii + 1].optimalPointInfo.vtEntryPoint[idxMin].y });
+				reqInfoNew.vtKeyType.emplace_back(TYPE_KEY_NODE); // node type
+				reqInfoNew.vtKeyId.emplace_back(keyId);
+				reqInfoNew.vtLinkDataType.emplace_back(TYPE_LINK_DATA_TREKKING);
+			}
 		}
 	}
 
-	// end
-	reqInfo.vtPoints.emplace_back(m_ptDestination);
-	reqInfo.vtIdLinks.emplace_back(keyDestination);
-	
-#if defined(USE_TSP_MODULE)	
-	ret = m_pRoutePlan->DoTabulate(&reqInfo, ppResultTables);
-#endif 
+	// 마지막
+	//reqInfoNew.vtPoints.emplace_back(reqInfo.vtPoints.back());
+	//reqInfoNew.vtKeyType.emplace_back(TYPE_KEY_LINK); // link type
+	//reqInfoNew.vtKeyId.emplace_back(reqInfo.vtKeyId.back());
+	//reqInfoNew.vtIdDataType.emplace_back(reqInfo.vtIdDataType.back());
+
+
+	// 지점 재 설정
+	for (int ii = 0; ii < reqInfoNew.vtPoints.size(); ii++)
+	{
+		if (ii == 0) { // 출발지
+			memcpy(&m_linkDeparture.Coord, &reqInfoNew.vtPoints[ii], sizeof(m_linkDeparture.Coord));
+			m_linkDeparture.LinkId = reqInfoNew.vtKeyId[ii];
+			m_linkDeparture.KeyType = reqInfoNew.vtKeyType[ii];
+			m_linkDeparture.LinkDataType = reqInfoNew.vtLinkDataType[ii];
+		}
+		else if (ii == reqInfoNew.vtPoints.size() - 1) { // 목적지
+			memcpy(&m_linkDestination.Coord, &reqInfoNew.vtPoints[ii], sizeof(m_linkDestination.Coord));
+			m_linkDestination.LinkId = reqInfoNew.vtKeyId[ii];
+			m_linkDestination.KeyType = reqInfoNew.vtKeyType[ii];
+			m_linkDestination.LinkDataType = reqInfoNew.vtLinkDataType[ii];
+		}
+		else { // 경유지
+			RouteLinkInfo linkInfo;
+			linkInfo.Coord = reqInfoNew.vtPoints[ii];
+			linkInfo.LinkId = reqInfoNew.vtKeyId[ii];
+			linkInfo.KeyType = reqInfoNew.vtKeyType[ii];
+			linkInfo.LinkDataType = reqInfoNew.vtLinkDataType[ii];
+			m_linkWaypoints.emplace_back(linkInfo);
+		}
+	}
+
+
+	if ((ret = m_pRoutePlan->DoComplexRoutes(&reqInfoNew, &m_vtRouteInfo, &m_vtRouteResult)) == 0)
+#else
+	if ((ret = m_pRoutePlan->DoComplexRoutesEx(&reqInfo/*, vtComplexPointInfo*/, &m_vtRouteInfo, &m_vtRouteResult)) == 0)
+#endif
+	{
+		m_routeResult.ResultCode = m_vtRouteResult[0].ResultCode; // 경로 결과 코드, 0:성공, 1~:실패
+
+		m_routeResult.RequestMode = m_vtRouteResult[0].RequestMode; // 요청 모드
+		m_routeResult.RequestId = m_vtRouteResult[0].RequestId; // 요청 ID
+
+		m_routeResult.RouteOption = m_vtRouteResult[0].RouteOption; // 경로 옵션
+		m_routeResult.RouteAvoid = m_vtRouteResult[0].RouteAvoid; // 경로 회피
+
+		m_routeResult.StartResultLink = m_vtRouteResult[m_vtRouteResult.size() - 1].StartResultLink;
+		m_routeResult.EndResultLink = m_vtRouteResult[0].EndResultLink;
+
+		RouteSummary summary;
+		// for (int ii = m_vtRouteResult.size() - 1; ii >= 0; --ii) {
+		for (const auto& route : m_vtRouteResult) {
+			// summarys
+			if (route.LinkInfo.empty()) {
+				continue; // 이종간 경로 탐색 무시된 케이스
+			}
+
+			summary.TotalDist = route.TotalLinkDist;
+			summary.TotalTime = route.TotalLinkTime;
+			m_routeResult.RouteSummarys.emplace_back(summary);
+
+			// 경로선
+			boxMerge(m_routeResult.RouteBox, route.RouteBox);
+			linkMerge(m_routeResult.LinkVertex, route.LinkVertex);
+
+			m_routeResult.LinkInfo.reserve(m_routeResult.LinkInfo.size() + route.LinkInfo.size());
+			for (const auto& link : route.LinkInfo) {
+				// 경유지가 있을 경우, 전체 경로를 합치면, 개별 offset 및 거리, 시간이 누적되어 변경되어야 함.
+				// 작업 추가 필요
+				m_routeResult.LinkInfo.emplace_back(link);
+			}
+
+			m_routeResult.TotalLinkDist += route.TotalLinkDist; // 경로 전체 거리
+			m_routeResult.TotalLinkCount += route.TotalLinkCount; // 경로 전체 링크 수
+			m_routeResult.TotalLinkTime += route.TotalLinkTime;; // 경로 전체 소요 시간 (초)
+		}
+	}
+
+	return ret;
+}
+
+
+int CRouteManager::DoMultiComplexRouting(IN const int32_t routeCount/*, IN const int32_t routeOptions[], IN const int32_t routeAvoids[]*/)
+{
+	int ret = -1;
+
+	const uint32_t uid = 12345678;
+	const int32_t route_count = 3;
+
+	RequestRouteInfo reqInfos[route_count];
+
+	vector<RouteInfo> vtRouteInfos[route_count];
+	vector<RouteResultInfo> vtRouteResults[route_count];
+
+	//vector<int32_t> routeOptions;
+	//vector<uint32_t> routeAvoids;
+
+	CRoutePlan routePlans[route_count];
+
+	m_vtRouteResult.resize(routeCount);
+
+#if defined(USE_MULTIPROCESS)
+#pragma omp parallel for
+#endif
+	for (int ii = 0; ii < routeCount; ii++) {
+		routePlans[ii].Initialize();
+		routePlans[ii].SetDataMgr(m_pDataMgr);
+		routePlans[ii].SetRouteCost(m_pRoutePlan->GetRouteCost());
+
+		reqInfos[ii].RequestId = uid;
+		reqInfos[ii].RouteOption = m_vtRouteOpt[ii];
+		reqInfos[ii].AvoidOption = m_vtAvoidOpt[ii];
+		reqInfos[ii].MobilityOption = m_nMobilityOpt;
+		reqInfos[ii].RouteSubOption = m_routeSubOpt;
+		reqInfos[ii].StartDirIgnore = m_nDepartureDirIgnore;
+		reqInfos[ii].WayDirIgnore = m_nWaypointDirIgnore;
+		reqInfos[ii].EndDirIgnore = m_nDestinationDirIgnore;
+
+		// start 
+		reqInfos[ii].vtPoints.emplace_back(m_linkDeparture.Coord);
+		reqInfos[ii].vtKeyId.emplace_back(m_linkDeparture.LinkId);
+		reqInfos[ii].vtKeyType.emplace_back(TYPE_KEY_LINK); // 기본은 링크 매칭
+#if defined(USE_FOREST_DATA)
+		if (m_linkDeparture.LinkDataType == TYPE_LINK_DATA_TREKKING) { // 링크 속성으로 데이터 타입 변경
+			reqInfos[ii].vtLinkDataType.emplace_back(TYPE_LINK_DATA_TREKKING);
+		} else {
+			reqInfos[ii].vtLinkDataType.emplace_back(TYPE_LINK_DATA_PEDESTRIAN);
+		}
+
+		// 코스 ID 매칭 확인
+		insertLinkCourseInfo(m_pDataMgr, m_linkDeparture.LinkId, m_linkDeparture.LinkDataType, reqInfos[ii].vtCourse);
+#endif
+
+		// 위 벡터들 통합
+		reqInfos[ii].vtPointsInfo.emplace_back(m_linkDeparture);
+
+
+		// waypoint
+		for (const auto& waypoint : m_linkWaypoints) {
+			reqInfos[ii].vtPoints.emplace_back(waypoint.Coord);
+			reqInfos[ii].vtKeyId.emplace_back(waypoint.LinkId);
+			reqInfos[ii].vtKeyType.emplace_back(TYPE_KEY_LINK); // 기본은 링크 매칭
+#if defined(USE_FOREST_DATA)
+			if (waypoint.LinkDataType == TYPE_LINK_DATA_TREKKING) { // 링크 속성으로 데이터 타입 변경
+				reqInfos[ii].vtLinkDataType.emplace_back(TYPE_LINK_DATA_TREKKING);
+			} else {
+				reqInfos[ii].vtLinkDataType.emplace_back(TYPE_LINK_DATA_PEDESTRIAN);
+			}
+
+			// 코스 ID 매칭 확인
+			insertLinkCourseInfo(m_pDataMgr, waypoint.LinkId, waypoint.LinkDataType, reqInfos[ii].vtCourse);
+#endif
+
+			// 위 벡터들 통합
+			reqInfos[ii].vtPointsInfo.emplace_back(waypoint);
+		} // for
+
+		  // end
+		reqInfos[ii].vtPoints.emplace_back(m_linkDestination.Coord);
+		reqInfos[ii].vtKeyId.emplace_back(m_linkDestination.LinkId);
+		reqInfos[ii].vtKeyType.emplace_back(TYPE_KEY_LINK); // 기본은 링크 매칭
+#if defined(USE_FOREST_DATA)
+		if (m_linkDestination.LinkDataType == TYPE_LINK_DATA_TREKKING) { // 링크 속성으로 데이터 타입 변경
+			reqInfos[ii].vtLinkDataType.emplace_back(TYPE_LINK_DATA_TREKKING);
+		} else {
+			reqInfos[ii].vtLinkDataType.emplace_back(TYPE_LINK_DATA_PEDESTRIAN);
+		}
+
+		// 코스 ID 매칭 확인
+		insertLinkCourseInfo(m_pDataMgr, m_linkDestination.LinkId, m_linkDestination.LinkDataType, reqInfos[ii].vtCourse);
+#endif
+
+		// 위 벡터들 통합
+		reqInfos[ii].vtPointsInfo.emplace_back(m_linkDestination);
+
+
+		vtRouteInfos[ii].resize(reqInfos[ii].vtPoints.size());
+		vtRouteResults[ii].resize(reqInfos[ii].vtPoints.size() - 1);
+
+		// 입구점 여부 확인 필요 
+		//vector<ComplexPointInfo> vtComplexPointInfo(reqInfos[ii].vtPoints.size());
+
+
+
+		// 숲길인데 산바운더리 입구점이 없으면 링크 확장으로 입구점 검색
+		routePlans[ii].DoEdgeRoute(&reqInfos[ii], vtRouteInfos[ii]/*, vtComplexPointInfo*/);
+
+
+		// 경탐 수행
+#if 0 // 각 지점간 이종 링크의 가장 가까운 입구점을 찾아 경유지로 선정하고 경로 탐색 
+		KeyID keyId = { 0, };
+		RequestRouteInfo reqInfoNew;
+
+		// 각 지점간 이종 링크 경유 확인 (숲길-보행자도로)
+		InitPoints();
+
+		reqInfoNew.RequestId = reqInfo.RequestId;
+		reqInfoNew.RouteOption = reqInfo.RouteOption;
+		reqInfoNew.AvoidOption = reqInfo.AvoidOption;
+		reqInfoNew.StartDirIgnore = reqInfo.StartDirIgnore;
+		reqInfoNew.WayDirIgnore = reqInfo.WayDirIgnore;
+		reqInfoNew.EndDirIgnore = reqInfo.EndDirIgnore;
+
+		for (int ii = 0; ii < reqInfo.vtPoints.size(); ii++) {
+			reqInfoNew.vtPoints.push_back({ reqInfo.vtPoints[ii].x, reqInfo.vtPoints[ii].y });
+			reqInfoNew.vtKeyType.emplace_back(reqInfo.vtKeyType[ii]); // node type
+			reqInfoNew.vtKeyId.emplace_back(reqInfo.vtKeyId[ii]);
+			reqInfoNew.vtLinkDataType.emplace_back(reqInfo.vtLinkDataType[ii]);
+
+			// 마지막이면 
+			if (ii == reqInfo.vtPoints.size() - 1) {
+				continue;
+			}
+
+			// 입구점 계산 무시 케이스 (보행자-보행자, 동일 산 바운더리)
+			//if (vtComplexRouteInfo[ii].optimalPointInfo.nType == vtOptPoint[ii + 1].nType) {
+			if (((reqInfo.vtLinkDataType[ii] == TYPE_LINK_DATA_PEDESTRIAN) && (reqInfo.vtLinkDataType[ii + 1] == TYPE_LINK_DATA_PEDESTRIAN)) ||
+				((reqInfo.vtLinkDataType[ii] == TYPE_LINK_DATA_TREKKING) && (reqInfo.vtLinkDataType[ii + 1] == TYPE_LINK_DATA_TREKKING) &&
+					(vtComplexRouteInfo[ii].optimalPointInfo.id != 0) && (vtComplexRouteInfo[ii].optimalPointInfo.id == vtComplexRouteInfo[ii + 1].optimalPointInfo.id))) {
+				continue;
+			}
+
+			// 동일 산 바운더리 무시, 현재 데이터에 산코드(MNT)가 누락되어 우선 미사용
+			//if (vtComplexRouteInfo[ii].optimalPointInfo.id == vtOptPoint[ii + 1].id) {
+			//	continue;
+			//}
+
+			// 첫번째 지점이 입구점 보유 시, 두 지점간 가장 가까운 입구점 계산
+			double dwDistMin = INT_MAX;
+			int idxMin = -1;
+			int idxNow = 0;
+			for (const auto& ent : vtComplexRouteInfo[ii].optimalPointInfo.vtEntryPoint) {
+				double dwDistS = getRealWorldDistance(reqInfo.vtPoints[ii].x, reqInfo.vtPoints[ii].y, ent.x, ent.y);
+				double dwDistE = getRealWorldDistance(ent.x, ent.y, reqInfo.vtPoints[ii + 1].x, reqInfo.vtPoints[ii + 1].y);
+
+				if (dwDistS + dwDistE < dwDistMin) {
+					dwDistMin = dwDistS + dwDistE;
+					idxMin = idxNow;
+				}
+				idxNow++;
+			}
+
+			// 가까운 입구점을 경유지로 추가
+			if (idxMin >= 0) {
+				// 첫번째 지점과 링크 타입이 다를 경우, 첫번째 링크에 맞는 링크 매칭 한번, 현재 링크에 맞는 매칭 한번, 총 2개의 링크를 셋 한다.
+				//keyId = GetPositionLink(vtComplexRouteInfo[ii].optimalPointInfo.vtEntryPoint[idxMin].x, vtComplexRouteInfo[ii].optimalPointInfo.vtEntryPoint[idxMin].y, TYPE_OPTIMAL_ENTRANCE_MOUNTAIN, TYPE_LINK_DATA_TREKKING);
+				keyId.tile_id = g_forestMeshId;
+				keyId.nid = vtComplexRouteInfo[ii].optimalPointInfo.vtEntryPoint[idxMin].nID_1;
+				keyId.dir = 0;
+				if (keyId.llid != NOT_USE) {
+					reqInfoNew.vtPoints.push_back({ vtComplexRouteInfo[ii].optimalPointInfo.vtEntryPoint[idxMin].x, vtComplexRouteInfo[ii].optimalPointInfo.vtEntryPoint[idxMin].y });
+					reqInfoNew.vtKeyType.emplace_back(TYPE_KEY_NODE); // node type
+					reqInfoNew.vtKeyId.emplace_back(keyId);
+					reqInfoNew.vtLinkDataType.emplace_back(TYPE_LINK_DATA_TREKKING);
+				}
+
+				//keyId = GetPositionLink(vtComplexRouteInfo[ii].optimalPointInfo.vtEntryPoint[idxMin].x, vtComplexRouteInfo[ii].optimalPointInfo.vtEntryPoint[idxMin].y, TYPE_OPTIMAL_ENTRANCE_MOUNTAIN, TYPE_LINK_DATA_PEDESTRIAN);
+				keyId.tile_id = vtComplexRouteInfo[ii].optimalPointInfo.vtEntryPoint[idxMin].nID_2 / 100000;
+				keyId.nid = vtComplexRouteInfo[ii].optimalPointInfo.vtEntryPoint[idxMin].nID_2 % 100000;
+				keyId.dir = 0;
+				if (keyId.llid != NOT_USE) {
+					reqInfoNew.vtPoints.push_back({ vtComplexRouteInfo[ii].optimalPointInfo.vtEntryPoint[idxMin].x, vtComplexRouteInfo[ii].optimalPointInfo.vtEntryPoint[idxMin].y });
+					reqInfoNew.vtKeyType.emplace_back(TYPE_KEY_NODE); // node type
+					reqInfoNew.vtKeyId.emplace_back(keyId);
+					reqInfoNew.vtLinkDataType.emplace_back(TYPE_LINK_DATA_PEDESTRIAN);
+				}
+			}
+
+			// 두번째 지점도 입구점을 보유 시, 두 지점간 가장 가까운 입구점 계산
+			dwDistMin = INT_MAX;
+			idxMin = -1;
+			idxNow = 0;
+			for (const auto& ent : vtComplexRouteInfo[ii + 1].optimalPointInfo.vtEntryPoint) {
+				double dwDistS = getRealWorldDistance(reqInfo.vtPoints[ii + 1].x, reqInfo.vtPoints[ii + 1].y, ent.x, ent.y);
+				double dwDistE = getRealWorldDistance(ent.x, ent.y, reqInfo.vtPoints[ii].x, reqInfo.vtPoints[ii].y);
+
+				if (dwDistS + dwDistE < dwDistMin) {
+					dwDistMin = dwDistS + dwDistE;
+					idxMin = idxNow;
+				}
+				idxNow++;
+			}
+
+			// 가까운 입구점을 경유지로 추가
+			if (idxMin >= 0) {
+				// 첫번째 지점과 링크 타입이 다를 경우, 첫번째 링크에 맞는 링크 매칭 한번, 현재 링크에 맞는 매칭 한번, 총 2개의 링크를 셋 한다.
+				//keyId = GetPositionLink(vtOptPoint[ii+1].vtEntryPoint[idxMin].x, vtOptPoint[ii+1].vtEntryPoint[idxMin].y, TYPE_OPTIMAL_ENTRANCE_NONE, TYPE_LINK_DATA_PEDESTRIAN);
+				keyId.tile_id = vtComplexRouteInfo[ii + 1].optimalPointInfo.vtEntryPoint[idxMin].nID_2 / 100000;
+				keyId.nid = vtComplexRouteInfo[ii + 1].optimalPointInfo.vtEntryPoint[idxMin].nID_2 % 100000;
+				keyId.dir = 0;
+				if (keyId.llid != NOT_USE) {
+					reqInfoNew.vtPoints.push_back({ vtComplexRouteInfo[ii + 1].optimalPointInfo.vtEntryPoint[idxMin].x, vtComplexRouteInfo[ii + 1].optimalPointInfo.vtEntryPoint[idxMin].y });
+					reqInfoNew.vtKeyType.emplace_back(TYPE_KEY_NODE); // node type
+					reqInfoNew.vtKeyId.emplace_back(keyId);
+					reqInfoNew.vtLinkDataType.emplace_back(TYPE_LINK_DATA_PEDESTRIAN);
+				}
+
+				//keyId = GetPositionLink(vtOptPoint[ii+1].vtEntryPoint[idxMin].x, vtOptPoint[ii+1].vtEntryPoint[idxMin].y, TYPE_OPTIMAL_ENTRANCE_MOUNTAIN, TYPE_LINK_DATA_TREKKING);
+				keyId.tile_id = g_forestMeshId;
+				keyId.nid = vtComplexRouteInfo[ii + 1].optimalPointInfo.vtEntryPoint[idxMin].nID_1;
+				keyId.dir = 0;
+				if (keyId.llid != NOT_USE) {
+					reqInfoNew.vtPoints.push_back({ vtComplexRouteInfo[ii + 1].optimalPointInfo.vtEntryPoint[idxMin].x, vtComplexRouteInfo[ii + 1].optimalPointInfo.vtEntryPoint[idxMin].y });
+					reqInfoNew.vtKeyType.emplace_back(TYPE_KEY_NODE); // node type
+					reqInfoNew.vtKeyId.emplace_back(keyId);
+					reqInfoNew.vtLinkDataType.emplace_back(TYPE_LINK_DATA_TREKKING);
+				}
+			}
+		}
+
+		// 마지막
+		//reqInfoNew.vtPoints.emplace_back(reqInfo.vtPoints.back());
+		//reqInfoNew.vtKeyType.emplace_back(TYPE_KEY_LINK); // link type
+		//reqInfoNew.vtKeyId.emplace_back(reqInfo.vtKeyId.back());
+		//reqInfoNew.vtIdDataType.emplace_back(reqInfo.vtIdDataType.back());
+
+
+		// 지점 재 설정
+		for (int ii = 0; ii < reqInfoNew.vtPoints.size(); ii++)
+		{
+			if (ii == 0) { // 출발지
+				memcpy(&m_linkDeparture.Coord, &reqInfoNew.vtPoints[ii], sizeof(m_linkDeparture.Coord));
+				m_linkDeparture.LinkId = reqInfoNew.vtKeyId[ii];
+				m_linkDeparture.KeyType = reqInfoNew.vtKeyType[ii];
+				m_linkDeparture.LinkDataType = reqInfoNew.vtLinkDataType[ii];
+			}
+			else if (ii == reqInfoNew.vtPoints.size() - 1) { // 목적지
+				memcpy(&m_linkDestination.Coord, &reqInfoNew.vtPoints[ii], sizeof(m_linkDestination.Coord));
+				m_linkDestination.LinkId = reqInfoNew.vtKeyId[ii];
+				m_linkDestination.KeyType = reqInfoNew.vtKeyType[ii];
+				m_linkDestination.LinkDataType = reqInfoNew.vtLinkDataType[ii];
+			}
+			else { // 경유지
+				RouteLinkInfo linkInfo;
+				linkInfo.Coord = reqInfoNew.vtPoints[ii];
+				linkInfo.LinkId = reqInfoNew.vtKeyId[ii];
+				linkInfo.KeyType = reqInfoNew.vtKeyType[ii];
+				linkInfo.LinkDataType = reqInfoNew.vtLinkDataType[ii];
+				m_linkWaypoints.emplace_back(linkInfo);
+			}
+	}
+
+
+		if ((ret = m_pRoutePlan->DoComplexRoutes(&reqInfoNew, &vtRouteInfos[ii], &m_vtRouteResult)) == 0)
+#else
+		if ((ret = routePlans[ii].DoComplexRoutesEx(&reqInfos[ii]/*, vtComplexPointInfo*/, &vtRouteInfos[ii], &vtRouteResults[ii])) == 0)
+#endif
+		{
+			m_vtRouteResult[ii].Init();
+
+			m_vtRouteResult[ii].ResultCode = vtRouteResults[ii][0].ResultCode; // 경로 결과 코드, 0:성공, 1~:실패
+
+			m_vtRouteResult[ii].RequestMode = vtRouteResults[ii][0].RequestMode; // 요청 모드
+			m_vtRouteResult[ii].RequestId = vtRouteResults[ii][0].RequestId; // 요청 ID
+
+			m_vtRouteResult[ii].RouteOption = vtRouteResults[ii][0].RouteOption; // 경로 옵션
+			m_vtRouteResult[ii].RouteAvoid = vtRouteResults[ii][0].RouteAvoid; // 경로 회피
+
+			m_vtRouteResult[ii].StartResultLink = vtRouteResults[ii][vtRouteResults[ii].size() - 1].StartResultLink;
+			m_vtRouteResult[ii].EndResultLink = vtRouteResults[ii][0].EndResultLink;
+
+			RouteSummary summary;
+			// for (int ii = m_vtRouteResult.size() - 1; ii >= 0; --ii) {
+			for (const auto& route : vtRouteResults[ii]) {
+				// summarys
+				if (route.LinkInfo.empty()) {
+					continue; // 이종간 경로 탐색 무시된 케이스
+				}
+
+				summary.TotalDist = route.TotalLinkDist;
+				summary.TotalTime = route.TotalLinkTime;
+				m_vtRouteResult[ii].RouteSummarys.emplace_back(summary);
+
+				// 경로선
+				boxMerge(m_vtRouteResult[ii].RouteBox, route.RouteBox);
+				linkMerge(m_vtRouteResult[ii].LinkVertex, route.LinkVertex);
+
+				m_vtRouteResult[ii].LinkInfo.reserve(m_vtRouteResult[ii].LinkInfo.size() + route.LinkInfo.size());
+				for (const auto& link : route.LinkInfo) {
+					// 경유지가 있을 경우, 전체 경로를 합치면, 개별 offset 및 거리, 시간이 누적되어 변경되어야 함.
+					// 작업 추가 필요
+					m_vtRouteResult[ii].LinkInfo.emplace_back(link);
+				}
+
+				m_vtRouteResult[ii].TotalLinkDist += route.TotalLinkDist; // 경로 전체 거리
+				m_vtRouteResult[ii].TotalLinkCount += route.TotalLinkCount; // 경로 전체 링크 수
+				m_vtRouteResult[ii].TotalLinkTime += route.TotalLinkTime;; // 경로 전체 소요 시간 (초)
+			}
+		}
+	}
+
+	return ret;
+}
+
+
+int CRouteManager::GetWeightMatrix(IN const char* szRequest, OUT vector<vector<stDistMatrix>>& vtWeightMatrix)
+{
+	int ret = RESULT_FAILED;
+
+	if (szRequest == nullptr && strlen(szRequest) <= 0) {
+		LOG_TRACE(LOG_WARNING, "GetWeightMatrix request failed, request string is null or zero size");
+		return ret;
+	}
+
+	vector<SPoint> vtOrigins;
+	TspOptions tspOpt;
+	ClusteringOptions clustOpt;
+
+	uint32_t crc = m_pTmsMgr->GetRequestCluster(szRequest, vtOrigins, tspOpt, clustOpt);
+
+	const int cntOrigins = vtOrigins.size();
+
+	// get table
+	string strFileName;
+	string strWMPath = m_pDataMgr->GetDataPath();
+	strWMPath += "/usr/result_table_";
+	if (clustOpt.userId != 0) {
+		strWMPath += to_string(clustOpt.userId);
+	} else {
+		strWMPath += "1234512345";
+	}
+	strWMPath += ".bin";
+
+	bool isRead = false;
+	bool isWritten = false;
+	const int32_t dataSize = sizeof(stDistMatrix::nTotalDist) + sizeof(stDistMatrix::nTotalTime) + sizeof(stDistMatrix::dbTotalCost);
+
+	if (clustOpt.fileCache == 1 || clustOpt.fileCache == 3) { // read, read-write
+		ret = m_pTmsMgr->LoadWeightMatrix(strWMPath.c_str(), cntOrigins, dataSize, crc, vtWeightMatrix);
+		if (ret == ROUTE_RESULT_SUCCESS) {
+			isRead = true;
+		}
+	}
+
+	// 캐쉬된 WM이 없으면 새로 생성
+	if (!isRead) {
+		ret = DoTabulate(vtOrigins, vtWeightMatrix);
+
+		// 테이블 데이터 미리 읽어 저장하면서 사용하자
+		if ((ret == ROUTE_RESULT_SUCCESS) && (clustOpt.fileCache == 2 || clustOpt.fileCache == 3)) { // write, read-write)) {
+			ret = m_pTmsMgr->SaveWeightMatrix(strWMPath.c_str(), cntOrigins, dataSize, crc, vtWeightMatrix);
+			if (ret == ROUTE_RESULT_SUCCESS) {
+				isWritten = true;
+			}
+		}
+	}
 
 	return ret;
 }
@@ -718,7 +1863,6 @@ int CRouteManager::GetCluster_for_geoyoung(IN const int32_t cntCluster, OUT vect
 
 
 	int cntPois = vtOrigins.size();
-	char szGroup[128] = { 0, };
 	int cntAdded = 0;
 
 	LOG_TRACE(LOG_DEBUG, "GetCluster_for_geoyoung, pois : %d", cntPois);
@@ -736,312 +1880,410 @@ int CRouteManager::GetCluster_for_geoyoung(IN const int32_t cntCluster, OUT vect
 
 	// geoyoung cluster
 	int idCluster = 0;
-	for (auto const& items : arrClusterCnt) {
-		stDistrict tmpDistrict;
-		sprintf(szGroup, "%02d", idCluster++);
-		tmpDistrict.name = szGroup;
+	for (const auto& items : arrClusterCnt) {
+		stDistrict cluster;
+		cluster.id = idCluster++;
 
 		LOG_TRACE(LOG_DEBUG, "GetCluster_for_geoyoung, cluster id : %d", items);
 
 		// cluster pois
 		for (int jj=0; jj<items; jj++) {
-			stPoi tmpPoi;
-			tmpPoi.coord = vtOrigins[cntAdded];
-			tmpDistrict.pois.emplace_back(tmpPoi);
-
+			cluster.vtCoord.emplace_back(vtOrigins[cntAdded]);
 			cntAdded++;
 		} // for
-		tmpDistrict.center.x = 0;
-		tmpDistrict.center.y = 0;
-		vtCluster.emplace_back(tmpDistrict);
+
+		// make border
+		GetBoundary(cluster.vtCoord, cluster.vtBorder, cluster.center);
+
+		vtCluster.emplace_back(cluster);
 	} // for
 
 	LOG_TRACE(LOG_DEBUG, "GetCluster_for_geoyoung, added : %d", cntAdded);
 
-	// 배송처 권역
-	for (auto& cluster : vtCluster) {
-		vector<SPoint> coords;
-		vector<SPoint> border;
-		vector<SPoint> expend;
-		vector<SPoint> slice;
-		for (const auto& poi : cluster.pois) {
-			coords.emplace_back(poi.coord);
-		}
-
-		// make border
-		GetBoundary(coords, cluster.border);
-	}
-
 	ret = ROUTE_RESULT_SUCCESS;
 
 	return ret;
 }
 
 
-int CRouteManager::GetCluster(IN const int32_t cntCluster, IN RouteTable** ppTables, OUT vector<stDistrict>& vtCluster)
+int CRouteManager::GetCluster(IN const char* szRequest, OUT vector<stDistrict>& vtCluster, OUT vector<SPoint>& vtPositionLock)
 {
-	int ret = -1;
+	int ret = RESULT_FAILED;
 
-	vector<SPoint> vtPois;
-	vtPois.reserve(m_ptWaypoints.size() + 2);
+	if (!vtCluster.empty()) {
+		vtCluster.clear();
+		vector<stDistrict>().swap(vtCluster);
+	}
 
-	// start 
-	vtPois.emplace_back(m_ptDeparture);
+	if (szRequest == nullptr && strlen(szRequest) <= 0)
+	{
+		LOG_TRACE(LOG_WARNING, "GetCluster request failed, request string is null or zero size");
+		return ret;
+	}
 
-	// waypoint
-	if (!m_ptWaypoints.empty()) {
-		for (int ii = 0; ii < m_ptWaypoints.size(); ii++) {
-			vtPois.emplace_back(m_ptWaypoints[ii]);
+	vector<vector<stDistMatrix>> vtWeightMatrix;
+	vector<SPoint> vtOrigins;
+	TspOptions tspOpt;
+	ClusteringOptions clustOpt;
+
+	uint32_t crc = m_pTmsMgr->GetRequestCluster(szRequest, vtOrigins, tspOpt, clustOpt);
+
+	const int cntOrigins = vtOrigins.size();
+
+	// get table
+	string strWMPath = m_pDataMgr->GetDataPath();
+	strWMPath += "/usr/result_table_";
+	if (clustOpt.userId != 0) {
+		strWMPath += to_string(clustOpt.userId);
+	} else {
+		strWMPath += "1234512345";
+	}
+	strWMPath += ".bin";
+
+	bool isRead = false;
+	bool isWritten = false;
+	const int32_t dataSize = sizeof(stDistMatrix::nTotalDist) + sizeof(stDistMatrix::nTotalTime) + sizeof(stDistMatrix::dbTotalCost);
+
+	if (clustOpt.fileCache == 1 || clustOpt.fileCache == 3) { // read, read-write
+		ret = m_pTmsMgr->LoadWeightMatrix(strWMPath.c_str(), cntOrigins, dataSize, crc, vtWeightMatrix);
+		if (ret == ROUTE_RESULT_SUCCESS) {
+			isRead = true;
 		}
 	}
 
-	// end
-	vtPois.emplace_back(m_ptDestination);
+	// 캐쉬된 WM이 없으면 새로 생성
+	if (!isRead) {
+		ret = DoTabulate(vtOrigins, vtWeightMatrix);
 
-	if (vtPois.empty() || cntCluster <= 1 || ppTables == nullptr) {
-		LOG_TRACE(LOG_WARNING, "GetClustering, request failed, poi cnt:%d, cluster cnt:%d, table:%p", vtPois.size(), cntCluster, ppTables);
-		return -1;
-	} 
-
-	uint32_t cntPois = vtPois.size();
-	
-	RouteTable** ppResultTables = ppTables;
-	double** ppWeightMatrix = nullptr;
-	ret = ROUTE_RESULT_SUCCESS;
-
-	if (ret == ROUTE_RESULT_SUCCESS) {
-		// wm 생성
-		ppWeightMatrix = new double*[cntPois];
-		for (int ii = 0; ii < cntPois; ii++) {
-			ppWeightMatrix[ii] = new double[cntPois];
-
-			// copy data
-			for (int jj = 0; jj < cntPois; jj++) {
-				ppWeightMatrix[ii][jj] = ppResultTables[ii][jj].nTotalDist;
+		// 테이블 데이터 미리 읽어 저장하면서 사용하자
+		if ((ret == ROUTE_RESULT_SUCCESS) && (clustOpt.fileCache == 2 || clustOpt.fileCache == 3)) { // write, read-write)) {
+			ret = m_pTmsMgr->SaveWeightMatrix(strWMPath.c_str(), cntOrigins, dataSize, crc, vtWeightMatrix);
+			if (ret == ROUTE_RESULT_SUCCESS) {
+				isWritten = true;
 			}
-		} // for
+		}
 	}
 
+	if (ret == RESULT_OK) {
+		// get cluster
+	//#define USE_GN_KMEANS_ALORITHM // k-means 알고리즘 사용
+#if defined(USE_KMEANS_ALORITHM)
+		double** ppWeightMatrix = nullptr;
 
-	// k-means
-	CGnKmeansClassfy kmc;
+		// 실거리 테이블이 있으면 사용, 없으면 직선거리 적용
+		if (ppTables != nullptr) {
+			// wm 생성
+			ppWeightMatrix = new double*[cntPois];
+			for (int ii = 0; ii < cntPois; ii++) {
+				ppWeightMatrix[ii] = new double[cntPois];
 
-	// set wm
-	kmc.SetWeightMatrix(ppWeightMatrix);
+				// copy data
+				for (int jj = 0; jj < cntPois; jj++) {
+					ppWeightMatrix[ii][jj] = ppTables[ii][jj].nTotalDist;
+				}
+			} // for
+		}
 
-	SPoint centerAll = getPolygonCenter(vtPois);
+		// k-means
+		CGnKmeansClassfy kmc;
 
-	// 최초 클러스터 데이터
-	kmc.SetDataCount(cntPois);
-	int ii = 0;
-	for (const auto& poi : vtPois) {
-		kmc.AddData(ii++, poi.x, poi.y);
-	}
+		// set wm
+		kmc.SetWeightMatrix(ppWeightMatrix);
 
-	int32_t remainedCluster = cntCluster;
+		SPoint centerAll = getPolygonCenter(vtPois);
+
+		// 최초 클러스터 데이터
+		kmc.SetDataCount(cntPois);
+		int ii = 0;
+		for (const auto& poi : vtPois) {
+			kmc.AddData(ii++, poi.x, poi.y);
+		}
 
 #if 1 // k-means 기본 분배
-	kmc.Run(remainedCluster);
-
-	// 클러스터 그룹핑
-	vtCluster.reserve(remainedCluster);
-
-	char szGroup[128] = { 0, };
-	for (int ii = 0; ii < remainedCluster; ii++) {
-		stDistrict tmpDistrict;
-
-		sprintf(szGroup, "%02d", kmc.m_vtResult[ii].group);
-
-		tmpDistrict.name = szGroup;
-		tmpDistrict.center.x = kmc.m_vtResult[ii].x;
-		tmpDistrict.center.y = kmc.m_vtResult[ii].y;
-		tmpDistrict.pois.reserve(kmc.m_vtResult[ii].idx);
-
-		vtCluster.emplace_back(tmpDistrict);
-	} // for
-
-	stDistrict* pDistrict = nullptr;
-	for (const auto& item : kmc.m_vtInput) {
-		pDistrict = &vtCluster.at(item.group);
-
-		if (pDistrict) {
-			stPoi newPoi;
-			newPoi.coord.x = item.x;
-			newPoi.coord.y = item.y;
-
-			pDistrict->pois.emplace_back(newPoi);
-		}
-		else {
-			LOG_TRACE(LOG_WARNING, "new cluster index not exist, idx:%d", item.group);
-		}
-	} // for
-#else // 밀도 균등을 위해 반복 처리
-	// 밀도 균등을 위해 반복 처리
-	// 클러스터 수만큼 반복하여, 평균치에 가까운 녀석을 순차적으로 빼면서 반복
-	const int32_t cntItemAvg = cntPois / MAX_CLUSTER_COUNT;
-	const int32_t cntItemBand = cntItemAvg * 5 / 100; // 위아래 5%까지 허용
-
-	for (; 0 < remainedCluster - 2;)
-	{
 		kmc.Run(remainedCluster);
 
 		// 클러스터 그룹핑
-		vector<stDistrict> tmpDistricts;
-		tmpDistricts.reserve(kmc.m_vtResult.size());
+		vtCluster.reserve(remainedCluster);
 
+		char szGroup[128] = { 0, };
 		for (int ii = 0; ii < remainedCluster; ii++) {
 			stDistrict tmpDistrict;
-			tmpDistricts.emplace_back(tmpDistrict);
+
+			sprintf(szGroup, "%02d", kmc.m_vtResult[ii].group);
+
+			tmpDistrict.name = szGroup;
+			tmpDistrict.center.x = kmc.m_vtResult[ii].x;
+			tmpDistrict.center.y = kmc.m_vtResult[ii].y;
+			tmpDistrict.pois.reserve(kmc.m_vtResult[ii].idx);
+
+			vtCluster.emplace_back(tmpDistrict);
 		} // for
 
+		stDistrict* pDistrict = nullptr;
 		for (const auto& item : kmc.m_vtInput) {
-			stDistrict* pCluster = &tmpDistricts.at(item.group);
+			pDistrict = &vtCluster.at(item.group);
 
-			if (pCluster) {
+			if (pDistrict) {
 				stPoi newPoi;
 				newPoi.coord.x = item.x;
 				newPoi.coord.y = item.y;
 
-				pCluster->pois.emplace_back(newPoi);
-				pCluster->center.x = kmc.m_vtResult[item.group].x;
-				pCluster->center.y = kmc.m_vtResult[item.group].y;
-			}
-			else {
+				pDistrict->pois.emplace_back(newPoi);
+			} else {
 				LOG_TRACE(LOG_WARNING, "new cluster index not exist, idx:%d", item.group);
 			}
 		} // for
+#else // 밀도 균등을 위해 반복 처리
+		// 밀도 균등을 위해 반복 처리
+		// 클러스터 수만큼 반복하여, 평균치에 가까운 녀석을 순차적으로 빼면서 반복
+		const int32_t cntItemAvg = cntPois / MAX_CLUSTER_COUNT;
+		const int32_t cntItemBand = cntItemAvg * 5 / 100; // 위아래 5%까지 허용
 
-		  // 밀도 균등 클러스터 선택
-		int32_t diff = INT32_MAX;
-		int32_t cntAddedCluster = 0; // 등록된 클러스터 갯수
-		int32_t diffNearCluster = INT32_MAX; // 평균치와 가장 가까운 클러스터 아이템 갯수
-		vector<stDistrict>::iterator candidateIt = tmpDistricts.end(); // 평균치와 가장 가까운 클러스터
-		char szNum[10] = { 0, };
-		for (auto it = tmpDistricts.begin(); it != tmpDistricts.end();) {
-			// 밀도 균등 허용치에 포함되면 사용
-			diff = it->pois.size() - cntItemAvg;
-			if (abs(diff) <= cntItemBand) {
-				sprintf(&it->name[0], "%02d", m_tmsInfoNew.size());
-				vtCluster.emplace_back(*it);
+		for (; 0 < remainedCluster - 2;) {
+			kmc.Run(remainedCluster);
 
+			// 클러스터 그룹핑
+			vector<stDistrict> tmpDistricts;
+			tmpDistricts.reserve(kmc.m_vtResult.size());
+
+			for (int ii = 0; ii < remainedCluster; ii++) {
+				stDistrict tmpDistrict;
+				tmpDistricts.emplace_back(tmpDistrict);
+			} // for
+
+			for (const auto& item : kmc.m_vtInput) {
+				stDistrict* pCluster = &tmpDistricts.at(item.group);
+
+				if (pCluster) {
+					stPoi newPoi;
+					newPoi.coord.x = item.x;
+					newPoi.coord.y = item.y;
+
+					pCluster->pois.emplace_back(newPoi);
+					pCluster->center.x = kmc.m_vtResult[item.group].x;
+					pCluster->center.y = kmc.m_vtResult[item.group].y;
+				} else {
+					LOG_TRACE(LOG_WARNING, "new cluster index not exist, idx:%d", item.group);
+				}
+			} // for
+
+			// 밀도 균등 클러스터 선택
+			int32_t diff = INT32_MAX;
+			int32_t cntAddedCluster = 0; // 등록된 클러스터 갯수
+			int32_t diffNearCluster = INT32_MAX; // 평균치와 가장 가까운 클러스터 아이템 갯수
+			vector<stDistrict>::iterator candidateIt = tmpDistricts.end(); // 평균치와 가장 가까운 클러스터
+			char szNum[10] = { 0, };
+			for (auto it = tmpDistricts.begin(); it != tmpDistricts.end();) {
+				// 밀도 균등 허용치에 포함되면 사용
+				diff = it->pois.size() - cntItemAvg;
+				if (abs(diff) <= cntItemBand) {
+					sprintf(&it->name[0], "%02d", m_tmsInfoNew.size());
+					vtCluster.emplace_back(*it);
+
+					cntAddedCluster++;
+
+					// 삭제
+					it = tmpDistricts.erase(it);
+					candidateIt = tmpDistricts.end();
+				} else {
+					if ((cntAddedCluster <= 0) && ((0 <= diff) && (diff < diffNearCluster))) {
+						// 예비 클러스터
+						candidateIt = it;
+
+						diffNearCluster = diff;
+					}
+
+					// 삭제 안하고 증가
+					it++;
+				}
+			} // for
+
+			// 밀도 균등 클러스터가 없으면 예비 클러스터에서 사용
+			if ((cntAddedCluster <= 0) && (candidateIt != tmpDistricts.end())) {
+				// 가까운 순으로 정렬
+				multimap<double, int>mapDist;
+				for (int ii = 0; ii < candidateIt->pois.size(); ii++) { // diffNearCluster
+					mapDist.emplace(getRealWorldDistance(candidateIt->center.x, candidateIt->center.y, candidateIt->pois[ii].coord.x, candidateIt->pois[ii].coord.y), ii);
+					//mapDist.emplace(10000000.f - getRealWorldDistance(centerAll.x, centerAll.y, candidateIt->pois[ii].coord.x, candidateIt->pois[ii].coord.y), ii);
+				} // for
+
+				// 밀도 균등 평균치 까지만 저장
+				stDistrict tmpAddDistrict; // 저장될 아이템들
+				stDistrict tmpRemainDistrict; // 다시 재사용될 아이템들
+				sprintf(&tmpAddDistrict.name[0], "%02d", m_tmsInfoNew.size());
+				tmpAddDistrict.center = candidateIt->center;
+
+				for (const auto& dist : mapDist) {
+					// 밀도 균등 평균치 까지만 저장
+					if (tmpAddDistrict.pois.size() < cntItemAvg) {
+						tmpAddDistrict.pois.emplace_back(candidateIt->pois[dist.second]);
+					} else {
+						tmpRemainDistrict.pois.emplace_back(candidateIt->pois[dist.second]);
+					}
+				} // for
+
+				// 원본 삭제
+				tmpDistricts.erase(candidateIt);
+
+				// 클러스터 추가
+				vtCluster.emplace_back(tmpAddDistrict);
 				cntAddedCluster++;
 
-				// 삭제
-				it = tmpDistricts.erase(it);
-				candidateIt = tmpDistricts.end();
+				// 재사용 추가
+				//tmpDistricts.emplace_back(tmpRemainDistrict);
 			}
-			else {
-				if ((cntAddedCluster <= 0) && ((0 <= diff) && (diff < diffNearCluster))) {
-					// 예비 클러스터
-					candidateIt = it;
 
-					diffNearCluster = diff;
-				}
-
-				// 삭제 안하고 증가
-				it++;
-			}
-		} // for
-
-		  // 밀도 균등 클러스터가 없으면 예비 클러스터에서 사용
-		if ((cntAddedCluster <= 0) && (candidateIt != tmpDistricts.end())) {
-			// 가까운 순으로 정렬
-			multimap<double, int>mapDist;
-			for (int ii = 0; ii < candidateIt->pois.size(); ii++) { // diffNearCluster
-				mapDist.emplace(getRealWorldDistance(candidateIt->center.x, candidateIt->center.y, candidateIt->pois[ii].coord.x, candidateIt->pois[ii].coord.y), ii);
-				//mapDist.emplace(10000000.f - getRealWorldDistance(centerAll.x, centerAll.y, candidateIt->pois[ii].coord.x, candidateIt->pois[ii].coord.y), ii);
-			} // for
-
-			  // 밀도 균등 평균치 까지만 저장
-			stDistrict tmpAddDistrict; // 저장될 아이템들
-			stDistrict tmpRemainDistrict; // 다시 재사용될 아이템들
-			sprintf(&tmpAddDistrict.name[0], "%02d", m_tmsInfoNew.size());
-			tmpAddDistrict.center = candidateIt->center;
-
-			for (const auto & dist : mapDist) {
-				// 밀도 균등 평균치 까지만 저장
-				if (tmpAddDistrict.pois.size() < cntItemAvg) {
-					tmpAddDistrict.pois.emplace_back(candidateIt->pois[dist.second]);
-				}
-				else {
-					tmpRemainDistrict.pois.emplace_back(candidateIt->pois[dist.second]);
+			// 남은 값을 다시 넣어 클러스터링 반복 진행
+			kmc.ReSet();
+			int ii = 0;
+			for (auto& district : tmpDistricts) {
+				for (auto& item : district.pois) {
+					kmc.AddData(ii++, item.coord.x, item.coord.y);
 				}
 			} // for
 
-			  // 원본 삭제
-			tmpDistricts.erase(candidateIt);
-
-			// 클러스터 추가
-			vtCluster.emplace_back(tmpAddDistrict);
-			cntAddedCluster++;
-
-			// 재사용 추가
-			//tmpDistricts.emplace_back(tmpRemainDistrict);
-		}
-
-		// 남은 값을 다시 넣어 클러스터링 반복 진행
-		kmc.ReSet();
-		int ii = 0;
-		for (auto& district : tmpDistricts) {
-			for (auto& item : district.pois) {
-				kmc.AddData(ii++, item.coord.x, item.coord.y);
-			}
+			remainedCluster -= cntAddedCluster;
 		} // for
 
-		remainedCluster -= cntAddedCluster;
-	} // for
+		// 마지막 남은 아이템들을 모아 클러스터링
+		if (remainedCluster != 1) {
+			LOG_TRACE(LOG_WARNING, "last cluster count should remained only one, now:%d", remainedCluster);
+		} else //if (0) {
+			kmc.Run(remainedCluster);
 
-	  // 마지막 남은 아이템들을 모아 클러스터링
-	if (remainedCluster != 1) {
-		LOG_TRACE(LOG_WARNING, "last cluster count should remained only one, now:%d", remainedCluster);
-	}
-	else //if (0) {
-		kmc.Run(remainedCluster);
+		// 클러스터 그룹핑
+		stDistrict tmpDistrict;
+		sprintf(&tmpDistrict.name[0], "%02d", m_tmsInfoNew.size());
+		tmpDistrict.center.x = kmc.m_vtResult[0].x;
+		tmpDistrict.center.y = kmc.m_vtResult[0].y;
 
-	// 클러스터 그룹핑
-	stDistrict tmpDistrict;
-	sprintf(&tmpDistrict.name[0], "%02d", m_tmsInfoNew.size());
-	tmpDistrict.center.x = kmc.m_vtResult[0].x;
-	tmpDistrict.center.y = kmc.m_vtResult[0].y;
-
-	for (const auto& item : kmc.m_vtInput) {
-		stPoi newPoi;
-		newPoi.coord.x = item.x;
-		newPoi.coord.y = item.y;
-		tmpDistrict.pois.emplace_back(newPoi);
-	} // for
-	vtCluster.emplace_back(tmpDistrict);
+		for (const auto& item : kmc.m_vtInput) {
+			stPoi newPoi;
+			newPoi.coord.x = item.x;
+			newPoi.coord.y = item.y;
+			tmpDistrict.pois.emplace_back(newPoi);
+		} // for
+		vtCluster.emplace_back(tmpDistrict);
 #endif
 
+		// release
+		kmc.m_vtInput.clear();
+		kmc.m_vtResult.clear();
 
-	// 배송처 권역
-	for (auto& cluster : vtCluster) {
-		vector<SPoint> coords;
-		vector<SPoint> border;
-		vector<SPoint> expend;
-		vector<SPoint> slice;
-		for (const auto& poi : cluster.pois) {
-			coords.emplace_back(poi.coord);
+
+		// 배송처 권역
+		for (auto& cluster : vtCluster) {
+			vector<SPoint> coords;
+			vector<SPoint> border;
+			vector<SPoint> expend;
+			vector<SPoint> slice;
+			for (const auto& poi : cluster.pois) {
+				coords.emplace_back(poi.coord);
+			}
+
+			// make border
+			GetBoundary(coords, cluster.border);
 		}
 
-		// make border
-		GetBoundary(coords, cluster.border);
+		ret = RESULT_OK;
+
+		for (int ii = 0; ii < cntPois; ii++) {
+			if (ppWeightMatrix) {
+				SAFE_DELETE_ARR(ppWeightMatrix[ii]);
+			}
+		}
+		SAFE_DELETE_ARR(ppWeightMatrix);
+
+#else // #define USE_KMEANS_ALORITHM // k-means 알고리즘 사용
+
+		ret = m_pTmsMgr->GetCluster(&tspOpt, &clustOpt, vtWeightMatrix, vtOrigins, vtCluster, vtPositionLock);
+
+#endif // #define USE_KMEANS_ALORITHM // k-means 알고리즘 사용
 	}
 
-	// release
-	kmc.m_vtInput.clear();
-	kmc.m_vtResult.clear();
-
-	for (int ii = 0; ii < cntPois; ii++) {
-		SAFE_DELETE_ARR(ppWeightMatrix[ii]);
+	if (!vtWeightMatrix.empty()) {
+		vtWeightMatrix.clear();
+		vector<vector<stDistMatrix>>().swap(vtWeightMatrix);
 	}
-	SAFE_DELETE_ARR(ppWeightMatrix);
 
 	return ret;
 }
 
 
-int CRouteManager::GetBoundary(IN const vector<SPoint>& vtPois, OUT vector<SPoint>& vtBoundary)
+int CRouteManager::GetBestway(IN const char* szRequest, OUT vector<stWaypoints>& vtWaypoints, OUT vector<uint32_t>& vtBestWaypoints, OUT double& dist, OUT int32_t& time)
+{
+	int ret = RESULT_FAILED;
+
+	if (szRequest == nullptr && strlen(szRequest) <= 0) {
+		LOG_TRACE(LOG_WARNING, "GetBestway request failed, request string is null or zero size");
+		return ret;
+	}
+
+	vector<SPoint> vtOrigins;
+	TspOptions tspOpt;
+
+	uint32_t crc = m_pTmsMgr->GetRequestBestway(szRequest, vtOrigins, tspOpt);
+
+	const int cntOrigins = vtOrigins.size();
+
+	vector<vector<stDistMatrix>> vtWeightMatrix;
+
+	// get table
+	string strWMPath = m_pDataMgr->GetDataPath();
+	strWMPath += "/usr/result_table_";
+	if (tspOpt.userId != 0) {
+		strWMPath += to_string(tspOpt.userId);
+	} else {
+		strWMPath += "1234512345";
+	}
+	strWMPath += ".bin";
+
+	bool isRead = false;
+	bool isWritten = false;
+	const int32_t dataSize = sizeof(stDistMatrix::nTotalDist) + sizeof(stDistMatrix::nTotalTime) + sizeof(stDistMatrix::dbTotalCost);
+
+	if (tspOpt.fileCache == 1 || tspOpt.fileCache == 3) { // read, read-write
+		ret = m_pTmsMgr->LoadWeightMatrix(strWMPath.c_str(), cntOrigins, dataSize, crc, vtWeightMatrix);
+		if (ret == ROUTE_RESULT_SUCCESS) {
+			isRead = true;
+		}
+	}
+
+	// 캐쉬된 WM이 없으면 새로 생성
+	if (!isRead) {
+		ret = DoTabulate(vtOrigins, vtWeightMatrix);
+
+		// 테이블 데이터 미리 읽어 저장하면서 사용하자
+		if ((ret == ROUTE_RESULT_SUCCESS) && (tspOpt.fileCache == 2 || tspOpt.fileCache == 3)) { // write, read-write)) {
+			ret = m_pTmsMgr->SaveWeightMatrix(strWMPath.c_str(), cntOrigins, dataSize, crc, vtWeightMatrix);
+			if (ret == ROUTE_RESULT_SUCCESS) {
+				isWritten = true;
+			}
+		}
+	}
+
+	stWaypoints waypoint;
+	int idx = 0;
+	for (const auto& pt : vtOrigins) {
+		waypoint.nId = idx++;
+		waypoint.x = pt.x;
+		waypoint.y = pt.y;
+
+		vtWaypoints.emplace_back(waypoint);
+	}
+
+	ret = m_pTmsMgr->GetBestway(&tspOpt, vtWeightMatrix, vtWaypoints, vtBestWaypoints, dist, time);
+
+	if (!vtWeightMatrix.empty()) {
+		vtWeightMatrix.clear();
+		vector<vector<stDistMatrix>>().swap(vtWeightMatrix);
+	}
+
+	return ret;
+}
+
+
+int CRouteManager::GetBoundary(IN const vector<SPoint>& vtPois, OUT vector<SPoint>& vtBoundary, OUT SPoint& center)
 {
 	if (vtPois.empty()) {
 		LOG_TRACE(LOG_WARNING, "GetClusterBoundary, request failed, poi cnt:%d", vtPois.size());
@@ -1050,8 +2292,6 @@ int CRouteManager::GetBoundary(IN const vector<SPoint>& vtPois, OUT vector<SPoin
 
 	vector<SPoint> coords;
 	vector<SPoint> border;
-	vector<SPoint> expend;
-	vector<SPoint> slice;
 
 	for (const auto& poi : vtPois) {
 		LOG_TRACE(LOG_TEST, "poi, x:%.5f, y:%.5f", poi.x, poi.y);
@@ -1059,105 +2299,125 @@ int CRouteManager::GetBoundary(IN const vector<SPoint>& vtPois, OUT vector<SPoin
 	}
 
 	// make border
-	ConvexHull(coords, border);
-
-	// make closed
-	if ((border.front().x != border.back().x) || (border.front().y != border.back().y)) {
-		border.emplace_back(border.front());
-	}
-
-	// 면적 조사
-	double area = GetPolygonArea(border);
-	if (area <= 1) {
-		vtBoundary.assign(border.begin(), border.end());
-	} else {
-		// 2023.7.26
-		// catmullline의 2DVector포함 빌드시 node 동작 안하는 이슈 발생
-
-		// 임시로 직선 바운더리 사용
-		// cluster.border = border;
-
-		
-		// expend border
-		GetBorderOfPolygon(border, -0.002, expend);
-
-		// 외곽선 일정거리로 나누기
-		GetSlicedLine(expend, 1000, slice);
-
-		// 외곽선 부드럽게
-		GetCatmullLine(slice, 0, vtBoundary);
-	}
+	m_pTmsMgr->GetBoundary(coords, vtBoundary, center);
 
 	return 0;
 }
 
 
-int CRouteManager::DoTabulate(TspOptions* pOpt, IN RouteTable** ppResultTables, OUT vector<uint32_t>& vtBestWaypoints)
+int CRouteManager::DoCourse(/*Packet*/)
 {
-	int ret = -1;
+	int ret = ROUTE_RESULT_SUCCESS;
 
 	const uint32_t uid = 12345678;
 
 	m_routeResult.Init();
 
+	
 	RequestRouteInfo reqInfo;
 	reqInfo.RequestId = uid;
-	reqInfo.RouteOption = m_nRouteOpt;
-	reqInfo.AvoidOption = m_nAvoidOpt;
+	reqInfo.RouteOption = ROUTE_OPT_SHORTEST;//m_vtRouteOpt[0]; // 추천은 속성 영향을 안받는 짧은 길 사용
+	reqInfo.AvoidOption = m_vtAvoidOpt[0];
+	reqInfo.MobilityOption = m_nMobilityOpt;
+	reqInfo.RouteSubOption = m_routeSubOpt;
 	reqInfo.StartDirIgnore = m_nDepartureDirIgnore;
 	reqInfo.WayDirIgnore = m_nWaypointDirIgnore;
 	reqInfo.EndDirIgnore = m_nDestinationDirIgnore;
+	reqInfo.RouteSubOption = m_routeSubOpt;
 
 	// start 
-	reqInfo.vtPoints.emplace_back(m_ptDeparture);
-	reqInfo.vtIdLinks.emplace_back(keyDeparture);
+	reqInfo.vtPoints.emplace_back(m_linkDeparture.Coord);
+	reqInfo.vtKeyId.emplace_back(m_linkDeparture.LinkId);
+#if defined(USE_MOUNTAIN_DATA)
+	if (m_linkDestination.LinkDataType == TYPE_LINK_DATA_TREKKING) { // 링크 속성으로 데이터 타입 변경
+		reqInfo.vtLinkDataType.emplace_back(TYPE_LINK_DATA_TREKKING);
+	} else {
+		reqInfo.vtLinkDataType.emplace_back(TYPE_LINK_DATA_PEDESTRIAN);
+	}
+#elif defined(USE_PEDESTRIAN_DATA)
+	reqInfo.vtLinkDataType.emplace_back(TYPE_LINK_DATA_PEDESTRIAN);
+#elif defined(USE_VEHICLE_DATA)
+	reqInfo.vtLinkDataType.emplace_back(TYPE_DATA_VEHICLE);
+#endif
+	reqInfo.vtKeyType.emplace_back(TYPE_KEY_LINK); // 기본은 링크 매칭
+
+	// 위 벡터들 통합
+	reqInfo.vtPointsInfo.emplace_back(m_linkDeparture);
 
 	// waypoint
-	if (!m_ptWaypoints.empty()) {
-		for (int ii = 0; ii < m_ptWaypoints.size(); ii++) {
-			reqInfo.vtPoints.emplace_back(m_ptWaypoints[ii]);
-			reqInfo.vtIdLinks.emplace_back(keyWaypoints[ii]);
-		}
+	if (!m_linkWaypoints.empty()) {
+		for (const auto& via : m_linkWaypoints) { //(int ii = 0; ii < m_linkWaypoints.size(); ii++) {
+			reqInfo.vtPoints.emplace_back(via.Coord);
+			reqInfo.vtKeyId.emplace_back(via.LinkId);
+#if defined(USE_MOUNTAIN_DATA)
+			if (via.LinkDataType == TYPE_LINK_DATA_TREKKING) { // 링크 속성으로 데이터 타입 변경
+				reqInfo.vtLinkDataType.emplace_back(TYPE_LINK_DATA_TREKKING);
+			} else {
+				reqInfo.vtLinkDataType.emplace_back(TYPE_LINK_DATA_PEDESTRIAN);
+			}
+#elif defined(USE_PEDESTRIAN_DATA)
+			reqInfo.vtLinkDataType.emplace_back(TYPE_LINK_DATA_PEDESTRIAN);
+#elif defined(USE_VEHICLE_DATA)
+			reqInfo.vtLinkDataType.emplace_back(TYPE_DATA_VEHICLE);
+#endif
+			reqInfo.vtKeyType.emplace_back(TYPE_KEY_LINK); // 기본은 링크 매칭
+
+			// 위 벡터들 통합
+			reqInfo.vtPointsInfo.emplace_back(via);
+		} // for
 	}
 
 	// end
-	reqInfo.vtPoints.emplace_back(m_ptDestination);
-	reqInfo.vtIdLinks.emplace_back(keyDestination);
-
-
-
-	// 지점 개수 만큼의 결과 테이블(n * n) 생성
-	// create route table rows
-	const int32_t cntPoints = reqInfo.vtPoints.size();
-	RouteTable** resultTables = nullptr;
-	
-	if (ppResultTables != nullptr) {
-		resultTables = const_cast<RouteTable**>(ppResultTables);
-		ret = ROUTE_RESULT_SUCCESS;
+	reqInfo.vtPoints.emplace_back(m_linkDestination.Coord);
+	reqInfo.vtKeyId.emplace_back(m_linkDestination.LinkId);
+#if defined(USE_MOUNTAIN_DATA)
+	if (m_linkDestination.LinkDataType == TYPE_LINK_DATA_TREKKING) { // 링크 속성으로 데이터 타입 변경
+		reqInfo.vtLinkDataType.emplace_back(TYPE_LINK_DATA_TREKKING);
+	} else {
+		reqInfo.vtLinkDataType.emplace_back(TYPE_LINK_DATA_PEDESTRIAN);
 	}
-	else {
-		resultTables = new RouteTable*[cntPoints];
-
-		// create route table cols 
-		for (int ii = 0; ii < cntPoints; ii++) {
-			resultTables[ii] = new RouteTable[cntPoints];
-		} // for
-
-#if defined(USE_TSP_MODULE)
-		ret = m_pRoutePlan->DoTabulate(&reqInfo, resultTables);
+#elif defined(USE_PEDESTRIAN_DATA)
+	reqInfo.vtLinkDataType.emplace_back(TYPE_LINK_DATA_PEDESTRIAN);
+#elif defined(USE_VEHICLE_DATA)
+	reqInfo.vtLinkDataType.emplace_back(TYPE_DATA_VEHICLE);
 #endif
+	reqInfo.vtKeyType.emplace_back(TYPE_KEY_LINK); // 기본은 링크 매칭
+
+	// 위 벡터들 통합
+	reqInfo.vtPointsInfo.emplace_back(m_linkDestination);
+
+
+	// 지점들이 정상 매칭되지 않았으면 실패 리턴
+	for (const auto& key : reqInfo.vtKeyId) {
+		if (key.llid == 0) {
+			ret = ROUTE_RESULT_FAILED_COURSE;
+			break;
+		}
+	}
+
+	// 출도착지의 링크 속성이 자전거길 일경우 mobility를 자전거로 변경
+	stLinkInfo* pLink = m_pDataMgr->GetLinkDataById(reqInfo.vtKeyId[0], reqInfo.vtLinkDataType[0]);
+	if (pLink != nullptr) {		
+		if ((pLink->trk.course_type == TYPE_TRE_BIKE) && (reqInfo.MobilityOption != TYPE_MOBILITY_BICYCLE)) {
+			LOG_TRACE(LOG_DEBUG, "mobility option change, old:%d -> new:%d", m_nMobilityOpt, TYPE_MOBILITY_BICYCLE);
+			reqInfo.MobilityOption = m_nMobilityOpt = TYPE_MOBILITY_BICYCLE;
+		}
 	}
 
 
-	// get route table
-	if (ret == ROUTE_RESULT_SUCCESS)
-	{
-#if defined(USE_TSP_MODULE)
-		GetBestWaypointResult(pOpt, const_cast<const RouteTable**>(resultTables), vtBestWaypoints);
-#endif
+	if (ret == ROUTE_RESULT_SUCCESS) {
+		if (!m_vtRouteInfo.empty()) {
+			m_vtRouteInfo.clear();
+			vector<RouteInfo>().swap(m_vtRouteInfo);
+		}
 
 		if (!m_vtRouteResult.empty()) {
+			m_vtRouteResult.clear();
+			vector<RouteResultInfo>().swap(m_vtRouteResult);
+		}
 
+
+		if ((ret = m_pRoutePlan->DoCourse(&reqInfo, &m_vtRouteInfo, &m_vtRouteResult)) == ROUTE_RESULT_SUCCESS) {
 			m_routeResult.ResultCode = m_vtRouteResult[0].ResultCode; // 경로 결과 코드, 0:성공, 1~:실패
 
 			m_routeResult.RequestMode = m_vtRouteResult[0].RequestMode; // 요청 모드
@@ -1166,38 +2426,227 @@ int CRouteManager::DoTabulate(TspOptions* pOpt, IN RouteTable** ppResultTables, 
 			m_routeResult.RouteOption = m_vtRouteResult[0].RouteOption; // 경로 옵션
 			m_routeResult.RouteAvoid = m_vtRouteResult[0].RouteAvoid; // 경로 회피
 
-			//m_routeResult.StartResultLink = m_vtRouteResult[m_vtRouteResult.size() - 1].StartResultLink;
-			//m_routeResult.EndResultLink = m_vtRouteResult[0].EndResultLink;
+			m_routeResult.StartResultLink = m_vtRouteResult[m_vtRouteResult.size() - 1].StartResultLink;
+			m_routeResult.EndResultLink = m_vtRouteResult[0].EndResultLink;
 
-			//for (int ii = m_vtRouteResult.size() - 1; ii >= 0; --ii) {
-			//	// 경로선
-			//	boxMerge(m_routeResult.RouteBox, m_vtRouteResult[ii].RouteBox);
-			//	linkMerge(m_routeResult.LinkVertex, m_vtRouteResult[ii].LinkVertex);
+			RouteSummary summary;
+			// for (int ii = m_vtRouteResult.size() - 1; ii >= 0; --ii) {
+			for (const auto& route : m_vtRouteResult) {
+				// summarys
+				summary.TotalDist = route.TotalLinkDist;
+				summary.TotalTime = route.TotalLinkTime;
+				m_routeResult.RouteSummarys.emplace_back(summary);
 
-			//	m_routeResult.LinkInfo.reserve(m_routeResult.LinkInfo.size() + m_vtRouteResult[ii].LinkInfo.size());
-			//	for (int jj = 0; jj < m_vtRouteResult[ii].LinkInfo.size(); jj++) {
-			//		// 경유지가 있을 경우, 전체 경로를 합치면, 개별 offset 및 거리, 시간이 누적되어 변경되어야 함.
-			//		// 작업 추가 필요
-			//		m_routeResult.LinkInfo.emplace_back(m_vtRouteResult[ii].LinkInfo[jj]);
-			//	}
+				// 경로선
+				boxMerge(m_routeResult.RouteBox, route.RouteBox);
+				linkMerge(m_routeResult.LinkVertex, route.LinkVertex);
 
-			//	m_routeResult.TotalLinkDist += m_vtRouteResult[ii].TotalLinkDist; // 경로 전체 거리
-			//	m_routeResult.TotalLinkCount += m_vtRouteResult[ii].TotalLinkCount; // 경로 전체 링크 수
-			//	m_routeResult.TotalLinkTime += m_vtRouteResult[ii].TotalLinkTime;; // 경로 전체 소요 시간 (초)
-			//}
+				m_routeResult.LinkInfo.reserve(m_routeResult.LinkInfo.size() + route.LinkInfo.size());
+				for (const auto& link : route.LinkInfo) {
+					// 경유지가 있을 경우, 전체 경로를 합치면, 개별 offset 및 거리, 시간이 누적되어 변경되어야 함.
+					// 작업 추가 필요
+					m_routeResult.LinkInfo.emplace_back(link);
+				} // for
+
+				m_routeResult.TotalLinkDist += route.TotalLinkDist; // 경로 전체 거리
+				m_routeResult.TotalLinkCount += route.TotalLinkCount; // 경로 전체 링크 수
+				m_routeResult.TotalLinkTime += route.TotalLinkTime;; // 경로 전체 소요 시간 (초)
+			} // for
 		}
-	}
-
-
-	// destroyed route table
-	if (resultTables) {
-		for (int ii = 0; ii < cntPoints; ii++) {
-			SAFE_DELETE_ARR(resultTables[ii]);
-		}
-		SAFE_DELETE_ARR(resultTables);
 	}
 
 	return ret;
+}
+
+int CRouteManager::DoTabulate(IN const vector<SPoint>vtOrigins, OUT vector<vector<stDistMatrix>>& vtDistMatrix)
+{
+	int ret = -1;
+
+	stOptimalPointInfo optStartInfo, optEndInfo;
+
+	// 좌표 설정
+	KeyID sID, eID, wID;
+
+	Initialize();
+
+	int matchLinkType = TYPE_LINK_MATCH_FOR_TABLE;
+
+	int cntOrigin = vtOrigins.size();
+	for (int ii = 0; ii < cntOrigin; ii++) {
+		SPoint coord = { vtOrigins[ii].x, vtOrigins[ii].y };
+		if (ii == 0) { // start
+			// get optimal start point
+#if defined(USE_OPTIMAL_POINT_API)
+			if (m_pDataMgr->GetOptimalPointDataByPoint(coord.x, coord.y, &optStartInfo, 0, 0, TYPE_LINK_MATCH_FOR_TABLE) > 0) {
+				sID = SetDeparture(optStartInfo.vtEntryPoint[0].x, optStartInfo.vtEntryPoint[0].y, matchLinkType);
+			} else
+#endif
+			{
+				sID = SetDeparture(coord.x, coord.y, matchLinkType);
+			}
+
+			if (sID.llid == NULL_VALUE) {
+				LOG_TRACE(LOG_DEBUG, "failed, set start projection, %.6f, %.6f", coord.x, coord.y);
+			}
+
+			// get optimal via point
+			// alreay applyed when set way point 
+		} else if (ii == cntOrigin - 1) { // end
+			// get optimal end point
+#if defined(USE_OPTIMAL_POINT_API)
+			if (m_pDataMgr->GetOptimalPointDataByPoint(coord.x, coord.y, &optEndInfo, 0, 0, matchLinkType) > 0) {
+				eID = SetDestination(optEndInfo.vtEntryPoint[0].x, optEndInfo.vtEntryPoint[0].y, matchLinkType);
+			} else
+#endif
+			{
+				eID = SetDestination(coord.x, coord.y, matchLinkType);
+			}
+
+			if (eID.llid == NULL_VALUE) {
+				LOG_TRACE(LOG_DEBUG, "failed, set end projection, %.6f, %.6f", vtOrigins[cntOrigin - 1].x, vtOrigins[cntOrigin - 1].y);
+			}
+		} else { // via
+#if defined(USE_OPTIMAL_POINT_API)
+			if (m_pDataMgr->GetOptimalPointDataByPoint(coord.x, coord.y, &optEndInfo, 0, 0, matchLinkType) > 0) {
+				wID = SetWaypoint(optEndInfo.vtEntryPoint[0].x, optEndInfo.vtEntryPoint[0].y, matchLinkType);
+			} else
+#endif
+			{
+				wID = SetWaypoint(coord.x, coord.y, matchLinkType);
+			}
+
+			if (wID.llid == NULL_VALUE) {
+				LOG_TRACE(LOG_DEBUG, "failed, set waypoint projection, %.6f, %.6f", coord.x, coord.y);
+			}
+		}
+	} // for
+
+	vector<uint32_t>vtRouteOpt = { ROUTE_OPT_COMFORTABLE, ROUTE_OPT_RECOMMENDED, ROUTE_OPT_SHORTEST, ROUTE_OPT_MAINROAD };
+	vector<uint32_t>vtAvoidOpt = { ROUTE_AVOID_NONE, ROUTE_AVOID_NONE, ROUTE_AVOID_NONE, ROUTE_AVOID_NONE };
+	int nMobility = TYPE_MOBILITY_VEHICLE;
+
+	SetRouteOption(vtRouteOpt, vtAvoidOpt, nMobility);
+
+	const uint32_t uid = 12345678;
+
+	m_routeResult.Init();
+
+	RequestRouteInfo reqInfo;
+	reqInfo.RequestId = uid;
+	reqInfo.RouteOption = m_vtRouteOpt[0];
+	reqInfo.AvoidOption = m_vtAvoidOpt[0];
+	reqInfo.MobilityOption = m_nMobilityOpt;
+	reqInfo.RouteSubOption = m_routeSubOpt;
+	reqInfo.StartDirIgnore = m_nDepartureDirIgnore;
+	reqInfo.WayDirIgnore = m_nWaypointDirIgnore;
+	reqInfo.EndDirIgnore = m_nDestinationDirIgnore;
+
+	// start 
+	reqInfo.vtPoints.emplace_back(m_linkDeparture.Coord);
+	reqInfo.vtKeyId.emplace_back(m_linkDeparture.LinkId);
+	reqInfo.vtKeyType.emplace_back(m_linkDeparture.KeyType);
+	reqInfo.vtLinkDataType.emplace_back(m_linkDeparture.LinkDataType);
+
+	// waypoint
+	if (!m_linkWaypoints.empty()) {
+		for (int ii = 0; ii < m_linkWaypoints.size(); ii++) {
+			reqInfo.vtPoints.emplace_back(m_linkWaypoints[ii].Coord);
+			reqInfo.vtKeyId.emplace_back(m_linkWaypoints[ii].LinkId);
+			reqInfo.vtKeyType.emplace_back(m_linkWaypoints[ii].KeyType);
+			reqInfo.vtLinkDataType.emplace_back(m_linkWaypoints[ii].LinkDataType);
+		}
+	}
+
+	// end
+	reqInfo.vtPoints.emplace_back(m_linkDestination.Coord);
+	reqInfo.vtKeyId.emplace_back(m_linkDestination.LinkId);
+	reqInfo.vtKeyType.emplace_back(m_linkDestination.KeyType);
+	reqInfo.vtLinkDataType.emplace_back(m_linkDestination.LinkDataType);
+
+	ret = m_pRoutePlan->DoTabulate(&reqInfo, vtDistMatrix);
+
+	if (ret != ROUTE_RESULT_SUCCESS) {
+		LOG_TRACE(LOG_WARNING, "failed, get weight matrix");
+	}
+	// release
+	Release();
+
+	return ret;
+}
+
+
+KeyID CRouteManager::SetPosition(IN const double lng, IN const double lat, IN const int matchType, OUT RouteLinkInfo& pointLinkInfo)
+{
+	if (m_pDataMgr != nullptr) {
+		double retDist = INT_MAX;
+		pointLinkInfo.Coord = { lng, lat };
+
+		int newMatchType = matchType;
+		int newLinkType = TYPE_LINK_DATA_NONE;
+
+		stLinkInfo* pLink = nullptr;
+
+#if defined(USE_FOREST_DATA)
+		if (m_routeSubOpt.mnt.course_id == 0) {
+			if ((m_routeSubOpt.mnt.course_type == TYPE_TRE_TRAIL) || (m_routeSubOpt.mnt.course_type == TYPE_TRE_BIKE)) { // 걷기, 자전거길
+				newLinkType = TYPE_LINK_DATA_PEDESTRIAN; // 걷기/자전거 운동은 보행자 경로 사용하자
+			} else {
+				newMatchType = getCourseLinkMatchType(m_routeSubOpt);
+			}
+		} else {
+			newMatchType = getCourseLinkMatchType(m_routeSubOpt);
+		}
+#endif
+
+		for (int ii = 0; ii< MAX_SEARCH_RANGE; ii++) {
+			int curMaxDist = 10;
+#if defined(USE_FOREST_DATA)
+			if (m_routeSubOpt.mnt.course_id != 0) { // 코스 탐색
+				pLink = m_pDataMgr->GetNearLinkDataByCourseId(m_routeSubOpt.mnt.course_id, lng, lat, courseRange[ii], pointLinkInfo.MatchCoord.x, pointLinkInfo.MatchCoord.y, retDist);
+			} else if (newLinkType != TYPE_LINK_DATA_PEDESTRIAN) { // 숲길을 보행자길 보다 넓게 매칭(숲길 우선 매칭)
+				if (m_routeSubOpt.mnt.course_type == TYPE_TRE_HIKING) {
+					curMaxDist = hikingRange[ii];
+				} else {
+					curMaxDist = trailRange[ii];
+				}
+				pLink = m_pDataMgr->GetLinkDataByPointAround(lng, lat, curMaxDist, pointLinkInfo.MatchCoord.x, pointLinkInfo.MatchCoord.y, retDist, newMatchType, TYPE_LINK_DATA_TREKKING);
+			}
+#endif
+
+#if defined(USE_PEDESTRIAN_DATA)
+			// 숲길보다 보행자 도로를 좁게 매칭하자(숲길 우선 매칭), 자전거는 보행자용 자전거 옵션 사용
+			if ((pLink == nullptr) && ((m_routeSubOpt.mnt.course_type == TYPE_TRE_HIKING) || (newLinkType == TYPE_LINK_DATA_PEDESTRIAN)))
+			//if (pLink == nullptr)	
+			{
+				pLink = m_pDataMgr->GetLinkDataByPointAround(lng, lat, searchRange[ii], pointLinkInfo.MatchCoord.x, pointLinkInfo.MatchCoord.y, retDist, newMatchType, TYPE_LINK_DATA_PEDESTRIAN);
+			}
+#endif
+
+#if defined(USE_VEHICLE_DATA)
+			if (pLink == nullptr)
+			{
+				pLink = m_pDataMgr->GetLinkDataByPointAround(lng, lat, searchRange[ii], pointLinkInfo.MatchCoord.x, pointLinkInfo.MatchCoord.y, retDist, newMatchType, TYPE_LINK_DATA_VEHICLE);
+			}
+#endif	
+
+			if (pLink) {
+				pointLinkInfo.LinkId = pLink->link_id;
+				pointLinkInfo.LinkDataType = pLink->base.link_type;
+				pointLinkInfo.KeyType = TYPE_KEY_LINK;
+
+				if (pLink->base.link_type == TYPE_LINK_DATA_PEDESTRIAN) {
+					pointLinkInfo.Payed = pLink->ped.walk_charge;
+				}
+
+				if (ii > 0) {
+					LOG_TRACE(LOG_DEBUG, "position projection, link tile:%d, id:%d, range_lv:%d, dist:%d", pointLinkInfo.LinkId.tile_id, pointLinkInfo.LinkId.nid, ii, retDist);
+				}
+				break;
+			}
+		} // for
+	}
+
+	return pointLinkInfo.LinkId;
 }
 
 
@@ -1233,18 +2682,7 @@ KeyID CRouteManager::Projection(IN const double lng, IN const double lat)
 			//for (vector<KeyID>::iterator it = pMesh->links.begin(); it != pMesh->links.end(); it++) {
 			for (unsigned int jj = 0; jj < cntLink; jj++)
 			{
-#if defined(USE_TREKKING_DATA)
-				pLink = m_pDataMgr->GetWLinkDataById(pMesh[ii]->links[jj]);
-				if (pLink == nullptr) {
-					pLink = m_pDataMgr->GetLinkDataById(pMesh[ii]->links[jj]);
-				}
-#elif defined(USE_PEDESTRIAN_DATA)
-				pLink = m_pDataMgr->GetWLinkDataById(pMesh[ii]->links[jj]);
-#elif defined(USE_VEHICLE_DATA)
-				pLink = m_pDataMgr->GetVLinkDataById(pMesh[ii]->links[jj]);
-#else
-				pLink = m_pDataMgr->GetLinkDataById(pMesh[ii]->links[jj]);
-#endif
+				pLink = m_pDataMgr->GetLinkDataById(pMesh[ii]->links[jj], TYPE_LINK_DATA_NONE);
 
 				if (pLink == nullptr)
 				{

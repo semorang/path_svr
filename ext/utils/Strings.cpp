@@ -10,6 +10,8 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <ctype.h>
+
 #include "Strings.h"
 
 
@@ -53,6 +55,46 @@ void MultiByteToUTF8(const char* strMultibyte, char* strUTF8)
 	UnicodeToUTF8(wszUnicode, strUTF8);
 }
 
+void UnicodeToMultiByte(const wchar_t* strUnicode, char* strMultibyte)
+{
+#ifdef _WINDOWS
+	int nLen = WideCharToMultiByte(CP_ACP, 0, strUnicode, lstrlenW(strUnicode), NULL, 0, NULL, NULL);
+	WideCharToMultiByte(CP_ACP, 0, strUnicode, lstrlenW(strUnicode), strMultibyte, nLen, NULL, NULL);
+#else
+	wcstombs(strUnicode, strMultibyte, strlen(strMultibyte));
+#endif
+}
+
+void UTF8ToMultiByte(const char* strUTF8, char* strMultibyte)
+{
+	wchar_t wszUnicode[MAX_PATH] = { 0, };
+
+	UTF8ToUnicode(strUTF8, wszUnicode);
+
+	UnicodeToMultiByte(wszUnicode, strMultibyte);
+}
+
+
+char* strsep(char** stringp, const char* delim)
+{
+	char* start = *stringp;
+	char* p;
+
+	p = (start != NULL) ? strpbrk(start, delim) : NULL;
+
+	if (p == NULL)
+	{
+		*stringp = NULL;
+	}
+	else
+	{
+		*p = '\0';
+		*stringp = p + 1;
+	}
+
+	return start;
+}
+
 #else //#if defined(_WIN32)
 
 char * encoding(const char *text_input, char *source, char *target)
@@ -81,27 +123,6 @@ char * encoding(const char *text_input, char *source, char *target)
 #endif //#if defined(_WIN32)
 
 
-char* strsep(char** stringp, const char* delim)
-{
-	char* start = *stringp;
-	char* p;
-
-	p = (start != NULL) ? strpbrk(start, delim) : NULL;
-
-	if (p == NULL)
-	{
-		*stringp = NULL;
-	}
-	else
-	{
-		*p = '\0';
-		*stringp = p + 1;
-	}
-
-	return start;
-}
-
-
 //char *trim(char *str, char *buf, int buf_len)
 //{
 //	int str_len, start_point = 0;
@@ -126,44 +147,51 @@ char* strsep(char** stringp, const char* delim)
 char* trim(char *line)
 {
 	size_t len = 0;
-	char cpTrim[MAX_TRIM_LEN];
+	char cpTrim[MAX_TRIM_LEN] = { 0, };
 	int xMan = 0;
 	int i;
 
 	len = strlen(line);
-	if (len >= MAX_TRIM_LEN)
-	{
-		puts("string too long");
-		return NULL;
-	}
 
-	strcpy(cpTrim, line);
-
-	// 앞에거 잘라내기
-	for (i = 0; i < len; i++)
+	if (len < 0) 
 	{
-		if (cpTrim[i] == ' ' || cpTrim[i] == '\t')
-			xMan++;
+		if (len >= MAX_TRIM_LEN)
+		{
+			puts("string too long");
+			return NULL;
+		}
 		else
-			break;
-	}
+		{
+			strcpy(cpTrim, line);
 
-	// 뒤에거 잘라내기
-	for (i = len - 1; i >= 0; i--)
-	{
-		if (cpTrim[i] == ' ' || cpTrim[i] == '\t' || cpTrim[i] == '\n')
-			cpTrim[i] = '\0';
-		else
-			break;
-	}
+			// 앞에거 잘라내기
+			for (i = 0; i < len; i++)
+			{
+				if (cpTrim[i] == ' ' || cpTrim[i] == '\t')
+					xMan++;
+				else
+					break;
+			}
 
-	if (len != (strlen(cpTrim) - xMan)) {
-		strcpy(line, cpTrim + xMan);
+			// 뒤에거 잘라내기
+			for (i = len - 1; i >= 0; i--)
+			{
+				if (cpTrim[i] == ' ' || cpTrim[i] == '\t' || cpTrim[i] == '\n')
+					cpTrim[i] = '\0';
+				else
+					break;
+			}
+
+			if (len != (strlen(cpTrim) - xMan)) {
+				strcpy(line, cpTrim + xMan);
+			}
+		}
 	}
 
 	//return strlen(line);
 	return line;
 }
+
 
 /*
 //char* trim(char *s); // 문자열 좌우 공백 모두 삭제 함수
@@ -213,3 +241,29 @@ char* trim(char *s) {
 }
 */
 
+#define MAX_UPPER_LEN 1024
+char* strupper(char* lower)
+{
+	size_t len = 0;
+	char cpUpper[MAX_UPPER_LEN] = { 0, };
+	int i;
+
+	if (lower != nullptr) {
+		len = strlen(lower);
+
+		if (len >= MAX_UPPER_LEN) {
+			puts("lower string too long");
+			return NULL;
+		}
+		else if (len > 0) {
+			for (i = 0; i < len; i++) {
+				cpUpper[i] = toupper(lower[i]);
+			} // for
+			cpUpper[i] = '\0';
+
+			strcpy(lower, cpUpper);
+		}
+	}
+
+	return lower;
+}

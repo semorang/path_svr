@@ -61,11 +61,11 @@ bool MapName::AddData(IN const stNameInfo * pData)
 
 bool MapName::DeleteData(IN const KeyID keyId)
 {
-	map<uint32_t, stNameInfo*>::iterator it = mapData.find(keyId.llid);
+	map<uint32_t, stNameInfo*>::iterator it = mapData.find(static_cast<int32_t>(keyId.nid));
 	if (it != mapData.end()) {
 		delete it->second;
 		it->second = nullptr;
-		mapData.erase(keyId.llid);
+		mapData.erase(keyId.nid);
 		return true;
 	}
 
@@ -83,7 +83,7 @@ const char* MapName::GetNameData(IN const uint32_t id) const
 {
 	map<uint32_t, stNameInfo*>::const_iterator it = mapData.find(id);
 	if (it != mapData.end()) {
-		return /*(const char*)*/it->second->name.c_str();
+		return it->second->name.c_str();
 	}
 
 	return nullptr;

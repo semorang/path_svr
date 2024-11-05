@@ -211,7 +211,19 @@ typedef struct _tagSPoint {
 		return *this;
 	}
 
-	const bool has(void) {
+	bool operator==(const _tagSPoint& rhs) const {
+		return ((x == rhs.x) && (y == rhs.y)) ? true : false;
+	}
+
+	bool operator!=(const _tagSPoint& rhs) const {
+		return ((x != rhs.x) || (y != rhs.y)) ? true : false;
+	}
+
+	bool equal(const _tagSPoint& rhs) const {
+		return (((int)(x * 1000000) == (int)(rhs.x * 1000000)) && ((int)(y * 1000000) == (int)(rhs.y * 1000000))) ? true : false;
+	}
+	
+	bool has(void) const {
 		return (x != 0.f && y != 0.f) ? true : false;
 	}
 }SPoint;

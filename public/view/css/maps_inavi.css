@@ -47,13 +47,13 @@
         .circle_road { width: 10px; height: 10px; border-radius: 50%; background: #6666FF; position:absolute; top: 8px; left: 180px;}
         .circle_road span {display:block;width:100px;height:50;float:left;text-align:left;cursor:pointer; position:absolute; top: -3px; left: 15px;}
 
-        .circle_1 { width: 18px; height: 18px; border-radius: 50%; background: #FF0000; position:absolute; top: 28px; left: 1px;}
+        .circle_1 { width: 18px; height: 18px; border-radius: 50%; background: #FF0000; position:absolute; top: 20px; left: 1px;}
         .circle_1 span { text-align: center;-webkit-text-stroke: 1px #FFF;} 
-        .circle_2 { width: 18px; height: 18px; border-radius: 50%; background: #FF0000; position:absolute; top: 28px; left: 1px;}
+        .circle_2 { width: 18px; height: 18px; border-radius: 50%; background: #FF0000; position:absolute; top: 20px; left: 1px;}
         .circle_2 span { text-align: center;-webkit-text-stroke: 1px #FFF;} 
-        .circle_3 { width: 18px; height: 18px; border-radius: 50%; background: #CFE7FF; border: 1px solid #71abe6; position:absolute; top: 28px; left: 1px}
+        .circle_3 { width: 18px; height: 18px; border-radius: 50%; background: #CFE7FF; border: 1px solid #71abe6; position:absolute; top: 20px; left: 1px}
         .circle_3 span { text-align: center;-webkit-text-stroke: 1px #000;} 
-        .circle_4 { width: 18px; height: 18px; border-radius: 50%; background: #6666FF; position:absolute; top: 28px; left: 1px;}
+        .circle_4 { width: 18px; height: 18px; border-radius: 50%; background: #6666FF; position:absolute; top: 20px; left: 1px;}
         .circle_4 span { text-align: center;-webkit-text-stroke: 1px #FFF;} 
 
         .circle_start { width: 18px; height: 18px; border-radius: 50%; background: #0000ff; position:absolute; top: 28px; left: 1px;}

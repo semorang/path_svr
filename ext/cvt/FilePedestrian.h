@@ -8,19 +8,19 @@ struct stWalkNode
 {
 	uint32_t MeshID;
 	uint32_t NodeID;
-	uint32_t AdjEdgeMesh; // ÀÎÁ¢ ¸Þ½¬ ID
-	uint32_t AdjEdgeNode; // ÀÎÁ¢ ³ëµå ID
-	uint32_t NodeNameIDX; // ¸íÄª»çÀü ÀÎµ¦½º
-	uint32_t GateNameIDX; // ÀÔÃâ±¸ ¸íÄª,¹øÈ£ »çÀü ÀÎµ¦½º
-	uint32_t FacilityNameIDX; // ½Ã¼³¹° »ó¼¼ ¸íÄª»çÀü ÀÎµ¦½º
-	SPoint NodeCoord; // ³ëµå ÁÂÇ¥
-	//BYTE NodeType; // ³ëµå Å¸ÀÔ, 1:±³Â÷Á¡, 2:´ÜÁ¡, 3:´õ¹ÌÁ¡, 4:±¸È¹º¯°æÁ¡, 5:¼Ó¼ºº¯È­Á¡, 6:ÁöÇÏÃ¶ÁøÃâÀÔ, 7:Ã¶µµÁøÃâÀÔ, 8:ÁöÇÏµµÁøÃâÀÔ, 9:ÁöÇÏ»ó°¡ÁøÃâÀÔ, 10:°Ç¹°ÁøÃâÀÔ
-	//BYTE FacilityPhase; // ½Ã¼³¹° À§»ó, 0:¹ÌÁ¤ÀÇ, 1:ÁöÇÏ, 2:Áö»ó, 3:
-	//BYTE GatePhase; // ÀÔÃâ±¸ À§»ó, 0:¹ÌÁ¤ÀÇ, 1:ÁöÇÏ, 2:Áö»ó, 3:Áö»óÀ§
-	uint32_t ConnectNum : 4; // Á¢¼Ó ³ëµå ¼ö, MAX:15
-	uint32_t NodeType : 4; // ³ëµå Å¸ÀÔ, 1:±³Â÷Á¡, 2:´ÜÁ¡, 3:´õ¹ÌÁ¡, 4:±¸È¹º¯°æÁ¡, 5:¼Ó¼ºº¯È­Á¡, 6:ÁöÇÏÃ¶ÁøÃâÀÔ, 7:Ã¶µµÁøÃâÀÔ, 8:ÁöÇÏµµÁøÃâÀÔ, 9:ÁöÇÏ»ó°¡ÁøÃâÀÔ, 10:°Ç¹°ÁøÃâÀÔ
-	uint32_t FacilityPhase : 2; // ½Ã¼³¹° À§»ó, 0:¹ÌÁ¤ÀÇ, 1:ÁöÇÏ, 2:Áö»ó, 3:
-	uint32_t GatePhase : 2; // ÀÔÃâ±¸ À§»ó, 0:¹ÌÁ¤ÀÇ, 1:ÁöÇÏ, 2:Áö»ó, 3:Áö»óÀ§
+	uint32_t AdjEdgeMesh; // ì¸ì ‘ ë©”ì‰¬ ID
+	uint32_t AdjEdgeNode; // ì¸ì ‘ ë…¸ë“œ ID
+	uint32_t NodeNameIDX; // ëª…ì¹­ì‚¬ì „ ì¸ë±ìŠ¤
+	uint32_t GateNameIDX; // ìž…ì¶œêµ¬ ëª…ì¹­,ë²ˆí˜¸ ì‚¬ì „ ì¸ë±ìŠ¤
+	uint32_t FctNameIDX; // ì‹œì„¤ë¬¼ ìƒì„¸ ëª…ì¹­ì‚¬ì „ ì¸ë±ìŠ¤
+	SPoint NodeCoord; // ë…¸ë“œ ì¢Œí‘œ
+	//BYTE NodeType; // ë…¸ë“œ íƒ€ìž…, 1:êµì°¨ì , 2:ë‹¨ì , 3:ë”ë¯¸ì , 4:êµ¬íšë³€ê²½ì , 5:ì†ì„±ë³€í™”ì , 6:ì§€í•˜ì² ì§„ì¶œìž…, 7:ì² ë„ì§„ì¶œìž…, 8:ì§€í•˜ë„ì§„ì¶œìž…, 9:ì§€í•˜ìƒê°€ì§„ì¶œìž…, 10:ê±´ë¬¼ì§„ì¶œìž…
+	//BYTE FacilityPhase; // ì‹œì„¤ë¬¼ ìœ„ìƒ, 0:ë¯¸ì •ì˜, 1:ì§€í•˜, 2:ì§€ìƒ, 3:
+	//BYTE GatePhase; // ìž…ì¶œêµ¬ ìœ„ìƒ, 0:ë¯¸ì •ì˜, 1:ì§€í•˜, 2:ì§€ìƒ, 3:ì§€ìƒìœ„
+	uint32_t ConnectNum : 4; // ì ‘ì† ë…¸ë“œ ìˆ˜, MAX:15
+	uint32_t NodeType : 4; // ë…¸ë“œ íƒ€ìž…, 1:êµì°¨ì , 2:ë‹¨ì , 3:ë”ë¯¸ì , 4:êµ¬íšë³€ê²½ì , 5:ì†ì„±ë³€í™”ì , 6:ì§€í•˜ì² ì§„ì¶œìž…, 7:ì² ë„ì§„ì¶œìž…, 8:ì§€í•˜ë„ì§„ì¶œìž…, 9:ì§€í•˜ìƒê°€ì§„ì¶œìž…, 10:ê±´ë¬¼ì§„ì¶œìž…
+	uint32_t FctPhase : 2; // ì‹œì„¤ë¬¼ ìœ„ìƒ, 0:ë¯¸ì •ì˜, 1:ì§€í•˜, 2:ì§€ìƒ, 3:
+	uint32_t GatePhase : 2; // ìž…ì¶œêµ¬ ìœ„ìƒ, 0:ë¯¸ì •ì˜, 1:ì§€í•˜, 2:ì§€ìƒ, 3:ì§€ìƒìœ„
 	uint32_t TypeReserved : 20; // reserved
 };
 
@@ -28,27 +28,27 @@ struct stWalkLink
 {
 	uint32_t MeshID;
 	uint32_t LinkID;
-	uint32_t FromNodeID; // from ³ëµå ID
-	uint32_t ToNodeID; // to ³ëµå ID
-	uint32_t RoadNameIDX; // ¸íÄª»çÀü ÀÎµ¦½º
-	//BYTE BycicleType; // ÀÚÀü°Åµµ·Î Å¸ÀÔ, 1:ÀÚÀü°ÅÀü¿ë, 2:º¸ÇàÀÚ/Â÷·®°â¿ë ÀÚÀü°Åµµ·Î, 3:º¸Çàµµ·Î
-	//BYTE WalkType; //º¸ÇàÀÚµµ·Î Å¸ÀÔ, 1:º¹¼±µµ·Ï, 2:Â÷·®°â¿ëµµ·Î, 3:ÀÚÀü°ÅÀü¿ëµµ·Î, 4:º¸ÇàÀü¿ëµµ·Î, 5:°¡»óº¸Çàµµ·Î
-	//BYTE FacilityType; // ½Ã¼³¹° Å¸ÀÔ, 0:¹ÌÁ¤ÀÇ, 1:Åä³¢±¼, 2:ÁöÇÏº¸µµ, 3:À°±³, 4:°í°¡µµ·Î, 5:±³·®, 6:ÁöÇÏÃ¶¿ª, 7:Ã¶µµ, 8:Áß¾Ó¹ö½ºÁ¤·ùÀå, 9:ÁöÇÏ»ó°¡, 10:°Ç¹°°üÅëµµ·Î, 11:´ÜÁöµµ·Î_°ø¿ø, 12:´ÜÁöµµ·Î_ÁÖ°Å½Ã¼³, 13:´ÜÁöµµ·Î_°ü±¤Áö, 14:´ÜÁöµµ·Î_±âÅ¸
-	//BYTE GateType; // ÁøÀÔ·Î Å¸ÀÔ, 0:¹ÌÁ¤ÀÇ, 1:°æ»ç·Î, 2:°è´Ü, 3:¿¡½ºÄÃ·¹ÀÌÅÍ, 4:°è´Ü/¿¡½ºÄÃ·¹ÀÌÅÍ, 5:¿¤¸®º£ÀÌÅÍ, 6:´Ü¼ø¿¬°á·Î, 7:È¾´Üº¸µµ, 8:¹«ºù¿öÅ©, 9:Â¡°Ë´Ù¸®, 10:ÀÇ»çÈ¾´Ü
-	//BYTE LaneCount; // Â÷¼±¼ö
-	//BYTE SideWalk; // ÀÎµµ(º¸µµ) ¿©ºÎ, 0:¹ÌÁ¶»ç, 1:ÀÖÀ½, 2:¾øÀ½
-	//BYTE WalkCharge; // º¸ÇàÀÚµµ·Î À¯·á ¿©ºÎ, 0:¹«·á, 1:À¯·á
-	//BYTE BycicleControl; // ÀÚÀü°Åµµ·Î ±ÔÁ¦ ÄÚµå, 0:¾ç¹æÇâ, 1:Á¤¹æÇâ, 2:¿ª¹æÇâ, 3:ÅëÇàºÒ°¡
-	uint32_t BycicleType : 2; // ÀÚÀü°Åµµ·Î Å¸ÀÔ, 1:ÀÚÀü°ÅÀü¿ë, 2:º¸ÇàÀÚ/Â÷·®°â¿ë ÀÚÀü°Åµµ·Î, 3:º¸Çàµµ·Î
-	uint32_t WalkType : 3; //º¸ÇàÀÚµµ·Î Å¸ÀÔ, 1:º¹¼±µµ·Ï, 2:Â÷·®°â¿ëµµ·Î, 3:ÀÚÀü°ÅÀü¿ëµµ·Î, 4:º¸ÇàÀü¿ëµµ·Î, 5:°¡»óº¸Çàµµ·Î
-	uint32_t FacilityType : 4; // ½Ã¼³¹° Å¸ÀÔ, 0:¹ÌÁ¤ÀÇ, 1:Åä³¢±¼, 2:ÁöÇÏº¸µµ, 3:À°±³, 4:°í°¡µµ·Î, 5:±³·®, 6:ÁöÇÏÃ¶¿ª, 7:Ã¶µµ, 8:Áß¾Ó¹ö½ºÁ¤·ùÀå, 9:ÁöÇÏ»ó°¡, 10:°Ç¹°°üÅëµµ·Î, 11:´ÜÁöµµ·Î_°ø¿ø, 12:´ÜÁöµµ·Î_ÁÖ°Å½Ã¼³, 13:´ÜÁöµµ·Î_°ü±¤Áö, 14:´ÜÁöµµ·Î_±âÅ¸
-	uint32_t GateType : 4; // ÁøÀÔ·Î Å¸ÀÔ, 0:¹ÌÁ¤ÀÇ, 1:°æ»ç·Î, 2:°è´Ü, 3:¿¡½ºÄÃ·¹ÀÌÅÍ, 4:°è´Ü/¿¡½ºÄÃ·¹ÀÌÅÍ, 5:¿¤¸®º£ÀÌÅÍ, 6:´Ü¼ø¿¬°á·Î, 7:È¾´Üº¸µµ, 8:¹«ºù¿öÅ©, 9:Â¡°Ë´Ù¸®, 10:ÀÇ»çÈ¾´Ü
-	uint32_t LaneCount : 6; // Â÷¼±¼ö, 63
-	uint32_t SideWalk : 2; // ÀÎµµ(º¸µµ) ¿©ºÎ, 0:¹ÌÁ¶»ç, 1:ÀÖÀ½, 2:¾øÀ½
-	uint32_t WalkCharge : 2; // º¸ÇàÀÚµµ·Î À¯·á ¿©ºÎ, 0:¹«·á, 1:À¯·á
-	uint32_t BycicleControl : 2; // ÀÚÀü°Åµµ·Î ±ÔÁ¦ ÄÚµå, 0:¾ç¹æÇâ, 1:Á¤¹æÇâ, 2:¿ª¹æÇâ, 3:ÅëÇàºÒ°¡
+	uint32_t FromNodeID; // from ë…¸ë“œ ID
+	uint32_t ToNodeID; // to ë…¸ë“œ ID
+	uint32_t RoadNameIDX; // ëª…ì¹­ì‚¬ì „ ì¸ë±ìŠ¤
+	//BYTE BicycleType; // ìžì „ê±°ë„ë¡œ íƒ€ìž…, 1:ìžì „ê±°ì „ìš©, 2:ë³´í–‰ìž/ì°¨ëŸ‰ê²¸ìš© ìžì „ê±°ë„ë¡œ, 3:ë³´í–‰ë„ë¡œ
+	//BYTE WalkType; //ë³´í–‰ìžë„ë¡œ íƒ€ìž…, 1:ë³µì„ ë„ë¡, 2:ì°¨ëŸ‰ê²¸ìš©ë„ë¡œ, 3:ìžì „ê±°ì „ìš©ë„ë¡œ, 4:ë³´í–‰ì „ìš©ë„ë¡œ, 5:ê°€ìƒë³´í–‰ë„ë¡œ
+	//BYTE FacilityType; // ì‹œì„¤ë¬¼ íƒ€ìž…, 0:ë¯¸ì •ì˜, 1:í† ë¼êµ´, 2:ì§€í•˜ë³´ë„, 3:ìœ¡êµ, 4:ê³ ê°€ë„ë¡œ, 5:êµëŸ‰, 6:ì§€í•˜ì² ì—­, 7:ì² ë„, 8:ì¤‘ì•™ë²„ìŠ¤ì •ë¥˜ìž¥, 9:ì§€í•˜ìƒê°€, 10:ê±´ë¬¼ê´€í†µë„ë¡œ, 11:ë‹¨ì§€ë„ë¡œ_ê³µì›, 12:ë‹¨ì§€ë„ë¡œ_ì£¼ê±°ì‹œì„¤, 13:ë‹¨ì§€ë„ë¡œ_ê´€ê´‘ì§€, 14:ë‹¨ì§€ë„ë¡œ_ê¸°íƒ€
+	//BYTE GateType; // ì§„ìž…ë¡œ íƒ€ìž…, 0:ë¯¸ì •ì˜, 1:ê²½ì‚¬ë¡œ, 2:ê³„ë‹¨, 3:ì—ìŠ¤ì»¬ë ˆì´í„°, 4:ê³„ë‹¨/ì—ìŠ¤ì»¬ë ˆì´í„°, 5:ì—˜ë¦¬ë² ì´í„°, 6:ë‹¨ìˆœì—°ê²°ë¡œ, 7:íš¡ë‹¨ë³´ë„, 8:ë¬´ë¹™ì›Œí¬, 9:ì§•ê²€ë‹¤ë¦¬, 10:ì˜ì‚¬íš¡ë‹¨
+	//BYTE LaneCount; // ì°¨ì„ ìˆ˜
+	//BYTE SideWalk; // ì¸ë„(ë³´ë„) ì—¬ë¶€, 0:ë¯¸ì¡°ì‚¬, 1:ìžˆìŒ, 2:ì—†ìŒ
+	//BYTE WalkCharge; // ë³´í–‰ìžë„ë¡œ ìœ ë£Œ ì—¬ë¶€, 0:ë¬´ë£Œ, 1:ìœ ë£Œ
+	//BYTE BicycleControl; // ìžì „ê±°ë„ë¡œ ê·œì œ ì½”ë“œ, 0:ì–‘ë°©í–¥, 1:ì •ë°©í–¥, 2:ì—­ë°©í–¥, 3:í†µí–‰ë¶ˆê°€
+	uint32_t BicycleType : 2; // ìžì „ê±°ë„ë¡œ íƒ€ìž…, 1:ìžì „ê±°ì „ìš©, 2:ë³´í–‰ìž/ì°¨ëŸ‰ê²¸ìš© ìžì „ê±°ë„ë¡œ, 3:ë³´í–‰ë„ë¡œ
+	uint32_t WalkType : 3; //ë³´í–‰ìžë„ë¡œ íƒ€ìž…, 1:ë³µì„ ë„ë¡, 2:ì°¨ëŸ‰ê²¸ìš©ë„ë¡œ, 3:ìžì „ê±°ì „ìš©ë„ë¡œ, 4:ë³´í–‰ì „ìš©ë„ë¡œ, 5:ê°€ìƒë³´í–‰ë„ë¡œ
+	uint32_t FacilityType : 4; // ì‹œì„¤ë¬¼ íƒ€ìž…, 0:ë¯¸ì •ì˜, 1:í† ë¼êµ´, 2:ì§€í•˜ë³´ë„, 3:ìœ¡êµ, 4:ê³ ê°€ë„ë¡œ, 5:êµëŸ‰, 6:ì§€í•˜ì² ì—­, 7:ì² ë„, 8:ì¤‘ì•™ë²„ìŠ¤ì •ë¥˜ìž¥, 9:ì§€í•˜ìƒê°€, 10:ê±´ë¬¼ê´€í†µë„ë¡œ, 11:ë‹¨ì§€ë„ë¡œ_ê³µì›, 12:ë‹¨ì§€ë„ë¡œ_ì£¼ê±°ì‹œì„¤, 13:ë‹¨ì§€ë„ë¡œ_ê´€ê´‘ì§€, 14:ë‹¨ì§€ë„ë¡œ_ê¸°íƒ€
+	uint32_t GateType : 4; // ì§„ìž…ë¡œ íƒ€ìž…, 0:ë¯¸ì •ì˜, 1:ê²½ì‚¬ë¡œ, 2:ê³„ë‹¨, 3:ì—ìŠ¤ì»¬ë ˆì´í„°, 4:ê³„ë‹¨/ì—ìŠ¤ì»¬ë ˆì´í„°, 5:ì—˜ë¦¬ë² ì´í„°, 6:ë‹¨ìˆœì—°ê²°ë¡œ, 7:íš¡ë‹¨ë³´ë„, 8:ë¬´ë¹™ì›Œí¬, 9:ì§•ê²€ë‹¤ë¦¬, 10:ì˜ì‚¬íš¡ë‹¨
+	uint32_t LaneCount : 6; // ì°¨ì„ ìˆ˜, 63
+	uint32_t SideWalk : 2; // ì¸ë„(ë³´ë„) ì—¬ë¶€, 0:ë¯¸ì¡°ì‚¬, 1:ìžˆìŒ, 2:ì—†ìŒ
+	uint32_t WalkCharge : 2; // ë³´í–‰ìžë„ë¡œ ìœ ë£Œ ì—¬ë¶€, 0:ë¬´ë£Œ, 1:ìœ ë£Œ
+	uint32_t BicycleControl : 2; // ìžì „ê±°ë„ë¡œ ê·œì œ ì½”ë“œ, 0:ì–‘ë°©í–¥, 1:ì •ë°©í–¥, 2:ì—­ë°©í–¥, 3:í†µí–‰ë¶ˆê°€
 	uint32_t TypeReserved : 7; // reserved
-	double LinkLen; // ¸µÅ© ±æÀÌ
+	double LinkLen; // ë§í¬ ê¸¸ì´
 	vector<SPoint> LinkVertex;
 };
 
@@ -71,10 +71,5 @@ public:
 	virtual bool GenServiceData();
 	virtual void AddDataFeild(IN const int idx, IN const int type, IN const char* colData);
 	virtual void AddDataRecord();
-
-	virtual bool OpenFile(IN const char* szFilePath);
-	virtual bool SaveData(IN const char* szFilePath);
-	virtual bool LoadData(IN const char* szFilePath);
-
 };
 

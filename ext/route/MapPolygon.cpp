@@ -27,7 +27,7 @@ bool isPointInPolygon(const double x, const double y, const SPoint *pptPolygon, 
 	return c;
 }
 
-bool isPointInPolygon(SPoint *ppt, const SPoint *pptPolygon, int32_t nPolygon)
+bool isPointInPolygon(const SPoint *ppt, const SPoint *pptPolygon, const int32_t nPolygon)
 {
 	bool ret = false;
 
@@ -60,14 +60,14 @@ void MapPolygon::Release(void)
 {
 	if (!mapData.empty())
 	{
-		for (map<uint64_t, stPolygonInfo*>::iterator it = mapData.begin(); it != mapData.end(); it++)
+		for (unordered_map<uint64_t, stPolygonInfo*>::iterator it = mapData.begin(); it != mapData.end(); it++)
 		{
 			delete it->second;
 			it->second = nullptr;
 		}
 
 		mapData.clear();
-		map<uint64_t, stPolygonInfo*>().swap(mapData);
+		unordered_map<uint64_t, stPolygonInfo*>().swap(mapData);
 	}
 
 	MapBase::Release();
@@ -88,7 +88,7 @@ bool MapPolygon::AddData(IN const stPolygonInfo * pData)
 
 bool MapPolygon::DeleteData(IN const KeyID keyId)
 {
-	map<uint64_t, stPolygonInfo*>::iterator it = mapData.find(keyId.llid);
+	unordered_map<uint64_t, stPolygonInfo*>::iterator it = mapData.find(keyId.llid);
 	if (it != mapData.end()) {
 		delete it->second;
 		it->second = nullptr;
@@ -102,7 +102,7 @@ bool MapPolygon::DeleteData(IN const KeyID keyId)
 
 stPolygonInfo * MapPolygon::GetDataById(IN const KeyID keyId)
 {
-	map<uint64_t, stPolygonInfo*>::iterator it = mapData.find(keyId.llid);
+	unordered_map<uint64_t, stPolygonInfo*>::iterator it = mapData.find(keyId.llid);
 	if (it != mapData.end()) {
 		return it->second;
 	}

@@ -20,9 +20,10 @@ static char THIS_FILE[] = __FILE__;
 
 CFileEntrance::CFileEntrance()
 {
+	m_nDataType = TYPE_DATA_ENTRANCE;
+	m_nFileType = TYPE_EXEC_ENTRANCE;
 	m_nEntType = TYPE_ENT_NONE;
 	m_nEntIdx = 0;
-	m_nFileType = TYPE_DATA_ENTRANCE;
 
 	m_pFileCpx = nullptr;
 	m_pFileBld = nullptr;
@@ -32,8 +33,6 @@ CFileEntrance::~CFileEntrance()
 {
 
 }
-
-static const uint32_t g_cntLogPrint = 100000;
 
 bool CFileEntrance::ParseData(IN const char* fname)
 {
@@ -112,7 +111,7 @@ bool CFileEntrance::ParseData(IN const char* fname)
 			//lenTok = strlen(pTok);
 			// 비어있을 수도 있음
 			//if (lenTok <= 0) {
-			//	LOG_TRACE(LOG_ERROR, "Failed, entrance building B_ENT_ID emtpy, line:%d", lineCount);
+			//	LOG_TRACE(LOG_ERROR, "Failed, entrance building B_ENT_ID empty, line:%d", lineCount);
 			//	continue;
 			//}
 
@@ -120,18 +119,20 @@ bool CFileEntrance::ParseData(IN const char* fname)
 			pTok = strsep(&pLine, token);
 			lenTok = strlen(pTok);
 			if (lenTok <= 0) {
-#if !defined(_USE_TEST_MESH)
-				LOG_TRACE(LOG_ERROR, "Failed, entrance building id emtpy, line:%d", lineCount);
-#endif
+				// 테스트 메쉬에서는 링크 끊김이 있을 수 있으니 무시하자
+				if (!g_isUseTestMesh) {
+					//LOG_TRACE(LOG_ERROR, "Failed, entrance building id empty, line:%d", lineCount);
+				}
 				continue;
 			}
 
 			// MID // 건물 폴리곤과 매칭되는 Key
 			ent_data.MatchId = m_pFileBld->GetIdFromStringId(pTok);
 			if (ent_data.MatchId.llid == NULL_VALUE) {
-#if !defined(_USE_TEST_MESH)
-				LOG_TRACE(LOG_ERROR, "Failed, entrance building id not match with building contianer datas, id:%s, line:%d", pTok, lineCount);
-#endif
+				// 테스트 메쉬에서는 링크 끊김이 있을 수 있으니 무시하자
+				if (!g_isUseTestMesh) {
+					//LOG_TRACE(LOG_ERROR, "Failed, entrance building id not match with building contianer datas, id:%s, line:%d", pTok, lineCount);
+				}
 				continue;
 			}
 
@@ -149,7 +150,7 @@ bool CFileEntrance::ParseData(IN const char* fname)
 			pTok = strsep(&pLine, token);
 			lenTok = strlen(pTok);
 			if (lenTok <= 0) {
-				LOG_TRACE(LOG_ERROR, "Failed, entrance building SGG code empty, line:%d", lineCount);
+				//LOG_TRACE(LOG_ERROR, "Failed, entrance building SGG code empty, line:%d", lineCount);
 				ent_data.SdSggCode = 0;
 			}
 			else {
@@ -176,7 +177,7 @@ bool CFileEntrance::ParseData(IN const char* fname)
 			pTok = strsep(&pLine, token);
 			lenTok = strlen(pTok);
 			if (lenTok <= 0) {
-				LOG_TRACE(LOG_ERROR, "Failed, entrance complex SID_CD emtpy, line:%d", lineCount);
+				LOG_TRACE(LOG_ERROR, "Failed, entrance complex SID_CD empty, line:%d", lineCount);
 				continue;
 			}
 			ent_data.SdSggCode = atoi(pTok);
@@ -189,9 +190,10 @@ bool CFileEntrance::ParseData(IN const char* fname)
 			strKey.insert(0, pTok);
 			ent_data.MatchId = m_pFileCpx->GetIdFromStringId(strKey.c_str());
 			if (ent_data.MatchId.llid == NULL_VALUE) {
-#if !defined(_USE_TEST_MESH)
-				LOG_TRACE(LOG_ERROR, "Failed, entrance complex id not match with complex container datas, id:%s, line:%d", pTok, lineCount);
-#endif
+				// 테스트 메쉬에서는 끊김이 있을 수 있으니 무시하자
+				if (!g_isUseTestMesh) {
+					LOG_TRACE(LOG_ERROR, "Failed, entrance complex id not match with complex container datas, id:%s, line:%d", pTok, lineCount);
+				}
 				continue;
 			}
 
@@ -207,7 +209,7 @@ bool CFileEntrance::ParseData(IN const char* fname)
 		pTok = strsep(&pLine, token);
 		lenTok = strlen(pTok);
 		if (lenTok <= 0) {
-			LOG_TRACE(LOG_ERROR, "Failed, entrance x position emtpy, line:%d", lineCount);
+			LOG_TRACE(LOG_ERROR, "Failed, entrance x position empty, line:%d", lineCount);
 			continue;
 		}
 		ent_data.x = atof(pTok);
@@ -250,38 +252,65 @@ bool CFileEntrance::GenServiceData()
 
 	static const int32_t nMaxEntDist = 3000; // 건물/단지와 최대 1000m 이상 차이가 나면 오류
 
-	stEntranceInfo entInfo;
+	int32_t cntProc = 0;
+	int32_t cntMissNearLink = 0;
+	const int sizeEnt = m_vtEntrance.size();
 
+	size_t tick_total = 0;
 
-	for (vector<stEntrance>::const_iterator it = m_vtEntrance.begin(); it != m_vtEntrance.end(); it++)
+#if defined(USE_MULTIPROCESS)
+#pragma omp parallel for
+#endif
+	for (int ii = 0; ii < sizeEnt; ii++)
 	{
-		if (it->MatchId.llid != NULL_VALUE) {	
-
-			/*int32_t nDist = getRealWorldDistance((pPoly->data_box.Xmin + pPoly->data_box.Xmax) / 2, (pPoly->data_box.Ymin + pPoly->data_box.Ymax) / 2, it->x, it->y);
-			if (nDist > nMaxEntDist) {
-				LOG_TRACE(LOG_WARNING, "Failed, entrance point too far from polygon, id:%lld, dist:%d, poly-> tile:%d, id:%d, x:%.6f, y:%.6f | ent-> type:%d, id:%d, code:%d, x:%.6f, y:%.6f", pPoly->poly_id.llid, nDist, pPoly->poly_id.tile_id, pPoly->poly_id.nid, (pPoly->data_box.Xmin + pPoly->data_box.Xmax) / 2, (pPoly->data_box.Ymin + pPoly->data_box.Ymax) / 2, it->MatchType, it->Id, it->EntCode, it->x, it->y);
-				continue;
-			}*/
+		if (m_vtEntrance[ii].MatchId.llid != NULL_VALUE) {
 				
-			memset(&entInfo, 0x00, sizeof(entInfo));
+			stEntranceInfo entInfo = { 0, };
+			stEntryPointInfo entPointInfo = { 0, };
 
-			entInfo.poly_type = it->MatchType; // 0:미지정, 1:건물, 2:단지
-			entInfo.ent_code = it->EntCode;
-			entInfo.x = it->x;
-			entInfo.y = it->y;
+			entInfo.poly_type = m_vtEntrance[ii].MatchType; // 0:미지정, 1:건물, 2:단지
+			entInfo.ent_code = m_vtEntrance[ii].EntCode;
+			entInfo.x = m_vtEntrance[ii].x;
+			entInfo.y = m_vtEntrance[ii].y;
 
-			//if (!m_pDataMgr->AddEntranceData(it->MatchId, &entInfo)) {
-			//	LOG_TRACE(LOG_WARNING, "Failed, can't add building entrance data to data manager, id:%d, tile:%d, nid:%d, ", it->Id, it->MatchId.tile_id, it->MatchId.nid);
-			//	continue;
-			//}
-			if (it->MatchType == TYPE_ENT_BUILDING) { // 건물
-				m_pFileBld->AddEntranceData(it->MatchId, entInfo);
+			if (entInfo.ent_code == TYPE_OPTIMAL_ENTRANCE_PARCEL_CAR) // 택배입구점
+			{
+				LOG_TRACE(LOG_INFO, "Parcel EntranceInfo type:%d, id:%d, x:%.5f, y:%.5f", m_vtEntrance[ii].MatchType, m_vtEntrance[ii].Id, entInfo.x, entInfo.y);
 			}
-			else if (it->MatchType == TYPE_ENT_COMPLEX) {
-				m_pFileCpx->AddEntranceData(it->MatchId, entInfo);
+			
+			size_t tick_prev = TICK_COUNT();
+			stLinkInfo* pLink = m_pDataMgr->GetNearRoadByPoint(entInfo.x, entInfo.y, 1000, TYPE_LINK_MATCH_CARSTOP_EX, TYPE_LINK_DATA_VEHICLE, entPointInfo);
+#if defined(USE_MULTIPROCESS)
+#pragma omp atomic
+#endif
+			tick_total += TICK_COUNT() - tick_prev;
+
+			if (pLink != nullptr) {
+				entInfo.angle = entPointInfo.nAngle; // 최근접 링크 진출 각도
+			} else {
+#if defined(USE_MULTIPROCESS)
+#pragma omp atomic
+#endif
+				cntMissNearLink++;
+
+				entInfo.angle = 0x1FF;
+				LOG_TRACE(LOG_WARNING, "entrance point dosen't have near link, type:%d, id:%d, x:%.5f, y:%.5f", m_vtEntrance[ii].MatchType, m_vtEntrance[ii].Id, entInfo.x, entInfo.y);
+			}
+
+			if (m_vtEntrance[ii].MatchType == TYPE_ENT_BUILDING) { // 건물
+#if defined(USE_MULTIPROCESS)
+#pragma omp critical
+#endif
+				m_pFileBld->AddEntranceData(m_vtEntrance[ii].MatchId, entInfo);
+			}
+			else if (m_vtEntrance[ii].MatchType == TYPE_ENT_COMPLEX) {
+#if defined(USE_MULTIPROCESS)
+#pragma omp critical
+#endif
+				m_pFileCpx->AddEntranceData(m_vtEntrance[ii].MatchId, entInfo);
 			}
 			else {
-				LOG_TRACE(LOG_ERROR, "Failed, entrance type not defined, id:%s, sgg:%d", it->Id, it->SdSggCode);
+				LOG_TRACE(LOG_ERROR, "Failed, entrance type not defined, id:%s, sgg:%d", m_vtEntrance[ii].Id, m_vtEntrance[ii].SdSggCode);
 				continue;
 			}
 		} // if 
@@ -304,6 +333,21 @@ bool CFileEntrance::GenServiceData()
 		//		}
 		//	}
 		//}
+
+
+#if defined(USE_MULTIPROCESS)
+#pragma omp atomic
+#endif
+		cntProc++;
+
+#if defined(__DEBUG)
+		if (cntProc % 1000 == 0)
+#else
+		if (cntProc % 100000 == 0)
+#endif
+		{
+			LOG_TRACE(LOG_DEBUG, "LOG, processing, link angle: %d/%d, missing: %d, avg_time:%d ms", cntProc, sizeEnt, cntMissNearLink, tick_total / cntProc);
+		}
 	} // for
 
 	if ((!m_nEntType || m_nEntType == TYPE_ENT_COMPLEX) && m_pFileCpx) {
@@ -331,15 +375,6 @@ void CFileEntrance::AddDataFeild(IN const int idx, IN const int type, IN const c
 void CFileEntrance::AddDataRecord()
 {
 
-}
-
-
-bool CFileEntrance::LoadData(IN const char* szFilePath)
-{
-	char szFileName[MAX_PATH] = { 0, };
-	sprintf(szFileName, "%s/%s.%s", szFilePath, g_szTypeTitle[TYPE_DATA_ENTRANCE], g_szTypeExec[TYPE_DATA_ENTRANCE]);
-
-	return CFileBase::LoadData(szFileName);
 }
 
 
@@ -681,15 +716,6 @@ void CFileEntrance::Release()
 }
 
 
-bool CFileEntrance::SaveData(IN const char* szFilePath)
-{
-	char szFileName[MAX_PATH] = { 0, };
-	sprintf(szFileName, "%s/%s.%s", szFilePath, g_szTypeTitle[TYPE_DATA_ENTRANCE], g_szTypeExec[TYPE_DATA_ENTRANCE]);
-
-	return CFileBase::SaveData(szFileName);
-}
-
-
 size_t CFileEntrance::WriteBody(FILE* fp, IN const uint32_t fileOff)
 {
 	if (!fp) {
@@ -701,8 +727,9 @@ size_t CFileEntrance::WriteBody(FILE* fp, IN const uint32_t fileOff)
 	stPolygonInfo* pPoly = nullptr;
 
 	FileBody fileBody;
+#if defined(USE_OPTIMAL_POINT_API)
 	FileEntrance fileEnt;
-
+#endif
 	size_t offFile = fileOff;
 	size_t retWrite = 0;
 	size_t retRead = 0;

@@ -12,7 +12,7 @@
 #include "randomize.h"
 #endif
 
-#ifndef __Sort__
+#ifndef __SORT__
 #include "sort.h"
 #endif
 

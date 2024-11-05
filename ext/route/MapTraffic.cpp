@@ -31,213 +31,461 @@ bool MapTraffic::Initialize(void)
 
 void MapTraffic::Release(void)
 {
-	if (!mapData.empty())
+	if (!mapTrafficMeshData.empty())
 	{
-		// clear traffic
-		for (unordered_map<uint32_t, stTrafficInfo*>::iterator it = mapTraffic.begin(); it != mapTraffic.end(); it++)
-		{
+		for (unordered_map<uint32_t, stTrafficMesh*>::iterator it = mapTrafficMeshData.begin(); it != mapTrafficMeshData.end(); it++) {
+			// clear match
+
+			// link-ks matching
+			if (it->second && !it->second->mapLinkToKS.empty()) {
+				it->second->mapLinkToKS.clear();
+				unordered_map<uint32_t, stKSLinkLink>().swap(it->second->mapLinkToKS);
+			}
+
+			// link-ttl matching
+			if (it->second && !it->second->mapLinkToTTL.empty()) {
+				it->second->mapLinkToTTL.clear();
+				unordered_map<uint32_t, stTTLinLink>().swap(it->second->mapLinkToTTL);
+			}
+
+
+			// clear traffic TTL
+			if (it->second && !it->second->mapTrafficTTL.empty()) {
+				for (unordered_map<uint32_t, stTrafficInfoTTL*>::iterator itTTL = it->second->mapTrafficTTL.begin(); itTTL != it->second->mapTrafficTTL.end(); itTTL++) {
+					SAFE_DELETE(itTTL->second);
+				}
+				it->second->mapTrafficTTL.clear();
+				unordered_map<uint32_t, stTrafficInfoTTL*>().swap(it->second->mapTrafficTTL);
+			}
+
 			SAFE_DELETE(it->second);
 		}
-		
-		mapTraffic.clear();
-		unordered_map<uint32_t, stTrafficInfo*>().swap(mapTraffic);
 
-
-		// clear match
-		for (unordered_map<uint32_t, stTrafficMesh*>::iterator it = mapData.begin(); it != mapData.end(); it++)
-		{
-			it->second->mapMatch.clear();
-			unordered_map<uint64_t, uint64_t>().swap(it->second->mapMatch);
-
-			SAFE_DELETE(it->second);
+		// clear traffic KS
+		if (!mapTrafficInfoKS.empty()) {
+			for (unordered_map<uint32_t, stTrafficInfoKS*>::iterator itKS = mapTrafficInfoKS.begin(); itKS != mapTrafficInfoKS.end(); itKS++) {
+				SAFE_DELETE(itKS->second);
+			}
+			mapTrafficInfoKS.clear();
+			unordered_map<uint32_t, stTrafficInfoKS*>().swap(mapTrafficInfoKS);
 		}
-
-		mapData.clear();
-		unordered_map<uint32_t, stTrafficMesh*>().swap(mapData);
 	}
 
 	MapBase::Release();
 }
 
 
+const unordered_map<uint32_t, stTrafficMesh*>* MapTraffic::GetTrafficMeshData(void) const
+{
+	return &mapTrafficMeshData;
+}
+
+
+const uint8_t MapTraffic::GetSpeed(IN const KeyID link, IN const uint8_t dir, IN OUT uint8_t& type)
+{
+	uint8_t retSpeed = SPEED_NOT_AVALABLE;
+	uint8_t retType = type;
+
+	stTrafficMesh* pMesh = nullptr;
+	unordered_map<uint32_t, stTrafficMesh*>::const_iterator itMesh = mapTrafficMeshData.find(link.tile_id);
+	if (itMesh != mapTrafficMeshData.end()) {
+		pMesh = itMesh->second;
+	}
+
+	if (pMesh == nullptr) {
+		return retSpeed;
+	}
+
+	// linkÏóê Îß§Ïπ≠ÎêòÎäî traffic key Íµ¨ÌïòÍ∏∞
+
+	// 1st ttl speed
+	if (type == TYPE_TRAFFIC_TTL || type == TYPE_TRAFFIC_NONE) {
+		if (!pMesh->mapLinkToTTL.empty() && !pMesh->mapTrafficTTL.empty()) {
+			unordered_map<uint32_t, stTTLinLink>::const_iterator itTTL = pMesh->mapLinkToTTL.find(link.nid);
+			if (itTTL != pMesh->mapLinkToTTL.end()) {
+				uint32_t ttl_nid;
+				if (dir == DIR_POSITIVE) {
+					ttl_nid = itTTL->second.ttlIdPositive;
+				} else { //if (dir == DIR_NAGATIVE) {
+					ttl_nid = itTTL->second.ttlIdNagative;
+				}
+
+				unordered_map<uint32_t, stTrafficInfoTTL*>::const_iterator itTraffic = pMesh->mapTrafficTTL.find(ttl_nid);
+				if (itTraffic != pMesh->mapTrafficTTL.end()) {
+					retSpeed = itTraffic->second->speed;
+					retType = TYPE_TRAFFIC_TTL;
+				}
+			}
+		}
+	}
+
+	// 2nd ks speed
+	if (type == TYPE_TRAFFIC_KS || (type == TYPE_TRAFFIC_NONE && retSpeed == SPEED_NOT_AVALABLE)) {
+		if (!pMesh->mapLinkToKS.empty() && !mapTrafficInfoKS.empty()) {
+			unordered_map<uint32_t, stKSLinkLink>::const_iterator itKS = pMesh->mapLinkToKS.find(link.nid);
+			if (itKS != pMesh->mapLinkToKS.end()) {
+				uint32_t ks_nid;
+				if (dir == DIR_POSITIVE) {
+					ks_nid = itKS->second.ksIdPositive;
+				} else { //if (dir == DIR_NAGATIVE) {
+					ks_nid = itKS->second.ksIdNagative;
+				}
+
+				unordered_map<uint32_t, stTrafficInfoKS*>::const_iterator itTraffic = mapTrafficInfoKS.find(ks_nid);
+				if (itTraffic != mapTrafficInfoKS.end()) {
+					retSpeed = itTraffic->second->speed;
+					retType = TYPE_TRAFFIC_KS;
+				}
+			}
+		}
+	}
+
+	type = retType;
+
+	return retSpeed;
+}
+
+
+const uint64_t MapTraffic::GetTrafficId(IN const KeyID link, IN const uint8_t dir, IN const uint8_t type)
+{
+	uint64_t retId = 0;
+
+	stTrafficMesh* pMesh = nullptr;
+	unordered_map<uint32_t, stTrafficMesh*>::const_iterator itMesh = mapTrafficMeshData.find(link.tile_id);
+	if (itMesh != mapTrafficMeshData.end()) {
+		pMesh = itMesh->second;
+	}
+
+	if (pMesh == nullptr) {
+		return retId;
+	}
+
+	// linkÏóê Îß§Ïπ≠ÎêòÎäî traffic key Íµ¨ÌïòÍ∏∞
+	if (type == TYPE_TRAFFIC_TTL) {
+		if (!pMesh->mapLinkToTTL.empty() && !pMesh->mapTrafficTTL.empty()) {
+			unordered_map<uint32_t, stTTLinLink>::const_iterator itTTL = pMesh->mapLinkToTTL.find(link.nid);
+			if (itTTL != pMesh->mapLinkToTTL.end()) {
+
+				uint32_t ttl_nid;
+				if (dir == DIR_POSITIVE) {
+					ttl_nid = itTTL->second.ttlIdPositive;
+				} else { //if (dir == DIR_NAGATIVE) {
+					ttl_nid = itTTL->second.ttlIdNagative;
+				}
+
+				retId = link.tile_id * TILEID_BYTE_COUNT + ttl_nid;
+			}
+		}
+	} else { // if (type == TYPE_TRAFFIC_KS) {
+		if (!pMesh->mapLinkToKS.empty() && !pMesh->mapLinkToKS.empty()) {
+			unordered_map<uint32_t, stKSLinkLink>::const_iterator itKS = pMesh->mapLinkToKS.find(link.nid);
+			if (itKS != pMesh->mapLinkToKS.end()) {
+				uint64_t ks_id;
+				if (dir == DIR_POSITIVE) {
+					ks_id = itKS->second.ksIdPositive;
+				} else { //if (dir == DIR_NAGATIVE) {
+					ks_id = itKS->second.ksIdNagative;
+				}
+
+				retId = ks_id;
+			}
+		}
+	}
+
+	return retId;
+}
+
+
 const uint32_t MapTraffic::GetCount(void) const
 {
-	return mapData.size();
+	return mapTrafficMeshData.size();
 }
 
 
-int MapTraffic::AddData(IN stTrafficInfo* pData) // add traffic
+bool MapTraffic::AddKSData(IN const uint32_t ks_id, IN const uint32_t tile_nid, IN const uint32_t link_nid, IN const uint8_t dir) // add KS traffic link match
 {
-	if (pData != nullptr /*&& pData->info != NOT_USE*/)
-	{
-		mapTraffic.emplace(pData->ks_id, pData);
-	}
-	
-	return 0;
-}
+	bool ret = false;
 
-
-int MapTraffic::AddData(IN const stTrafficKey& key, IN const uint32_t ksId)
-{
-	stTrafficInfo* pTraffic = nullptr;
-
-	// traffic key¿« map »Æ¿Œ 
-	unordered_map<uint32_t, stTrafficInfo*>::const_iterator it = mapTraffic.find(ksId);
-	if (it != mapTraffic.end()) {
-		pTraffic = it->second;
-	}
-	else {
-		// create
-		pTraffic = new stTrafficInfo();
-		pTraffic->key.llid = key.llid;
-		pTraffic->ks_id = ksId;
-
-		mapTraffic.emplace(ksId, pTraffic);
-	}
-
-
-	// ∏ﬁΩ¨ »Æ¿Œ
-	stTrafficMesh* pMesh = nullptr;
-	
-	unordered_map<uint32_t, stTrafficMesh*>::const_iterator match = mapData.find(key.mesh);
-	if (match == mapData.end()) {
-		// ∏µ≈©∞° øÏº± ¿€æ˜µ«∞Ì, ¿Ã»ƒø° ∏≈ƒ™øÎ ¡§∫∏∏¶ µÓ∑œ«œ±‚ ∂ßπÆø° ∆Æ∑°«» µÓ∑œ Ω√ ø©±‚∑Œ ø¿∏È æ»µ . 
-
-		//LOG_TRACE(LOG_WARNING, "mesh not exist, traffic(tile:%d, snode:%d, enode:%d, dir:%d)", key.mesh, key.snode, key.enode, key.dir);
-		return 0;
-
-		// create
-		pMesh = new stTrafficMesh();
-		pMesh->mesh = key.mesh;
-
-		mapData.emplace(key.mesh, pMesh);
-	}
-	else
-	{
-		pMesh = match->second;
-	}
-
-	// traffic key∑Œ ∏≈ƒ™µ«¥¬ link idx ±∏«œ±‚
-	unordered_map<uint64_t, uint64_t>::const_iterator it_idx = pMesh->mapMatch.find(key.llid);
-	if (it_idx == pMesh->mapMatch.end()) {
-		// ¡¯«‡πÊ«‚¿ª æÁπÊ«‚¿∏∑Œ ≥ı∞Ì ¿Á »Æ¿Œ
-		stTrafficKey newKey = key;
-		newKey.dir = 0;
-		it_idx = pMesh->mapMatch.find(newKey.llid);
-	}
-
-	if (it_idx != pMesh->mapMatch.end()) {
-		// ∏≈ƒ™µ«¥¬ link idx µÓ∑œ
-		KeyID linkId;
-		linkId.llid = it_idx->second;
-		// πÊ«‚º∫ ¿˚øÎ
-		linkId.dir = key.dir;
-		pTraffic->setLinks.emplace(linkId.llid);
-	}
-	else {
-		// ¿Ã∑Ø∏È æ»µ«¥¬µ•.
-
-		// ¿œπÊ≈Î«‡ ∏µ≈©¿« πÊ«‚º∫∞˙ traffic πÊ«‚º∫¿Ã ¿œƒ°«œ¡ˆ æ ¿Ω
-		LOG_TRACE(LOG_WARNING, "link not match with traffic and dir, traffic(tile:%d, snode:%d, enode:%d, dir:%d)", key.mesh, key.snode, key.enode, key.dir);
-		return 0;
-	}
-
-	//pMesh->mapTraffic.emplace(pData->key.llid, const_cast<stTrafficInfo*>(pData));
-	////pItem->mapTraffic.insert(pair<uint64_t, stTrafficInfo*>({ pData->key_id, const_cast<stTrafficInfo*>(pData) }));
-	return pTraffic->setLinks.size();
-}
-
-
-int MapTraffic::AddData(IN const stLinkInfo * pData)
-{
-	if (pData != nullptr /*&& pData->info != NOT_USE*/)
-	{
-		stTrafficKey traffickey;
-		traffickey.mesh = pData->link_id.tile_id;
-		traffickey.snode = pData->snode_id.nid;
-		traffickey.enode = pData->enode_id.nid;
-		traffickey.dir = pData->link_id.dir;
-
-		unordered_map<uint32_t, stTrafficMesh*>::const_iterator it = mapData.find(pData->link_id.tile_id);
-		if (it == mapData.end()) {
-			// create
-			stTrafficMesh* pMesh = new stTrafficMesh();
-			pMesh->mesh = pData->link_id.tile_id;
-			pMesh->mapMatch.emplace(traffickey.llid, pData->link_id.llid);
-			//pItem->mapTraffic.insert(pair<uint64_t, stTrafficInfo*>({ pData->key_id, const_cast<stTrafficInfo*>(pData) }));
-
-			mapData.emplace(pMesh->mesh, pMesh);
-		}
-		else
-		{
-			it->second->mapMatch.emplace(traffickey.llid, pData->link_id.llid);
-			//it->second->LinkMatch.insert(pair<uint64_t, stTrafficInfo*>({ pData->key_id, const_cast<stTrafficInfo*>(pData) }));
-		}
-	}
-	else
-	{
-		return 0;
-	}
-}
-
-
-bool MapTraffic::DeleteData(IN const uint64_t keyId)
-{
-	stTrafficKey stKey;
-	memcpy(&stKey, &keyId, sizeof(stKey));
-
-	unordered_map<uint32_t, stTrafficMesh*>::iterator it = mapData.find(stKey.mesh);
-	if (it != mapData.end()) {
-		// clear match
-		it->second->mapMatch.clear();
-		unordered_map<uint64_t, uint64_t>().swap(it->second->mapMatch);
-
-		SAFE_DELETE(it->second);
-
-		return true;
-	}
-
-	return false;
-}
-
-
-const uint32_t MapTraffic::GetSpeed(IN const KeyID link)
-{
-	uint32_t speed = SPEED_NOT_AVALABLE;
-
-	stTrafficMesh* pMesh = nullptr;
-	unordered_map<uint32_t, stTrafficMesh*>::const_iterator match = mapData.find(link.tile_id);
-	if (match != mapData.end()) {
-		pMesh = match->second;
-	}
-
-	// linkø° ∏≈ƒ™µ«¥¬ traffic key ±∏«œ±‚
-	unordered_map<uint64_t, uint64_t>::const_iterator it_key= pMesh->mapMatch.find(link.llid);
-	if (it_key != pMesh->mapMatch.end()) {
-		unordered_map<uint32_t, stTrafficInfo*>::const_iterator it_traffic = mapTraffic.find(it_key->second);
+	// ks to link ÌôïÏù∏ 
+	unordered_map<uint32_t, stTrafficInfoKS*>::const_iterator it = mapTrafficInfoKS.find(ks_id);
+	if (it != mapTrafficInfoKS.end()) {
+		KeyID link;
+		link.tile_id = tile_nid;
+		link.nid = link_nid;
+		link.dir = dir;
 		
-		if (it_traffic != mapTraffic.end()) {
-			speed = it_traffic->second->speed;
+		// add traffic info data
+		it->second->setLinks.emplace(link.llid);
+	} else {
+		// create
+		KeyID link;
+		link.tile_id = tile_nid;
+		link.nid = link_nid;
+		link.dir = dir;
+
+		stTrafficInfoKS* pTraffic = nullptr;
+		pTraffic = new stTrafficInfoKS();
+		pTraffic->ks_id = ks_id;
+		pTraffic->setLinks.emplace(link.llid);
+
+		// add traffic info data
+		mapTrafficInfoKS.emplace(ks_id, pTraffic);
+	}
+
+	
+	// Î©îÏâ¨ ÌôïÏù∏
+	stTrafficMesh* pMesh = nullptr;
+	unordered_map<uint32_t, stTrafficMesh*>::const_iterator itMesh = mapTrafficMeshData.find(tile_nid);
+	if (itMesh != mapTrafficMeshData.end()) {
+		pMesh = itMesh->second;
+	} else {
+		// create traffic mesh
+		pMesh = new stTrafficMesh();
+		pMesh->meshId = tile_nid;
+
+		// add traffic mesh
+		mapTrafficMeshData.emplace(pMesh->meshId, pMesh);
+	}
+
+	if (pMesh) {
+		// link-ks Îß§Ïπ≠ Îç∞Ïù¥ÌÑ∞ ÌôïÏù∏
+		unordered_map<uint32_t, stKSLinkLink>::iterator itLink = pMesh->mapLinkToKS.find(link_nid);
+		if (itLink != pMesh->mapLinkToKS.end()) {
+			if (dir == DIR_POSITIVE) {
+				if (itLink->second.ksIdPositive != 0) {
+					// Ïù¥ÎØ∏ ÏûàÏúºÎ©¥....
+					LOG_TRACE(LOG_WARNING, "link to ks matching duplicated, tile_id:%d, link_nid:%ld, ks_id:%d, dir:%ld", tile_nid, link_nid, ks_id, DIR_POSITIVE);
+				}
+				itLink->second.ksIdPositive = ks_id;
+			} else { //if (keyTraffic.ttl.dir == DIR_NAGATIVE) {
+				if (itLink->second.ksIdNagative != 0) {
+					// Ïù¥ÎØ∏ ÏûàÏúºÎ©¥....
+					LOG_TRACE(LOG_WARNING, "link to ks matching duplicated, tile_id:%d, link_nid:%ld, ks_id:%d, dir:%ld", tile_nid, link_nid, ks_id, DIR_NAGATIVE);
+				}
+				itLink->second.ksIdNagative = ks_id;
+			}
+
+			if (itLink->second.ksIdPositive == itLink->second.ksIdNagative) {
+				// Ï†ï/Ïó≠Ïù¥ Í∞ôÏúºÎ©¥....
+				LOG_TRACE(LOG_WARNING, "link to ks matching duplicated, tile_id:%d, link_nid:%ld, ks_id_p:%d, ks_id_n:%d", tile_nid, link_nid, itLink->second.ksIdPositive, itLink->second.ksIdNagative);
+			}
+		} else {
+			// create
+			stKSLinkLink ksInLink;
+			if (dir == DIR_POSITIVE) {
+				ksInLink.ksIdPositive = ks_id;
+			} else { //if (keyTraffic.ttl.dir == DIR_NAGATIVE) {
+				ksInLink.ksIdNagative = ks_id;
+			}
+
+			// add traffic matching data
+			pMesh->mapLinkToKS.emplace(link_nid, ksInLink);
+		}
+
+		ret = true;
+	}
+
+	return ret;
+}
+
+
+bool MapTraffic::UpdateKSData(IN const uint32_t ksId, IN const uint8_t speed, uint32_t timestamp) // add traffic info
+{
+	bool ret = false;
+
+	unordered_map<uint32_t, stTrafficInfoKS*>::const_iterator it = mapTrafficInfoKS.find(ksId);
+	if (it != mapTrafficInfoKS.end()) {
+		it->second->speed = speed;
+		it->second->timestamp = timestamp;
+
+		ret = true;
+	}
+
+	return ret;
+}
+
+
+const stTrafficInfoKS * MapTraffic::GetTrafficInfoKS(IN const uint32_t ks_id)
+{
+	stTrafficInfoKS * pInfo = nullptr;
+
+	unordered_map<uint32_t, stTrafficInfoKS*>::const_iterator itKS = mapTrafficInfoKS.find(ks_id);
+	if (itKS != mapTrafficInfoKS.end()) {
+		pInfo = itKS->second;
+	}
+
+	return pInfo;
+}
+
+
+const unordered_map<uint32_t, stTrafficInfoKS*>* MapTraffic::GetTrafficKSMapData(void) const
+{
+	return &mapTrafficInfoKS;
+}
+
+
+bool MapTraffic::AddTTLData(IN const uint32_t ttl_nid, IN const uint32_t tile_nid, IN const uint32_t link_nid, IN const uint8_t dir)
+{
+	bool ret = false;
+	// Î©îÏâ¨ ÌôïÏù∏
+	stTrafficMesh* pMesh = nullptr;
+
+	unordered_map<uint32_t, stTrafficMesh*>::const_iterator itMesh = mapTrafficMeshData.find(tile_nid);
+	if (itMesh != mapTrafficMeshData.end()) {
+		pMesh = itMesh->second;
+	} else {
+		// create traffic mesh
+		pMesh = new stTrafficMesh();
+		pMesh->meshId = tile_nid;
+
+		// add traffic mesh
+		mapTrafficMeshData.emplace(pMesh->meshId, pMesh);
+	}
+
+
+	if (pMesh) {
+		// traffic keyÏùò map ÌôïÏù∏ 
+		unordered_map<uint32_t, stTrafficInfoTTL*>::const_iterator it = pMesh->mapTrafficTTL.find(ttl_nid);
+		if (it != pMesh->mapTrafficTTL.end()) {
+			// Ïù¥ÎØ∏ ÏûàÏúºÎ©¥....
+			LOG_TRACE(LOG_WARNING, "already exist ttl traffic info in mesh, mesh_id:%d, ttl_id:%d", tile_nid, ttl_nid);
+		} else {
+			// create
+			stTrafficInfoTTL* pTraffic = nullptr;
+			pTraffic = new stTrafficInfoTTL();
+			pTraffic->ttl_nid = ttl_nid;
+			pTraffic->link_nid = link_nid;
+			pTraffic->dir = dir;
+
+			// add traffic info data
+			pMesh->mapTrafficTTL.emplace(ttl_nid, pTraffic);
+		}
+
+
+		// link-ttl Îß§Ïπ≠ Îç∞Ïù¥ÌÑ∞ ÌôïÏù∏
+		unordered_map<uint32_t, stTTLinLink>::iterator itLink = pMesh->mapLinkToTTL.find(link_nid);
+		if (itLink != pMesh->mapLinkToTTL.end()) {
+			if (dir == DIR_POSITIVE) {
+				if (itLink->second.ttlIdPositive != 0) {
+					// Ïù¥ÎØ∏ ÏûàÏúºÎ©¥....
+					LOG_TRACE(LOG_WARNING, "link to ttl matching duplicated, tile_id:%d, link_nid:%ld, ttl_id:%d, dir:%ld", ttl_nid, link_nid, ttl_nid, DIR_POSITIVE);
+				}
+				itLink->second.ttlIdPositive = ttl_nid;
+			} else { //if (keyTraffic.ttl.dir == DIR_NAGATIVE) {
+				if (itLink->second.ttlIdNagative != 0) {
+					// Ïù¥ÎØ∏ ÏûàÏúºÎ©¥....
+					LOG_TRACE(LOG_WARNING, "link to ttl matching duplicated, tile_id:%d, link_nid:%ld, ttl_id:%d, dir:%ld", ttl_nid, link_nid, ttl_nid, DIR_NAGATIVE);
+				}
+				itLink->second.ttlIdNagative = ttl_nid;
+			}
+
+			if (itLink->second.ttlIdPositive == itLink->second.ttlIdNagative) {
+				// Ï†ï/Ïó≠Ïù¥ Í∞ôÏúºÎ©¥....
+				LOG_TRACE(LOG_WARNING, "link to ttl matching duplicated, tile_id:%d, link_nid:%ld, ttl_id_p:%d, ttl_id_n:%d", ttl_nid, link_nid, itLink->second.ttlIdPositive, itLink->second.ttlIdNagative);
+			}
+		} else {
+			// create
+			stTTLinLink ttlInLink;
+			if (dir == DIR_POSITIVE) {
+				ttlInLink.ttlIdPositive = ttl_nid;
+			} else { //if (keyTraffic.ttl.dir == DIR_NAGATIVE) {
+				ttlInLink.ttlIdNagative = ttl_nid;
+			}
+
+			// add traffic matching data
+			pMesh->mapLinkToTTL.emplace(link_nid, ttlInLink);
+		}
+
+		ret = true;
+	}
+	
+	return ret;
+}
+
+
+bool MapTraffic::UpdateTTLData(IN const uint64_t ttlId, IN const uint8_t speed, uint32_t timestamp) // update traffic
+{
+	bool ret = false;
+
+	// Î©îÏâ¨ ÌôïÏù∏
+	if (ttlId > TILEID_BYTE_COUNT) {
+		stTrafficMesh* pMesh = nullptr;
+		int32_t tile_nid = ttlId / TILEID_BYTE_COUNT;
+		int32_t ttl_nid = ttlId % TILEID_BYTE_COUNT;
+
+		unordered_map<uint32_t, stTrafficMesh*>::const_iterator itMesh = mapTrafficMeshData.find(tile_nid);
+		if (itMesh != mapTrafficMeshData.end()) {
+			pMesh = itMesh->second;
+
+			if (pMesh) {
+				// traffic keyÏùò map ÌôïÏù∏ 
+				unordered_map<uint32_t, stTrafficInfoTTL*>::const_iterator itTTL = pMesh->mapTrafficTTL.find(ttl_nid);
+				if (itTTL != pMesh->mapTrafficTTL.end()) {
+					itTTL->second->speed = speed;
+					itTTL->second->timestamp = timestamp;
+
+					ret = true;
+				}
+			}
 		}
 	}
 
-	return speed;
+	return ret;
 }
 
 
-const stTrafficInfo * MapTraffic::GetTrafficInfo(IN const uint32_t ksId)
+const int32_t getBlockinTTL(IN const uint64_t ttlId)
 {
-	unordered_map<uint32_t, stTrafficInfo*>::const_iterator it = mapTraffic.find(ksId);
-
-	if (it != mapTraffic.end()) {
-		return it->second;
+	int32_t meshId = 0;
+	if (ttlId > 0) {
+		meshId = static_cast<int32_t>(ttlId / TILEID_BYTE_COUNT);
 	}
-	
-	return nullptr;
+
+	return meshId;
+}
+
+const int32_t getIteminTTL(IN const uint64_t ttlId)
+{
+	int32_t itemId = 0;
+	if (ttlId > 0) {
+		itemId = ttlId % TILEID_BYTE_COUNT;
+	}
+
+	return itemId;
 }
 
 
-const unordered_map<uint32_t, stTrafficInfo*>* MapTraffic::GetTrafficMapData(void)
+const stTrafficInfoTTL * MapTraffic::GetTrafficInfoTTL(IN const uint64_t ttl_id)
 {
-	return &mapTraffic;
+	stTrafficInfoTTL * pInfo = nullptr;
+
+	// find mesh
+	int32_t meshId = getBlockinTTL(ttl_id);
+	if (meshId > 0) {
+		unordered_map<uint32_t, stTrafficMesh*>::const_iterator itMesh = mapTrafficMeshData.find(meshId);
+		if (itMesh != mapTrafficMeshData.end()) {
+			// find traffic TTL info
+			unordered_map<uint32_t, stTrafficInfoTTL*>::const_iterator itTTL = itMesh->second->mapTrafficTTL.find(ttl_id);
+			if (itTTL != itMesh->second->mapTrafficTTL.end()) {
+				pInfo = itTTL->second;
+			}
+		}
+	}
+
+	return pInfo;
+}
+
+
+const unordered_map<uint32_t, stTrafficInfoTTL*>* MapTraffic::GetTrafficTTLMapData(IN const uint32_t meshId)
+{
+	unordered_map<uint32_t, stTrafficInfoTTL*>* pInfo = nullptr;
+
+	// find mesh
+	unordered_map<uint32_t, stTrafficMesh*>::const_iterator itMesh = mapTrafficMeshData.find(meshId);
+
+	if (itMesh != mapTrafficMeshData.end()) {
+		pInfo = &itMesh->second->mapTrafficTTL;
+	}
+
+	return pInfo;
 }

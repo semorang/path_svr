@@ -18,7 +18,7 @@ public:
 	stNodeInfo* GetNodeById(IN const KeyID keyId);
 
 private:
-	map<uint64_t, stNodeInfo*> mapData;
+	unordered_map<uint64_t, stNodeInfo*> mapData;
 
 };
 

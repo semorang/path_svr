@@ -14,20 +14,31 @@
 // const ROUTE_RESULT_FAILED_EXPEND = 93;		//93	확장 실패
 // const RESULT_APPKEY_ERROR = 300;			// 300	AppKey Error	공통	AppKey 인증 오류
 const ERROR_CODES = {
-    ROUTE_RESULT_SUCCESS : 0,				//0	성공
-    ROUTE_RESULT_FAILED : 1,				//1	탐색 실패	내부 오류에 의한 실패
-    ROUTE_RESULT_FAILED_SAME_ROUTE : 2,		//2	스마트 재탐색 적용	기존 경로와 동일
-    ROUTE_RESULT_FAILED_WRONG_PARAM : 10,	//10	잘 못된 파라미터	필수 파라미터 체크
-    ROUTE_RESULT_FAILED_SET_MEMORY : 50,	//50	탐색 확장 관련 메모리 할당 오류	탐색 초기화 관련
-    ROUTE_RESULT_FAILED_READ_DATA : 51,		//51	탐색 관련 데이터(지도, 옵션 등) 파일 읽기 실패	탐색 초기화 관련
-    ROUTE_RESULT_FAILED_SET_START : 70,		//70	출발지가 프로젝션이 안되거나, 잘못된 출발지
-    ROUTE_RESULT_FAILED_SET_VIA : 71,		//71	경유지가 프로젝션이 안되거나, 잘못된 경유지
-    ROUTE_RESULT_FAILED_SET_END : 72,		//72	목적지가 프로젝션이 안되거나, 잘못된 목적지
-    ROUTE_RESULT_FAILED_DIST_OVER : 90,		//90	탐색 가능 거리 초과	직선거리 15km 이내 허용
-    ROUTE_RESULT_FAILED_TIME_OVER : 91,		//91	탐색 시간 초과	10초 이상
-    ROUTE_RESULT_FAILED_NODE_OVER : 92,	    //92	확장 가능 Node 개수 초과
-    ROUTE_RESULT_FAILED_EXPEND : 93,		//93	확장 실패
-    RESULT_APPKEY_ERROR : 300,			    // 300	AppKey Error	공통	AppKey 인증 오류
+    ROUTE_RESULT_SUCCESS : 0,				        //0	성공
+    ROUTE_RESULT_FAILED : 1,				        //1	탐색 실패	내부 오류에 의한 실패
+    ROUTE_RESULT_FAILED_SAME_ROUTE : 2,		        //2	스마트 재탐색 적용	기존 경로와 동일
+    ROUTE_RESULT_FAILED_MULTI_POS_ROUTE_ALL : 5,	//5		다중 경로 탐색 모두 실패
+	ROUTE_RESULT_FAILED_MULTI_POS_ROUTE : 6,		//6		다중 경로 탐색 실패
+    ROUTE_RESULT_FAILED_WRONG_PARAM : 10,	        //10	잘 못된 파라미터	필수 파라미터 체크
+    ROUTE_RESULT_FAILED_SET_MEMORY : 50,	        //50	탐색 확장 관련 메모리 할당 오류	탐색 초기화 관련
+    ROUTE_RESULT_FAILED_READ_DATA : 51,		        //51	탐색 관련 데이터(지도, 옵션 등) 파일 읽기 실패	탐색 초기화 관련
+    ROUTE_RESULT_FAILED_SET_START : 70,		        //70	출발지가 프로젝션이 안되거나, 잘못된 출발지
+    ROUTE_RESULT_FAILED_SET_VIA : 71,		        //71	경유지가 프로젝션이 안되거나, 잘못된 경유지
+    ROUTE_RESULT_FAILED_SET_END : 72,		        //72	목적지가 프로젝션이 안되거나, 잘못된 목적지
+    ROUTE_RESULT_FAILED_DIST_OVER : 90,		        //90	탐색 가능 거리 초과	직선거리 30km 이내 허용
+    ROUTE_RESULT_FAILED_TIME_OVER : 91,		        //91	탐색 시간 초과	10초 이상
+    ROUTE_RESULT_FAILED_NODE_OVER : 92,	            //92	확장 가능 Node 개수 초과
+    ROUTE_RESULT_FAILED_EXPEND : 93,		        //93	확장 실패
+    RESULT_APPKEY_ERROR : 300,			            // 300	AppKey Error	공통	AppKey 인증 오류
+
+    ROUTE_RESULT_FAILED_COURSE : 600,					//600	코스 탐색 실패
+	ROUTE_RESULT_FAILED_COURSE_ID : 601,				//601	코스 ID 검색 실패
+	ROUTE_RESULT_FAILED_COURSE_TYPE : 602,				//602	코스 TYPE 검색 실패
+
+    TMS_RESULT_FAILED : 10000,							//10000	클러스터링 실패
+	TMS_RESULT_FAILED_LOOP : 10001,						//10001 분배 재계산 한계 횟수 초과
+	TMS_RESULT_FAILED_MATCHING_LIMIT : 10002,			//10002 지정된 분배 수량내에서 배정이 실패함
+	TMS_RESULT_FAILED_MATCHING_DEVIATION : 10003,		//10003 지정된 편차 내의 배정이 실패함
 }
 
 
@@ -53,24 +64,57 @@ const ROUTE_OPTIONS = {
 
 
 // route avoids
-const ROUTE_AVOIDS = {
-    ROUTE_AVOID_NONE : 0,
-	//ROUTE_AVOID_HIKING : 1, // 등산로
-	//ROUTE_AVOID_TRAIL : 2, // 둘레길
-	//ROUTE_AVOID_BIKE : 4, // 자전거
-	//ROUTE_AVOID_CROSS : 8, // 종주길
-    ROUTE_AVOID_ALLEY : 1,
-    ROUTE_AVOID_PAVE : 2,
-    ROUTE_AVOID_STAIRS : 4,
-    ROUTE_AVOID_BRIDGE : 8,
-    ROUTE_AVOID_ROCK : 16,
-    ROUTE_AVOID_RIDGE : 32,
-    ROUTE_AVOID_LADDER : 64,
-    ROUTE_AVOID_ROPE : 128,
-    ROUTE_AVOID_TATTERED : 256,
-    ROUTE_AVOID_PALM : 512,
-    ROUTE_AVOID_DECK : 1024,
-}
+const ROUTE_AVOIDS_TRK = {
+    ROUTE_AVOID_NONE : 0, // 없음
+	ROUTE_AVOID_HIKING : 1, // 등산로
+	ROUTE_AVOID_TRAIL : 2, // 둘레길
+	ROUTE_AVOID_BIKE : 4, // 자전거
+	ROUTE_AVOID_CROSS : 8, // 종주길
+    ROUTE_AVOID_RECOMMEND : 16, // 추천코스
+	ROUTE_AVOID_MTB : 32, // MTB코스
+	ROUTE_AVOID_POPULAR : 64, // 인기코스
+
+    ROUTE_AVOID_ALLEY : 256,
+    ROUTE_AVOID_PAVE : 512,
+    ROUTE_AVOID_STAIRS : 1024,
+    ROUTE_AVOID_BRIDGE : 2048,
+    ROUTE_AVOID_ROCK : 4096,
+    ROUTE_AVOID_RIDGE : 8192,
+    ROUTE_AVOID_LADDER : 16384,
+    ROUTE_AVOID_ROPE : 32768,
+    ROUTE_AVOID_TATTERED : 65536,
+    ROUTE_AVOID_PALM : 131072,
+    ROUTE_AVOID_DECK : 262144,
+};
+
+const ROUTE_AVOIDS_PED = {
+	ROUTE_AVOID_PED_NODE : 0, // 미정의
+    ROUTE_AVOID_PED_SLOP : 1, // 경사로
+	ROUTE_AVOID_PED_STAIRS : 2, // 계단
+	ROUTE_AVOID_PED_ESCALATOR: 4, // 에스컬레이터
+	ROUTE_AVOID_PED_STAIRS_ESCALATOR : 8, // 계단/에스컬레이터
+	ROUTE_AVOID_PED_ELEVATOR : 16, // 엘리베이터
+	ROUTE_AVOID_PED_CONNECTION: 32, // 단순연결로
+	ROUTE_AVOID_PED_CROSSWALK : 64, // 횡단보도
+    ROUTE_AVOID_PED_MOVINGWALK : 128, // 무빙워크
+    ROUTE_AVOID_PED_STEPPINGSTONES : 256, // 징검다리
+	ROUTE_AVOID_PED_VIRTUAL : 512, // 의사횡단
+
+	ROUTE_AVOID_PED_CAVE : 2048, // 토끼굴
+	ROUTE_AVOID_PED_UNDERPASS : 4096, // 지하보도
+	ROUTE_AVOID_PED_FOOTBRIDGE : 8192, // 육교
+	ROUTE_AVOID_PED_OVERPASS : 16384, // 고가도로
+	ROUTE_AVOID_PED_BRIDGE : 32768, // 교량
+	ROUTE_AVOID_PED_SUBWAY : 65536, // 지하철역
+	ROUTE_AVOID_PED_RAILROAD : 131072, // 철도
+	ROUTE_AVOID_PED_BUSSTATION : 262144, // 중앙버스정류장
+	ROUTE_AVOID_PED_UNDERGROUNDMALL : 524288, // 지하상가
+	ROUTE_AVOID_PED_THROUGHBUILDING : 1048576, // 건물관통도로
+	ROUTE_AVOID_PED_COMPLEXPARK : 2097152, // 단지도로_공원
+	ROUTE_AVOID_PED_COMPLEXAPT : 4194304, // 단지도로_주거시설
+	ROUTE_AVOID_PED_COMPLEXTOUR : 8388608, // 단지도로_관광지
+	ROUTE_AVOID_PED_COMPLEXETC : 16777216, // 단지도로_기타
+};
 
 
 function getErrMsg(code) {
@@ -85,6 +129,13 @@ function getErrMsg(code) {
             break;
         case ERROR_CODES.ROUTE_RESULT_FAILED_SAME_ROUTE:
             msg = "스마트 재탐색 적용(기존 경로와 동일)";
+            break;
+        case ERROR_CODES.ROUTE_RESULT_FAILED_MULTI_POS_ROUTE_ALL:
+            msg = "다중 경로 탐색 실패(모든 경로 탐색)";
+            break;
+        case ERROR_CODES.ROUTE_RESULT_FAILED_MULTI_POS_ROUTE:
+            msg = "다중 경로 탐색 실패(일부 경로 탐색)";
+            break;
         case ERROR_CODES.ROUTE_RESULT_FAILED_WRONG_PARAM:
             msg = "잘못된 파라미터(필수 파라미터 체크)";
             break;
@@ -104,7 +155,7 @@ function getErrMsg(code) {
             msg = "목적지가 프로젝션이 안되거나, 잘못된 목적지";
             break;
         case ERROR_CODES.ROUTE_RESULT_FAILED_DIST_OVER:
-            msg = "탐색 가능 거리 초과(직선거리 15km 이내 허용)";
+            msg = "탐색 가능 거리 초과";
             break;
         case ERROR_CODES.ROUTE_RESULT_FAILED_TIME_OVER:	
             msg = "탐색 시간 초과(10초 이상)";
@@ -118,6 +169,30 @@ function getErrMsg(code) {
         case ERROR_CODES.RESULT_APPKEY_ERROR:
             msg = "AppKey 인증 오류";	// 300	AppKey Error	공통	AppKey 인증 오류
             break;
+
+        case ERROR_CODES.ROUTE_RESULT_FAILED_COURSE:	
+            msg = "코스 탐색 실패";
+            break;
+        case ERROR_CODES.ROUTE_RESULT_FAILED_COURSE_ID:
+            msg = "코스 ID 검색 실패";
+            break;
+        case ERROR_CODES.ROUTE_RESULT_FAILED_COURSE_TYPE:
+            msg = "코스 TYPE 검색 실패";
+            break;
+
+        case ERROR_CODES.TMS_RESULT_FAILED:
+            msg = "클러스터링 실패";
+            break;
+        case ERROR_CODES.TMS_RESULT_FAILED_LOOP:
+            msg = "분배 재계산 한계 횟수 초과";
+            break;
+        case ERROR_CODES.TMS_RESULT_FAILED_MATCHING_LIMIT:
+            msg = "지정된 분배 수량내에서 배정이 실패함";
+            break;
+        case ERROR_CODES.TMS_RESULT_FAILED_MATCHING_DEVIATION:
+            msg = "지정된 편차 내의 배정이 실패함";
+            break;
+
         default:
             msg = "실패(알수 없는 오류)";
             break;
@@ -188,7 +263,8 @@ module.exports = {
     ROUTE_OPTIONS,
 
     // route avoids
-    ROUTE_AVOIDS,
+    ROUTE_AVOIDS_TRK,
+    ROUTE_AVOIDS_PED,
 
     // errors
     ERROR_CODES,

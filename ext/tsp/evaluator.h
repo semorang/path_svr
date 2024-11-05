@@ -12,26 +12,21 @@
 #include "indi.h"
 #endif
 
-#include <string.h>
-#include <assert.h>
+#include "../tms/tms.h"
+
+// #include <string.h>
+// #include <assert.h>
 #include <vector>
-#include <string>
+// #include <string>
 
-#include "../route/RoutePlan.h"
 
-using namespace std;
-
-struct stCity {
-	int nId;
-	double x;
-	double y;
-};
+// using namespace std;
 
 class TEvaluator{
 public:
 	TEvaluator();
 	~TEvaluator();
-	void setInstance(vector<stCity>& vt_cities, IN const RouteTable** ppResultTables); // sets variables
+	void setInstance(const vector<stWaypoints>& vtCities, const vector<vector<stDistMatrix>>& vtDistMatrix, const int compareType); // sets variables
 
 	void doIt( TIndi& indi ); // sets indi.fEvaluationValue
 	void writeTo( FILE* fp, TIndi& indi ); // prints out TSP solution

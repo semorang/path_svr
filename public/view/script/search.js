@@ -94,3 +94,32 @@ function displaySearchList(search) {
     listEl.appendChild(fragment);
     menuEl.scrollTop = 0;
 }
+
+
+// 키워드 검색 
+function getSearch(path, keyword) {
+    var pathname = path;
+    var search2url = pathname + '?&query=' + keyword.toString() + '&reqcount=' + 10;
+
+    $.ajax({
+        type: 'get',         // 타입 (get, post, put 등등)
+        url: search2url,       // 요청할 서버 url
+        // async: false,         // 비동기화 여부 (default : true)
+        success: function(result) {                
+            var header = result.header;
+            if (header.isSuccessful == true) {      
+                console.log("response, search data: " + result.search.totalcount)
+
+                // set search result
+                displaySearchList(result.search);
+            } else {
+                alert('err code: ' + header.resultCode + '\nerr msg: ' + header.resultMessage)
+            }
+        },
+        error: function(request, status, error) {
+            alert('통합 검색 요청 실패')
+        },
+        complete: function(xhr, status) {
+        }
+    });    
+}

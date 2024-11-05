@@ -20,9 +20,10 @@ static char THIS_FILE[] = __FILE__;
 
 CFileBuilding::CFileBuilding()
 {
-	m_nBldIdx = 0;
-	m_nFileType = TYPE_DATA_BUILDING;
+	m_nDataType = TYPE_DATA_BUILDING;
+	m_nFileType = TYPE_EXEC_POLYGON;
 	m_pFileCpx = nullptr;
+	m_nBldIdx = 0;
 }
 
 CFileBuilding::~CFileBuilding()
@@ -32,8 +33,6 @@ CFileBuilding::~CFileBuilding()
 		unordered_map<uint64_t, stBuilding>().swap(m_mapBuilding);
 	}
 }
-
-static const uint32_t g_cntLogPrint = 100000;
 
 bool CFileBuilding::ParseData(IN const char* fname)
 {
@@ -137,24 +136,20 @@ bool CFileBuilding::ParseData(IN const char* fname)
 			continue;
 		}
 
-
-#if defined(_USE_TEST_MESH)
-		bool isContinue = true;
-		for (const auto& item : g_arrTestMesh) {
-			if (item == building.keyBld.tile_id) {
-				isContinue = false;
-				break;
-			}
-		}
-		if (isContinue) continue;
-#endif
-
-
 		if (building.keyBld.tile_id <= 0) {
 			// 메쉬 오류
 			LOG_TRACE(LOG_ERROR, "Error, building mesh id not set, mesh:%d", building.keyBld.tile_id);
 			continue;
 		}
+
+
+		// 테스트 메쉬가 있으면 정의된 메쉬만 확인하자
+		if (g_isUseTestMesh && !g_arrTestMesh.empty()) {
+			if (g_arrTestMesh.find(building.keyBld.tile_id) == g_arrTestMesh.end()) {
+				continue;
+			}
+		}
+
 
 		building.keyBld = AddStringId(building.BldId.c_str(), building.keyBld.tile_id);
 		if (building.keyBld.llid == NULL_VALUE) {
@@ -162,7 +157,7 @@ bool CFileBuilding::ParseData(IN const char* fname)
 			continue;
 		}
 
-		building.keyBld.ent.type = 0; // 타입, 0:빌딩, 1:단지
+		building.keyBld.poly.type = TYPE_POLYGON_BUILDING; // 폴리곤 타입, 0:미지정, 1:빌딩, 2:단지, 3:산바운더리
 
 		if (m_mapBuilding.find(building.keyBld.llid) != m_mapBuilding.end()) {
 			// 중복
@@ -260,182 +255,6 @@ void CFileBuilding::AddDataRecord()
 }
 
 
-bool CFileBuilding::SaveData(IN const char* szFilePath)
-{
-	char szFileName[MAX_PATH] = { 0, };
-	sprintf(szFileName, "%s/%s.%s", szFilePath, g_szTypeTitle[TYPE_DATA_BUILDING], g_szTypeExec[TYPE_DATA_BUILDING]);
-
-	return CFileBase::SaveData(szFileName);
-
-
-	///////////////////////////////////////////
-	//// data
-	//FILE* fp = fopen(szFileName, "wb+");
-	//if (!fp)
-	//{
-	//	LOG_TRACE(LOG_ERROR, "Failed, can't open file for save data, file:%s", szFilePath);
-	//	return false;
-	//}
-
-
-	//// write base
-	//offFile = WriteBase(fp);
-
-	//// check offset 
-	//if (sizeof(FileBase) != offFile)
-	//{
-	//	LOG_TRACE(LOG_ERROR, "Failed, file base offset not match, base:%d vs current:%d", sizeof(FileBase), offFile);
-	//	fclose(fp);
-	//	return false;
-	//}
-
-
-	//// write header
-	//offFile += WriteHeader(fp);
-
-	//// check offset 
-	//if (m_fileHeader.offIndex != offFile)
-	//{
-	//	LOG_TRACE(LOG_ERROR, "Failed, file header offset not match, header:%d vs current:%d", m_fileHeader.offIndex, offFile);
-	//	fclose(fp);
-	//	return false;
-	//}
-
-
-	//// write index
-	//offFile += WriteIndex(fp);
-
-	//// check offset 
-	//if (m_fileHeader.offBody != offFile)
-	//{
-	//	LOG_TRACE(LOG_ERROR, "Failed, file header body offset not match, header:%d vs current:%d", m_fileHeader.offBody, offFile);
-	//	fclose(fp);
-	//	return false;
-	//}
-
-
-	//// write body
-	//offFile += WriteBody(fp, offFile);
-
-	//// check offset 
-	//if (offFile <= 0)
-	//{
-	//	LOG_TRACE(LOG_ERROR, "Failed, file body size zero");
-	//	fclose(fp);
-	//	return false;
-	//}
-
-
-	//// re-write index for body size and offset
-	//fseek(fp, m_fileHeader.offIndex, SEEK_SET);
-	//for (uint32_t idx = 0; idx < m_fileHeader.cntIndex; idx++)
-	//{
-	//	FileIndex fileIndex;
-	//	memcpy(&fileIndex, &m_vtIndex[idx], sizeof(fileIndex));
-	//	if ((retRead = fwrite(&fileIndex, sizeof(fileIndex), 1, fp)) != 1)
-	//	{
-	//		LOG_TRACE(LOG_ERROR, "Failed, can't re-write file index data, idx:%d", idx);
-	//		fclose(fp);
-	//		return false;
-	//	}
-	//}
-
-
-	//fclose(fp);
-
-
-	////LOG_TRACE(LOG_DEBUG, "Save data, total mesh cnt:%lld", cntTotalMesh);
-	////LOG_TRACE(LOG_DEBUG, "Save data, total building cnt:%lld", cntTotalBld);
-
-
-
-	//// release memory
-	//LOG_TRACE(LOG_DEBUG, "LOG, Release data");
-	//Release();
-
-	//return true;
-}
-
-
-//size_t CFileBuilding::WriteHeader(FILE* fp, FileHeader* pHeader)
-//{
-//	FileBase stFileBase = { 0, };
-//	size_t offFile = 0;
-//	size_t retWrite = 0;
-//	size_t retRead = 0;
-//	const size_t sizeHeader = sizeof(FileHeader);
-//
-//	if (!fp || !pHeader) {
-//		LOG_TRACE(LOG_ERROR, "Failed, input param null, fp:%p, pHeader:%p", fp, pHeader);
-//		return 0;
-//	}
-//
-//	memcpy(&pHeader->rtMap, GetMeshRegion(), sizeof(pHeader->rtMap));
-//	pHeader->cntIndex = GetMeshCount();
-//	pHeader->offIndex = sizeHeader;
-//	pHeader->offBody = sizeHeader + sizeof(FileIndex) * pHeader->cntIndex;
-//
-//	if ((retWrite = fwrite(pHeader, sizeHeader, 1, fp)) != 1)
-//	{
-//		LOG_TRACE(LOG_ERROR, "Failed, can't write header, written:%d", retWrite);
-//		fclose(fp);
-//		return 0;
-//	}
-//	offFile += sizeHeader;
-//
-//	LOG_TRACE(LOG_DEBUG, "Save data, header, mesh cnt:%lld", pHeader->cntIndex);
-//
-//	return offFile;
-//}
-
-
-//size_t CFileBuilding::WriteIndex(FILE* fp, vector<FileIndex>* pvtFileIndex)
-//{
-//	size_t offFile = 0;
-//	size_t retWrite = 0;
-//	size_t retRead = 0;
-//	const size_t sizeIndex = sizeof(FileIndex);
-//	FileIndex fileIndex;
-//	stMeshInfo* pMesh = nullptr;
-//
-//	if (!fp || !pvtFileIndex) {
-//		LOG_TRACE(LOG_ERROR, "Failed, input param null, fp:%p, pHeader:%p", fp, pvtFileIndex);
-//		return 0;
-//	}
-//
-//	for (uint32_t idx = 0; idx < GetMeshCount(); idx++)
-//	{
-//		pMesh = GetMeshData(idx);
-//		if (!pMesh)
-//		{
-//			LOG_TRACE(LOG_ERROR, "Failed, can't access mesh, idx:%d", idx);
-//			return 0;
-//		}
-//
-//		fileIndex.idxTile = idx;
-//		fileIndex.idTile = pMesh->mesh_id.tile_id;
-//		memcpy(&fileIndex.rtTile, &pMesh->mesh_box, sizeof(fileIndex.rtTile));
-//		memcpy(&fileIndex.rtData, &pMesh->data_box, sizeof(fileIndex.rtData));
-//		fileIndex.szBody = 0;
-//		fileIndex.offBody = 0;
-//
-//		if ((retWrite = fwrite(&fileIndex, sizeIndex, 1, fp)) != 1)
-//		{
-//			LOG_TRACE(LOG_ERROR, "Failed, can't write index[%d], written:%d", idx, retWrite);
-//			return 0;
-//		}
-//		offFile += sizeIndex;
-//
-//		// add body data info buff
-//		pvtFileIndex->push_back(fileIndex);
-//	}
-//
-//	LOG_TRACE(LOG_DEBUG, "Save data, mesh index, mesh cnt:%lld", pvtFileIndex->size());
-//
-//	return offFile;
-//}
-
-
 size_t CFileBuilding::WriteBody(FILE* fp, IN const uint32_t fileOff)
 {
 	if (!fp) {
@@ -455,7 +274,7 @@ size_t CFileBuilding::WriteBody(FILE* fp, IN const uint32_t fileOff)
 	long offItem = 0;
 	const size_t sizeFileBody = sizeof(fileBody);
 
-	uint32_t ii, jj, kk;
+	uint32_t ii, jj;
 
 	// write body - building, vertex
 	for (ii = 0; ii < GetMeshCount(); ii++)
@@ -600,171 +419,6 @@ size_t CFileBuilding::WriteBody(FILE* fp, IN const uint32_t fileOff)
 	return offFile;
 }
 
-
-bool CFileBuilding::LoadData(IN const char* szFilePath)
-{
-	char szFileName[MAX_PATH] = { 0, };
-	sprintf(szFileName, "%s/%s.%s", szFilePath, g_szTypeTitle[TYPE_DATA_BUILDING], g_szTypeExec[TYPE_DATA_BUILDING]);
-
-	return CFileBase::LoadData(szFileName);
-
-
-	// load name dic
-	size_t offFile = 0;
-	size_t offItem = 0;
-	size_t retRead = 0;
-
-	/////////////////////////////////////////
-	// name dic
-	//LoadNameData(szFilePath);
-
-
-	// load data
-	FILE* fp = fopen(szFilePath, "rb");
-	if (!fp)
-	{
-		LOG_TRACE(LOG_ERROR, "Failed, can't open file for load data, file:%s", szFilePath);
-		return false;
-	}
-
-	strcpy(m_szDataPath, szFilePath);
-
-	FileHeader fileHeader = { 0, };
-	FileIndex fileIndex = { 0, };
-	FileBody fileBody = { 0, };
-	FilePolygon fileBld = { 0, };
-
-	// read header
-	if ((retRead = fread(&fileHeader, sizeof(fileHeader), 1, fp)) != 1)
-	{
-		LOG_TRACE(LOG_ERROR, "Failed, can't read header, cnt:%d", retRead);
-		fclose(fp);
-		return false;
-	}
-
-	memcpy(&m_rtBox, &fileHeader.rtMap, sizeof(m_rtBox));
-
-	// stMeshInfo* pMesh;
-	// stPolygonInfo* pBld;
-
-	// read index
-	for (uint32_t idxTile = 0; idxTile < fileHeader.cntIndex; idxTile++)
-	{
-		fseek(fp, fileHeader.offIndex + sizeof(fileIndex) * idxTile, SEEK_SET);
-		if ((retRead = fread(&fileIndex, sizeof(fileIndex), 1, fp)) != 1)
-		{
-			LOG_TRACE(LOG_ERROR, "Failed, can't read index, idx:%d", idxTile);
-			fclose(fp);
-			return false;
-		}
-
-		m_vtIndex.push_back(fileIndex);
-
-
-
-		continue; // for using cache
-
-
-
-		//pMesh = new stMeshInfo;
-		////memset(pMesh, 0x00, sizeof(stMeshInfo));
-
-
-
-
-		//// read body
-		//if (stIndex.offBody <= 0 || stIndex.szBody <= 0)
-		//{
-		//	LOG_TRACE(LOG_ERROR, "Failed, index body info invalid, off:%d, size:%d", stIndex.offBody, stIndex.szBody);
-		//	fclose(fp);
-		//	return false;
-		//}
-
-		//fseek(fp, stIndex.offBody, SEEK_SET);
-		//if ((retRead = fread(&stBody, sizeof(stBody), 1, fp)) != 1)
-		//{
-		//	LOG_TRACE(LOG_ERROR, "Failed, can't read body, offset:%d", stIndex.offBody);
-		//	fclose(fp);
-		//	return false;
-		//}
-
-		//if (stIndex.idTile != stBody.idTile)
-		//{
-		//	LOG_TRACE(LOG_ERROR, "Failed, index tile info not match with body, index tile id:%d vs body tile id:%d", stIndex.idTile, stBody.idTile);
-		//	fclose(fp);
-		//	return false;
-		//}
-
-
-		//// mesh
-		//pMesh->mesh_id.tile_id = stIndex.idTile;
-		//memcpy(&pMesh->mesh_box, &stIndex.rtTile, sizeof(pMesh->mesh_box));
-		//memcpy(&pMesh->data_box, &stIndex.rtData, sizeof(pMesh->data_box));
-		//for (int ii = 0; ii < 8; ii++)
-		//{
-		//	if (stBody.idNeighborTile[ii] <= 0)
-		//		break;
-		//	pMesh->vtNeighbor.push_back(stBody.idNeighborTile[ii]);
-		//}
-		//AddMeshData(pMesh);
-
-
-		//// building
-		//for (int ii = 0; ii < stBody.bld.cntBld; ii++)
-		//{
-		//	// read link
-		//	if ((retRead = fread(&stBld, sizeof(stBld), 1, fp)) != 1)
-		//	{
-		//		LOG_TRACE(LOG_ERROR, "Failed, can't read bulding, mesh_id:%d, idx:%d", stIndex.idTile, ii);
-		//		fclose(fp);
-		//		return false;
-		//	}
-
-		//	pMesh->buildings.push_back(stBld.poly_id);
-
-		//	pBld = new stPolygonInfo;
-		//	
-		//	pBld->poly_id = stBld.poly_id;
-		//	memcpy(&pBld->data_box, &stBld.rtBox, sizeof(stBld.rtBox));
-		//	pBld->type = stBld.type;
-		//	pBld->height = stBld.height;
-		//	pBld->name_type = stBld.name_type;
-		//	pBld->name_val = stBld.name_val;
-		//	
-		//	// read parts
-		//	uint32_t part;
-		//	for (int jj = 0; jj < stBld.parts; jj++)
-		//	{				
-		//		if ((retRead = fread(&part, sizeof(part), 1, fp)) != 1)
-		//		{
-		//			LOG_TRACE(LOG_ERROR, "Failed, can't read parts, mesh_id:%d, buildig idx:%d, idx:%d", stIndex.idTile, ii, jj);
-		//			fclose(fp);
-		//			return false;
-		//		}
-		//		pBld->vtPts.push_back(part);
-		//	}
-
-		//	// read vertext
-		//	SPoint point;
-		//	for (int jj = 0; jj < stBld.points; jj++)
-		//	{
-		//		if ((retRead = fread(&point, sizeof(point), 1, fp)) != 1)
-		//		{
-		//			LOG_TRACE(LOG_ERROR, "Failed, can't read point, mesh_id:%d, buildig idx:%d, idx:%d", stIndex.idTile, ii, jj);
-		//			fclose(fp);
-		//			return false;
-		//		}
-		//		pBld->vtVtx.push_back(point);
-		//	}
-		//	AddBuildingData(pBld);
-		//}
-		//LOG_TRACE(LOG_DEBUG, "Data loading, building data loaded, mesh:%d, link cnt:%lld", pMesh->mesh_id.tile_id, stBody.bld.cntBld);
-	}
-
-	fclose(fp);
-
-	return true;
-}
 
 
 size_t CFileBuilding::ReadBody(FILE* fp)
@@ -1267,9 +921,9 @@ const KeyID CFileBuilding::AddStringId(IN const char* szStringId, IN const uint3
 
 	if (szStringId && ((retKey = GetIdFromStringId(szStringId)).llid == NULL_VALUE)) {
 		string strId(szStringId);
-		retKey.ent.nid = m_nBldIdx++;
-		retKey.ent.tile_id = meshId;
-		retKey.ent.type = 0; // building
+		retKey.poly.nid = m_nBldIdx++;
+		retKey.poly.tile_id = meshId;
+		retKey.poly.type = TYPE_POLYGON_BUILDING; // building
 
 		m_mapStringId.emplace(strId, retKey);
 	}
