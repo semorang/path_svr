@@ -239,8 +239,17 @@ CRoutePlan::CRoutePlan()
 	m_rpCost.vehicle.cost_lv9 = 15;
 #endif
 #endif
-
 	// 회전 가중치
+#	if defined(TARGET_FOR_FLEETUNE)
+	m_rpCost.vehicle.cost_ang0 = 0; // 직진
+	m_rpCost.vehicle.cost_ang45 = 5; // 우측
+	m_rpCost.vehicle.cost_ang90 = 10; // 우회전 
+	m_rpCost.vehicle.cost_ang135 = 15; // 급우회전 
+	m_rpCost.vehicle.cost_ang180 = 20;//600; // 유턴
+	m_rpCost.vehicle.cost_ang225 = 30; // 급좌회전 
+	m_rpCost.vehicle.cost_ang270 = 25; // 좌회전 
+	m_rpCost.vehicle.cost_ang315 = 20; // 좌측
+#	else // for fleetune
 	m_rpCost.vehicle.cost_ang0 = 0; // 직진
 	m_rpCost.vehicle.cost_ang45 = 5; // 우측
 	m_rpCost.vehicle.cost_ang90 = 20; // 우회전 
@@ -249,6 +258,7 @@ CRoutePlan::CRoutePlan()
 	m_rpCost.vehicle.cost_ang225 = 60; // 급좌회전 
 	m_rpCost.vehicle.cost_ang270 = 60; // 좌회전 
 	m_rpCost.vehicle.cost_ang315 = 60; // 좌측
+#	endif // for fleetune
 #endif //#if defined(USE_P2P_DATA)
 }
 
@@ -1383,11 +1393,11 @@ const double CRoutePlan::GetTravelCost(IN const stLinkInfo* pLink, IN const stLi
 			if ((opt == ROUTE_OPT_FASTEST || opt == ROUTE_OPT_COMFORTABLE || opt == ROUTE_OPT_MAINROAD || mobility == TYPE_MOBILITY_AUTONOMOUS)) {
 				// 경로레벨, 0:고속도로, 1:도시고속도로, 자동차전용 국도/지방도, 2:국도, 3:지방도/일반도로8차선이상, 4:일반도로6차선이상, 
 				// 5:일반도로4차선이상, 6:일반도로2차선이상, 7:일반도로1차선이상, 8:SS도로, 9:GSS도로/단지내도로/통행금지도로/비포장도로
-#if defined(USE_P2P_DATA)
+#if 0 // defined(USE_P2P_DATA)
 				if (pLink->veh.safe_zone != 0) { // 보호구역
 					secCost *= 1000;
 				} else if (pLink->veh.tunnel != 0) { // 터널
-					//secCost *= 1000;
+					secCost *= 1000;
 				} else if (pLink->veh.under_pass != 0) { // 지하도
 					secCost *= 1.5;
 				} else
@@ -6617,7 +6627,13 @@ const int CRoutePlan::MakeTabulate(IN const RequestRouteInfo* pReqInfo, IN const
 				}
 			}
 			else {
-				LOG_TRACE(LOG_DEBUG, "Failed, can't make table, rows[%02d], result:%d/%d, tick:%lld", ii, cntGoal, cntDestination, pDestTb->tickFinish - pDestTb->tickStart);
+				LOG_TRACE(LOG_DEBUG_LINE, "Failed, can't make table, rows[%02d], result:%d/%d, tick:%lld", ii, cntGoal, cntDestination, pDestTb->tickFinish - pDestTb->tickStart);
+				for (int idx = 0; idx < cntDestination; idx++) {
+					if (ppResultTables[ii][idx].nUsable == false) {
+						LOG_TRACE(LOG_DEBUG_CONTINUE, ", %d", idx);
+					}
+				}
+				LOG_TRACE(LOG_DEBUG_CONTINUE, "\n");
 			}
 
 			ret = ROUTE_RESULT_FAILED_EXPEND;

@@ -935,7 +935,7 @@ bool  CFileComplex::SetData_Complex(int idx, stComplex &getComplex_Dbf, char* co
 	case 2:		getComplex_Dbf.SdSggCode = trim(colData); break;
 	case 3:		getComplex_Dbf.MeshID = atoi(trim(colData)); break;
 	case 4: {
-		if (trim(colData) > 0) {
+		if (trim(colData) != nullptr) {
 			char* pTok = strsep(&colData, "|");
 			uint32_t idJoinedMesh;
 			while (pTok) {

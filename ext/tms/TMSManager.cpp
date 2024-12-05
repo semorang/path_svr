@@ -1782,6 +1782,10 @@ uint32_t CTMSManager::GetRequestCluster(IN const char* szRequest, OUT vector<SPo
 			tspOpt.userId = clustOpt.userId = atoi(cJSON_GetStringValue(pValue));
 		}
 
+		if (tspOpt.userId == 0 || tspOpt.userId == NULL_VALUE) {
+			tspOpt.userId = 13578642;
+		}
+
 		pValue = cJSON_GetObjectItem(root, "cache");
 		if ((pValue != NULL) && cJSON_IsNumber(pValue)) {
 			tspOpt.fileCache = clustOpt.fileCache = cJSON_GetNumberValue(pValue);
@@ -1938,6 +1942,10 @@ uint32_t CTMSManager::GetRequestBestway(IN const char* szRequest, OUT vector<SPo
 			tspOpt.userId = atoi(cJSON_GetStringValue(pValue));
 		}
 
+		if (tspOpt.userId == 0 || tspOpt.userId == NULL_VALUE) {
+			tspOpt.userId = 13578642;
+		}
+
 		pValue = cJSON_GetObjectItem(root, "cache");
 		if ((pValue != NULL) && cJSON_IsNumber(pValue)) {
 			tspOpt.fileCache = cJSON_GetNumberValue(pValue);
@@ -2019,7 +2027,7 @@ uint32_t CTMSManager::GetRequestBestway(IN const char* szRequest, OUT vector<SPo
 }
 
 
-uint32_t CTMSManager::LoadWeightMatrix(IN const char* szFileName, IN const int cntItem, IN const int sizeItem, IN const uint32_t crc, OUT vector<vector<stDistMatrix>>& vtDistMatrix)
+uint32_t CTMSManager::LoadWeightMatrix(IN const char* szFileName, IN const int cntItem, IN const int sizeItem, IN const uint32_t crc, OUT RequestRouteInfo& reqInfo, OUT vector<vector<stDistMatrix>>& vtDistMatrix)
 {
 	uint32_t ret = -1;
 
@@ -2041,6 +2049,19 @@ uint32_t CTMSManager::LoadWeightMatrix(IN const char* szFileName, IN const int c
 		if ((readRows <= 0 || readDataSize <= 0) || (readRows != cntItem) || (readDataSize != sizeItem) || readCrc != crc) {
 			LOG_TRACE(LOG_WARNING, "failed, read weight matrix, [req vs res] cnt: %d vs %d, size: %d vs %d, crc: %u vs %u", readRows, cntItem, sizeItem, readDataSize, readCrc, crc, readCrc);
 		} else {
+			// read origins
+			// coordinate
+			//for (int ii = 0; ii < readRows; ii++) {
+
+			//}
+
+			// read machings
+			// coordinate
+			// linkid
+			//for (int ii = 0; ii < readRows; ii++) {
+
+			//}
+
 			for (int ii = 0; ii < readRows; ii++) {
 				vector<stDistMatrix> vtDistMatrixRow;
 				for (int jj = 0; jj < readRows; jj++) {
@@ -2068,7 +2089,7 @@ uint32_t CTMSManager::LoadWeightMatrix(IN const char* szFileName, IN const int c
 }
 
 
-uint32_t CTMSManager::SaveWeightMatrix(IN const char* szFileName, IN const int cntItem, IN const int sizeItem, IN const uint32_t crc, IN const vector<vector<stDistMatrix>>& vtDistMatrix)
+uint32_t CTMSManager::SaveWeightMatrix(IN const char* szFileName, IN const RequestRouteInfo* pReqInfo, IN const int cntItem, IN const int sizeItem, IN const uint32_t crc, IN const vector<vector<stDistMatrix>>& vtDistMatrix)
 {
 	uint32_t ret = 0;
 
@@ -2087,6 +2108,19 @@ uint32_t CTMSManager::SaveWeightMatrix(IN const char* szFileName, IN const int c
 
 		// write data crc
 		fwrite(&crc, 1, sizeof(crc), fp);
+
+		// write origins
+		// coordinate
+		//for (int ii = 0; ii < readRows; ii++) {
+
+		//}
+
+		// write machings
+		// coordinate
+		// linkid
+		//for (int ii = 0; ii < readRows; ii++) {
+
+		//}
 
 		// write matrix
 		for (int ii = 0; ii < cntItem; ii++) {

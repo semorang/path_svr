@@ -60,8 +60,6 @@ bool CRouteManager::Initialize(void)
 		m_pTmsMgr->Initialize();
 	}
 
-	m_routeResult.Init();
-
 	InitPoints();
 
 	m_vtRouteOpt.clear();
@@ -362,7 +360,12 @@ const uint32_t CRouteManager::GetRouteResultsCount(void) const
 
 const RouteResultInfo* CRouteManager::GetRouteResult(void) const
 {
-	return &m_routeResult;
+	if (m_vtRouteResult.empty()) {
+		return nullptr;
+	} else {
+		return &m_vtRouteResult[0];
+	}
+	
 }
 
 
@@ -618,182 +621,183 @@ int CRouteManager::SingleRoute()
 	ret = DoRouting();
 #endif
 
+#if defined(USE_P2P_DATA)
+	GetCandidateRoute();
+#endif
+
 	return ret;
 }
 
 
 const int CRouteManager::GetCandidateRoute(void)
 {
-	int cntRoutes = m_vtRouteResult.size();
-	for (int ii = 0; ii < cntRoutes; ii++) {
-		vector<RouteLinkInfo> vtMPP;
-		m_pRoutePlan->GetMostProbableLink(&m_vtRouteResult[ii], vtMPP);
+	// 다중 경로가 있어도 1번째 경로의 대안 경로만 생성하자
 
-		for (const auto& candidateLink : vtMPP) {
+	vector<RouteLinkInfo> vtMPP;
+	m_pRoutePlan->GetMostProbableLink(&m_vtRouteResult[0], vtMPP);
 
-		}
+	for (const auto& candidateLink : vtMPP) {
 
-		int ret = -1;
-		const uint32_t uid = 12345678;
-		const int32_t maxRouteCount = 2; // 3;
-		const int32_t newRouteCount = min(maxRouteCount, vtMPP.size());
+	}
 
-		RequestRouteInfo reqInfos[maxRouteCount];
-		vector<RouteInfo> vtRouteInfos[maxRouteCount];
-		vector<RouteResultInfo> vtRouteResults[maxRouteCount];
-		CRoutePlan routePlans[maxRouteCount];
+	int ret = -1;
+	const uint32_t uid = 12345678;
+	const int32_t maxRouteCount = 3; // 3;
+	const int32_t newRouteCount = min(maxRouteCount, static_cast<int>(vtMPP.size()));
+
+	RequestRouteInfo reqInfos[maxRouteCount];
+	vector<RouteInfo> vtRouteInfos[maxRouteCount];
+	vector<RouteResultInfo> vtRouteResults[maxRouteCount];
+	CRoutePlan routePlans[maxRouteCount];
 
 //#if defined(USE_MULTIPROCESS)
 //#pragma omp parallel for
 //#endif
-		for (int jj = 0; jj < newRouteCount; jj++) {
-			routePlans[jj].Initialize();
-			routePlans[jj].SetDataMgr(m_pDataMgr);
-			routePlans[jj].SetRouteCost(m_pRoutePlan->GetRouteCost());
+	for (int ii = 0; ii < newRouteCount; ii++) {
+		routePlans[ii].Initialize();
+		routePlans[ii].SetDataMgr(m_pDataMgr);
+		routePlans[ii].SetRouteCost(m_pRoutePlan->GetRouteCost());
 
-			reqInfos[jj].RequestId = uid;
-			reqInfos[jj].RouteOption = m_vtRouteOpt[ii];
-			reqInfos[jj].AvoidOption = m_vtAvoidOpt[ii];
-			reqInfos[jj].MobilityOption = m_nMobilityOpt;
-			reqInfos[jj].RouteSubOption = m_routeSubOpt;
-			reqInfos[jj].StartDirIgnore = m_nDepartureDirIgnore;
-			reqInfos[jj].WayDirIgnore = m_nWaypointDirIgnore;
-			reqInfos[jj].EndDirIgnore = m_nDestinationDirIgnore;
+		reqInfos[ii].RequestId = uid;
+		reqInfos[ii].RouteOption = m_vtRouteOpt[0];
+		reqInfos[ii].AvoidOption = m_vtAvoidOpt[0];
+		reqInfos[ii].MobilityOption = m_nMobilityOpt;
+		reqInfos[ii].RouteSubOption = m_routeSubOpt;
+		reqInfos[ii].StartDirIgnore = m_nDepartureDirIgnore;
+		reqInfos[ii].WayDirIgnore = m_nWaypointDirIgnore;
+		reqInfos[ii].EndDirIgnore = m_nDestinationDirIgnore;
 
-			RouteLinkInfo linkInfo;
-			// 시작 지점 정보 변경
-			// start 
+		RouteLinkInfo linkInfo;
+		// 시작 지점 정보 변경
+		// start 
 			
-			linkInfo.init();
-			linkInfo.KeyType = TYPE_KEY_LINK;
-			linkInfo.LinkDataType = m_linkDeparture.LinkDataType;
-			linkInfo.LinkId = vtMPP[jj].LinkId;
-			linkInfo.Coord = vtMPP[jj].Coord;
-			linkInfo.MatchCoord = vtMPP[jj].Coord;
-			//linkInfo.Payed; // 유료 링크
-			linkInfo.LinkSplitIdx = 0; // 링크와 직교 접점 좌표의 링크 버텍스 idx
-			linkInfo.LinkDistToS = 0; // s로의 거리
-			linkInfo.LinkDistToE = 0; // e로의 거리
-			linkInfo.LinkDir = vtMPP[jj].LinkDir;
-			linkInfo.LinkGuideType = LINK_GUIDE_TYPE_DEPARTURE;
-			vector<SPoint> LinkVtxToS; // 좌표점에서 s버텍스, 종료링크의 경우는 FromS로 이해할것
-			vector<SPoint> LinkVtxToE; // 좌표점에서 e버텍스, 종료링크의 경우는 FromS로 이해할것
+		linkInfo.init();
+		linkInfo.KeyType = TYPE_KEY_LINK;
+		linkInfo.LinkDataType = m_linkDeparture.LinkDataType;
+		linkInfo.LinkId = vtMPP[ii].LinkId;
+		linkInfo.Coord = vtMPP[ii].Coord;
+		linkInfo.MatchCoord = vtMPP[ii].Coord;
+		//linkInfo.Payed; // 유료 링크
+		linkInfo.LinkSplitIdx = 0; // 링크와 직교 접점 좌표의 링크 버텍스 idx
+		linkInfo.LinkDistToS = 0; // s로의 거리
+		linkInfo.LinkDistToE = 0; // e로의 거리
+		linkInfo.LinkDir = vtMPP[ii].LinkDir;
+		linkInfo.LinkGuideType = LINK_GUIDE_TYPE_DEPARTURE;
+		vector<SPoint> LinkVtxToS; // 좌표점에서 s버텍스, 종료링크의 경우는 FromS로 이해할것
+		vector<SPoint> LinkVtxToE; // 좌표점에서 e버텍스, 종료링크의 경우는 FromS로 이해할것
 
-			reqInfos[jj].vtPoints.emplace_back(vtMPP[jj].Coord);
-			reqInfos[jj].vtKeyId.emplace_back(vtMPP[jj].LinkId);
-			reqInfos[jj].vtKeyType.emplace_back(TYPE_KEY_LINK); // 기본은 링크 매칭
+		reqInfos[ii].vtPoints.emplace_back(vtMPP[ii].Coord);
+		reqInfos[ii].vtKeyId.emplace_back(vtMPP[ii].LinkId);
+		reqInfos[ii].vtKeyType.emplace_back(TYPE_KEY_LINK); // 기본은 링크 매칭
 #if defined(USE_PEDESTRIAN_DATA)
 #if defined(USE_MOUNTAIN_DATA)
-			if (m_linkDeparture.LinkDataType == TYPE_LINK_DATA_TREKKING) { // 링크 속성으로 데이터 타입 변경
-				reqInfos[jj].vtLinkDataType.emplace_back(TYPE_LINK_DATA_TREKKING);
+		if (m_linkDeparture.LinkDataType == TYPE_LINK_DATA_TREKKING) { // 링크 속성으로 데이터 타입 변경
+			reqInfos[ii].vtLinkDataType.emplace_back(TYPE_LINK_DATA_TREKKING);
+		} else
+#endif
+		{
+			reqInfos[ii].vtLinkDataType.emplace_back(TYPE_LINK_DATA_PEDESTRIAN);
+		}
+#else
+		reqInfos[ii].vtLinkDataType.emplace_back(TYPE_LINK_DATA_VEHICLE);
+#endif
+
+		// 위 벡터들 통합
+		reqInfos[ii].vtPointsInfo.emplace_back(linkInfo);
+
+
+		// waypoint
+		for (const auto& waypoint : m_linkWaypoints) {
+			reqInfos[ii].vtPoints.emplace_back(waypoint.Coord);
+			reqInfos[ii].vtKeyId.emplace_back(waypoint.LinkId);
+			reqInfos[ii].vtKeyType.emplace_back(TYPE_KEY_LINK); // 기본은 링크 매칭
+#if defined(USE_PEDESTRIAN_DATA)
+#if defined(USE_MOUNTAIN_DATA)
+			if (waypoint.LinkDataType == TYPE_LINK_DATA_TREKKING) { // 링크 속성으로 데이터 타입 변경
+				reqInfos[ii].vtLinkDataType.emplace_back(TYPE_LINK_DATA_TREKKING);
 			} else
 #endif
 			{
-				reqInfos[jj].vtLinkDataType.emplace_back(TYPE_LINK_DATA_PEDESTRIAN);
+				reqInfos[ii].vtLinkDataType.emplace_back(TYPE_LINK_DATA_PEDESTRIAN);
 			}
 #else
-			reqInfos[jj].vtLinkDataType.emplace_back(TYPE_LINK_DATA_VEHICLE);
+			reqInfos[ii].vtLinkDataType.emplace_back(TYPE_LINK_DATA_VEHICLE);
 #endif
 
 			// 위 벡터들 통합
-			reqInfos[jj].vtPointsInfo.emplace_back(linkInfo);
+			reqInfos[ii].vtPointsInfo.emplace_back(waypoint);
+		} // for
 
-
-			// waypoint
-			for (const auto& waypoint : m_linkWaypoints) {
-				reqInfos[jj].vtPoints.emplace_back(waypoint.Coord);
-				reqInfos[jj].vtKeyId.emplace_back(waypoint.LinkId);
-				reqInfos[jj].vtKeyType.emplace_back(TYPE_KEY_LINK); // 기본은 링크 매칭
+		// end
+		reqInfos[ii].vtPoints.emplace_back(m_linkDestination.Coord);
+		reqInfos[ii].vtKeyId.emplace_back(m_linkDestination.LinkId);
+		reqInfos[ii].vtKeyType.emplace_back(TYPE_KEY_LINK); // 기본은 링크 매칭
 #if defined(USE_PEDESTRIAN_DATA)
 #if defined(USE_MOUNTAIN_DATA)
-				if (waypoint.LinkDataType == TYPE_LINK_DATA_TREKKING) { // 링크 속성으로 데이터 타입 변경
-					reqInfos[jj].vtLinkDataType.emplace_back(TYPE_LINK_DATA_TREKKING);
-				} else
+		if (m_linkDestination.LinkDataType == TYPE_LINK_DATA_TREKKING) { // 링크 속성으로 데이터 타입 변경
+			reqInfos[ii].vtLinkDataType.emplace_back(TYPE_LINK_DATA_TREKKING);
+		} else
 #endif
-				{
-					reqInfos[jj].vtLinkDataType.emplace_back(TYPE_LINK_DATA_PEDESTRIAN);
-				}
+		{
+			reqInfos[ii].vtLinkDataType.emplace_back(TYPE_LINK_DATA_PEDESTRIAN);
+		}
 #else
-				reqInfos[jj].vtLinkDataType.emplace_back(TYPE_LINK_DATA_VEHICLE);
+		reqInfos[ii].vtLinkDataType.emplace_back(TYPE_LINK_DATA_VEHICLE);
 #endif
 
-				// 위 벡터들 통합
-				reqInfos[jj].vtPointsInfo.emplace_back(waypoint);
+		// 위 벡터들 통합
+		reqInfos[ii].vtPointsInfo.emplace_back(m_linkDestination);
+
+
+		KeyID keyId = { 0, };
+
+		vtRouteInfos[ii].resize(reqInfos[ii].vtPoints.size());
+		vtRouteResults[ii].resize(reqInfos[ii].vtPoints.size() - 1);
+
+		if ((ret = m_pRoutePlan->DoRoutes(&reqInfos[ii], &vtRouteInfos[ii], &vtRouteResults[ii])) == ROUTE_RESULT_SUCCESS) {
+			RouteResultInfo result;
+			result.Init();
+
+			result.ResultCode = vtRouteResults[ii][0].ResultCode; // 경로 결과 코드, 0:성공, 1~:실패
+
+			result.RequestMode = vtRouteResults[ii][0].RequestMode; // 요청 모드
+			result.RequestId = vtRouteResults[ii][0].RequestId; // 요청 ID
+
+			result.RouteOption = vtRouteResults[ii][0].RouteOption; // 경로 옵션
+			result.RouteAvoid = vtRouteResults[ii][0].RouteAvoid; // 경로 회피
+
+			result.StartResultLink = vtRouteResults[ii][vtRouteResults[ii].size() - 1].StartResultLink;
+			result.EndResultLink = vtRouteResults[ii][0].EndResultLink;
+
+			RouteSummary summary;
+			for (const auto& route : vtRouteResults[ii]) {
+				// summarys
+				if (route.LinkInfo.empty()) {
+					continue; // 이종간 경로 탐색 무시된 케이스
+				}
+
+				summary.TotalDist = route.TotalLinkDist;
+				summary.TotalTime = route.TotalLinkTime;
+				result.RouteSummarys.emplace_back(summary);
+
+				// 경로선
+				boxMerge(result.RouteBox, route.RouteBox);
+				linkMerge(result.LinkVertex, route.LinkVertex);
+
+				result.LinkInfo.reserve(result.LinkInfo.size() + route.LinkInfo.size());
+				for (const auto& link : route.LinkInfo) {
+					// 경유지가 있을 경우, 전체 경로를 합치면, 개별 offset 및 거리, 시간이 누적되어 변경되어야 함.
+					// 작업 추가 필요
+					result.LinkInfo.emplace_back(link);
+				} // for
+
+				result.TotalLinkDist += route.TotalLinkDist; // 경로 전체 거리
+				result.TotalLinkCount += route.TotalLinkCount; // 경로 전체 링크 수
+				result.TotalLinkTime += route.TotalLinkTime;; // 경로 전체 소요 시간 (초)
 			} // for
 
-			// end
-			reqInfos[jj].vtPoints.emplace_back(m_linkDestination.Coord);
-			reqInfos[jj].vtKeyId.emplace_back(m_linkDestination.LinkId);
-			reqInfos[jj].vtKeyType.emplace_back(TYPE_KEY_LINK); // 기본은 링크 매칭
-#if defined(USE_PEDESTRIAN_DATA)
-#if defined(USE_MOUNTAIN_DATA)
-			if (m_linkDestination.LinkDataType == TYPE_LINK_DATA_TREKKING) { // 링크 속성으로 데이터 타입 변경
-				reqInfos[jj].vtLinkDataType.emplace_back(TYPE_LINK_DATA_TREKKING);
-			} else
-#endif
-			{
-				reqInfos[jj].vtLinkDataType.emplace_back(TYPE_LINK_DATA_PEDESTRIAN);
-			}
-#else
-			reqInfos[jj].vtLinkDataType.emplace_back(TYPE_LINK_DATA_VEHICLE);
-#endif
-
-			// 위 벡터들 통합
-			reqInfos[jj].vtPointsInfo.emplace_back(m_linkDestination);
-
-
-			KeyID keyId = { 0, };
-
-			vtRouteInfos[jj].resize(reqInfos[jj].vtPoints.size());
-			vtRouteResults[jj].resize(reqInfos[jj].vtPoints.size() - 1);
-
-			if ((ret = m_pRoutePlan->DoRoutes(&reqInfos[jj], &vtRouteInfos[jj], &vtRouteResults[jj])) == ROUTE_RESULT_SUCCESS) {
-
-				int idxNewRouteResult = m_vtRouteResult.size();
-				int cntNewRouteResult = idxNewRouteResult + 1;
-				m_vtRouteResult.resize(cntNewRouteResult);
-
-				m_vtRouteResult[idxNewRouteResult].Init();
-
-				m_vtRouteResult[idxNewRouteResult].ResultCode = vtRouteResults[jj][0].ResultCode; // 경로 결과 코드, 0:성공, 1~:실패
-
-				m_vtRouteResult[idxNewRouteResult].RequestMode = vtRouteResults[jj][0].RequestMode; // 요청 모드
-				m_vtRouteResult[idxNewRouteResult].RequestId = vtRouteResults[jj][0].RequestId; // 요청 ID
-
-				m_vtRouteResult[idxNewRouteResult].RouteOption = vtRouteResults[jj][0].RouteOption; // 경로 옵션
-				m_vtRouteResult[idxNewRouteResult].RouteAvoid = vtRouteResults[jj][0].RouteAvoid; // 경로 회피
-
-				m_vtRouteResult[idxNewRouteResult].StartResultLink = vtRouteResults[jj][vtRouteResults[jj].size() - 1].StartResultLink;
-				m_vtRouteResult[idxNewRouteResult].EndResultLink = vtRouteResults[jj][0].EndResultLink;
-
-				RouteSummary summary;
-				for (const auto& route : vtRouteResults[jj]) {
-					// summarys
-					if (route.LinkInfo.empty()) {
-						continue; // 이종간 경로 탐색 무시된 케이스
-					}
-
-					summary.TotalDist = route.TotalLinkDist;
-					summary.TotalTime = route.TotalLinkTime;
-					m_vtRouteResult[idxNewRouteResult].RouteSummarys.emplace_back(summary);
-
-					// 경로선
-					boxMerge(m_vtRouteResult[idxNewRouteResult].RouteBox, route.RouteBox);
-					linkMerge(m_vtRouteResult[idxNewRouteResult].LinkVertex, route.LinkVertex);
-
-					m_vtRouteResult[idxNewRouteResult].LinkInfo.reserve(m_vtRouteResult[idxNewRouteResult].LinkInfo.size() + route.LinkInfo.size());
-					for (const auto& link : route.LinkInfo) {
-						// 경유지가 있을 경우, 전체 경로를 합치면, 개별 offset 및 거리, 시간이 누적되어 변경되어야 함.
-						// 작업 추가 필요
-						m_vtRouteResult[idxNewRouteResult].LinkInfo.emplace_back(link);
-					} // for
-
-					m_vtRouteResult[idxNewRouteResult].TotalLinkDist += route.TotalLinkDist; // 경로 전체 거리
-					m_vtRouteResult[idxNewRouteResult].TotalLinkCount += route.TotalLinkCount; // 경로 전체 링크 수
-					m_vtRouteResult[idxNewRouteResult].TotalLinkTime += route.TotalLinkTime;; // 경로 전체 소요 시간 (초)
-				} // for
-			}
-		} // for
+			m_vtRouteResult.emplace_back(result);
+		}
 	} // for
 
 	return 0;
@@ -834,8 +838,6 @@ int CRouteManager::DoRouting(/*Packet*/)
 	int ret = -1;
 
 	const uint32_t uid = 12345678;
-
-	m_routeResult.Init();
 
 #if 0
 	if (m_linkWaypoints.empty()) {
@@ -932,42 +934,50 @@ int CRouteManager::DoRouting(/*Packet*/)
 			vector<RouteResultInfo>().swap(m_vtRouteResult);
 		}
 
-		if ((ret = m_pRoutePlan->DoRoutes(&reqInfo, &m_vtRouteInfo, &m_vtRouteResult)) == ROUTE_RESULT_SUCCESS)
+		vector<RouteInfo> vtRouteInfo;
+		vector<RouteResultInfo> vtRouteResult;
+
+		if ((ret = m_pRoutePlan->DoRoutes(&reqInfo, &vtRouteInfo, &vtRouteResult)) == ROUTE_RESULT_SUCCESS)
 		{
-			m_routeResult.ResultCode = m_vtRouteResult[0].ResultCode; // 경로 결과 코드, 0:성공, 1~:실패
+			RouteResultInfo result;
+			result.Init();
 
-			m_routeResult.RequestMode = m_vtRouteResult[0].RequestMode; // 요청 모드
-			m_routeResult.RequestId = m_vtRouteResult[0].RequestId; // 요청 ID
+			result.ResultCode = vtRouteResult[0].ResultCode; // 경로 결과 코드, 0:성공, 1~:실패
 
-			m_routeResult.RouteOption = m_vtRouteResult[0].RouteOption; // 경로 옵션
-			m_routeResult.RouteAvoid = m_vtRouteResult[0].RouteAvoid; // 경로 회피
+			result.RequestMode = vtRouteResult[0].RequestMode; // 요청 모드
+			result.RequestId = vtRouteResult[0].RequestId; // 요청 ID
 
-			m_routeResult.StartResultLink = m_vtRouteResult[m_vtRouteResult.size() - 1].StartResultLink;
-			m_routeResult.EndResultLink = m_vtRouteResult[0].EndResultLink;
+			result.RouteOption = vtRouteResult[0].RouteOption; // 경로 옵션
+			result.RouteAvoid = vtRouteResult[0].RouteAvoid; // 경로 회피
+
+			result.StartResultLink = vtRouteResult[vtRouteResult.size() - 1].StartResultLink;
+			result.EndResultLink = vtRouteResult[0].EndResultLink;
 
 			RouteSummary summary;
-			// for (int ii = m_vtRouteResult.size() - 1; ii >= 0; --ii) {
-			for (const auto& route : m_vtRouteResult) {
+			// for (int ii = vtRouteResult.size() - 1; ii >= 0; --ii) {
+			for (const auto& route : vtRouteResult) {
 				// summarys
 				summary.TotalDist = route.TotalLinkDist;
 				summary.TotalTime = route.TotalLinkTime;
-				m_routeResult.RouteSummarys.emplace_back(summary);
+				result.RouteSummarys.emplace_back(summary);
 
 				// 경로선
-				boxMerge(m_routeResult.RouteBox, route.RouteBox);
-				linkMerge(m_routeResult.LinkVertex, route.LinkVertex);
+				boxMerge(result.RouteBox, route.RouteBox);
+				linkMerge(result.LinkVertex, route.LinkVertex);
 
-				m_routeResult.LinkInfo.reserve(m_routeResult.LinkInfo.size() + route.LinkInfo.size());
+				result.LinkInfo.reserve(result.LinkInfo.size() + route.LinkInfo.size());
 				for (const auto& link : route.LinkInfo) {
 					// 경유지가 있을 경우, 전체 경로를 합치면, 개별 offset 및 거리, 시간이 누적되어 변경되어야 함.
 					// 작업 추가 필요
-					m_routeResult.LinkInfo.emplace_back(link);
+					result.LinkInfo.emplace_back(link);
 				} // for
 
-				m_routeResult.TotalLinkDist += route.TotalLinkDist; // 경로 전체 거리
-				m_routeResult.TotalLinkCount += route.TotalLinkCount; // 경로 전체 링크 수
-				m_routeResult.TotalLinkTime += route.TotalLinkTime;; // 경로 전체 소요 시간 (초)
+				result.TotalLinkDist += route.TotalLinkDist; // 경로 전체 거리
+				result.TotalLinkCount += route.TotalLinkCount; // 경로 전체 링크 수
+				result.TotalLinkTime += route.TotalLinkTime;; // 경로 전체 소요 시간 (초)
 			} // for
+
+			m_vtRouteResult.emplace_back(result);
 		}
 	}
 
@@ -1169,8 +1179,6 @@ int CRouteManager::DoComplexRouting(/*Packet*/)
 
 	const uint32_t uid = 12345678;
 
-	m_routeResult.Init();
-
 	RequestRouteInfo reqInfo;
 	reqInfo.RequestId = uid;
 	reqInfo.RouteOption = m_vtRouteOpt[0];
@@ -1240,7 +1248,6 @@ int CRouteManager::DoComplexRouting(/*Packet*/)
 	// 위 벡터들 통합
 	reqInfo.vtPointsInfo.emplace_back(m_linkDestination);
 
-
 	if (!m_vtRouteInfo.empty()) {
 		m_vtRouteInfo.clear();
 		vector<RouteInfo>().swap(m_vtRouteInfo);
@@ -1251,9 +1258,11 @@ int CRouteManager::DoComplexRouting(/*Packet*/)
 		vector<RouteResultInfo>().swap(m_vtRouteResult);
 	}
 
+	vector<RouteInfo> vtRouteInfo;
+	vector<RouteResultInfo> vtRouteResult;
 
-	m_vtRouteInfo.resize(reqInfo.vtPoints.size());
-	m_vtRouteResult.resize(reqInfo.vtPoints.size() - 1);
+	vtRouteInfo.resize(reqInfo.vtPoints.size());
+	vtRouteResult.resize(reqInfo.vtPoints.size() - 1);
 
 	// 입구점 여부 확인 필요 
 	//vector<ComplexPointInfo> vtComplexPointInfo(reqInfo.vtPoints.size());
@@ -1422,23 +1431,26 @@ int CRouteManager::DoComplexRouting(/*Packet*/)
 
 	if ((ret = m_pRoutePlan->DoComplexRoutes(&reqInfoNew, &m_vtRouteInfo, &m_vtRouteResult)) == 0)
 #else
-	if ((ret = m_pRoutePlan->DoComplexRoutesEx(&reqInfo/*, vtComplexPointInfo*/, &m_vtRouteInfo, &m_vtRouteResult)) == 0)
+	if ((ret = m_pRoutePlan->DoComplexRoutesEx(&reqInfo/*, vtComplexPointInfo*/, &vtRouteInfo, &vtRouteResult)) == 0)
 #endif
 	{
-		m_routeResult.ResultCode = m_vtRouteResult[0].ResultCode; // 경로 결과 코드, 0:성공, 1~:실패
+		RouteResultInfo result;
+		result.Init();
 
-		m_routeResult.RequestMode = m_vtRouteResult[0].RequestMode; // 요청 모드
-		m_routeResult.RequestId = m_vtRouteResult[0].RequestId; // 요청 ID
+		result.ResultCode = vtRouteResult[0].ResultCode; // 경로 결과 코드, 0:성공, 1~:실패
 
-		m_routeResult.RouteOption = m_vtRouteResult[0].RouteOption; // 경로 옵션
-		m_routeResult.RouteAvoid = m_vtRouteResult[0].RouteAvoid; // 경로 회피
+		result.RequestMode = vtRouteResult[0].RequestMode; // 요청 모드
+		result.RequestId = vtRouteResult[0].RequestId; // 요청 ID
 
-		m_routeResult.StartResultLink = m_vtRouteResult[m_vtRouteResult.size() - 1].StartResultLink;
-		m_routeResult.EndResultLink = m_vtRouteResult[0].EndResultLink;
+		result.RouteOption = vtRouteResult[0].RouteOption; // 경로 옵션
+		result.RouteAvoid = vtRouteResult[0].RouteAvoid; // 경로 회피
+
+		result.StartResultLink = vtRouteResult[vtRouteResult.size() - 1].StartResultLink;
+		result.EndResultLink = vtRouteResult[0].EndResultLink;
 
 		RouteSummary summary;
-		// for (int ii = m_vtRouteResult.size() - 1; ii >= 0; --ii) {
-		for (const auto& route : m_vtRouteResult) {
+		// for (int ii = vtRouteResult.size() - 1; ii >= 0; --ii) {
+		for (const auto& route : vtRouteResult) {
 			// summarys
 			if (route.LinkInfo.empty()) {
 				continue; // 이종간 경로 탐색 무시된 케이스
@@ -1446,23 +1458,25 @@ int CRouteManager::DoComplexRouting(/*Packet*/)
 
 			summary.TotalDist = route.TotalLinkDist;
 			summary.TotalTime = route.TotalLinkTime;
-			m_routeResult.RouteSummarys.emplace_back(summary);
+			result.RouteSummarys.emplace_back(summary);
 
 			// 경로선
-			boxMerge(m_routeResult.RouteBox, route.RouteBox);
-			linkMerge(m_routeResult.LinkVertex, route.LinkVertex);
+			boxMerge(result.RouteBox, route.RouteBox);
+			linkMerge(result.LinkVertex, route.LinkVertex);
 
-			m_routeResult.LinkInfo.reserve(m_routeResult.LinkInfo.size() + route.LinkInfo.size());
+			result.LinkInfo.reserve(result.LinkInfo.size() + route.LinkInfo.size());
 			for (const auto& link : route.LinkInfo) {
 				// 경유지가 있을 경우, 전체 경로를 합치면, 개별 offset 및 거리, 시간이 누적되어 변경되어야 함.
 				// 작업 추가 필요
-				m_routeResult.LinkInfo.emplace_back(link);
+				result.LinkInfo.emplace_back(link);
 			}
 
-			m_routeResult.TotalLinkDist += route.TotalLinkDist; // 경로 전체 거리
-			m_routeResult.TotalLinkCount += route.TotalLinkCount; // 경로 전체 링크 수
-			m_routeResult.TotalLinkTime += route.TotalLinkTime;; // 경로 전체 소요 시간 (초)
-		}
+			result.TotalLinkDist += route.TotalLinkDist; // 경로 전체 거리
+			result.TotalLinkCount += route.TotalLinkCount; // 경로 전체 링크 수
+			result.TotalLinkTime += route.TotalLinkTime;; // 경로 전체 소요 시간 (초)
+		} // for
+
+		m_vtRouteResult.emplace_back(result);
 	}
 
 	return ret;
@@ -1803,19 +1817,18 @@ int CRouteManager::GetWeightMatrix(IN const char* szRequest, OUT vector<vector<s
 	string strFileName;
 	string strWMPath = m_pDataMgr->GetDataPath();
 	strWMPath += "/usr/result_table_";
-	if (clustOpt.userId != 0) {
-		strWMPath += to_string(clustOpt.userId);
-	} else {
-		strWMPath += "1234512345";
-	}
+	strWMPath += to_string(clustOpt.userId);
 	strWMPath += ".bin";
 
 	bool isRead = false;
 	bool isWritten = false;
 	const int32_t dataSize = sizeof(stDistMatrix::nTotalDist) + sizeof(stDistMatrix::nTotalTime) + sizeof(stDistMatrix::dbTotalCost);
 
+	RequestRouteInfo reqInfo;
+	reqInfo.RequestId = clustOpt.userId;
+
 	if (clustOpt.fileCache == 1 || clustOpt.fileCache == 3) { // read, read-write
-		ret = m_pTmsMgr->LoadWeightMatrix(strWMPath.c_str(), cntOrigins, dataSize, crc, vtWeightMatrix);
+		ret = m_pTmsMgr->LoadWeightMatrix(strWMPath.c_str(), cntOrigins, dataSize, crc, reqInfo, vtWeightMatrix);
 		if (ret == ROUTE_RESULT_SUCCESS) {
 			isRead = true;
 		}
@@ -1823,11 +1836,10 @@ int CRouteManager::GetWeightMatrix(IN const char* szRequest, OUT vector<vector<s
 
 	// 캐쉬된 WM이 없으면 새로 생성
 	if (!isRead) {
-		ret = DoTabulate(vtOrigins, vtWeightMatrix);
-
+		ret = DoTabulate(vtOrigins, reqInfo, vtWeightMatrix);
 		// 테이블 데이터 미리 읽어 저장하면서 사용하자
 		if ((ret == ROUTE_RESULT_SUCCESS) && (clustOpt.fileCache == 2 || clustOpt.fileCache == 3)) { // write, read-write)) {
-			ret = m_pTmsMgr->SaveWeightMatrix(strWMPath.c_str(), cntOrigins, dataSize, crc, vtWeightMatrix);
+			ret = m_pTmsMgr->SaveWeightMatrix(strWMPath.c_str(), &reqInfo, cntOrigins, dataSize, crc, vtWeightMatrix);
 			if (ret == ROUTE_RESULT_SUCCESS) {
 				isWritten = true;
 			}
@@ -1933,19 +1945,18 @@ int CRouteManager::GetCluster(IN const char* szRequest, OUT vector<stDistrict>& 
 	// get table
 	string strWMPath = m_pDataMgr->GetDataPath();
 	strWMPath += "/usr/result_table_";
-	if (clustOpt.userId != 0) {
-		strWMPath += to_string(clustOpt.userId);
-	} else {
-		strWMPath += "1234512345";
-	}
+	strWMPath += to_string(clustOpt.userId);
 	strWMPath += ".bin";
 
 	bool isRead = false;
 	bool isWritten = false;
 	const int32_t dataSize = sizeof(stDistMatrix::nTotalDist) + sizeof(stDistMatrix::nTotalTime) + sizeof(stDistMatrix::dbTotalCost);
 
+	RequestRouteInfo reqInfo;
+	reqInfo.RequestId = clustOpt.userId;
+
 	if (clustOpt.fileCache == 1 || clustOpt.fileCache == 3) { // read, read-write
-		ret = m_pTmsMgr->LoadWeightMatrix(strWMPath.c_str(), cntOrigins, dataSize, crc, vtWeightMatrix);
+		ret = m_pTmsMgr->LoadWeightMatrix(strWMPath.c_str(), cntOrigins, dataSize, crc, reqInfo, vtWeightMatrix);
 		if (ret == ROUTE_RESULT_SUCCESS) {
 			isRead = true;
 		}
@@ -1953,11 +1964,10 @@ int CRouteManager::GetCluster(IN const char* szRequest, OUT vector<stDistrict>& 
 
 	// 캐쉬된 WM이 없으면 새로 생성
 	if (!isRead) {
-		ret = DoTabulate(vtOrigins, vtWeightMatrix);
-
+		ret = DoTabulate(vtOrigins, reqInfo, vtWeightMatrix);
 		// 테이블 데이터 미리 읽어 저장하면서 사용하자
 		if ((ret == ROUTE_RESULT_SUCCESS) && (clustOpt.fileCache == 2 || clustOpt.fileCache == 3)) { // write, read-write)) {
-			ret = m_pTmsMgr->SaveWeightMatrix(strWMPath.c_str(), cntOrigins, dataSize, crc, vtWeightMatrix);
+			ret = m_pTmsMgr->SaveWeightMatrix(strWMPath.c_str(), &reqInfo, cntOrigins, dataSize, crc, vtWeightMatrix);
 			if (ret == ROUTE_RESULT_SUCCESS) {
 				isWritten = true;
 			}
@@ -2231,19 +2241,18 @@ int CRouteManager::GetBestway(IN const char* szRequest, OUT vector<stWaypoints>&
 	// get table
 	string strWMPath = m_pDataMgr->GetDataPath();
 	strWMPath += "/usr/result_table_";
-	if (tspOpt.userId != 0) {
-		strWMPath += to_string(tspOpt.userId);
-	} else {
-		strWMPath += "1234512345";
-	}
+	strWMPath += to_string(tspOpt.userId);
 	strWMPath += ".bin";
 
 	bool isRead = false;
 	bool isWritten = false;
 	const int32_t dataSize = sizeof(stDistMatrix::nTotalDist) + sizeof(stDistMatrix::nTotalTime) + sizeof(stDistMatrix::dbTotalCost);
 
+	RequestRouteInfo reqInfo;
+	reqInfo.RequestId = tspOpt.userId;
+
 	if (tspOpt.fileCache == 1 || tspOpt.fileCache == 3) { // read, read-write
-		ret = m_pTmsMgr->LoadWeightMatrix(strWMPath.c_str(), cntOrigins, dataSize, crc, vtWeightMatrix);
+		ret = m_pTmsMgr->LoadWeightMatrix(strWMPath.c_str(), cntOrigins, dataSize, crc, reqInfo, vtWeightMatrix);
 		if (ret == ROUTE_RESULT_SUCCESS) {
 			isRead = true;
 		}
@@ -2251,11 +2260,10 @@ int CRouteManager::GetBestway(IN const char* szRequest, OUT vector<stWaypoints>&
 
 	// 캐쉬된 WM이 없으면 새로 생성
 	if (!isRead) {
-		ret = DoTabulate(vtOrigins, vtWeightMatrix);
-
+		ret = DoTabulate(vtOrigins, reqInfo, vtWeightMatrix);
 		// 테이블 데이터 미리 읽어 저장하면서 사용하자
 		if ((ret == ROUTE_RESULT_SUCCESS) && (tspOpt.fileCache == 2 || tspOpt.fileCache == 3)) { // write, read-write)) {
-			ret = m_pTmsMgr->SaveWeightMatrix(strWMPath.c_str(), cntOrigins, dataSize, crc, vtWeightMatrix);
+			ret = m_pTmsMgr->SaveWeightMatrix(strWMPath.c_str(), &reqInfo, cntOrigins, dataSize, crc, vtWeightMatrix);
 			if (ret == ROUTE_RESULT_SUCCESS) {
 				isWritten = true;
 			}
@@ -2311,9 +2319,6 @@ int CRouteManager::DoCourse(/*Packet*/)
 
 	const uint32_t uid = 12345678;
 
-	m_routeResult.Init();
-
-	
 	RequestRouteInfo reqInfo;
 	reqInfo.RequestId = uid;
 	reqInfo.RouteOption = ROUTE_OPT_SHORTEST;//m_vtRouteOpt[0]; // 추천은 속성 영향을 안받는 짧은 길 사용
@@ -2416,49 +2421,55 @@ int CRouteManager::DoCourse(/*Packet*/)
 			vector<RouteResultInfo>().swap(m_vtRouteResult);
 		}
 
+		vector<RouteInfo> vtRouteInfo;
+		vector<RouteResultInfo> vtRouteResult;
 
-		if ((ret = m_pRoutePlan->DoCourse(&reqInfo, &m_vtRouteInfo, &m_vtRouteResult)) == ROUTE_RESULT_SUCCESS) {
-			m_routeResult.ResultCode = m_vtRouteResult[0].ResultCode; // 경로 결과 코드, 0:성공, 1~:실패
+		if ((ret = m_pRoutePlan->DoCourse(&reqInfo, &vtRouteInfo, &vtRouteResult)) == ROUTE_RESULT_SUCCESS) {
+			RouteResultInfo result;
 
-			m_routeResult.RequestMode = m_vtRouteResult[0].RequestMode; // 요청 모드
-			m_routeResult.RequestId = m_vtRouteResult[0].RequestId; // 요청 ID
+			result.ResultCode = vtRouteResult[0].ResultCode; // 경로 결과 코드, 0:성공, 1~:실패
 
-			m_routeResult.RouteOption = m_vtRouteResult[0].RouteOption; // 경로 옵션
-			m_routeResult.RouteAvoid = m_vtRouteResult[0].RouteAvoid; // 경로 회피
+			result.RequestMode = vtRouteResult[0].RequestMode; // 요청 모드
+			result.RequestId = vtRouteResult[0].RequestId; // 요청 ID
 
-			m_routeResult.StartResultLink = m_vtRouteResult[m_vtRouteResult.size() - 1].StartResultLink;
-			m_routeResult.EndResultLink = m_vtRouteResult[0].EndResultLink;
+			result.RouteOption = vtRouteResult[0].RouteOption; // 경로 옵션
+			result.RouteAvoid = vtRouteResult[0].RouteAvoid; // 경로 회피
+
+			result.StartResultLink = vtRouteResult[vtRouteResult.size() - 1].StartResultLink;
+			result.EndResultLink = vtRouteResult[0].EndResultLink;
 
 			RouteSummary summary;
-			// for (int ii = m_vtRouteResult.size() - 1; ii >= 0; --ii) {
-			for (const auto& route : m_vtRouteResult) {
+			// for (int ii = vtRouteResult.size() - 1; ii >= 0; --ii) {
+			for (const auto& route : vtRouteResult) {
 				// summarys
 				summary.TotalDist = route.TotalLinkDist;
 				summary.TotalTime = route.TotalLinkTime;
-				m_routeResult.RouteSummarys.emplace_back(summary);
+				result.RouteSummarys.emplace_back(summary);
 
 				// 경로선
-				boxMerge(m_routeResult.RouteBox, route.RouteBox);
-				linkMerge(m_routeResult.LinkVertex, route.LinkVertex);
+				boxMerge(result.RouteBox, route.RouteBox);
+				linkMerge(result.LinkVertex, route.LinkVertex);
 
-				m_routeResult.LinkInfo.reserve(m_routeResult.LinkInfo.size() + route.LinkInfo.size());
+				result.LinkInfo.reserve(result.LinkInfo.size() + route.LinkInfo.size());
 				for (const auto& link : route.LinkInfo) {
 					// 경유지가 있을 경우, 전체 경로를 합치면, 개별 offset 및 거리, 시간이 누적되어 변경되어야 함.
 					// 작업 추가 필요
-					m_routeResult.LinkInfo.emplace_back(link);
+					result.LinkInfo.emplace_back(link);
 				} // for
 
-				m_routeResult.TotalLinkDist += route.TotalLinkDist; // 경로 전체 거리
-				m_routeResult.TotalLinkCount += route.TotalLinkCount; // 경로 전체 링크 수
-				m_routeResult.TotalLinkTime += route.TotalLinkTime;; // 경로 전체 소요 시간 (초)
+				result.TotalLinkDist += route.TotalLinkDist; // 경로 전체 거리
+				result.TotalLinkCount += route.TotalLinkCount; // 경로 전체 링크 수
+				result.TotalLinkTime += route.TotalLinkTime;; // 경로 전체 소요 시간 (초)
 			} // for
+
+			m_vtRouteResult.emplace_back(result);
 		}
 	}
 
 	return ret;
 }
 
-int CRouteManager::DoTabulate(IN const vector<SPoint>vtOrigins, OUT vector<vector<stDistMatrix>>& vtDistMatrix)
+int CRouteManager::DoTabulate(IN const vector<SPoint>vtOrigins, OUT RequestRouteInfo& reqInfo, OUT vector<vector<stDistMatrix>>& vtDistMatrix)
 {
 	int ret = -1;
 
@@ -2527,12 +2538,9 @@ int CRouteManager::DoTabulate(IN const vector<SPoint>vtOrigins, OUT vector<vecto
 
 	SetRouteOption(vtRouteOpt, vtAvoidOpt, nMobility);
 
-	const uint32_t uid = 12345678;
-
-	m_routeResult.Init();
-
-	RequestRouteInfo reqInfo;
-	reqInfo.RequestId = uid;
+	if ((reqInfo.RequestId == 0) || (reqInfo.RequestId == NULL_VALUE)){
+		reqInfo.RequestId = 13578642;
+	}
 	reqInfo.RouteOption = m_vtRouteOpt[0];
 	reqInfo.AvoidOption = m_vtAvoidOpt[0];
 	reqInfo.MobilityOption = m_nMobilityOpt;

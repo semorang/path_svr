@@ -124,5 +124,6 @@ const uint16_t setPassCode(const char* szPassCode);
 const uint16_t getPassCode(IN const uint16_t currentLinkPassCode, IN const int32_t idxCurrentPass);
 const int32_t getNextPassCode(IN const KeyID currentLinkId, IN const KeyID nextLinkId, IN const stNodeInfo* pNode, IN const int32_t processDepth = -1, IN CDataManager* pDataMgr = nullptr);
 const int32_t getPrevPassCode(IN const KeyID currentLinkId, IN const KeyID prevLinkId, IN const stNodeInfo* pNode, IN const int32_t processDepth = -1, IN CDataManager* pDataMgr = nullptr);
-
 const int32_t getPrevPassCode(IN const stNodeInfo* pNode, IN const KeyID prevLinkId, IN CDataManager* pDataMgr);
+const bool checkNextLinkIsolated(IN const stLinkInfo* pLink, CDataManager* pDataMgr);
+const bool checkPrevLinkIsolated(IN const stLinkInfo* pLink, CDataManager* pDataMgr);

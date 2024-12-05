@@ -670,7 +670,7 @@ void DoMultiRoute(const FunctionCallbackInfo<Value>& args) {
       // m_pRouteMgr.SetRouteOption(opt, avoid, mobility);
    }
 
-   #if defined(USE_MOUNTAIN_DATA)
+#if defined(USE_MOUNTAIN_DATA)
    if (cntRoute > 1) {
       ret = m_pRouteMgr.Route(cntRoute);
    } else {
@@ -821,7 +821,7 @@ void GetMapsRouteResult(const FunctionCallbackInfo<Value>& args) {
 
    string strJson;
    const RouteResultInfo* pResult = m_pRouteMgr.GetRouteResult();
-  
+
    if (pResult == nullptr) {
       m_pRoutePkg.GetErrorResult(ROUTE_RESULT_FAILED, strJson);
    } else {
@@ -832,18 +832,37 @@ void GetMapsRouteResult(const FunctionCallbackInfo<Value>& args) {
 }
 
 
-void GetOptimalPosition(const FunctionCallbackInfo<Value>& args) {
+void GetMapsMultiRouteResult(const FunctionCallbackInfo<Value>& args) {
    Isolate* isolate = args.GetIsolate();
    Local<Context> context = isolate->GetCurrentContext();
 
-   LOG_TRACE(LOG_DEBUG, "Start find optimal location.");
+   string strJson;
+   int cntRoutes = m_pRouteMgr.GetRouteResultsCount();
+
+   if (cntRoutes <= 0) {
+      m_pRoutePkg.GetErrorResult(ROUTE_RESULT_FAILED, strJson);
+   } else if (cntRoutes <= 1) {
+      const RouteResultInfo* pResult = m_pRouteMgr.GetRouteResult();
+      m_pRoutePkg.GetMapsRouteResult(pResult, strJson);
+   } else {
+      const vector<RouteResultInfo>* pResults = m_pRouteMgr.GetMultiRouteResults();
+      m_pRoutePkg.GetMapsMultiRouteResult(*pResults, strJson);
+   }
+
+   args.GetReturnValue().Set(String::NewFromUtf8(isolate, strJson.c_str()).ToLocalChecked());
+}
+
+
+void GetOptimalPosition(const FunctionCallbackInfo<Value>& args) {
+   Isolate* isolate = args.GetIsolate();
+   Local<Context> context = isolate->GetCurrentContext();
 
    string strJson;
 
    int cnt = args.Length();
 
    if (cnt < 2) {
-      LOG_TRACE(LOG_DEBUG, "function call argument too short : %s", args);
+      LOG_TRACE(LOG_DEBUG, "Request Error, function call argument too short : %d, %s", args.Length(), args);
 
       m_pRoutePkg.GetErrorResult(OPTIMAL_RESULT_FAILED_WRONG_PARAM, strJson);
    } else {      
@@ -874,7 +893,7 @@ void GetOptimalPosition(const FunctionCallbackInfo<Value>& args) {
          nOption = args[5].As<Number>()->Value();
       }
 
-      LOG_TRACE(LOG_DEBUG, "Request, Location lng:%f, lat:%f, ent_type:%d, ret_cnt:%d, expand:%d, option:%d", lng, lat, entType, retCount, isExpand, nOption);
+      LOG_TRACE(LOG_DEBUG, "Request, lng:%f, lat:%f, ent_type:%d, ret_cnt:%d, expand:%d, option:%d", lng, lat, entType, retCount, isExpand, nOption);
 
       stReqOptimal reqOpt = {0, };
       stOptimalPointInfo optInfo = {0, };
@@ -887,6 +906,12 @@ void GetOptimalPosition(const FunctionCallbackInfo<Value>& args) {
       uint32_t cntItems = m_pDataMgr.GetOptimalPointDataByPoint(lng, lat, &optInfo, entType, retCount, 1, 0, nOption);
 
       m_pRoutePkg.GetOptimalPosition(&reqOpt, &optInfo, strJson);
+
+      if (cntItems > 0) {
+         LOG_TRACE(LOG_DEBUG, "Result, cnt:%d, lng:%f, lat:%f, dist:%d, ang:%d", cntItems, optInfo.vtEntryPoint[0].x, optInfo.vtEntryPoint[0].y, static_cast<int32_t>(optInfo.vtEntryPoint[0].dwDist), optInfo.vtEntryPoint[0].nAngle);
+      } else {
+         LOG_TRACE(LOG_DEBUG, "Result, failed, cnt:0");
+      }
    }
 
    if (!strJson.empty()) {
@@ -905,13 +930,15 @@ void GetTable(const FunctionCallbackInfo<Value>& args) {
    string strJson;
 
    if (args.Length() < 1) {
-      LOG_TRACE(LOG_WARNING, "GetTable arg to short, length : %d", args.Length());
+      LOG_TRACE(LOG_DEBUG, "Request Error, function call argument too short : %d, %s", args.Length(), args);
 
       m_pRoutePkg.GetErrorResult(ROUTE_RESULT_FAILED_WRONG_PARAM, strJson);
    }
    else {
       String::Utf8Value pRequest(isolate, args[0]);
       string strRequest = *pRequest;
+
+      // request
       
       // get table
       vector<vector<stDistMatrix>> vtWeightMatrix;
@@ -925,6 +952,8 @@ void GetTable(const FunctionCallbackInfo<Value>& args) {
       
       vtWeightMatrix.clear();
       vector<vector<stDistMatrix>>().swap(vtWeightMatrix);
+
+      // result
    }
 
    /*
@@ -1167,13 +1196,16 @@ void UpdateTraffic(const FunctionCallbackInfo<Value>& args) {
 void init(Local<Object> exports) {
 
 #if defined(USE_MULTIPROCESS)
-   if (omp_get_max_threads() > PROCESS_NUM) {
-	   omp_set_num_threads(PROCESS_NUM);
-      printf("Check OpenMP reset threads num to %d\n", omp_get_max_threads());
-   } else {
-      printf("Check OpenMP threads num : %d\n", omp_get_max_threads());
-   }
-   printf("Check OpenMP thread ids : ");
+   int numThreads = min(omp_get_num_procs() - 1, PROCESS_NUM);
+   omp_set_num_threads(numThreads);
+   printf("OMP thread num %d", omp_get_num_threads());
+   // if (omp_get_max_threads() > PROCESS_NUM) {
+	//    omp_set_num_threads(PROCESS_NUM);
+   //    printf("Check OpenMP reset threads num to %d\n", omp_get_max_threads());
+   // } else {
+   //    printf("Check OpenMP threads num : %d\n", omp_get_max_threads());
+   // }
+   printf("OMP thread ids : ");
 #pragma omp parallel
    printf("%d ", omp_get_thread_num());
    printf("\n");
@@ -1196,6 +1228,7 @@ void init(Local<Object> exports) {
    NODE_SET_METHOD(exports, "getroute", GetRouteResult);
    NODE_SET_METHOD(exports, "getmultiroute", GetMultiRouteResult);
    NODE_SET_METHOD(exports, "getmapsroute", GetMapsRouteResult);
+   NODE_SET_METHOD(exports, "getmapsmultiroute", GetMapsMultiRouteResult);
    NODE_SET_METHOD(exports, "gettable", GetTable);
    NODE_SET_METHOD(exports, "getcluster", GetCluster);
    NODE_SET_METHOD(exports, "getcluster_for_geoyoung", GetCluster_for_geoyoung);   

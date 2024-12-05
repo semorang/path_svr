@@ -185,6 +185,9 @@ const cur_ip = require("ip");
 const cur_port = (process.env.PED_SVR_PORT === undefined) ? 77777 : process.env.PED_SVR_PORT;
 const cur_pid = process.pid;
 const start_time = new Date();
+const backlog_cnt = 100; // 대기열 크기 설정, 기본값:120
+const req_timeout = 20000; // 요청(대기열포함) 타임아웃: 20초, 기본값:2분(120000)
+const keepalive_timeout = 5000; // 연결 유지 타임아웃: 5초, 기본값:5초(5000)
 
 const server = app.listen(cur_port, function () {
     var cur_date = new Date();
@@ -200,7 +203,7 @@ const server = app.listen(cur_port, function () {
     // logout("start walk routing server addr "  + cur_ip.address() + ":" + cur_port + " on " + os.type());
 });
 
-server.headersTimeout = 10 * 1000; //10s
+server.timeout = req_timeout;
 
 
 // http.createServer(app).listen(cur_port, '0.0.0.0', function () { //http://133.186.212.20:9095/

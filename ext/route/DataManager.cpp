@@ -1630,6 +1630,15 @@ stLinkInfo * CDataManager::GetLinkDataByPointAround(IN const double lng, IN cons
 					continue;
 				}
 
+				// 링크 고립 체크
+#if defined(TARGET_FOR_FLEETUNE)
+				if (checkNextLinkIsolated(pLink, this) != true) {
+					if (checkPrevLinkIsolated(pLink, this) != true) {
+						continue;
+					}
+				}
+#endif
+
 #pragma omp critical
 				if (minDist < retDist) {
 					retLink = pLink;

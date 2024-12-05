@@ -537,8 +537,11 @@ time_t LOG_TRACE(LOG_LEVEL lvl, const char *fmt, ...)
 
 
 	// print head
+#if defined(_WIN32)
 	log_print_head(lvl, szBuff, logNow);
-	
+#else 
+	log_print_head(lvl, logNow);
+#endif
 
 	// print body
 	//log_print_body();

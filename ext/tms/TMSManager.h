@@ -2,6 +2,7 @@
 
 #include "../include/MapDef.h"
 #include "../route/DataManager.h"
+#include "../route/RoutePlan.h"
 #if 1 //!defined(USE_REAL_ROUTE_TSP)
 #include "../tsp/environment.h"
 #endif
@@ -46,8 +47,8 @@ public:
 
 	uint32_t GetRequestCluster(IN const char* szRequest, OUT vector<SPoint>& vtOrigin, OUT TspOptions& tspOpt, OUT ClusteringOptions& clustOpt);
 	uint32_t GetRequestBestway(IN const char* szRequest, OUT vector<SPoint>& vtOrigin, OUT TspOptions& tspOpt);
-	uint32_t LoadWeightMatrix(IN const char* szFileName, IN const int cntItem, IN const int sizeItem, IN const uint32_t crc, OUT vector<vector<stDistMatrix>>& vtDistMatrix);
-	uint32_t SaveWeightMatrix(IN const char* szFileName, IN const int cntItem, IN const int sizeItem, IN const uint32_t crc, IN const vector<vector<stDistMatrix>>& vtDistMatrix);
+	uint32_t LoadWeightMatrix(IN const char* szFileName, IN const int cntItem, IN const int sizeItem, IN const uint32_t crc, OUT RequestRouteInfo& reqInfo, OUT vector<vector<stDistMatrix>>& vtDistMatrix);
+	uint32_t SaveWeightMatrix(IN const char* szFileName, IN const RequestRouteInfo* pReqInfo, IN const int cntItem, IN const int sizeItem, IN const uint32_t crc, IN const vector<vector<stDistMatrix>>& vtDistMatrix);
 
 private:
 	bool Clustering(IN const ClusteringOptions* pClustOpt, IN const vector<vector<stDistMatrix>>& vtDistMatrix, IN const vector<stWaypoints>& vtWaypoints, IN const vector<uint32_t>& vtBestway, IN const int32_t nBonusValue,  OUT vector<stDistrict>& vtClusters);

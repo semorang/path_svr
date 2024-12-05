@@ -191,17 +191,16 @@ app.get('/view/route', function(req, res) {
 
 
 // 최적지점API
-app.get('/optimalposition', function(req, res) {
+app.get('/optimalposition', timeout('5s'), function(req, res) {
     res.redirect(url.format({
         pathname: "/api/optimalposition",
         query: req.query
     }));
 });
 
-app.get('/api/optimalposition', function(req, res) {
-    let startTime = logout("start optimalposition request");
+app.get('/api/optimalposition', timeout('5s'), function(req, res) {
+    let startTime = logout("start optimalposition, ip : " + request_ip.getClientIp(req));
 
-    logout("client IP : " + request_ip.getClientIp(req));
     logout("client req : " + JSON.stringify(req.query));
 
     let type = "0";
@@ -226,21 +225,21 @@ app.get('/api/optimalposition', function(req, res) {
 
     let ret = route.optimalposition(req);
 
-    logout("result : " + ((ret.header.resultCode == 0) ? "success" : "failed") + ", code : " + ret.header.resultCode);
-    if (ret.header.resultCode != 0) {
-        logout('최적지점 검색 실패 : ' + ret.header.resultMessage);
+    if (ret.header.resultCode == 0) {
+        logout("result: success, code: " + ret.header.resultCode + ", cnt: " + ret.data.count);
+    } else {
+        logout("result: failed, code: " + ret.header.resultCode + ", msg: " + ret.header.resultMessage);
     }
 
     res.send(ret);
 
-    logout("end optimalposition request", startTime);
+    logout("end optimalposition, ", startTime);
 });
 
 
-app.get('/view/optimalposition', function(req, res) {
-    let startTime = logout("start optimal(view) request");
+app.get('/view/optimalposition', timeout('5s'), function(req, res) {
+    let startTime = logout("start optimal(view), ip : " + request_ip.getClientIp(req));
 
-    logout("client IP : " + request_ip.getClientIp(req));
     logout("client req : " + JSON.stringify(req.query));
 
     let type = "0";
@@ -280,7 +279,7 @@ app.get('/view/optimalposition', function(req, res) {
         }
     }
 
-    logout("end optimal(view) request", startTime);
+    logout("end optimal(view), ", startTime);
 });
 
 
@@ -288,6 +287,9 @@ const cur_ip = require("ip");
 const cur_port = (process.env.OPT_SVR_PORT === undefined) ? 20301 : process.env.OPT_SVR_PORT;
 const cur_pid = process.pid;
 const start_time = new Date();
+const backlog_cnt = 100; // 대기열 크기 설정, 기본값:120
+const req_timeout = 20000; // 요청(대기열포함) 타임아웃: 20초, 기본값:2분(120000)
+const keepalive_timeout = 5000; // 연결 유지 타임아웃: 5초, 기본값:5초(5000)
 
 const server = app.listen(cur_port, function () {
     var data_path = process.env.DATA_PATH;
@@ -304,7 +306,8 @@ const server = app.listen(cur_port, function () {
     // addon.logout("start optimal position server addr "  + cur_ip.address() + ":" + cur_port + " on " + os.type());
 });
 
-server.headersTimeout = 5 * 1000; //10s
+server.timeout = req_timeout;
+//server.headersTimeout = 5 * 1000; //10s
 
 
 // http.createServer(app).listen(cur_port, '0.0.0.0', function () { //http://133.186.212.20:9095/

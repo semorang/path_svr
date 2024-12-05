@@ -49,8 +49,9 @@ public:
 
 	void GetErrorResult(IN const int32_t err_code, OUT string& strJson);
 	void GetRouteResult(IN const RouteResultInfo* pResult, IN const bool isJunction, OUT string& strJson);
-	void GetMultiRouteResult(IN const vector<RouteResultInfo>& vtRouteResults, IN const bool isJunction, OUT string& strResult);
-	void GetMapsRouteResult(IN const RouteResultInfo* pResult, OUT string& strResult);
+	void GetMultiRouteResult(IN const vector<RouteResultInfo>& vtRouteResults, IN const bool isJunction, OUT string& strJson);
+	int32_t GetMapsRouteResult(IN const RouteResultInfo* pResult, OUT string& strJson);
+	int32_t GetMapsMultiRouteResult(IN const vector<RouteResultInfo>& vtRouteResults, OUT string& strJson);
 	void GetClusteringResult(IN const vector<stDistrict>& vtClusters, IN const vector<SPoint>& vtPositionLock, OUT string& strJson);
 	void GetBoundaryResult(IN const vector<SPoint>& vtBoundary, OUT string& strJson);
 	void GetBestWaypointResult(IN const vector<stWaypoints>& vtWaypoints, IN const vector<uint32_t>& vtBestWaypoints, IN const double dist, IN const int32_t time, OUT string& strJson);
@@ -69,5 +70,6 @@ private:
 	CDataManager* m_pDataMgr;
 
 	bool GetRouteResultJson(IN const RouteResultInfo* pResult, IN const time_t time, IN const bool isJunction, OUT void* pJson);
+	bool GetMapsRouteResultJson(IN const RouteResultInfo* pResult, IN const time_t time, OUT void* pJson);
 };
 

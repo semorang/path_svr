@@ -131,6 +131,37 @@ bool getPointByDistance(IN const double slng, IN const double slat, IN OUT doubl
 }
 
 
+// 두점 사이의 중심에서 수직으로 일정 거리 떨어진 지점의 좌표 계산
+bool getPointByDistanceFromCenter(IN const double slng, IN const double slat, IN const double& elng, IN const double& elat, IN const double lDistance, IN const bool isRight, OUT double& x, OUT double& y)
+{
+	// 중간점 계산
+	double xm = (slng + elng) / 2.0;
+	double ym = (slat + elat) / 2.0;
+
+	// 두 점 사이의 거리 계산
+	double dx, dy;
+	if (isRight) {
+		dx = slng - elng;
+		dy = slat - elat;
+	} else {
+		dx = elng - slng;
+		dy = elat - slat;
+	}
+
+	double length = std::sqrt(dx * dx + dy * dy);
+
+	if (length == 0.f) {
+		return false;
+	}
+
+	// 수직 방향으로 이동한 좌표 계산
+	x = xm - lDistance * dy / length;
+	y = ym + lDistance * dx / length;
+
+	return true;
+}
+
+
 bool isInBox(IN const double lon, IN const double lat, IN const SBox& inBox, IN const double inMargin)
 {
 	if (lon < inBox.Xmin - inMargin) return false;

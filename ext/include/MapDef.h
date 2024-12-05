@@ -11,6 +11,7 @@
 #include <memory>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdexcept>
 #include <time.h>
 #include <cstring>
 
@@ -38,9 +39,10 @@ using namespace std;
 #endif
 
 
-#define USE_ROUTE_TABLE_LEVEL	7 // 7(1차선이상일반도로) 레벨보다 낮아지면 도로 확장이 어려워짐.
+#define USE_ROUTE_TABLE_LEVEL	7 // 7(1차선이상일반도로) 레벨보다 낮아지면 도로 확장이 어려워짐. 수도권 50 POI 수행 시간 : LV6/교통 == 약 13s/177s, LV7/교통 = 약 33s/244s
 //#define __USE_TEMPLETE // 템플릿 사용
 
+//#define TARGET_FOR_FLEETUNE // 플리튠
 //#define TARGET_FOR_KAKAO_VX // 카카오VX제공
 //#define USE_OPTIMAL_POINT_API // 최적 지점 API
 #define USE_ROUTING_POINT_API // 경로 탐색 API
@@ -57,7 +59,7 @@ using namespace std;
 //#	define USE_PEDESTRIAN_DATA // 보행자/자전거 데이터
 #	define USE_VEHICLE_DATA // 차량 데이터
 #	define USE_P2P_DATA // P2P 데이터
-//#	define define USE_SAMSUNG_HEAVY // 삼성 중공업 데이터
+//#	define USE_SAMSUNG_HEAVY // 삼성 중공업 데이터
 #endif
 
 
@@ -101,20 +103,24 @@ typedef struct tagRECT
 
 #if defined(USE_P2P_DATA)
 // 0.0.4 add ttl_id & change data file names
+// 0.0.5 add to coordinate for inavi air navigation
+// 0.0.6 add candidate route
 #define ENGINE_VERSION_MAJOR	0
 #define ENGINE_VERSION_MINOR	0
-#define ENGINE_VERSION_PATCH	4
+#define ENGINE_VERSION_PATCH	5
 #define ENGINE_VERSION_BUILD	0
 #elif defined(USE_OPTIMAL_POINT_API)
 #define ENGINE_VERSION_MAJOR	1
 #define ENGINE_VERSION_MINOR	0
-#define ENGINE_VERSION_PATCH	10
+#define ENGINE_VERSION_PATCH	12
 #define ENGINE_VERSION_BUILD	0
 // 1.0.6 fix road param setting, and bycicle -> bicicle
 // 1.0.7 add optimal point angle attribute when data compile step, with data v1.0.3
 // 1.0.8 file execute name change
 // 1.0.9 change avoid road pass code type 3 -> 4
 // 1.0.10 fix optimal polygon check compare with building and complex 
+// 1.0.11 change max multi core max -> max - 1 
+// 1.0.12 fix cjson print free after using result
 #elif defined(USE_ROUTING_POINT_API)
 #	if defined(USE_FOREST_DATA)
 // 0.0.5 add multi modal route (forest entrance + pedestrian)
@@ -134,7 +140,7 @@ typedef struct tagRECT
 #define ENGINE_VERSION_MINOR	0
 #define ENGINE_VERSION_PATCH	1
 #define ENGINE_VERSION_BUILD	0
-#	else // USE_PEDESTRIAN_DATA
+#	elif defined(USE_PEDESTRIAN_DATA)
 // 0.0.6 add charging link attribute
 // 0.0.7 fix waypoint guide-type value 3->2
 // 0.0.8 use ttl_id
@@ -143,6 +149,15 @@ typedef struct tagRECT
 #define ENGINE_VERSION_PATCH	8
 #define ENGINE_VERSION_BUILD	0
 // 0.0.4 add junction option, fix pedestrian cost value
+#	else // defined(USE_VEHICLE_DATA)
+// 0.0.6 add charging link attribute
+// 0.0.7 fix waypoint guide-type value 3->2
+// 0.0.8 use ttl_id
+// 0.0.9 add link isolate check and avoid matching (for tms)
+#define ENGINE_VERSION_MAJOR	0
+#define ENGINE_VERSION_MINOR	0
+#define ENGINE_VERSION_PATCH	9
+#define ENGINE_VERSION_BUILD	0
 #	endif
 #else
 #define ENGINE_VERSION_MAJOR	1

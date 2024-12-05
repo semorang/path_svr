@@ -1123,7 +1123,16 @@ const int32_t getNextPassCode(IN const KeyID currentLinkId, IN const KeyID nextL
 		KeyID nextNodeId = { 0 };
 
 		pNextLink = pDataMgr->GetVLinkDataById(nextLinkId);
-		if (pNextLink != nullptr) {
+		
+		// reset
+		retPass = PASS_CODE_DISABLE;
+
+#if defined(TARGET_FOR_FLEETUNE)
+		if ((pNextLink != nullptr) && (pNextLink->veh.level <= USE_ROUTE_TABLE_LEVEL))
+#else
+		if (pNextLink != nullptr)
+#endif
+		{
 			// 양방의 경우, 현재 링크 노드의 반대 노드 구하기
 			// 일방의 경우에는 현재 링크가 다음 노드로 진입 가능한지 여부 확인
 			if (pNextLink->veh.pass_code == 1) { // 양방향
@@ -1152,7 +1161,7 @@ const int32_t getNextPassCode(IN const KeyID currentLinkId, IN const KeyID nextL
 		// 출발지의 방향성으로 설정시, 진출이 불가한 (다음 링크에서 회전 불가 등) 경우 확인
 		if (pNextNode && (pNextNode->base.connnode_count >= 1)) {
 			for (int ii = 0; ii < pNextNode->base.connnode_count; ii++) {
-				if ((retPass = getNextPassCode(nextLinkId, pNextNode->connnodes[ii], pNextNode, processDepth + 1)) != PASS_CODE_DISABLE) {
+				if ((retPass = getNextPassCode(nextLinkId, pNextNode->connnodes[ii], pNextNode, processDepth + 1, pDataMgr)) != PASS_CODE_DISABLE) {
 					break;
 				}
 			} // for
@@ -1174,7 +1183,12 @@ const int32_t getNextPassCode(IN const stNodeInfo* pNode, IN const KeyID nextLin
 		for (int ii = 0; ii < pNode->base.connnode_count; ii++) {
 			pNextLink = pDataMgr->GetLinkDataById(nextLinkId, pNode->base.node_type);
 
-			if (pNextLink != nullptr) {
+#if defined(TARGET_FOR_FLEETUNE)
+			if ((pNextLink != nullptr) && (pNextLink->veh.level <= USE_ROUTE_TABLE_LEVEL))
+#else
+			if (pNextLink != nullptr)
+#endif
+			{
 				// 양방의 경우, 현재 링크 노드의 반대 노드 구하기
 				// 일방의 경우에는 현재 링크가 다음 노드로 진입 가능한지 여부 확인
 				if (pNextLink->veh.pass_code == 1) { // 양방향
@@ -1256,7 +1270,16 @@ const int32_t getPrevPassCode(IN const KeyID currentLinkId, IN const KeyID prevL
 		KeyID prevNodeId = { 0 };
 
 		pPrevLink = pDataMgr->GetVLinkDataById(prevLinkId);
-		if (pPrevLink != nullptr) {			
+
+		// reset
+		retPass = PASS_CODE_DISABLE;
+
+#if defined(TARGET_FOR_FLEETUNE)
+		if ((pPrevLink != nullptr) && (pPrevLink->veh.level <= USE_ROUTE_TABLE_LEVEL))
+#else
+		if (pPrevLink != nullptr)
+#endif
+		{			
 			// 양방의 경우, 현재 링크 노드의 반대 노드 구하기
 			// 일방의 경우에는 다음 링크가 현재 노드로 진입 가능한지 여부 확인
 			if (pPrevLink->veh.pass_code == 1) { // 양방향
@@ -1281,7 +1304,7 @@ const int32_t getPrevPassCode(IN const KeyID currentLinkId, IN const KeyID prevL
 		// 목적지의 방향성으로 설정시, 진입이 불가한 (이전 링크에서 회전 불가 등) 경우 확인
 		if (pPrevNode && (pPrevNode->base.connnode_count >= 1)) {
 			for (int ii = 0; ii < pPrevNode->base.connnode_count; ii++) {
-				if ((retPass = getPrevPassCode(prevLinkId, pPrevNode->connnodes[ii], pPrevNode, processDepth + 1)) != PASS_CODE_DISABLE) {
+				if ((retPass = getPrevPassCode(prevLinkId, pPrevNode->connnodes[ii], pPrevNode, processDepth + 1, pDataMgr)) != PASS_CODE_DISABLE) {
 					break;
 				}
 			} // for
@@ -1303,7 +1326,12 @@ const int32_t getPrevPassCode(IN const stNodeInfo* pNode, IN const KeyID prevLin
 		for (int ii = 0; ii < pNode->base.connnode_count; ii++) {
 			pPrevLink = pDataMgr->GetLinkDataById(prevLinkId, pNode->base.node_type);
 
-			if (pPrevLink != nullptr) {
+#if defined(TARGET_FOR_FLEETUNE)
+			if ((pPrevLink != nullptr) && (pPrevLink->veh.level <= USE_ROUTE_TABLE_LEVEL))
+#else
+			if (pPrevLink != nullptr)
+#endif
+			{
 				// 양방의 경우, 현재 링크 노드의 반대 노드 구하기
 				// 일방의 경우에는 다음 링크가 현재 노드로 진입 가능한지 여부 확인
 				if (pPrevLink->veh.pass_code == 1) { // 양방향
@@ -1323,4 +1351,90 @@ const int32_t getPrevPassCode(IN const stNodeInfo* pNode, IN const KeyID prevLin
 	}
 
 	return retPass;
+}
+
+
+// 현재 링크에서 depth만큼 진출 가능한지 확인
+const bool checkNextLinkIsolated(IN const stLinkInfo* pLink, CDataManager* pDataMgr)
+{
+	bool ret = false;
+
+	if (pLink != nullptr && pLink->link_id.llid != NULL_VALUE && pDataMgr != nullptr) {
+		// snode
+		stNodeInfo* pNode = pDataMgr->GetVNodeDataById(pLink->snode_id);
+		if (pNode != nullptr) {
+			for (int ii = 0; ii < pNode->base.connnode_count; ii++) {
+				if (pLink->link_id == pNode->connnodes[ii]) {
+					continue;
+				}
+
+				int32_t passCode = getNextPassCode(pLink->link_id, pNode->connnodes[ii], pNode, 1, pDataMgr);
+				if (passCode != PASS_CODE_DISABLE) {
+					ret = true;
+					break;
+				}
+			} // for
+		}
+
+		// enode
+		pNode = pDataMgr->GetVNodeDataById(pLink->enode_id);
+		if ((ret != true) && (pNode != nullptr)) {
+			for (int ii = 0; ii < pNode->base.connnode_count; ii++) {
+				if (pLink->link_id == pNode->connnodes[ii]) {
+					continue;
+				}
+
+				int32_t passCode = getNextPassCode(pLink->link_id, pNode->connnodes[ii], pNode, 1, pDataMgr);
+				if (passCode != PASS_CODE_DISABLE) {
+					ret = true;
+					break;
+				}
+			} // for
+		}
+	}
+	
+	return ret;
+}
+
+
+// 현재 링크로 depth 만큼 진입 가능한지 확인
+const bool checkPrevLinkIsolated(IN const stLinkInfo* pLink, CDataManager* pDataMgr)
+{
+	bool ret = false;
+
+	if (pLink != nullptr && pLink->link_id.llid != NULL_VALUE && pDataMgr != nullptr) {
+		// snode
+		stNodeInfo* pNode = pDataMgr->GetVNodeDataById(pLink->snode_id);
+		if (pNode != nullptr) {
+			for (int ii = 0; ii < pNode->base.connnode_count; ii++) {
+				if (pLink->link_id == pNode->connnodes[ii]) {
+					continue;
+				}
+
+				int32_t passCode = getPrevPassCode(pLink->link_id, pNode->connnodes[ii], pNode, 1, pDataMgr);
+				if (passCode != PASS_CODE_DISABLE) {
+					ret = true;
+					break;
+				}
+			} // for
+		}
+
+		// enode
+		pNode = pDataMgr->GetVNodeDataById(pLink->enode_id);
+		if ((ret != true) && (pNode != nullptr)) {
+			for (int ii = 0; ii < pNode->base.connnode_count; ii++) {
+				if (pLink->link_id == pNode->connnodes[ii]) {
+					continue;
+				}
+
+				int32_t passCode = getPrevPassCode(pLink->link_id, pNode->connnodes[ii], pNode, 1, pDataMgr);
+				if (passCode != PASS_CODE_DISABLE) {
+					ret = true;
+					break;
+				}
+			} // for
+		}
+	}
+
+	return ret;
 }

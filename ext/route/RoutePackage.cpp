@@ -120,7 +120,9 @@ void CRoutePackage::GetErrorResult(IN const int32_t err_code,  OUT string& strJs
 		cJSON_AddStringToObject(root, "resultMessage", err_msg.c_str());
 	}
 
-	strJson = cJSON_Print(root);
+	char* pJson = cJSON_Print(root);
+	strJson.append(pJson);
+	cJSON_free(pJson);
 
 	cJSON_Delete(root);
 #endif // #if defined(USE_CJSON)
@@ -480,6 +482,159 @@ bool CRoutePackage::GetRouteResultJson(IN const RouteResultInfo* pResult, IN con
 }
 
 
+bool CRoutePackage::GetMapsRouteResultJson(IN const RouteResultInfo* pResult, IN const time_t time, OUT void* pJson)
+{
+	if (pResult == nullptr || pJson == nullptr) {
+		return false;
+	}
+
+	uint32_t request_id = pResult->RequestId;
+	uint32_t result_code = pResult->ResultCode;
+
+	time_t timer;
+	struct tm* tmNow;
+	string strEta;
+
+#if defined(USE_CJSON)
+	// route
+	cJSON* route = reinterpret_cast<cJSON*>(pJson);// cJSON_CreateObject();
+
+	cJSON_AddItemToObject(route, "option", cJSON_CreateNumber(pResult->RouteOption));
+	cJSON_AddItemToObject(route, "spend_time", cJSON_CreateNumber(pResult->TotalLinkTime));
+	cJSON_AddItemToObject(route, "distance", cJSON_CreateNumber(pResult->TotalLinkDist));
+	cJSON_AddItemToObject(route, "toll_fee", cJSON_CreateNumber(0));
+	cJSON_AddItemToObject(route, "taxiFare", cJSON_CreateNumber(0));
+	cJSON_AddItemToObject(route, "isHighWay", cJSON_CreateBool(false));
+
+	// 경로 정보 (Array)
+	cJSON* paths = cJSON_CreateArray();
+	stLinkInfo* pLink = nullptr;
+	stLinkVehicleInfo vehInfo;
+	char szBuff[MAX_PATH] = { 0, };
+
+	int vertex_offset = 0;
+
+	for (const auto& link : pResult->LinkInfo) {
+		// 경로 링크 정보
+		cJSON* path = cJSON_CreateObject();
+
+		// 경로선 (Array)
+		cJSON* coords = cJSON_CreateArray();
+		int vtxCount = link.vtx_cnt;
+
+		memcpy(&vehInfo, &link.link_info, sizeof(vehInfo));
+
+		// 경로선 확장
+		for (int ii = 0; ii < vtxCount; ii++) {
+			// 남은 거리로 vertex 확인
+
+			cJSON* coord = cJSON_CreateObject();
+			cJSON_AddItemToObject(coord, "x", cJSON_CreateNumber(pResult->LinkVertex[vertex_offset].x));
+			cJSON_AddItemToObject(coord, "y", cJSON_CreateNumber(pResult->LinkVertex[vertex_offset].y));
+
+			vertex_offset++;
+
+			// add coord to coords
+			cJSON_AddItemToArray(coords, coord);
+		} // for
+
+		  // add coords to path
+		cJSON_AddItemToObject(path, "coords", coords);
+
+		// speed
+		cJSON_AddNumberToObject(path, "speed", 0);
+
+		// time
+		cJSON_AddNumberToObject(path, "spend_time", link.time);
+
+		// distance
+		cJSON_AddNumberToObject(path, "distance", link.length);
+
+		// road_code
+		cJSON_AddNumberToObject(path, "road_code", vehInfo.road_type);
+
+		// traffic_color
+		cJSON_AddStringToObject(path, "traffic_color", "green");
+
+#if defined(USE_P2P_DATA) // P2P HD 매칭을 위한 SD 링크 ID 정보
+		pLink = m_pDataMgr->GetVLinkDataById(link.link_id);
+		if (pLink != nullptr && link.link_id.llid != NULL_VALUE) {
+			// road_name
+			if (pLink->name_idx > 0) {
+#if defined(_WIN32)
+				char szUTF8[MAX_PATH] = { 0, };
+				MultiByteToUTF8(m_pDataMgr->GetNameDataByIdx(pLink->name_idx), szUTF8);
+				cJSON_AddStringToObject(path, "road_name", szUTF8);
+#else
+				cJSON_AddStringToObject(path, "road_name", encoding(m_pDataMgr->GetNameDataByIdx(pLink->name_idx), "euc-kr", "utf-8"));
+#endif // #if defined(_WIN32)
+			}
+
+			// p2p 추가정보
+			cJSON* p2p = cJSON_CreateObject();
+
+			// speed 재설정
+			cJSON_SetNumberHelper(cJSON_GetObjectItem(path, "speed"), pLink->veh.speed_f);
+
+			// hd matching link id
+			// LOG_TRACE(LOG_DEBUG, "tile:%d, id:%d, snode:%d, enode:%d",pLink->link_id.tile_id, pLink->link_id.nid, pLink->snode_id.nid, pLink->enode_id.nid);
+			sprintf(szBuff, "%d%06d%06d", pLink->link_id.tile_id, pLink->snode_id.nid, pLink->enode_id.nid);
+			// cJSON_AddNumberToObject(p2p, "link_id", (pLink->link_id.tile_id * 1000000000000) + (pLink->snode_id.nid * 1000000) + pLink->enode_id.nid); // 원본 ID 사용, (snode 6자리 + enode 6자리)
+			cJSON_AddStringToObject(p2p, "link_id", szBuff);
+
+			// dir, 0:정방향, 1:역방향
+			cJSON_AddNumberToObject(p2p, "dir", link.dir);
+
+			// type 링크 타입, 0:일반, 1:출발지링크, 2:경유지링크, 3:도착지링크
+			cJSON_AddNumberToObject(p2p, "guide_type", link.guide_type);
+
+			// ang, 진행각
+			cJSON_AddNumberToObject(p2p, "angle", link.angle);
+
+			// add new coordinate for air navigation
+			// 링크 중심 좌표에서 진행방향 우측으로 이격된 좌표를 제공
+			SPoint ptFirst, ptLast, ptNav = { 0.f, };
+			if (vtxCount > 2) {
+				ptFirst = pResult->LinkVertex[link.vtx_off + (vtxCount / 2)];
+				ptLast = pResult->LinkVertex[link.vtx_off + (vtxCount / 2) + 1];
+			} else {
+				ptFirst = pResult->LinkVertex[link.vtx_off];
+				ptLast = pResult->LinkVertex[link.vtx_off + 1];
+			}
+
+			// 도로로부터 지정된거리(도로너비) 만큼 띄워 도로변으로 위치시켜 주자
+			static const double dwDist = 0.00005f; // 5m
+			static const bool isRight = true;
+			cJSON* nav_coord = cJSON_CreateObject();
+			if (getPointByDistanceFromCenter(ptFirst.x, ptFirst.y, ptLast.x, ptLast.y, dwDist, isRight, ptNav.x, ptNav.y) == true) {
+				cJSON_AddItemToObject(nav_coord, "x", cJSON_CreateNumber(ptNav.x));
+				cJSON_AddItemToObject(nav_coord, "y", cJSON_CreateNumber(ptNav.y));
+			} else {
+				cJSON_AddItemToObject(nav_coord, "x", cJSON_CreateNumber(ptFirst.x));
+				cJSON_AddItemToObject(nav_coord, "y", cJSON_CreateNumber(ptFirst.y));
+			}
+			// 내비게이션용 경유지 좌표
+			cJSON_AddItemToObject(p2p, "nav_coord", nav_coord);
+
+			// add p2p to path
+			cJSON_AddItemToObject(path, "p2p_extend", p2p);
+		}
+#endif // #if 1 defined(USE_P2P_DATA)
+
+		// add path to paths
+		cJSON_AddItemToArray(paths, path);
+
+	} // for paths
+
+	  // add paths to data
+	cJSON_AddItemToObject(route, "paths", paths);
+	
+#endif // #if defined(USE_CJSON)
+
+	return true;
+}
+
+
 void CRoutePackage::GetRouteResult(IN const RouteResultInfo* pResult, IN const bool isJunction, OUT string& strJson)
 {
 	int result_code = ROUTE_RESULT_FAILED;
@@ -799,7 +954,9 @@ void CRoutePackage::GetRouteResult(IN const RouteResultInfo* pResult, IN const b
 		cJSON_AddItemToObject(root, "routes", routes);
 	}
 
-	strJson = cJSON_Print(root);
+	char* pJson = cJSON_Print(root);
+	strJson.append(pJson);
+	cJSON_free(pJson);
 
 	cJSON_Delete(root);
 
@@ -1243,14 +1400,16 @@ void CRoutePackage::GetMultiRouteResult(IN const vector<RouteResultInfo>& vtRout
 		cJSON_AddItemToObject(root, "routes", routes);
 	}
 
-	strJson = cJSON_Print(root);
+	char* pJson = cJSON_Print(root);
+	strJson.append(pJson);
+	cJSON_free(pJson);
 
 	cJSON_Delete(root);
 #endif // #if defined(USE_CJSON)
 }
 
 
-void CRoutePackage::GetMapsRouteResult(IN const RouteResultInfo* pResult, OUT string& strJson)
+int32_t CRoutePackage::GetMapsRouteResult(IN const RouteResultInfo* pResult, OUT string& strJson)
 {
 	int result_code = ROUTE_RESULT_FAILED;
 
@@ -1266,9 +1425,15 @@ void CRoutePackage::GetMapsRouteResult(IN const RouteResultInfo* pResult, OUT st
 	else {
 		result_code = ROUTE_RESULT_SUCCESS;
 
-		cJSON* routes = cJSON_CreateArray();
-		cJSON* data = cJSON_CreateObject();
+		// - now
+		time_t timer = time(NULL);
 
+		cJSON* routes = cJSON_CreateArray();
+		cJSON* route = cJSON_CreateObject();
+
+#if 1
+		GetMapsRouteResultJson(pResult, timer, route);
+#else
 		cJSON_AddItemToObject(data, "option", cJSON_CreateNumber(pResult->RouteOption));
 		cJSON_AddItemToObject(data, "spend_time", cJSON_CreateNumber(pResult->TotalLinkTime));
 		cJSON_AddItemToObject(data, "distance", cJSON_CreateNumber(pResult->TotalLinkDist));
@@ -1276,13 +1441,14 @@ void CRoutePackage::GetMapsRouteResult(IN const RouteResultInfo* pResult, OUT st
 		cJSON_AddItemToObject(data, "taxiFare", cJSON_CreateNumber(0));
 		cJSON_AddItemToObject(data, "isHighWay", cJSON_CreateBool(false));
 
-		// 경로 정보 (Array)
-		cJSON* paths = cJSON_CreateArray();
 		stLinkInfo* pLink = nullptr;
 		stLinkVehicleInfo vehInfo;
 		char szBuff[MAX_PATH] = { 0, };
 
 		int vertex_offset = 0;
+
+		// 경로 정보 (Array)
+		cJSON* paths = cJSON_CreateArray();
 
 		for (const auto& link : pResult->LinkInfo) {
 			// 경로 링크 정보
@@ -1369,11 +1535,13 @@ void CRoutePackage::GetMapsRouteResult(IN const RouteResultInfo* pResult, OUT st
 			// add path to paths
 			cJSON_AddItemToArray(paths, path);
 
-		} // for paths
+			// add paths to route
+			cJSON_AddItemToObject(route, "paths", paths);
 
-		// add paths to data
-		cJSON_AddItemToObject(data, "paths", paths);
-		cJSON_AddItemToArray(routes, data);
+		} // for paths
+#endif
+
+		cJSON_AddItemToArray(routes, route);
 
 		// add data to root
 		cJSON_AddItemToObject(root, "routes", routes);
@@ -1388,7 +1556,9 @@ void CRoutePackage::GetMapsRouteResult(IN const RouteResultInfo* pResult, OUT st
 		cJSON_AddStringToObject(root, "error_msg", "failed");
 	}
 
-	strJson = cJSON_Print(root);
+	char* pJson = cJSON_Print(root);
+	strJson.append(pJson);
+	cJSON_free(pJson);
 
 	cJSON_Delete(root);
 
@@ -1421,12 +1591,85 @@ void CRoutePackage::GetMapsRouteResult(IN const RouteResultInfo* pResult, OUT st
 	Writer<StringBuffer> writer(buffer);
 	doc.Accept(writer);
 	strJson = buffer.GetString();
-#endif
+#endif // #if defined(USE_CJSON)
 
 	// add route to root
 	if (!strJson.empty()) {
 		// mainobj->Set(context, String::NewFromUtf8(isolate, "route").ToLocalChecked(), String::NewFromUtf8(isolate, strJson.c_str()).ToLocalChecked());
 	}
+
+	return result_code;
+}
+
+
+int32_t CRoutePackage::GetMapsMultiRouteResult(IN const vector<RouteResultInfo>& vtRouteResults, OUT string& strJson)
+{
+	int result_code = ROUTE_RESULT_FAILED;
+
+#if defined(USE_CJSON)
+	cJSON* root = cJSON_CreateObject();
+	
+	int cntRoutes = vtRouteResults.size();
+
+	int request_id = 0;
+	bool isSuccess = false;
+	bool isFailed = false;
+	vector<int> vtResultCodes;
+
+	// header
+	for (const auto& result : vtRouteResults) {
+		request_id = result.RequestId;
+		(result.ResultCode != ROUTE_RESULT_SUCCESS) ? isFailed = true : isSuccess = true;
+		vtResultCodes.emplace_back(result.ResultCode);
+	}
+
+	// add header to root
+	cJSON_AddItemToObject(root, "request_id", cJSON_CreateNumber(request_id));
+	if (isFailed) {
+		if (vtResultCodes.empty()) {
+			cJSON_AddItemToObject(root, "result_code", cJSON_CreateNumber(ROUTE_RESULT_FAILED_MULTI_POS_ROUTE_ALL));
+		} else {
+			cJSON_AddItemToObject(root, "result_code", cJSON_CreateNumber(vtResultCodes[0]));
+		}
+	} else {
+		cJSON_AddItemToObject(root, "result_code", cJSON_CreateNumber(ROUTE_RESULT_SUCCESS));
+	}
+
+
+	// - now
+	time_t timer = time(NULL);
+
+	cJSON* routes = cJSON_CreateArray();
+
+	for (const auto& result : vtRouteResults) {
+		const RouteResultInfo* pResult = &result;
+
+		if (pResult == nullptr) {
+			result_code = ROUTE_RESULT_FAILED;
+		} else if (pResult->ResultCode != ROUTE_RESULT_SUCCESS) {
+			result_code = pResult->ResultCode;
+		} else {
+			cJSON* route = cJSON_CreateObject();
+
+			GetMapsRouteResultJson(pResult, timer, route);
+
+			// add paths to routes
+			cJSON_AddItemToArray(routes, route);
+		}
+	} // for routes
+
+	// add routes to root
+	cJSON_AddItemToObject(root, "routes", routes);
+
+	char* pJson = cJSON_Print(root);
+	strJson.append(pJson);
+	cJSON_free(pJson);
+
+	cJSON_Delete(root);
+
+#endif // #if defined(USE_CJSON)
+
+	return result_code;
 }
 
 
@@ -1551,7 +1794,9 @@ void CRoutePackage::GetClusteringResult(IN const vector<stDistrict>& vtClusters,
 		cJSON_AddNumberToObject(root, "result_code", result_code);
 		cJSON_AddStringToObject(root, "msg", "success");
 
-		strJson = cJSON_Print(root);
+		char* pJson = cJSON_Print(root);
+		strJson.append(pJson);
+		cJSON_free(pJson);
 
 		cJSON_Delete(root);
 	}
@@ -1592,7 +1837,9 @@ void CRoutePackage::GetBoundaryResult(IN const vector<SPoint>& vtBoundary, OUT s
 		cJSON_AddNumberToObject(root, "result_code", result_code);
 		cJSON_AddStringToObject(root, "msg", "success");
 
-		strJson = cJSON_Print(root);
+		char* pJson = cJSON_Print(root);
+		strJson.append(pJson);
+		cJSON_free(pJson);
 
 		cJSON_Delete(root);
 	}
@@ -1642,8 +1889,10 @@ void CRoutePackage::GetBestWaypointResult(IN const vector<stWaypoints>& vtWaypoi
 		cJSON_AddNumberToObject(root, "result_code", ROUTE_RESULT_FAILED);
 		cJSON_AddStringToObject(root, "msg", "failed");
 	}
-		
-	strJson = cJSON_Print(root);
+	
+	char* pJson = cJSON_Print(root);
+	strJson.append(pJson);
+	cJSON_free(pJson);
 
 	cJSON_Delete(root);
 #endif // #if defined(USE_CJSON)
@@ -1751,7 +2000,9 @@ void CRoutePackage::GetWeightMatrixResult(IN const vector<vector<stDistMatrix>>&
 	UNKNOWN_ERROR indicates a Distance Matrix request could not be processed due to a server error. The request may succeed if you try again.
 	*/
 		
-	strJson = cJSON_Print(root);
+	char* pJson = cJSON_Print(root);
+	strJson.append(pJson);
+	cJSON_free(pJson);
 
 	cJSON_Delete(root);
 #endif // #if defined(USE_CJSON)
@@ -2202,7 +2453,9 @@ void CRoutePackage::GetOptimalPosition(IN const stReqOptimal* pRequest, IN const
 		}
 	}
 
-	strJson = cJSON_Print(root);
+	char* pJson = cJSON_Print(root);
+	strJson.append(pJson);
+	cJSON_free(pJson);
 	
 	cJSON_Delete(root);
 	

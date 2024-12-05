@@ -80,7 +80,7 @@ private:
 	int DoMultiComplexRouting(IN const int32_t routeCount/*, IN const int32_t routeOptions[], IN const int32_t routeAvoids[]*/);
 	// int setNode(/*FLAG, Packet*/);
 	int DoCourse(/*Packet*/);
-	int DoTabulate(IN const vector<SPoint>vtOrigins, OUT vector<vector<stDistMatrix>>& vtDistMatrix);
+	int DoTabulate(IN const vector<SPoint>vtOrigins, OUT RequestRouteInfo& reqInfo, OUT vector<vector<stDistMatrix>>& vtDistMatrix);
 
 	KeyID SetPosition(IN const double lng, IN const double lat, IN const int matchType, OUT RouteLinkInfo& pointLinkInfo);
 
@@ -105,8 +105,6 @@ private:
 	int32_t m_nDepartureDirIgnore; // 출발지 방향성 무시
 	int32_t m_nWaypointDirIgnore; // 경유지 방향성 무시
 	int32_t m_nDestinationDirIgnore; // 도착지 방향성 무시
-
-	RouteResultInfo m_routeResult;
 
 	vector<RouteInfo> m_vtRouteInfo;
 	vector<RouteResultInfo> m_vtRouteResult;

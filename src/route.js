@@ -55,14 +55,13 @@ exports.version = function() {
 
 
 exports.optimalposition = function(req) {
-
-    var header = {
+    let header = {
         isSuccessful: false,
         resultCode: codes.ERROR_CODES.ROUTE_RESULT_FAILED,
         resultMessage: ""
     };
 
-    var ret = {
+    let ret = {
         header: header,
     };
 
@@ -74,7 +73,7 @@ exports.optimalposition = function(req) {
     let option = 0;
     
     if (req.query.type == undefined) {
-        // 택시승하차 - 차량출입구 만 선택
+        // 택시승하차(건물/단지) - 차량출입구 순으로 선택
         // 2,3,1,0; 
         type = 0x00010302; // 바이트 거꾸로
     } else {
@@ -104,8 +103,8 @@ exports.optimalposition = function(req) {
         }
     }
 
-    let res = addon.getoptimalposition(parseFloat(lng), parseFloat(lat), type, count, expand, option);
-    res = JSON.parse(res);
+    let result = addon.getoptimalposition(parseFloat(lng), parseFloat(lat), type, count, expand, option);
+    let res = JSON.parse(result);
 
     if (res.result_code == 0) {
         ret.header.isSuccessful = true;
@@ -134,11 +133,10 @@ exports.optimalposition = function(req) {
 exports.doroute = function(key, req, expend) {
     addon.logout("start routing");
 
-    var querystring = require('querystring');
-    var ret;
+    let querystring = require('querystring');
 
     // 사용자 키 확인
-    var user = auth.checkAuth(key);
+    let user = auth.checkAuth(key);
     if (user === null || user.length <= 0) {
         var header = {
             isSuccessful: false,
@@ -146,7 +144,7 @@ exports.doroute = function(key, req, expend) {
             resultMessage: codes.getErrMsg(codes.ERROR_CODES.RESULT_APPKEY_ERROR)
         };
     
-        ret = {
+        let ret = {
             header: header,
             user_info: req,
         };
@@ -172,16 +170,16 @@ exports.doroute = function(key, req, expend) {
     const is_junction = (req.junction !== undefined && req.junction == 'true') ? true : false;
 
     // header
-    var ret_header = {
+    let ret_header = {
         isSuccessful: false,
         resultCode: codes.ERROR_CODES.ROUTE_RESULT_FAILED,
         resultMessage: ""
     };
     
     // user info
-    var ret_user_info = req;
+    let ret_user_info = req;
 
-    var ret = {
+    let ret = {
         header: ret_header,
         user_info: ret_user_info,
     };
@@ -336,18 +334,18 @@ exports.doroute = function(key, req, expend) {
     }
     
     for(ii=0; ii<route_cnt; ii++) {
-        var res = addon.doroute(route_opt[ii], route_avoid[ii], route_mobility);
+        let result = addon.doroute(route_opt[ii], route_avoid[ii], route_mobility);
 
-        if (res.result == 0) {
+        if (result.result == 0) {
             if (is_sum) {
-                res = addon.getsummary();
+                result = addon.getsummary();
             } else if ((target === "inavi") || (target === "p2p")) {
-                res = addon.getmapsroute();
+                result = addon.getmapsroute();
             } else {
                 // logout("--------------route request junction, type: " + typeof(is_junction) + ", value : " + is_junction + ", Number: " + Number(is_junction) + ", Boolean: " + Boolean(is_junction));
-                res = addon.getroute(is_junction);
+                result = addon.getroute(is_junction);
             }
-            res = JSON.parse(res);
+            let res = JSON.parse(result);
 
             if (res.result_code == 0) {
                 ret.header.isSuccessful = true;
@@ -391,11 +389,10 @@ exports.doroute = function(key, req, expend) {
 exports.domultiroute = function(key, req, expend) {
     addon.logout("start multi routing");
 
-    var querystring = require('querystring');
-    var ret;
+    let querystring = require('querystring');
 
     // 사용자 키 확인
-    var user = auth.checkAuth(key);
+    let user = auth.checkAuth(key);
     if (user === null || user.length <= 0) {
         var header = {
             isSuccessful: false,
@@ -403,7 +400,7 @@ exports.domultiroute = function(key, req, expend) {
             resultMessage: codes.getErrMsg(codes.ERROR_CODES.RESULT_APPKEY_ERROR)
         };
     
-        ret = {
+        let ret = {
             header: header,
             user_info: req,
         };
@@ -431,13 +428,13 @@ exports.domultiroute = function(key, req, expend) {
     const is_junction = (req.junction !== undefined && req.junction == 'true') ? true : false;
 
     // header
-    var ret_header = {
+    let ret_header = {
         isSuccessful: false,
         resultCode: codes.ERROR_CODES.ROUTE_RESULT_FAILED,
         resultMessage: ""
     };
     
-    var ret_user_info = {
+    let ret_user_info = {
         id: id,
     };
 
@@ -445,11 +442,11 @@ exports.domultiroute = function(key, req, expend) {
         ret_user_info.option = option;
     }
 
-    var summarys = {
+    let summarys = {
         summarys: undefined,
     }
 
-    var ret = {
+    let ret = {
         header: ret_header,
         user_info: ret_user_info,
     };
@@ -620,18 +617,19 @@ exports.domultiroute = function(key, req, expend) {
         });
     }
 
-    var res = addon.domultiroute(route_cnt);
+    let result = addon.domultiroute(route_cnt);
 
-    if (res.result == 0) {
+    if (result.result == 0) {
         if (is_sum) {
-            res = addon.getsummary();
+            result = addon.getsummary();
         } else if ((target === "inavi") || (target === "p2p")) {
-            res = addon.getmapsroute();
+            // res = addon.getmapsroute();
+            result = addon.getmapsmultiroute();
         } else {
             // logout("--------------route request junction, type: " + typeof(is_junction) + ", value : " + is_junction + ", Number: " + Number(is_junction) + ", Boolean: " + Boolean(is_junction));
-            res = addon.getmultiroute(is_junction);
+            result = addon.getmultiroute(is_junction);
         }
-        res = JSON.parse(res);
+        let res = JSON.parse(result);
 
         if (res.result_code == 0) {
             ret.header.isSuccessful = true;
@@ -685,16 +683,16 @@ exports.gettable = function(req) {
 
     addon.logout("start distance matrix");
 
-    var res = addon.gettable(JSON.stringify(req));
-    res = JSON.parse(res);
+    let result = addon.gettable(JSON.stringify(req));
+    let res = JSON.parse(result);
 
-    var header = {
+    let header = {
         isSuccessful: false,
         resultCode: codes.ERROR_CODES.ROUTE_RESULT_FAILED,
         resultMessage: ""
     };
 
-    var ret = {
+    let ret = {
         header: header,
         mode: (req.mode != undefined) ? req.mode : "driving",
         origins: (req.origins != undefined) ? req.origins : null,
@@ -723,17 +721,17 @@ exports.setdatacost = function(key, mode, base, cost) {
 
     addon.logout("start set data cost");
 
-    var header = {
+    let header = {
         isSuccessful: false,
         resultCode: codes.ERROR_CODES.ROUTE_RESULT_FAILED,
         resultMessage: ""
     };
 
-    var ret = {
+    let ret = {
         header: header,
     };
 
-    var user = auth.checkAuth(key);
+    let user = auth.checkAuth(key);
     if (user != null && user.length > 0) {
         if (mode !== undefined && cost !== undefined) {       
             logout("client user:'" + user + "', mode:'" + mode + "', base:" + base + ", req:" + JSON.stringify(cost));
@@ -775,7 +773,7 @@ exports.setdatacost = function(key, mode, base, cost) {
 
 // 클러스터링
 exports.getcluster = function(req) {
-    var res = codes.ERROR_CODES.ROUTE_RESULT_FAILED;
+    let result = codes.ERROR_CODES.ROUTE_RESULT_FAILED;
 
     if (req.tsp == undefined) {
         var tsp = {
@@ -796,20 +794,20 @@ exports.getcluster = function(req) {
     }
 
     if ((req.target === undefined) && (req.target === 'geoyoung')) {
-        res = addon.getcluster_for_geoyoung(JSON.stringify(req));
+        result = addon.getcluster_for_geoyoung(JSON.stringify(req));
     } else {
-        res = addon.getcluster(JSON.stringify(req));
+        result = addon.getcluster(JSON.stringify(req));
     }
 
-    res = JSON.parse(res);
+    let res = JSON.parse(result);
 
-    var header = {
+    let header = {
         isSuccessful: false,
         resultCode: codes.ERROR_CODES.ROUTE_RESULT_FAILED,
         resultMessage: ""
     };
 
-    var ret = {
+    let ret = {
         header: header,
         mode: (req.mode != undefined) ? req.mode : "clustering",
         origins: (req.origins != undefined) ? req.origins : null,
@@ -839,26 +837,26 @@ exports.getboundary = function(mode, in_target, destinations) {
 
     const target = (in_target === undefined) ? '' : req.query.target;
 
-    var header = {
+    let header = {
         isSuccessful: false,
         resultCode: codes.ERROR_CODES.ROUTE_RESULT_FAILED,
         resultMessage: ""
     };
 
-    var boundary = {
+    let boundary = {
         boundary: new Array,
     };
 
-    var ret = {
+    let ret = {
         header: header,
         origins: destinations,
         boundary: boundary,
     };
 
-    var cntDestinations = destinations.length;
+    let cntDestinations = destinations.length;
 
-    var res = addon.getboundary(cntDestinations, destinations);
-    res = JSON.parse(res);
+    let result = addon.getboundary(cntDestinations, destinations);
+    let res = JSON.parse(result);
 
     if (res.result_code == 0) {
         ret.header.isSuccessful = true;
@@ -880,19 +878,16 @@ exports.getboundary = function(mode, in_target, destinations) {
 
 // 클러스터링 영역
 exports.getbestways = function(req) {
-    var res = codes.ERROR_CODES.ROUTE_RESULT_FAILED;
+    let result = addon.getwaypoints(JSON.stringify(req));
+    let res = JSON.parse(result);
 
-    res = addon.getwaypoints(JSON.stringify(req));
-
-    res = JSON.parse(res);
-
-    var header = {
+    let header = {
         isSuccessful: false,
         resultCode: codes.ERROR_CODES.ROUTE_RESULT_FAILED,
         resultMessage: ""
     };
 
-    var ret = {
+    let ret = {
         header: header,
         mode: (req.mode != undefined) ? req.mode : "tsp",
         origins: (req.origins != undefined) ? req.origins : null,
