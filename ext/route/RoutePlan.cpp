@@ -1410,6 +1410,9 @@ const double CRoutePlan::GetTravelCost(IN const stLinkInfo* pLink, IN const stLi
 					}
 
 #if defined(USE_P2P_DATA)
+					if (pLink->veh.link_type == 8) { // 유턴
+						secCost += 1000.f; // 유턴 지점은 코스트를 올려 가능하면 유턴 않도록 하자
+					}
 					double spdValue = avgSpd / 3.6f;
 #elif defined(USE_REAL_ROUTE_TSP)
 					double spdValue = avgSpd / 1.f;
@@ -1846,11 +1849,12 @@ const int CRoutePlan::AddNextLinks(IN RouteInfo* pRouteInfo, IN const CandidateL
 #if defined(USE_P2P_DATA)
 			if ((pRouteInfo->RouteOption == ROUTE_OPT_MAINROAD) && (pLinkNext->veh.hd_flag != 1) && // HD 링크와 매칭 정보가 없으면 통행 불가
 				((pRouteInfo->EndLinkInfo.LinkGuideType == LINK_GUIDE_TYPE_DEFAULT) ||
-				(pRouteInfo->EndLinkInfo.LinkGuideType == LINK_GUIDE_TYPE_WAYPOINT))) {
+					(pRouteInfo->EndLinkInfo.LinkGuideType == LINK_GUIDE_TYPE_WAYPOINT))) {
 				// 출발지와 도착지는 HD 부분 링크를 허용, 하지만 경유지는 불허
 				continue;
-			}
-			else if ((pLink->veh.link_type == 8) || (retPassCode == PASS_CODE_UTURN))  { // 유턴 금지
+			} else if (retPassCode == PASS_CODE_UTURN) { // 유턴 코드는 불가
+				continue;
+			} else if ((pLink->veh.link_type == 8) && (pLink->veh.level > 3)) { // 지방도 이하 레벨의 유턴 도로는 금지
 				continue;
 			}
 #elif defined(USE_FOREST_DATA)
@@ -2128,8 +2132,9 @@ const int CRoutePlan::AddPrevLinks(IN RouteInfo* pRouteInfo, IN const CandidateL
 					(pRouteInfo->EndLinkInfo.LinkGuideType == LINK_GUIDE_TYPE_WAYPOINT))) {
 				// 출발지와 도착지는 HD 부분 링크를 허용, 하지만 경유지는 불허
 				continue;
-			}
-			else if (pLink->veh.link_type == 8) { // 유턴 금지
+			} else if (retPassCode == PASS_CODE_UTURN) { // 유턴 코드는 불가
+				continue;
+			} else if ((pLink->veh.link_type == 8) && (pLink->veh.level > 3)) { // 지방도 이하 레벨의 유턴 도로는 금지
 				continue;
 			}
 #elif defined(USE_FOREST_DATA)
@@ -2405,8 +2410,9 @@ const int CRoutePlan::AddNextCourse(IN RouteInfo* pRouteInfo, IN const Candidate
 					(pRouteInfo->EndLinkInfo.LinkGuideType == LINK_GUIDE_TYPE_WAYPOINT))) {
 				// 출발지와 도착지는 HD 부분 링크를 허용, 하지만 경유지는 불허
 				continue;
-			}
-			else if (pLink->veh.link_type == 8) { // 유턴 금지
+			} else if (retPassCode == PASS_CODE_UTURN) { // 유턴 코드는 불가
+				continue;
+			} else if ((pLink->veh.link_type == 8) && (pLink->veh.level > 3)) { // 지방도 이하 레벨의 유턴 도로는 금지
 				continue;
 			}
 #elif defined(USE_FOREST_DATA)

@@ -603,7 +603,7 @@ bool CRoutePackage::GetMapsRouteResultJson(IN const RouteResultInfo* pResult, IN
 			}
 
 			// 도로로부터 지정된거리(도로너비) 만큼 띄워 도로변으로 위치시켜 주자
-			static const double dwDist = 0.00005f; // 5m
+			static const double dwDist = 0.000001f; // 10cm
 			static const bool isRight = true;
 			cJSON* nav_coord = cJSON_CreateObject();
 			if (getPointByDistanceFromCenter(ptFirst.x, ptFirst.y, ptLast.x, ptLast.y, dwDist, isRight, ptNav.x, ptNav.y) == true) {
