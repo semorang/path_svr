@@ -592,29 +592,31 @@ bool CRoutePackage::GetMapsRouteResultJson(IN const RouteResultInfo* pResult, IN
 			cJSON_AddNumberToObject(p2p, "angle", link.angle);
 
 			// add new coordinate for air navigation
+			if (link.length > 60) { // 60m 미만은 넣지 말자 nav에서 교차로등 다른 링크를 선정하는 이슈 잦아 거리 제한함, 2025-06-25 
 			// 링크 중심 좌표에서 진행방향 우측으로 이격된 좌표를 제공
-			SPoint ptFirst, ptLast, ptNav = { 0.f, };
-			if (vtxCount > 2) {
-				ptFirst = pResult->LinkVertex[link.vtx_off + (vtxCount / 2)];
-				ptLast = pResult->LinkVertex[link.vtx_off + (vtxCount / 2) + 1];
-			} else {
-				ptFirst = pResult->LinkVertex[link.vtx_off];
-				ptLast = pResult->LinkVertex[link.vtx_off + 1];
-			}
+				SPoint ptFirst, ptLast, ptNav = { 0.f, };
+				if (vtxCount > 2) {
+					ptFirst = pResult->LinkVertex[link.vtx_off + (vtxCount / 2)];
+					ptLast = pResult->LinkVertex[link.vtx_off + (vtxCount / 2) + 1];
+				} else {
+					ptFirst = pResult->LinkVertex[link.vtx_off];
+					ptLast = pResult->LinkVertex[link.vtx_off + 1];
+				}
 
-			// 도로로부터 지정된거리(도로너비) 만큼 띄워 도로변으로 위치시켜 주자
-			static const double dwDist = 0.000001f; // 10cm
-			static const bool isRight = true;
-			cJSON* nav_coord = cJSON_CreateObject();
-			if (getPointByDistanceFromCenter(ptFirst.x, ptFirst.y, ptLast.x, ptLast.y, dwDist, isRight, ptNav.x, ptNav.y) == true) {
-				cJSON_AddItemToObject(nav_coord, "x", cJSON_CreateNumber(ptNav.x));
-				cJSON_AddItemToObject(nav_coord, "y", cJSON_CreateNumber(ptNav.y));
-			} else {
-				cJSON_AddItemToObject(nav_coord, "x", cJSON_CreateNumber(ptFirst.x));
-				cJSON_AddItemToObject(nav_coord, "y", cJSON_CreateNumber(ptFirst.y));
+				// 도로로부터 지정된거리(도로너비) 만큼 띄워 도로변으로 위치시켜 주자
+				static const double dwDist = 0.000001f; // 10cm
+				static const bool isRight = true;
+				cJSON* nav_coord = cJSON_CreateObject();
+				if (getPointByDistanceFromCenter(ptFirst.x, ptFirst.y, ptLast.x, ptLast.y, dwDist, isRight, ptNav.x, ptNav.y) == true) {
+					cJSON_AddItemToObject(nav_coord, "x", cJSON_CreateNumber(ptNav.x));
+					cJSON_AddItemToObject(nav_coord, "y", cJSON_CreateNumber(ptNav.y));
+				} else {
+					cJSON_AddItemToObject(nav_coord, "x", cJSON_CreateNumber(ptFirst.x));
+					cJSON_AddItemToObject(nav_coord, "y", cJSON_CreateNumber(ptFirst.y));
+				}
+				// 내비게이션용 경유지 좌표
+				cJSON_AddItemToObject(p2p, "nav_coord", nav_coord);
 			}
-			// 내비게이션용 경유지 좌표
-			cJSON_AddItemToObject(p2p, "nav_coord", nav_coord);
 
 			// add p2p to path
 			cJSON_AddItemToObject(path, "p2p_extend", p2p);
