@@ -33,7 +33,7 @@ class TCross{
 public:
 	TCross( int N );
 	~TCross();
-	void doIt( TIndi& tKid, TIndi& tPa2, int numOfKids, int flagP, int flagC[ 10 ], vector<vector<int>>& fEdgeFreq ); // EAX entry point
+	bool doIt( TIndi& tKid, TIndi& tPa2, int numOfKids, int flagP, int flagC[ 10 ], vector<vector<int>>& fEdgeFreq ); // EAX entry point
 	void setParents( const TIndi& tPa1, const TIndi& tPa2, int flagC[ 10 ], int numOfKids ); // sets parents
 	void setABcycle( const TIndi& parent1, const TIndi& parent2, int flagC[ 10 ], int numOfKids ); // sets ab cycle
 
@@ -42,7 +42,7 @@ public:
 	void changeSol( TIndi& tKid, int ABnum, int type ); // generates intermediate solution from ab cycle
 
 	void makeCompleteSol( TIndi& tKid ); // the 5th step of EAX
-	void makeUnit(); // the 5-1th step of EAX
+	bool makeUnit(); // the 5-1th step of EAX
 	void backToPa1( TIndi& tKid ); // rolls back p_a
 	void goToBest( TIndi& tKid ); // sets tKid to the best solutions of child generation
 

@@ -11,7 +11,7 @@ typedef enum
 	TYPE_TSP_VALUE_COST,
 	TYPE_TSP_VALUE_DIST,
 	TYPE_TSP_VALUE_TIME
-}TYPE_TSP_VALUEEEE;
+}TYPE_TSP_VALUE;
 
 
 typedef struct _tagWaypoints
@@ -19,6 +19,16 @@ typedef struct _tagWaypoints
 	int nId;
 	double x;
 	double y;
+	int nLayoverTime; // 지점 소요 시간
+	int nCargoVolume; // 지점 화물 수량
+
+	_tagWaypoints() {
+		nId = -1;
+		x = 0.f;
+		y = 0.f;
+		nLayoverTime = 0;
+		nCargoVolume = 0;
+	}
 }stWaypoints;
 
 

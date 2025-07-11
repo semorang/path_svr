@@ -57,9 +57,6 @@ void MapMesh::SetBox(IN const SBox* pBox)
 
 int MapMesh::AddData(IN const stMeshInfo * pData)
 {
-	static const int nMaxNeighbor = 8;
-	int nCurNeighbor = 0;
-
 	if (pData != nullptr) {
 		mapData.emplace(pData->mesh_id.tile_id, const_cast<stMeshInfo*>(pData));
 	}
@@ -263,19 +260,9 @@ bool MapMesh::InsertComplex(IN const stPolygonInfo * pData)
 		}
 #endif
 		pMesh->complexs.emplace_back(pData->poly_id);
-
-//#pragma omp parallel for
-//		for (int ii = 0; ii < pData->vtVtx.size(); ii++)
-//		{
-//			ExtendDataBox(pMesh, pData->vtVtx[ii].x, pData->vtVtx[ii].y);
-//		}
 		pMesh->data_box = pMesh->mesh_box;
 
-		const SPoint* pPolygon = pData->getAttributeVertex();
-		for (int ii = pData->getAttributeCount(TYPE_POLYGON_DATA_ATTR_VTX) - 1; ii >= 0 ; --ii)
-		{
-			ExtendDataBox(pMesh, pPolygon[ii]);
-		}
+		extendDataBox(pMesh->data_box, pData->getAttributeVertex(), pData->getAttributeCount(TYPE_POLYGON_DATA_ATTR_VTX));
 
 		return true;
 	}
@@ -296,19 +283,9 @@ bool MapMesh::InsertBuilding(IN const stPolygonInfo * pData)
 		}
 #endif
 		pMesh->buildings.emplace_back(pData->poly_id);
-
-//#pragma omp parallel for
-//		for (int ii = 0; ii < pData->vtVtx.size(); ii++)
-//		{
-//			ExtendDataBox(pMesh, pData->vtVtx[ii].x, pData->vtVtx[ii].y);
-//		}
 		pMesh->data_box = pMesh->mesh_box;
 
-		const SPoint* pPolygon = pData->getAttributeVertex();
-		for (int ii = pData->getAttributeCount(TYPE_POLYGON_DATA_ATTR_VTX) - 1; ii >= 0; --ii)
-		{
-			ExtendDataBox(pMesh, pPolygon[ii]);
-		}
+		extendDataBox(pMesh->data_box, pData->getAttributeVertex(), pData->getAttributeCount(TYPE_POLYGON_DATA_ATTR_VTX));
 
 		return true;
 	}
@@ -331,7 +308,7 @@ stMeshInfo* MapMesh::GetMeshByPoint(IN const double lng, IN const double lat)
 {
 	stMeshInfo* pMesh = nullptr;
 
-	if (lng != 0.f && lat != 0.f) 
+	if (lng != 0.f && lat != 0.f)
 	{
 #if defined(USE_FOREST_DATA)
 		// 숲길은 단일 메쉬고, 마지막 값으로 정의했기에 숲길을 우선 검색
@@ -340,9 +317,13 @@ stMeshInfo* MapMesh::GetMeshByPoint(IN const double lng, IN const double lat)
 		for (map<uint64_t, stMeshInfo*>::const_iterator it = mapData.begin(); it != mapData.end(); it++)
 #endif
 		{
+#if defined(USE_VEHICLE_DATA)
+			if (it->second->mesh_id.tile_id == GLOBAL_MESH_ID) {
+				continue;
+			}
+#endif
 			if (lng < it->second->mesh_box.Xmin || it->second->mesh_box.Xmax < lng
-				|| lat < it->second->mesh_box.Ymin || it->second->mesh_box.Ymax < lat)
-			{
+				|| lat < it->second->mesh_box.Ymin || it->second->mesh_box.Ymax < lat) {
 				continue;
 			}
 
@@ -397,8 +378,7 @@ int MapMesh::GetPitInData(IN const double lng, IN const double lat, IN const int
 #endif
 		{
 			if (lng < it->second->data_box.Xmin || it->second->data_box.Xmax < lng
-				|| lat < it->second->data_box.Ymin || it->second->data_box.Ymax < lat)
-			{
+				|| lat < it->second->data_box.Ymin || it->second->data_box.Ymax < lat) {
 				continue;
 			}
 
@@ -419,7 +399,7 @@ uint32_t MapMesh::GetPitInRegion(IN const SBox& pRegion, IN const uint32_t cntMa
 	uint32_t cntMesh = mapData.size();
 
 	if (cntMaxBuff <= 0 || pMeshInfo == nullptr) {
-		LOG_PRINT(LOG_ERROR, "%s", "param value null");
+		LOG_TRACE_DEBUG(LOG_ERROR, "%s", "param value null");
 		return 0;
 	}
 
@@ -465,26 +445,6 @@ stMeshInfo * MapMesh::GetMeshData(IN const uint32_t idx)
 }
 
 
-void MapMesh::ExtendDataBox(IN stMeshInfo * pData, IN const double lng, IN const double lat) const
-{
-	if (pData != nullptr)
-	{
-		if (lng < pData->data_box.Xmin || pData->data_box.Xmin == 0) { pData->data_box.Xmin = lng; }
-		if (pData->data_box.Xmax < lng || pData->data_box.Xmax == 0) { pData->data_box.Xmax = lng; }
-		if (lat < pData->data_box.Ymin || pData->data_box.Ymin == 0) { pData->data_box.Ymin = lat; }
-		if (pData->data_box.Ymax < lat || pData->data_box.Ymax == 0) { pData->data_box.Ymax = lat; }
-	}
-}
-
-
-void MapMesh::ExtendDataBox(IN stMeshInfo * pData, IN const SPoint& coord) const
-{
-	if (pData != nullptr) {
-		return ExtendDataBox(pData, coord.x, coord.y);
-	}
-}
-
-
 void MapMesh::CheckNeighborMesh(void)
 {
 	static const int nMaxNeighbor = 8;
@@ -494,10 +454,10 @@ void MapMesh::CheckNeighborMesh(void)
 	// 소수점 단위가 오차가 있을 수 있어, 10만 곱한 영역을 비교하자	
 	for (map<uint64_t, stMeshInfo*>::iterator itMe = mapData.begin(); itMe != mapData.end(); itMe++)
 	{
-		RECT rtMe = { 
-			static_cast<int32_t>(itMe->second->mesh_box.Xmin * 100000), 
-			static_cast<int32_t>(itMe->second->mesh_box.Ymin * 100000), 
-			static_cast<int32_t>(itMe->second->mesh_box.Xmax * 100000), 
+		RECT rtMe = {
+			static_cast<int32_t>(itMe->second->mesh_box.Xmin * 100000),
+			static_cast<int32_t>(itMe->second->mesh_box.Ymin * 100000),
+			static_cast<int32_t>(itMe->second->mesh_box.Xmax * 100000),
 			static_cast<int32_t>(itMe->second->mesh_box.Ymax * 100000) };
 
 		if (itMe->second->links.empty()) {

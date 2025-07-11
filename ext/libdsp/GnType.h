@@ -20,10 +20,34 @@
 
 struct PointN {
 	int x, y;
+
+	bool empty() const {
+		return ((this->x == 0) && (this->y == 0));
+	}
+
+	bool operator== (const PointN& rhs) const {
+		return ((this->x == rhs.x) && (this->y == rhs.y));
+	}
+
+	bool operator!= (const PointN& rhs) const {
+		return ((this->x != rhs.x) || (this->y != rhs.y));
+	}
 };
 
 struct PointF {
 	double x, y;
+
+	bool empty() const {
+		return ((this->x == 0.f) && (this->y == 0.f));
+	}
+
+	bool operator== (const PointN& rhs) const {
+		return ((this->x == rhs.x) && (this->y == rhs.y));
+	}
+
+	bool operator!= (const PointN& rhs) const {
+		return ((this->x != rhs.x) || (this->y != rhs.y));
+	}
 };
 
 typedef struct {

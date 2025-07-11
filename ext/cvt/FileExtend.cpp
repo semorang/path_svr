@@ -175,6 +175,10 @@ bool CFileExtend::LoadDataByIdx(IN const uint32_t idx)
 		return false;
 	}
 
+	if (fileBody.szData <= 0) {
+		return false;
+	}
+
 	int readItems = 0;
 	int32_t cntNode = 0;
 	int32_t cntLink = 0;
@@ -213,7 +217,6 @@ bool CFileExtend::LoadDataByIdx(IN const uint32_t idx)
 			readItems += readItem;
 		}
 	} // for
-
 
 	if (readItems != fileBody.szData) {
 		LOG_TRACE(LOG_ERROR, "Failed, body data size not matching from read file size, tile_id:%d, body:%d vs file:%d", fileBody.idTile, fileBody.szData, readItems);

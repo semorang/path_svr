@@ -45,6 +45,8 @@ class sTrfCtrl
            int cache_target, int type, time_t cur_timer = 0);
   int speed(uint8_t* spd, int trf_blk_idx, int itm_idx, time_t timer, 
             float link_length);
+  int speed_block(std::vector<uint8_t>& vtblock, time_t timer);
+
   //int speed(uint8_t* spd_blk, 
   //          int trf_blk_idx, int blk_cnt, int ptn_id, int time_idx);
   //int speed(uint8_t* spd, int ptn_id, int tidx, uint16_t bidx, uint16_t iidx);

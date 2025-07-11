@@ -52,10 +52,15 @@ public:
 	void GetMultiRouteResult(IN const vector<RouteResultInfo>& vtRouteResults, IN const bool isJunction, OUT string& strJson);
 	int32_t GetMapsRouteResult(IN const RouteResultInfo* pResult, OUT string& strJson);
 	int32_t GetMapsMultiRouteResult(IN const vector<RouteResultInfo>& vtRouteResults, OUT string& strJson);
-	void GetClusteringResult(IN const vector<stDistrict>& vtClusters, IN const vector<SPoint>& vtPositionLock, OUT string& strJson);
+	void GetClusteringResult(IN const Cluster& CLUST, IN const RouteDistMatrix& RDM, IN const char* pszFile, OUT string& strJson);
 	void GetBoundaryResult(IN const vector<SPoint>& vtBoundary, OUT string& strJson);
-	void GetBestWaypointResult(IN const vector<stWaypoints>& vtWaypoints, IN const vector<uint32_t>& vtBestWaypoints, IN const double dist, IN const int32_t time, OUT string& strJson);
-	void GetWeightMatrixResult(IN const vector<vector<stDistMatrix>>& vtWeightMatrix, OUT string& strJson);
+	void GetBestWaypointResult(IN const BestWaypoints& TSP, IN const RouteDistMatrix& RDM, IN const char* pszFile, OUT string& strJson);
+	void GetWeightMatrixResult(IN const RouteDistMatrix& RDM, OUT string& strJson);
+	void GetWeightMatrixRouteLineResult(IN const RouteDistMatrix& RDM, OUT string& strJson);
+
+	int32_t GetWeightMatrixResultFile(IN const RouteDistMatrix& RDM, IN const bool includeRDM, IN const char* pszFile);
+	int32_t GetWeightMatrixRouteLineResultFile(IN const RouteDistMatrix& RDM, IN const char* pszFile, IN const bool includeBinary);
+
 		// 분기점 노드의 경로선을 제외한 나머지 링크 얻기 // like a mpp
 	// length = 본경로의 최대 길이, 0: 전체, ...
 	// expansion = 본 경로 외 확장할 레벨, 0: 현재 경로만, 1: 현재 경로에서 1단계만 가지치기 ...
@@ -66,6 +71,7 @@ public:
 	const size_t GetRouteProbablePathEx(IN const unordered_map<uint64_t, int>* pmapVisited, IN double addedlength, IN const int32_t depth, IN const double branchLength, OUT vector<RouteProbablePath*>& vtJctInfo);
 
 	void GetOptimalPosition(IN const stReqOptimal* pReq, IN const stOptimalPointInfo* pResult, OUT string& strJson);
+	void GetMultiOptimalPosition(IN const vector<stOptimalPointInfo>* pvtResult, OUT string& strJson);
 private:
 	CDataManager* m_pDataMgr;
 

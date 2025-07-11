@@ -108,7 +108,7 @@ bool CFileVehicle::ParseData(IN const char* fname)
 			{ "SR_K3" },{ "SR_NUM3" },{ "LANE_NUM" },{ "LINK_K" },{ "LEVEL" },
 			{ "ROAD_DK1" },{ "ROAD_DK2" },{ "ROAD_DK3" },{ "PASS_CODE" },{ "K_CONTROL" },
 			{ "EXPRESS" },{ "CHARGE" },{ "SAFE_Z" },{ "ROAD_NM" },{ "TUNNEL" },
-			{ "UNDER_P" },{ "LINK_LEN" },
+			{ "UNDER_P" },{ "ENTRY" },{ "LINK_LEN" },
 		};
 #else
 		static char szLinkField[128][44] = {
@@ -160,7 +160,7 @@ bool CFileVehicle::ParseData(IN const char* fname)
 
 
 	//데이터 얻기
-	LOG_TRACE(LOG_DEBUG, "LOG, start, raw data parsing file : %s, cnt : %d", fname, nRecCount);
+	time_t timeStart = LOG_TRACE(LOG_DEBUG, "LOG, start, raw data parsing file : %s, cnt : %d", fname, nRecCount);
 
 
 	FILE* fpNodeLinkMatching = nullptr;
@@ -350,9 +350,9 @@ bool CFileVehicle::ParseData(IN const char* fname)
 			pLink->veh.over_pass = link.OverPass;
 			pLink->veh.hd_flag = link.HdFlag;
 #else			
-			pLink->veh.weight = link.MaxWeight == 0 ? 0 : 1; // 높이 제한	
-			pLink->veh.height = link.MaxHeight == 0 ? 0 : 1; // 무게 제한			
-			pLink->veh.bridge = link.Bridge == 0 ? 0 : 1; // 교량			
+			pLink->veh.weight = link.MaxWeight == 0 ? 0 : 1; // 높이 제한
+			pLink->veh.height = link.MaxHeight == 0 ? 0 : 1; // 무게 제한
+			pLink->veh.bridge = link.Bridge == 0 ? 0 : 1; // 교량
 			pLink->veh.under_pass = link.UnderPass == 0 ? 0 : 1; // 지하차도
 			pLink->veh.toll = link.TollInfo == 0 ? 0 : 1; // 톨게이트
 			pLink->veh.restriction = (link.EntryRestriction < 1 || 5 < link.EntryRestriction) ? 0 : link.EntryRestriction;// 진입 제한
@@ -364,10 +364,10 @@ bool CFileVehicle::ParseData(IN const char* fname)
 			if ((link.TTLID_P > 0 || link.TTLID_N > 0) && pLink->veh.level < 7) {
 				// add ttl traffic data 
 				int32_t ttl_nid = link.TTLID_P % TILEID_BYTE_COUNT;
-				m_pDataMgr->AddTrafficTTLData(ttl_nid, pLink->link_id.tile_id, pLink->link_id.nid, DIR_POSITIVE); // TTL 정
+				m_pDataMgr->AddTrafficTTLData(ttl_nid, DIR_POSITIVE, pLink->link_id.tile_id, pLink->link_id.nid, pLink->link_id.dir); // TTL 정
 
 				ttl_nid = link.TTLID_N % TILEID_BYTE_COUNT;
-				m_pDataMgr->AddTrafficTTLData(ttl_nid, pLink->link_id.tile_id, pLink->link_id.nid, DIR_NAGATIVE); // TTL 역
+				m_pDataMgr->AddTrafficTTLData(ttl_nid, DIR_NAGATIVE, pLink->link_id.tile_id, pLink->link_id.nid, pLink->link_id.dir); // TTL 역
 			}
 
 
@@ -408,6 +408,8 @@ bool CFileVehicle::ParseData(IN const char* fname)
 
 	shpReader.Close();
 
+	LOG_TRACE(LOG_DEBUG, timeStart, "LOG, finished, raw data parsing file");
+
 	if (!m_mapNode.empty() && !m_mapLink.empty()) {
 		return GenServiceData();
 	}
@@ -427,6 +429,9 @@ bool CFileVehicle::GenServiceData()
 		LOG_TRACE(LOG_ERROR, "Failed, node link data empty, node cnt:%d, link cnt:%d", m_mapNode.size(), m_mapLink.size());
 		return false;
 	}
+
+	// 클래스에 추가
+	time_t timeStart = LOG_TRACE(LOG_DEBUG, "LOG, start, add vehicle data to class");
 
 	LOG_TRACE(LOG_DEBUG, "LOG, start, link s/e node indexing");
 
@@ -776,8 +781,7 @@ bool CFileVehicle::GenServiceData()
 		}
 	}
 
-
-	LOG_TRACE(LOG_DEBUG, "LOG, finished");
+	LOG_TRACE(LOG_DEBUG, timeStart, "LOG, finished");
 
 
 	return CFileBase::GenServiceData();
@@ -1089,7 +1093,7 @@ const int32_t getNextPassCode(IN const KeyID currentLinkId, IN const KeyID nextL
 		}
 
 		if (idxCurrentLinkPass < 0 || idxNextLinkPass < 0) {
-			LOG_TRACE(LOG_WARNING, "can't find link matched pass, current link id:%lld%(%d,%d), next link id:%lld(%d,%d)", currentLinkId.llid, currentLinkId.tile_id, currentLinkId.nid, nextLinkId.llid, nextLinkId.tile_id, nextLinkId.nid);
+			LOG_TRACE(LOG_WARNING, "can't find link matched pass, current link id:%lld(%d,%d), next link id:%lld(%d,%d)", currentLinkId.llid, currentLinkId.tile_id, currentLinkId.nid, nextLinkId.llid, nextLinkId.tile_id, nextLinkId.nid);
 		}
 		else {
 			// 통행코드는 자신의 현재 위치(링크) 다음 방향 값을 첫 인덱스를 시작해 자신을 가장 마지막 인덱스로 구성함.
@@ -1127,7 +1131,7 @@ const int32_t getNextPassCode(IN const KeyID currentLinkId, IN const KeyID nextL
 		// reset
 		retPass = PASS_CODE_DISABLE;
 
-#if defined(TARGET_FOR_FLEETUNE)
+#if 0 //defined(USE_TMS_API)
 		if ((pNextLink != nullptr) && (pNextLink->veh.level <= USE_ROUTE_TABLE_LEVEL))
 #else
 		if (pNextLink != nullptr)
@@ -1183,7 +1187,7 @@ const int32_t getNextPassCode(IN const stNodeInfo* pNode, IN const KeyID nextLin
 		for (int ii = 0; ii < pNode->base.connnode_count; ii++) {
 			pNextLink = pDataMgr->GetLinkDataById(nextLinkId, pNode->base.node_type);
 
-#if defined(TARGET_FOR_FLEETUNE)
+#if 0 //defined(USE_TMS_API)
 			if ((pNextLink != nullptr) && (pNextLink->veh.level <= USE_ROUTE_TABLE_LEVEL))
 #else
 			if (pNextLink != nullptr)
@@ -1215,7 +1219,9 @@ const int32_t getPrevPassCode(IN const KeyID currentLinkId, IN const KeyID prevL
 {
 	int32_t retPass = PASS_CODE_DISABLE;
 
-	if (currentLinkId.llid != NULL_VALUE && prevLinkId.llid != NULL_VALUE && pNode) {
+	if (pNode && pNode->base.point_type == TYPE_NODE_EDGE) {
+		retPass = PASS_CODE_ENABLE;
+	} else if (currentLinkId.llid != NULL_VALUE && prevLinkId.llid != NULL_VALUE && pNode) {
 		// 링크의 통행 코드
 		int16_t codeLinkPass = 0;
 
@@ -1236,7 +1242,7 @@ const int32_t getPrevPassCode(IN const KeyID currentLinkId, IN const KeyID prevL
 		}
 
 		if (idxCurrentLinkPass < 0 || idxPrevLinkPass < 0) {
-			LOG_TRACE(LOG_WARNING, "can't find link matched pass, current link id:%lld%(%d,%d), prev link id:%lld(%d,%d)", currentLinkId.llid, currentLinkId.tile_id, currentLinkId.nid, prevLinkId.llid, prevLinkId.tile_id, prevLinkId.nid);
+			LOG_TRACE(LOG_WARNING, "can't find link matched pass, current link id:%lld(%d,%d), prev link id:%lld(%d,%d)", currentLinkId.llid, currentLinkId.tile_id, currentLinkId.nid, prevLinkId.llid, prevLinkId.tile_id, prevLinkId.nid);
 		}
 		else {
 			// 통행코드는 자신의 현재 위치(링크) 다음 방향 값을 첫 인덱스를 시작해 자신을 가장 마지막 인덱스로 구성함.
@@ -1274,7 +1280,7 @@ const int32_t getPrevPassCode(IN const KeyID currentLinkId, IN const KeyID prevL
 		// reset
 		retPass = PASS_CODE_DISABLE;
 
-#if defined(TARGET_FOR_FLEETUNE)
+#if 0 //defined(USE_TMS_API)
 		if ((pPrevLink != nullptr) && (pPrevLink->veh.level <= USE_ROUTE_TABLE_LEVEL))
 #else
 		if (pPrevLink != nullptr)
@@ -1326,7 +1332,7 @@ const int32_t getPrevPassCode(IN const stNodeInfo* pNode, IN const KeyID prevLin
 		for (int ii = 0; ii < pNode->base.connnode_count; ii++) {
 			pPrevLink = pDataMgr->GetLinkDataById(prevLinkId, pNode->base.node_type);
 
-#if defined(TARGET_FOR_FLEETUNE)
+#if 0 //defined(USE_TMS_API)
 			if ((pPrevLink != nullptr) && (pPrevLink->veh.level <= USE_ROUTE_TABLE_LEVEL))
 #else
 			if (pPrevLink != nullptr)
@@ -1364,11 +1370,14 @@ const bool checkNextLinkIsolated(IN const stLinkInfo* pLink, CDataManager* pData
 		stNodeInfo* pNode = pDataMgr->GetVNodeDataById(pLink->snode_id);
 		if (pNode != nullptr) {
 			for (int ii = 0; ii < pNode->base.connnode_count; ii++) {
-				if (pLink->link_id == pNode->connnodes[ii]) {
-					continue;
+				int depth = 1;
+				if ((pNode->base.connnode_count == 1) && (pLink->link_id == pNode->connnodes[ii])) { // 종단 노드일 경우
+					;// depth = 0;
+				} else if ((pLink->link_id == pNode->connnodes[ii])) { // 자신에게 되돌아 오는 경우
+					continue; 
 				}
 
-				int32_t passCode = getNextPassCode(pLink->link_id, pNode->connnodes[ii], pNode, 1, pDataMgr);
+				int32_t passCode = getNextPassCode(pLink->link_id, pNode->connnodes[ii], pNode, depth, pDataMgr);
 				if (passCode != PASS_CODE_DISABLE) {
 					ret = true;
 					break;
@@ -1376,15 +1385,17 @@ const bool checkNextLinkIsolated(IN const stLinkInfo* pLink, CDataManager* pData
 			} // for
 		}
 
-		// enode
-		pNode = pDataMgr->GetVNodeDataById(pLink->enode_id);
-		if ((ret != true) && (pNode != nullptr)) {
+		// enode		
+		if ((ret != true) && ((pNode = pDataMgr->GetVNodeDataById(pLink->enode_id)) != nullptr)) {
 			for (int ii = 0; ii < pNode->base.connnode_count; ii++) {
-				if (pLink->link_id == pNode->connnodes[ii]) {
+				int depth = 1;
+				if ((pNode->base.connnode_count == 1) && (pLink->link_id == pNode->connnodes[ii])) { // 종단 노드일 경우
+					;// depth = 0;
+				} else if ((pLink->link_id == pNode->connnodes[ii])) { // 자신에게 되돌아 오는 경우
 					continue;
 				}
 
-				int32_t passCode = getNextPassCode(pLink->link_id, pNode->connnodes[ii], pNode, 1, pDataMgr);
+				int32_t passCode = getNextPassCode(pLink->link_id, pNode->connnodes[ii], pNode, depth, pDataMgr);
 				if (passCode != PASS_CODE_DISABLE) {
 					ret = true;
 					break;
@@ -1407,11 +1418,14 @@ const bool checkPrevLinkIsolated(IN const stLinkInfo* pLink, CDataManager* pData
 		stNodeInfo* pNode = pDataMgr->GetVNodeDataById(pLink->snode_id);
 		if (pNode != nullptr) {
 			for (int ii = 0; ii < pNode->base.connnode_count; ii++) {
-				if (pLink->link_id == pNode->connnodes[ii]) {
+				int depth = 1;
+				if ((pNode->base.connnode_count == 1) && (pLink->link_id == pNode->connnodes[ii])) { // 종단 노드일 경우
+					;// depth = 0;
+				} else if ((pLink->link_id == pNode->connnodes[ii])) { // 자신에게 되돌아 오는 경우
 					continue;
 				}
 
-				int32_t passCode = getPrevPassCode(pLink->link_id, pNode->connnodes[ii], pNode, 1, pDataMgr);
+				int32_t passCode = getPrevPassCode(pLink->link_id, pNode->connnodes[ii], pNode, depth, pDataMgr);
 				if (passCode != PASS_CODE_DISABLE) {
 					ret = true;
 					break;
@@ -1420,14 +1434,16 @@ const bool checkPrevLinkIsolated(IN const stLinkInfo* pLink, CDataManager* pData
 		}
 
 		// enode
-		pNode = pDataMgr->GetVNodeDataById(pLink->enode_id);
-		if ((ret != true) && (pNode != nullptr)) {
+		if ((ret != true) && ((pNode = pDataMgr->GetVNodeDataById(pLink->enode_id)) != nullptr)) {
 			for (int ii = 0; ii < pNode->base.connnode_count; ii++) {
-				if (pLink->link_id == pNode->connnodes[ii]) {
+				int depth = 1;
+				if ((pNode->base.connnode_count == 1) && (pLink->link_id == pNode->connnodes[ii])) { // 종단 노드일 경우
+					;// depth = 0;
+				} else if ((pLink->link_id == pNode->connnodes[ii])) { // 자신에게 되돌아 오는 경우
 					continue;
 				}
 
-				int32_t passCode = getPrevPassCode(pLink->link_id, pNode->connnodes[ii], pNode, 1, pDataMgr);
+				int32_t passCode = getPrevPassCode(pLink->link_id, pNode->connnodes[ii], pNode, depth, pDataMgr);
 				if (passCode != PASS_CODE_DISABLE) {
 					ret = true;
 					break;

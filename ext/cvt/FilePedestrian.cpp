@@ -616,7 +616,7 @@ bool  CFilePedestrian::SetData_Node(int idx, stWalkNode &getNode_Dbf, char* colD
 bool CFilePedestrian::SetData_Link(int idx, stWalkLink &getLink_Dbf, char* colData)
 {
 	//uint32_t ped.bicycle_type : 2; // 자전거도로 타입, 1:자전거전용, 2:보행자/차량겸용 자전거도로, 3:보행도로
-	//uint32_t ped.walk_type : 3; //보행자도로 타입, 1:복선도록, 2:차량겸용도로, 3:자전거전용도로, 4:보행전용도로, 5:가상보행도로
+	//uint32_t ped.walk_type : 3; //보행자도로 타입, 1:복선도로, 2:차량겸용도로, 3:자전거전용도로, 4:보행전용도로, 5:가상보행도로
 	//uint32_t ped.facility_type : 4; // 시설물 타입, 0:미정의, 1:토끼굴, 2:지하보도, 3:육교, 4:고가도로, 5:교량, 6:지하철역, 7:철도, 8:중앙버스정류장, 9:지하상가, 10:건물관통도로, 11:단지도로_공원, 12:단지도로_주거시설, 13:단지도로_관광지, 14:단지도로_기타
 	//uint32_t ped.gate_type : 4; // 진입로 타입, 0:미정의, 1:경사로, 2:계단, 3:에스컬레이터, 4:계단/에스컬레이터, 5:엘리베이터, 6:단순연결로, 7:횡단보도, 8:무빙워크, 9:징검다리, 10:의사횡단
 	//uint32_t ped.lane_count : 6; // 차선수, 63

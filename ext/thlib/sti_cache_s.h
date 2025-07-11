@@ -10,6 +10,13 @@
 #include "thstring.h"
 #include "thfile.h"
 
+struct TTLSPD
+{
+	uint64_t ttlid = 0;
+	uint8_t spd = 0xFF;
+};
+
+
 class sTrfCache {
 public :
   enum __STRF_TYPE {
@@ -61,6 +68,7 @@ public :
   int     init(const char* map_path, size_t cache_size, int type);
   int     speed(uint8_t* spd, int ptn_id, int time_idx, 
                 int trf_blk_idx, int item_idx);
+  int speed_block(std::vector<uint8_t>& vtblock, int ptn_id, int time_idx);
   //int     speed_block(uint8_t* spd_blk, int ptn_id, 
   //                    int time_idx, int trf_blk_idx, int blk_cnt);
   int     interval();

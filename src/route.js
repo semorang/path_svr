@@ -28,7 +28,7 @@ function checkcoord(lng, lat, contury)
 } 
 
 
-exports.init = function(pid, path, log) {
+exports.init = function(pid, dataPath, filePath, logPath) {
 
     logout("begin engine initialize");
 
@@ -36,10 +36,10 @@ exports.init = function(pid, path, log) {
     if (isSetPid == false && pid !== undefined) {
         isSetPid = true;
 
-        if (path !== undefined && log !== undefined && path.length > 0 && log.length > 0) {
-            addon.init(pid, path, log);
-        } else if (path !== undefined && path.length > 0) {
-            addon.init(pid, path);
+        if (dataPath !== undefined && logPath !== undefined && filePath !== undefined && dataPath.length > 0 && logPath.length > 0 && filePath.length > 0) {
+            addon.init(pid, dataPath, filePath, logPath);
+        } else if (dataPath !== undefined && filePath !== undefined && dataPath.length > 0 && filePath.length > 0) {
+            addon.init(pid, dataPath, filePath);
         } else {
             addon.init(pid);
         }
@@ -129,6 +129,61 @@ exports.optimalposition = function(req) {
 }
 
 
+exports.multi_optimalposition = function(key, req) {
+    let header = {
+        isSuccessful: false,
+        resultCode: codes.ERROR_CODES.ROUTE_RESULT_FAILED,
+        resultMessage: ""
+    };
+
+    // 사용자 키 확인
+    let user = auth.checkAuth(key);
+    if (user === null || user.length <= 0) {
+        header.isSuccessful = false,
+        header.resultCode = codes.ERROR_CODES.RESULT_APPKEY_ERROR,
+        header.resultMessage = codes.getErrMsg(codes.ERROR_CODES.RESULT_APPKEY_ERROR)
+    
+        let ret = {
+            header: header,
+            user_info: req,
+        };
+
+        logout("key error: " + JSON.stringify(ret));
+        return ret;
+    }
+
+    logout("user: " + user + ", req: " + JSON.stringify(req));
+
+    let ret = {
+        header: header,
+    };
+
+    let result = addon.getmultioptimalposition(JSON.stringify(req));
+    let res = JSON.parse(result);
+
+    if (res.result_code == 0) {
+        ret.header.isSuccessful = true;
+        ret.header.resultCode = res.result_code;
+        ret.header.resultMessage = codes.getOptimalErrMsg(res.result_code);
+
+        if (req.origins!== undefined) {
+            ret.origins = req.origins;
+        }
+
+        if (res.datas !== undefined) {
+            ret.datas = res.datas;
+        }
+    }
+    else {
+        ret.header.isSuccessful = false;
+        ret.header.resultCode = res.result_code;
+        ret.header.resultMessage = codes.getOptimalErrMsg(res.result_code);
+    } 
+
+    return ret;
+}
+
+
 // 단일 경로 옵션을 지원
 exports.doroute = function(key, req, expend) {
     addon.logout("start routing");
@@ -149,7 +204,7 @@ exports.doroute = function(key, req, expend) {
             user_info: req,
         };
 
-        logout("key error: " + JSON.stringify(ret));
+        logout("key error: " + JSON.stringify(ret) + ", req: " + JSON.stringify(req));
         return ret;
     }
 
@@ -166,7 +221,7 @@ exports.doroute = function(key, req, expend) {
     const is_sum = (expend !== undefined && expend == 'summary') ? true : false;
     const is_optimal = (req.optimal !== undefined && req.optimal != 'false') ? true : false; // 최적지점 사용, p2p는 무시
     const target = (req.target === undefined) ? '' : req.target;
-    const typeMatch = (target === 'kakaovx') ? 6 : 0;
+    let typeMatch = (target === 'kakaovx') ? codes.LINK_MATCH_TYPE.TYPE_LINK_MATCH_FOR_FOREST : 0;
     const is_junction = (req.junction !== undefined && req.junction == 'true') ? true : false;
 
     // header
@@ -324,7 +379,9 @@ exports.doroute = function(key, req, expend) {
         ret.routes = new Array;
     }
 
-
+    if (mobility == codes.MOBILITY_TYPE.TYPE_MOBILITY_BICYCLE) { // BICYCLE
+        typeMatch = codes.LINK_MATCH_TYPE.TYPE_LINK_MATCH_FOR_BICYCLE;
+    }
     addon.setdeparture(ret.user_info.start.x, ret.user_info.start.y, is_optimal, typeMatch);
     addon.setdestination(ret.user_info.end.x, ret.user_info.end.y, is_optimal, typeMatch);
     if (ret.user_info.vias !== undefined) {
@@ -372,8 +429,8 @@ exports.doroute = function(key, req, expend) {
         }
         else {
             ret.header.isSuccessful = false;
-            ret.header.resultCode = res.result;
-            ret.header.resultMessage = codes.getErrMsg(ret.header.resultCode);
+            ret.header.resultCode = result.result;
+            ret.header.resultMessage = codes.getErrMsg(result.result);
         }
 
         addon.releaseroute();
@@ -405,7 +462,7 @@ exports.domultiroute = function(key, req, expend) {
             user_info: req,
         };
 
-        logout("key error: " + JSON.stringify(ret));
+        logout("key error: " + JSON.stringify(ret) + ", req: " + JSON.stringify(req));
         return ret;
     }
 
@@ -424,7 +481,7 @@ exports.domultiroute = function(key, req, expend) {
     const is_sum = (expend !== undefined && expend == 'summary') ? true : false;
     const is_optimal = (req.optimal !== undefined && req.optimal != 'false') ? true : false; // 최적지점 사용, p2p는 무시
     const target = (req.target === undefined) ? '' : req.target;
-    const typeMatch = (target === 'kakaovx') ? 6 : 0;
+    let typeMatch = (target === 'kakaovx') ? 6 : 0;
     const is_junction = (req.junction !== undefined && req.junction == 'true') ? true : false;
 
     // header
@@ -652,16 +709,16 @@ exports.domultiroute = function(key, req, expend) {
     }
     else {
         ret.header.isSuccessful = false;
-        ret.header.resultCode = res.result;
+        ret.header.resultCode = result.result;
         ret.header.resultMessage = codes.getErrMsg(ret.header.resultCode);
     }
 
-    addon.releaseroute();
-    
-    
+    addon.releaseroute();    
+
+
     if (target === 'p2p') {
         tickEnd = logout("end p2p route tick-count", tickStart);
-        
+
         ret.result = new Object();
 
         if (ret.header.isSuccessful == true) {
@@ -670,7 +727,6 @@ exports.domultiroute = function(key, req, expend) {
             ret.result.work_time = tickEnd - tickStart;
         }
     }
-    
 
     logout("end routing, count: " + route_cnt + ", result(" + ret.header.resultCode + '), ' + ret.header.resultMessage);
 
@@ -832,9 +888,6 @@ exports.getcluster = function(req) {
 
 
 exports.getboundary = function(mode, in_target, destinations) {
-
-    addon.logout("start boundary");
-
     const target = (in_target === undefined) ? '' : req.query.target;
 
     let header = {
@@ -869,8 +922,6 @@ exports.getboundary = function(mode, in_target, destinations) {
         ret.header.resultCode = res.result_code;
         ret.header.resultMessage = codes.getErrMsg(ret.header.resultCode);
     }
-    
-    addon.logout("end boundary");
 
     return ret;
 }

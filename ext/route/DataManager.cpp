@@ -2,7 +2,6 @@
 #include "../stdafx.h"
 #endif
 
-
 #include "DataManager.h"
 
 #if defined(USE_INAVI_STATIC_DATA)
@@ -12,8 +11,11 @@
 #include "../shp/shpio.h"
 #include "../utils/UserLog.h"
 #include "../utils/GeoTools.h"
+#include "../utils/DataConvertor.h"
 #include "MMPoint.hpp"
-
+#if defined(USE_CJSON)
+#include "../libjson/cjson/cJSON.h"
+#endif
 
 #if defined(_WIN32) && defined(_DEBUG)
 #define new DEBUG_NEW
@@ -208,11 +210,12 @@ bool CDataManager::Initialize(void)
 
 	// for optimal api
 	memset(&m_dataCost, 0x00, sizeof(m_dataCost));
-	m_dataCost.optimal.cost_lv0 = 100; // 0단계 검색 범위
-	m_dataCost.optimal.cost_lv1 = 300; // 1단계 검색 범위
-	m_dataCost.optimal.cost_lv2 = 500; // 2단계 검색 범위
-	m_dataCost.optimal.cost_lv3 = 700; // 3단계 검색 범위
-	m_dataCost.optimal.cost_lv4 = 1000; // 4단계 검색 범위
+
+	m_dataCost.optimal.cost_lv[0] = 100; // 0단계 검색 범위
+	m_dataCost.optimal.cost_lv[1] = 300; // 1단계 검색 범위
+	m_dataCost.optimal.cost_lv[2] = 500; // 2단계 검색 범위
+	m_dataCost.optimal.cost_lv[3] = 700; // 3단계 검색 범위
+	m_dataCost.optimal.cost_lv[4] = 1000; // 4단계 검색 범위
 	m_dataCost.optimal.cost_mes = 500; // 이웃메쉬 포함 영역
 	m_dataCost.optimal.cost_bld = 300; // 이웃빌딩 포함 영역
 	m_dataCost.optimal.cost_cpx = 500; // 이웃단지 포함 영역
@@ -695,16 +698,24 @@ bool CDataManager::AddNameData(IN const stNameInfo * pData)
 
 
 // Traffic
-uint8_t CDataManager::GetTrafficSpeed(IN const KeyID link, IN const uint8_t dir, IN OUT uint8_t& type)
+uint8_t CDataManager::GetTrafficSpeed(IN const KeyID link, IN const uint8_t dir, IN const uint32_t timestamp, IN OUT uint8_t& type)
 {
 	uint8_t retType = type;
-	uint8_t retSpeed = m_pMapTraffic->GetSpeed(link, dir, retType);
+	uint8_t retSpeed = SPEED_NOT_AVALABLE;
 
-	if ((type == TYPE_TRAFFIC_STATIC) || (type == TYPE_TRAFFIC_NONE && retSpeed == SPEED_NOT_AVALABLE)) {
-		if ((retSpeed = GetTrafficStaticSpeed(link, dir)) != SPEED_NOT_AVALABLE) {
-			retType = TYPE_TRAFFIC_STATIC;
-		}		
+	if ((type == TYPE_TRAFFIC_REAL) || (type == TYPE_TRAFFIC_REAL_STATIC)) {
+		retSpeed = m_pMapTraffic->GetSpeed(link, dir, retType); // TYPE_REAL_TTL or TYPE_REAL_KS
 	}
+
+	if ((type == TYPE_TRAFFIC_STATIC) || (type == TYPE_TRAFFIC_REAL_STATIC && retSpeed == SPEED_NOT_AVALABLE)) {
+		retSpeed = GetTrafficStaticSpeed(link, dir, timestamp, retType); // TYPE_STATIC_TTL or TYPE_STATIC_KS
+	}
+
+#if 0 // defined(USE_TMS_API)
+	if (type == TYPE_TRAFFIC_NONE && retSpeed == SPEED_NOT_AVALABLE) {
+		retSpeed = GetTrafficStaticSpeed(link, dir, timestamp, retType); // TYPE_STATIC_TTL or TYPE_STATIC_KS
+	}
+#endif
 
 	type = retType;
 
@@ -712,9 +723,44 @@ uint8_t CDataManager::GetTrafficSpeed(IN const KeyID link, IN const uint8_t dir,
 }
 
 
-uint64_t CDataManager::GetTrafficId(IN const KeyID link, IN const uint8_t dir, IN const uint8_t type) const
+uint64_t CDataManager::GetTrafficId(IN const KeyID link, IN const uint8_t dir, IN const uint8_t type)
 {
 	return m_pMapTraffic->GetTrafficId(link, dir, type);
+}
+
+
+bool CDataManager::CheckTrafficAlive(uint32_t limit_timestamp)
+{
+	m_pMapTraffic->CheckAliveKSData(limit_timestamp);
+
+	vector<stTrafficInfoTTL> vtCheckedResetLink;
+	m_pMapTraffic->CheckAliveTTLData(limit_timestamp, vtCheckedResetLink);
+#if USE_TRAFFIC_LINK_ATTRIBUTE
+	if (!vtCheckedResetLink.empty()) {
+#pragma omp for
+		for (int ii = 0; ii < vtCheckedResetLink.size(); ii++) {
+			KeyID keyLink;
+			keyLink.tile_id = vtCheckedResetLink[ii].ttl_nid;
+			keyLink.dir = vtCheckedResetLink[ii].link_dir;
+			keyLink.nid = vtCheckedResetLink[ii].link_dir;
+			stLinkInfo* pLink = GetVLinkDataById(keyLink);
+			if (pLink != nullptr) {
+				if (vtCheckedResetLink[ii].ttl_dir == DIR_POSITIVE) {
+					pLink->veh_ext.spd_p = SPEED_NOT_AVALABLE;
+					pLink->veh_ext.spd_type_p = TYPE_TRAFFIC_NONE;
+				} else if (vtCheckedResetLink[ii].ttl_dir == DIR_NAGATIVE) {
+					pLink->veh_ext.spd_n = SPEED_NOT_AVALABLE;
+					pLink->veh_ext.spd_type_n = TYPE_TRAFFIC_NONE;
+				} else {
+					pLink->veh_ext.spd_p = pLink->veh_ext.spd_n = SPEED_NOT_AVALABLE;
+					pLink->veh_ext.spd_type_p = pLink->veh_ext.spd_type_n = TYPE_TRAFFIC_NONE;
+				}
+			}
+		}
+	}
+#endif // #if USE_TRAFFIC_LINK_ATTRIBUTE
+
+	return true;
 }
 
 
@@ -734,22 +780,54 @@ bool CDataManager::UpdateTrafficKSData(IN const uint32_t ksId, IN const uint8_t 
 // TTL
 bool CDataManager::UpdateTrafficTTLData(IN const uint64_t ttlId, IN const uint8_t speed, uint32_t timestamp)
 {
-	return m_pMapTraffic->UpdateTTLData(ttlId, speed, timestamp);
+	bool ret = false;
+	uint8_t retDir;
+	KeyID retLink;
+	
+	if ((ret = m_pMapTraffic->UpdateTTLData(ttlId, speed, timestamp, retDir, retLink)) == true)
+	{
+#if USE_TRAFFIC_LINK_ATTRIBUTE
+		KeyID keyLink = retLink;
+		stLinkInfo* pLink = GetVLinkDataById(keyLink);
+		if (pLink != nullptr) {
+			if (retDir == DIR_POSITIVE) {
+				pLink->veh_ext.spd_p = speed;
+				pLink->veh_ext.spd_type_p = TYPE_SPEED_STATIC_TTL;
+			} else if (retDir == DIR_NAGATIVE) {
+				pLink->veh_ext.spd_n = speed;
+				pLink->veh_ext.spd_type_n = TYPE_SPEED_STATIC_TTL;
+			} else {
+				pLink->veh_ext.spd_p = pLink->veh_ext.spd_n = speed;
+				pLink->veh_ext.spd_type_p = pLink->veh_ext.spd_type_n = TYPE_SPEED_STATIC_TTL;
+			}			
+		}
+#endif
+	}
+
+	return ret;
 }
 
 
-bool CDataManager::AddTrafficTTLData(IN const uint32_t ttl_nid, IN const uint32_t tile_nid, IN const uint32_t link_nid, IN const uint8_t dir)
+bool CDataManager::AddTrafficTTLData(IN const uint32_t ttl_nid, IN const uint8_t ttl_dir, IN const uint32_t tile_nid, IN const uint32_t link_nid, IN const uint8_t link_dir)
 {
-	return m_pMapTraffic->AddTTLData(ttl_nid, tile_nid, link_nid, dir);
+	return m_pMapTraffic->AddTTLData(ttl_nid, ttl_dir, tile_nid, link_nid, link_dir);
 }
 
 
 // STATIC
-uint8_t CDataManager::GetTrafficStaticSpeed(IN const KeyID link, IN const uint8_t dir, IN const uint32_t timestamp)
+uint8_t CDataManager::GetTrafficStaticSpeed(IN const KeyID link, IN const uint8_t dir, IN const uint32_t timestamp, IN OUT uint8_t& type)
 {
-	uint8_t retSpd = SPEED_NOT_AVALABLE;
+	uint8_t retType = TYPE_SPEED_NONE;
+	uint8_t retSpeed = SPEED_NOT_AVALABLE;
+
 #if defined(USE_INAVI_STATIC_DATA)
-	uint64_t ttlId = m_pMapTraffic->GetTrafficId(link, dir, TYPE_TRAFFIC_TTL);
+	if (type == TYPE_TRAFFIC_REAL) {
+		retType = TYPE_SPEED_REAL_TTL;
+	} else {
+		retType = TYPE_SPEED_STATIC_TTL;
+	}
+
+	uint64_t ttlId = m_pMapTraffic->GetTrafficId(link, dir, retType);
 	if (ttlId > 0 && m_pStaticMgr != nullptr) {
 		float length = 0.f;
 
@@ -763,10 +841,26 @@ uint8_t CDataManager::GetTrafficStaticSpeed(IN const KeyID link, IN const uint8_
 			tmNow = time(NULL);
 		}
 
-		retSpd = m_pStaticMgr->GetSpd(ttlId, tmNow, length);
+		retSpeed = m_pStaticMgr->GetSpd(ttlId, tmNow, length);
+		type = retType;
 	}
 #endif
-	return retSpd;
+
+	return retSpeed;
+}
+
+
+bool CDataManager::GetTrafficStaticSpeedBlock(IN const uint32_t timestamp, OUT std::unordered_map<uint64_t, uint8_t>& umapBlock)
+{
+	bool ret = false;
+
+	return ret = m_pStaticMgr->GetStaticSpeedBlock(timestamp, umapBlock);
+
+	if (!umapBlock.empty()) {
+		ret = true;
+	}
+
+	return ret;
 }
 
 
@@ -961,7 +1055,7 @@ stPolygonInfo* CDataManager::GetBuildingDataById(IN const KeyID keyId, IN const 
 
 	return pData;
 }
-
+	
 
 stPolygonInfo* CDataManager::GetComplexDataById(IN const KeyID keyId, IN const bool force)
 {
@@ -1359,7 +1453,7 @@ const char* CDataManager::GetVersionString(IN const uint32_t nDataType)
 }
 
 
-stLinkInfo * CDataManager::GetLinkDataByPointAround(IN const double lng, IN const double lat, IN const int32_t nMaxDist, OUT double& retLng, OUT double& retLat, OUT double& retDist, IN const int32_t nMatchType, IN const int32_t nLinkDataType, OUT int32_t* pMatchVtxIdx)
+stLinkInfo * CDataManager::GetLinkDataByPointAround(IN const double lng, IN const double lat, IN const int32_t nMaxDist, OUT double& retLng, OUT double& retLat, OUT double& retDist, IN const int32_t nMatchType, IN const int32_t nLinkDataType, IN const int32_t nLinkLimitLevel, IN const TruckOption* pTruckOption, OUT int32_t* pMatchVtxIdx)
 {
 	stMeshInfo* pMesh = nullptr;
 	stLinkInfo* retLink = nullptr;
@@ -1369,7 +1463,8 @@ stLinkInfo * CDataManager::GetLinkDataByPointAround(IN const double lng, IN cons
 	double minDistTrekking = INT_MAX;
 	int32_t minMatchVtxIndexTrekking = -1;
 	SPoint minCoordTrekking = { 0, };
-
+#endif
+#if defined(USE_PEDESTRIAN_DATA)
 	stLinkInfo* minLinkPedestrian = nullptr;
 	double minDistPedestrian = INT_MAX;
 	int32_t minMatchVtxIndexPedestrian = -1;
@@ -1447,6 +1542,15 @@ stLinkInfo * CDataManager::GetLinkDataByPointAround(IN const double lng, IN cons
 #if defined(USE_MULTIPROCESS)
 	volatile bool flag = false;
 #endif
+
+	int LimitLevel = nLinkLimitLevel;
+	if (LimitLevel <= -1) {
+		if (nMatchType == TYPE_LINK_MATCH_FOR_TABLE) {
+			LimitLevel = USE_ROUTE_TABLE_LEVEL;
+		} else {
+			LimitLevel = 9;
+		}
+	}
 
 //#pragma omp parallel for
 	for (int32_t ii = 0; ii < nMaxMesh; ii++)
@@ -1532,6 +1636,20 @@ stLinkInfo * CDataManager::GetLinkDataByPointAround(IN const double lng, IN cons
 			for (int ii = 0; ii < pMesh->wlinks.size(); ii++) {
 				if (!(pLink = GetWLinkDataById(pMesh->wlinks[ii])) ||
 					((nLinkDataType != TYPE_LINK_DATA_NONE) && (nLinkDataType != pLink->base.link_type)) ||
+					((nMatchType == TYPE_LINK_MATCH_FOR_BICYCLE) && (
+						(pLink->ped.gate_type == TYPE_GATE_STAIRS) ||
+						(pLink->ped.gate_type == TYPE_GATE_ESCALATOR) ||
+						(pLink->ped.gate_type == TYPE_GATE_STAIRS_ESCALATOR) ||
+						(pLink->ped.gate_type == TYPE_GATE_ESCALATOR) ||
+						(pLink->ped.gate_type == TYPE_GATE_ELEVATOR) ||
+						(pLink->ped.gate_type == TYPE_GATE_MOVINGWALK) ||
+						(pLink->ped.gate_type == TYPE_GATE_STEPPINGSTONES) ||
+						(pLink->ped.facility_type == TYPE_OBJECT_UNDERPASS) ||
+						(pLink->ped.facility_type == TYPE_OBJECT_FOOTBRIDGE) ||
+						(pLink->ped.facility_type == TYPE_OBJECT_SUBWAY) ||
+						(pLink->ped.facility_type == TYPE_OBJECT_RAILROAD) ||
+						(pLink->ped.facility_type == TYPE_OBJECT_UNDERGROUNDMALL) ||
+						(pLink->ped.facility_type == TYPE_OBJECT_THROUGHBUILDING))) ||
 					((nMatchType != TYPE_LINK_MATCH_NONE) && (
 						(pLink->ped.facility_type == TYPE_OBJECT_UNDERPASS) ||
 						(pLink->ped.facility_type == TYPE_OBJECT_SUBWAY) ||
@@ -1569,7 +1687,8 @@ stLinkInfo * CDataManager::GetLinkDataByPointAround(IN const double lng, IN cons
 #pragma omp parallel firstprivate(pLink, minLng, minLat, minDist, minVtxIdx, minIr)
 #pragma omp for
 			for (int ii = 0; ii < pMesh->vlinks.size(); ii++) {
-				if (!(pLink = GetVLinkDataById(pMesh->vlinks[ii])) ||
+				pLink = GetVLinkDataById(pMesh->vlinks[ii]);
+				if (!pLink ||
 					(
 					// link_dtype : 2; // 링크세부종별(dk3), 0:미정의, 1:고가도로,지하차도 옆길, 2:비포장도로, 3:단지내도로
 					// level : 4; // 경로레벨, 0:고속도로, 1:도시고속도로, 자동차전용 국도/지방도, 2:국도, 3:지방도/일반도로8차선이상, 4:일반도로6차선이상, 5:일반도로4차선이상, 6:일반도로2차선이상, 7:일반도로1차선이상, 8:SS도로, 9:GSS도로/단지내도로/통행금지도로/비포장도로
@@ -1587,7 +1706,7 @@ stLinkInfo * CDataManager::GetLinkDataByPointAround(IN const double lng, IN cons
 					// link_type: 링크종별 5:램프 는 level: 경로레벨, 2:국도 이하일 경우 -> 허용 
 
 					(nMatchType == TYPE_LINK_MATCH_CARSTOP) &&
-					(/*pLink->veh.link_dtype == 1 || */pLink->veh.link_dtype == 3 || //( pLink->veh.level >= 9 || 단지폴리곤에 포함된 단지내 도로만 제외
+					(/*pLink->veh.link_dtype == 1 || */pLink->veh.link_dtype == 3 || pLink->veh.level > LimitLevel ||
 					 pLink->veh.road_type == 1 || pLink->veh.road_type == 2 || pLink->veh.road_type == 4 ||
 					 pLink->veh.pass_code == 2 || pLink->veh.pass_code == 4 ||
 					 pLink->veh.link_type == 3 || pLink->veh.link_type == 4 || (pLink->veh.link_type == 5 && pLink->veh.level <= 1)  ||
@@ -1595,7 +1714,7 @@ stLinkInfo * CDataManager::GetLinkDataByPointAround(IN const double lng, IN cons
 					 pLink->veh.tunnel == 1 || pLink->veh.under_pass == 1)) ||
 
 					((nMatchType == TYPE_LINK_MATCH_CARSTOP_EX) &&
-					(/*pLink->veh.link_dtype == 1 || */ // 차량 승하자 + 단지내도로(건물입구점 재확인시, 단지도로에 매칭된 입구점을 확인하기 위해 포함)
+					(/*pLink->veh.link_dtype == 1 || */ pLink->veh.level > LimitLevel || // 차량 승하자 + 단지내도로(건물입구점 재확인시, 단지도로에 매칭된 입구점을 확인하기 위해 포함) 
 					 pLink->veh.road_type == 1 || pLink->veh.road_type == 2 || pLink->veh.road_type == 4 ||
 					 pLink->veh.pass_code == 2 || pLink->veh.pass_code == 4 ||
 #if defined(USE_P2P_DATA)
@@ -1606,7 +1725,7 @@ stLinkInfo * CDataManager::GetLinkDataByPointAround(IN const double lng, IN cons
 					 pLink->veh.tunnel == 1 || pLink->veh.under_pass == 1)) ||
 
 					((nMatchType == TYPE_LINK_MATCH_FOR_TABLE) &&
-					(/*pLink->veh.link_dtype == 1 || */ pLink->veh.link_dtype == 3 || pLink->veh.level > USE_ROUTE_TABLE_LEVEL ||
+					(/*pLink->veh.link_dtype == 1 || */ pLink->veh.link_dtype == 3 || pLink->veh.level > LimitLevel ||
 					//pLink->veh.lane_cnt <= 2 || // 2차선 이하 제외
 					pLink->veh.road_type == 1 || pLink->veh.road_type == 2 || pLink->veh.road_type == 4 ||
 					pLink->veh.pass_code == 2 || pLink->veh.pass_code == 4 ||
@@ -1615,7 +1734,7 @@ stLinkInfo * CDataManager::GetLinkDataByPointAround(IN const double lng, IN cons
 					pLink->veh.tunnel == 1 || pLink->veh.under_pass == 1)) ||
 
 					((nMatchType == TYPE_LINK_MATCH_FOR_HD) &&
-					(/*pLink->veh.link_dtype == 1 || */ /*pLink->veh.link_dtype == 3 || pLink->veh.level >= 9 ||*/
+					(/*pLink->veh.link_dtype == 1 || */ /*pLink->veh.link_dtype == 3 || pLink->veh.level >= 9 ||*/ pLink->veh.level > LimitLevel ||
 					// 대구 경북 과학 기술원내 도로가 단지내 도로이기에, p2p는 단지내 도로는 포함
 					pLink->veh.road_type == 1 || pLink->veh.road_type == 2 || pLink->veh.road_type == 4 ||
 					pLink->veh.pass_code == 2 || pLink->veh.pass_code == 4 ||
@@ -1630,10 +1749,17 @@ stLinkInfo * CDataManager::GetLinkDataByPointAround(IN const double lng, IN cons
 					continue;
 				}
 
+#if defined(USE_VEHICLE_DATA)
+				if (pTruckOption && (IsAvoidTruckLink(pTruckOption, pLink))) {
+					continue;
+				}
+#endif
+
 				// 링크 고립 체크
-#if defined(TARGET_FOR_FLEETUNE)
+#if defined(USE_TMS_API)
 				if (checkNextLinkIsolated(pLink, this) != true) {
 					if (checkPrevLinkIsolated(pLink, this) != true) {
+						LOG_TRACE(LOG_WARNING, "current link isolated, id:%lld, tile:%d, link:%d", pLink->link_id.llid, pLink->link_id.tile_id, pLink->link_id.nid);
 						continue;
 					}
 				}
@@ -1697,8 +1823,17 @@ stLinkInfo * CDataManager::GetLinkDataByPointAround(IN const double lng, IN cons
 		}
 	}
 
-
 	if ((minLinkPedestrian != nullptr) && ((minLinkTrekking == nullptr) || (minDistPedestrian < minDistTrekking - minDistGap))) {
+		retLink = minLinkPedestrian;
+		retLng = minCoordPedestrian.x;
+		retLat = minCoordPedestrian.y;
+		retDist = minDistPedestrian;
+		if (pMatchVtxIdx != nullptr) {
+			*pMatchVtxIdx = minMatchVtxIndexPedestrian;
+		}
+	}
+#elif defined(USE_PEDESTRIAN_DATA)
+	if (minLinkPedestrian != nullptr) {
 		retLink = minLinkPedestrian;
 		retLng = minCoordPedestrian.x;
 		retLat = minCoordPedestrian.y;
@@ -1927,7 +2062,7 @@ const int getAngle(IN const stLinkInfo* pLink, IN const int32_t nDir, IN const i
 }
 
 
-stLinkInfo * CDataManager::GetNearRoadByPoint(IN const double lng, IN const double lat, IN const int32_t maxDist, IN const int32_t nMatchType, IN const int32_t nLinkDataType, OUT stEntryPointInfo& entInfo)
+stLinkInfo * CDataManager::GetNearRoadByPoint(IN const double lng, IN const double lat, IN const int32_t maxDist, IN const int32_t nMatchType, IN const int32_t nLinkDataType, IN const int32_t nLinkLimitLevel, OUT stEntryPointInfo& entInfo)
 {
 	stLinkInfo * pRetLink = nullptr;
 
@@ -1941,7 +2076,7 @@ stLinkInfo * CDataManager::GetNearRoadByPoint(IN const double lng, IN const doub
 	static const double LaneMidDist = 3.25; // 60 이상 차선 기본 거리 미터
 	static const double LaneHighDist = 3.5; // 80 이상 차선 기본 거리 미터
 	
-	stLinkInfo* pLink = GetLinkDataByPointAround(lng, lat, maxDist, retPos.x, retPos.y, retDist, nMatchType, nLinkDataType, &idxLinkVtx);
+	stLinkInfo* pLink = GetLinkDataByPointAround(lng, lat, maxDist, retPos.x, retPos.y, retDist, nMatchType, nLinkDataType, nLinkLimitLevel, nullptr, &idxLinkVtx);
 	if (pLink != nullptr) {
 		double dwDist = getRealWorldDistance(lng, lat, retPos.x, retPos.y);
 
@@ -2033,7 +2168,7 @@ stLinkInfo * CDataManager::GetNearRoadByPoint(IN const double lng, IN const doub
 		retDist = dwLaneDist;
 		SPoint nearRetPos = newRetPos;
 		//stLinkInfo* pNewLink = GetLinkDataByPointAround(newRetPos.x, newRetPos.y, dwLaneDist, nearRetPos.x, nearRetPos.y, retDist, TYPE_LINK_MATCH_NONE, &idxLinkVtx);
-		stLinkInfo* pNewLink = GetLinkDataByPointAround(newRetPos.x, newRetPos.y, dwLaneDist + LaneLowDist, nearRetPos.x, nearRetPos.y, retDist, TYPE_LINK_MATCH_NONE, nLinkDataType, &idxLinkVtx);
+		stLinkInfo* pNewLink = GetLinkDataByPointAround(newRetPos.x, newRetPos.y, dwLaneDist + LaneLowDist, nearRetPos.x, nearRetPos.y, retDist, TYPE_LINK_MATCH_NONE, nLinkDataType, nLinkLimitLevel, nullptr, &idxLinkVtx);
 
 		if (pNewLink != nullptr && pNewLink != pLink) {
 			// 이격 거리 주변 도로보다 가까운 거리로 재설정 하자
@@ -2059,7 +2194,7 @@ stLinkInfo * CDataManager::GetNearRoadByPoint(IN const double lng, IN const doub
 }
 
 
-int32_t CDataManager::GetOptimalPointDataByPoint(IN const double lng, IN const double lat, OUT stOptimalPointInfo* pOptInfo, IN const int32_t nEntType, IN const int32_t nRetCount, IN const int32_t nMatchType, IN const int32_t nLinkDataType, IN const int32_t nOption)
+int32_t CDataManager::GetOptimalPointDataByPoint(IN const double lng, IN const double lat, OUT stOptimalPointInfo* pOptInfo, IN const int32_t nEntType, IN const int32_t nReqCount, IN const int32_t nMatchType, IN const int32_t nLinkDataType, IN const int32_t nSubOption)
 {
 	int32_t cntRet = 0;
 	stReqOptimal reqOpt;
@@ -2284,7 +2419,7 @@ int32_t CDataManager::GetOptimalPointDataByPoint(IN const double lng, IN const d
 
 					// 도로 사이드에 위치시킬 최적 지점 이격 거리
 					for (int ii = 0; ii < 5; ii++) {
-						if ((pNearRoad = GetNearRoadByPoint(ent.x, ent.y, m_dataCost.base[ii], TYPE_LINK_MATCH_CARSTOP_EX, nLinkDataType, entInfo)) != nullptr) {
+						if ((pNearRoad = GetNearRoadByPoint(ent.x, ent.y, m_dataCost.optimal.cost_lv[ii], TYPE_LINK_MATCH_CARSTOP_EX, nLinkDataType, -1, entInfo)) != nullptr) {
 							break;
 						}
 					}
@@ -2299,15 +2434,15 @@ int32_t CDataManager::GetOptimalPointDataByPoint(IN const double lng, IN const d
 
 
 			// 입구점 정보가 없으면 주변 가까운 도로 검출
-			if (vtEntInfo.empty() || nOption == 1) {
+			if (vtEntInfo.empty() || nSubOption == 1) {
 				pNearRoad = nullptr;
 
 				// 도로 사이드에 위치시킬 최적 지점 이격 거리
 				for (int ii = 0; ii < 5; ii++) {
 #if defined(USE_FOREST_DATA)
-					if ((pNearRoad = GetNearRoadByPoint(reqCoord.x, reqCoord.y, m_dataCost.base[ii], TYPE_LINK_MATCH_NONE, nLinkDataType, entInfo)) != nullptr)
+					if ((pNearRoad = GetNearRoadByPoint(reqCoord.x, reqCoord.y, m_dataCost.optimal.cost_lv[ii], TYPE_LINK_MATCH_NONE, nLinkDataType, -1, entInfo)) != nullptr)
 #else
-					if ((pNearRoad = GetNearRoadByPoint(reqCoord.x, reqCoord.y, m_dataCost.base[ii], TYPE_LINK_MATCH_CARSTOP, nLinkDataType, entInfo)) != nullptr)
+					if ((pNearRoad = GetNearRoadByPoint(reqCoord.x, reqCoord.y, m_dataCost.optimal.cost_lv[ii], TYPE_LINK_MATCH_CARSTOP, nLinkDataType, -1, entInfo)) != nullptr)
 #endif
 					{
 						break;
@@ -2329,18 +2464,17 @@ int32_t CDataManager::GetOptimalPointDataByPoint(IN const double lng, IN const d
 		if (cntRet <= 0 && vtExpInfo.empty()) {
 			//sprintf((char*)m_strMsg.c_str(), "Can't find optimal points, polyId:%d, polyType:%d", pOptInfo->id, pOptInfo->nType);
 		}
-		else {			
+		else {
 			if (cntRet > 1 && reqOpt.typeAll == 0) {
 				sort(vtEntInfo.begin(), vtEntInfo.end(), cmpEntPoint);
 			}
 
 			// 요청된 갯수만 적용
-			if (nRetCount <= 0 || cntRet <= nRetCount) {
+			if (nReqCount <= 0 || cntRet <= nReqCount) {
 				pOptInfo->vtEntryPoint.assign(vtEntInfo.begin(), vtEntInfo.end());
-			}
-			else {
-				pOptInfo->vtEntryPoint.assign(vtEntInfo.begin(), vtEntInfo.begin() + nRetCount);
-				cntRet = nRetCount;
+			} else {
+				pOptInfo->vtEntryPoint.assign(vtEntInfo.begin(), vtEntInfo.begin() + nReqCount);
+				cntRet = nReqCount;
 			}
 
 			// 추가 속성 적용
@@ -2349,9 +2483,9 @@ int32_t CDataManager::GetOptimalPointDataByPoint(IN const double lng, IN const d
 					pOptInfo->vtEntryPoint.emplace_back(vtExpInfo[ii]);
 					cntRet++;
 				}
-				LOG_TRACE(LOG_DEBUG, "Polygon EntryPoint  Info, id:%d, type:%d, cnt:%d, ext:%d", pOptInfo->id, pOptInfo->nType, cntRet, vtExpInfo.size());
+				//LOG_TRACE(LOG_DEBUG, "Polygon EntryPoint  Info, id:%d, type:%d, cnt:%d, ext:%d", pOptInfo->id, pOptInfo->nType, cntRet, vtExpInfo.size());
 			} else {
-				LOG_TRACE(LOG_DEBUG, "Polygon EntryPoint Info, id:%d, type:%d, cnt:%d", pOptInfo->id, pOptInfo->nType, cntRet);
+				//LOG_TRACE(LOG_DEBUG, "Polygon EntryPoint Info, id:%d, type:%d, cnt:%d", pOptInfo->id, pOptInfo->nType, cntRet);
 			}
 		}
 	}
@@ -2359,6 +2493,105 @@ int32_t CDataManager::GetOptimalPointDataByPoint(IN const double lng, IN const d
 	return cntRet;
 }
 
+
+int32_t CDataManager::GetRequestMultiOptimalPoints(IN const char* szRequest, OUT vector<SPoint>& vtOrigins, OUT stReqOptimal& reqOpt)
+{
+	int32_t ret = ROUTE_RESULT_SUCCESS;
+
+#if defined(USE_CJSON)
+	cJSON* root = cJSON_Parse(szRequest);
+	int userId = 0;
+	if (root != NULL) {
+		cJSON* pValue = cJSON_GetObjectItem(root, "id");
+		if ((pValue != NULL) && cJSON_IsNumber(pValue)) {
+			userId = cJSON_GetNumberValue(pValue);
+		} else if ((pValue != NULL) && cJSON_IsString(pValue)) {
+			userId = atoi(cJSON_GetStringValue(pValue));
+		}
+
+		if (userId == 0 || userId == NULL_VALUE) {
+			userId = 13578642;
+		}
+
+		cJSON* pOption = cJSON_GetObjectItem(root, "option");
+		if (pOption != NULL) {
+			pValue = cJSON_GetObjectItem(pOption, "type");
+			if ((pValue != NULL) && cJSON_IsNumber(pValue)) {
+				reqOpt.typeAll = cJSON_GetNumberValue(pValue);
+			} else if ((pValue != NULL) && cJSON_IsString(pValue)) {
+				reqOpt.typeAll = atoi(cJSON_GetStringValue(pValue));
+			}
+
+			pValue = cJSON_GetObjectItem(pOption, "count");
+			if ((pValue != NULL) && cJSON_IsNumber(pValue)) {
+				reqOpt.reqCount = cJSON_GetNumberValue(pValue);
+			} else if ((pValue != NULL) && cJSON_IsString(pValue)) {
+				reqOpt.reqCount = atoi(cJSON_GetStringValue(pValue));
+			} else {
+				reqOpt.reqCount = 0;
+			}
+		}
+
+		cJSON* pOrigins = cJSON_GetObjectItem(root, "origins");
+		if (pOrigins != NULL) {
+			int cntPoints = cJSON_GetArraySize(pOrigins);
+
+			if (cntPoints > 0) {
+				vtOrigins.reserve(cntPoints);
+
+				SPoint tmpCoord;
+				cJSON* pCoords;
+				for (int ii = 0; ii < cntPoints; ii++) {
+					pCoords = cJSON_GetArrayItem(pOrigins, ii);
+					if ((pCoords != NULL) && (cJSON_GetArraySize(pCoords) == 2)) {
+						pValue = cJSON_GetArrayItem(pCoords, 0);
+						tmpCoord.x = cJSON_GetNumberValue(pValue);
+						pValue = cJSON_GetArrayItem(pCoords, 1);
+						tmpCoord.y = cJSON_GetNumberValue(pValue);
+
+						vtOrigins.emplace_back(tmpCoord);
+					}
+				} // for
+			}
+		}
+
+		cJSON_Delete(root);
+	} // cJSON
+#endif // #if defined(USE_CJSON)
+
+	return ret;
+}
+
+
+int32_t CDataManager::GetMultiOptimalPointDataByPoints(IN const vector<SPoint>& vtOrigins, OUT vector<stOptimalPointInfo>& vtOptInfos, IN const int32_t nEntType, IN const int32_t nReqCount, IN const int32_t nSubOption, IN const int32_t nMatchType, IN const int32_t nLinkDataType)
+{
+	int32_t ret = 0;
+
+	int cntPoints = vtOrigins.size();
+
+	time_t startTime = LOG_TRACE(LOG_DEBUG, "start, multi optimal position search");
+
+	if (cntPoints > 0) {
+		vtOptInfos.resize(cntPoints);
+
+#if defined(USE_MULTIPROCESS)
+#pragma omp parallel for
+#endif
+		for (int ii = 0; ii < cntPoints; ii++) {
+			if (GetOptimalPointDataByPoint(vtOrigins[ii].x, vtOrigins[ii].y, &vtOptInfos[ii], nEntType, nReqCount, nMatchType, nLinkDataType, nSubOption) >= 1) {
+				ret++;
+			}
+		}
+	}
+
+#if defined(USE_MULTIPROCESS)
+	LOG_TRACE(LOG_DEBUG, startTime, "ent, multi optimal position search(omp), cnt:%d", ret);
+#else 
+	LOG_TRACE(LOG_DEBUG, startTime, "ent, multi optimal position search, cnt:%d", ret);
+#endif
+
+	return ret;
+}
 
 
 stLinkInfo * CDataManager::GetNearLinkDataByCourseId(IN const int32_t nCourseId, IN const double lng, IN const double lat, IN const int32_t nMaxDist, OUT double& retLng, OUT double& retLat, OUT double& retDist)
@@ -2402,6 +2635,29 @@ stLinkInfo * CDataManager::GetNearLinkDataByCourseId(IN const int32_t nCourseId,
 //}
 
 
+bool CDataManager::IsAvoidTruckLink(IN const TruckOption* pTruckOption, IN const stLinkInfo* pLink)
+{
+	bool ret = false;
+
+	if (pTruckOption && pTruckOption->isEnableTruckOption() && pLink) {
+		if (pLink->veh.height) {
+			double height = GetExtendDataById(pLink->link_id, TYPE_LINKEX_HEIGHT, TYPE_KEY_LINK);
+			if ((height > 0.f) && ((height * 100) < pTruckOption->height)) {
+				ret = true;
+			}
+		}
+		if (!ret && pLink->veh.weight) {
+			double weight = GetExtendDataById(pLink->link_id, TYPE_LINKEX_WEIGHT, TYPE_KEY_LINK);
+			if ((weight > 0.f) && ((weight * 1000) < pTruckOption->weight)) {
+				ret = true;
+			}
+		}
+	}
+
+	return ret;
+}
+
+
 bool CDataManager::GetNewData(IN const uint32_t idTile)
 {
 	unordered_map<uint32_t, FileIndex> mapNeedMatch;
@@ -2425,8 +2681,8 @@ int32_t FindNearMesh(IN const SBox& rtWorld, IN const unordered_map<uint32_t, Fi
 
 	// 주변 메쉬 id
 	if ((it = mapIdx.find(idMesh)) != mapIdx.end()) {
-		// 영역에 들어오는 메쉬면 추가
-		if (isInPitBox(it->second.rtData, rtWorld)) {
+		// 바디 데이터가 존재하고, 영역에 들어오는 메쉬면 추가
+		if ((it->second.szBody >= 0) && isInPitBox(it->second.rtData, rtWorld)) {
 			retMeshs.emplace(it->second.idTile, it->second);
 
 			// 주변 메쉬 포함
@@ -2455,8 +2711,11 @@ bool CDataManager::GetNewData(IN const SBox& rtWorld)
 
 	// 요청 영역의 중심에 매칭되는 하나의 메쉬를 찿고, 찾은 매쉬의 주변 메쉬를 돌아가며 확인
 	for (const auto& idx : m_mapFileIndex) {
-		if (isInBox(lng, lat, idx.second.rtData)) {
-			idMesh = idx.first;
+		if ((idx.second.szBody >= 0) && isInBox(lng, lat, idx.second.rtData)) {
+			idMesh = idx.second.idTile;
+			if (idx.second.idTile == GLOBAL_MESH_ID) {
+				continue;
+			}
 			break;
 		}
 	} // for
@@ -2464,7 +2723,7 @@ bool CDataManager::GetNewData(IN const SBox& rtWorld)
 	// 중심 좌표에 매칭되는 메쉬가 없으면 영역에 포함되는 메쉬 검색
 	if (idMesh == NULL_VALUE) {
 		for (const auto& idx : m_mapFileIndex) {
-			if (isInPitBox(idx.second.rtData, rtWorld)) {
+			if ((idx.second.szBody >= 0) && isInPitBox(idx.second.rtData, rtWorld)) {
 				idMesh = idx.first;
 				break;
 			}
@@ -2488,18 +2747,20 @@ bool CDataManager::GetNewData(IN const double& lng, IN const double& lat)
 		if (isInBox(lng, lat, idx.second.rtData)) {
 			mapNeedMatch.emplace(idx.second.idTile, idx.second);
 
-#if !defined(USE_DATA_CACHE)
-			// id 매칭, 로딩되야 할 메쉬
-			stMeshInfo* pMesh = m_pMapMesh->GetMeshById(idx.second.idTile);
-			if (pMesh != nullptr) {
-				for (const auto& mesh : pMesh->neighbors) {
-					if ((it = m_mapFileIndex.find(mesh)) != m_mapFileIndex.end()) {
-						mapNeedMatch.emplace(it->second.idTile, it->second);
-					}
-				} // for
+			if (idx.second.idTile == GLOBAL_MESH_ID) {
+				continue;
+			} else {
+				// id 매칭, 로딩되야 할 메쉬
+				stMeshInfo* pMesh = m_pMapMesh->GetMeshById(idx.second.idTile);
+				if (pMesh != nullptr) {
+					for (const auto& mesh : pMesh->neighbors) {
+						if ((it = m_mapFileIndex.find(mesh)) != m_mapFileIndex.end()) {
+							mapNeedMatch.emplace(it->second.idTile, it->second);
+						}
+					} // for
+				}
+				break;
 			}
-#endif
-			break;
 		}
 	} // for
 
@@ -2529,15 +2790,618 @@ void CDataManager::SetFileMgr(IN CFileManager* pFileMgr)
 }
 
 
-void CDataManager::SetDataPath(IN const char* pszFilePath)
+void CDataManager::SetDataPath(IN const char* pszDataPath)
 {
-	strcpy(m_szDataPath, pszFilePath);
+	strcpy(m_szDataPath, pszDataPath);
+
+	// check dir
+	char szCheckPath[MAX_PATH] = {0, };
+	sprintf(szCheckPath, "%s/usr", pszDataPath);
+	checkDirectory(szCheckPath);
 }
 
 
 const char* CDataManager::CDataManager::GetDataPath(void) const
 {
 	return m_szDataPath;
+}
+
+
+int getRequestCost(IN const char* szRequest, IN const char* szType, OUT DataCost* pDataCost)
+{
+	if (szRequest == nullptr || szType == nullptr || pDataCost == nullptr) {
+		return 0;
+	}
+
+	// json
+	int cntValue = 0;
+
+#if defined(USE_CJSON)
+	cJSON* root = cJSON_Parse(szRequest);
+	if (root != NULL) {
+		string strType;
+		cJSON* pData = cJSON_GetObjectItem(root, "type");
+		if (pData) {
+			strType = cJSON_GetStringValue(pData);
+		}
+
+		if ((strcmp(szType, strType.c_str()) == 0) && (strcmp(szType, "pedestrian") == 0)) {
+			cJSON* pData = cJSON_GetObjectItem(root, "cost");
+			cJSON* pArray = nullptr;
+			cJSON* pItem = nullptr;
+			cJSON* pCost = nullptr;
+			const int nMaxSize = ROUTE_OPT_COUNT;
+
+			// forest cost
+			if (pData) {
+				pItem = cJSON_GetObjectItem(pData, "forest");
+				if (pItem != NULL) {
+					// 기본
+					pArray = cJSON_GetObjectItem(pItem, "base");
+					if (pArray && cJSON_IsArray(pArray)) { // new
+						int nSize = cJSON_GetArraySize(pArray);
+						for (int ii = 0; ii < min(nSize, nMaxSize); ii++) {
+							pCost = cJSON_GetArrayItem(pArray, ii);
+							if (pCost != nullptr) {
+								pDataCost->pedestrian.cost_forest_base[ii] = cJSON_GetNumberValue(pCost);
+								cntValue++;
+							}
+						}
+					}
+
+					// 인기도	
+					pArray = cJSON_GetObjectItem(pItem, "popular");
+					if (pArray && cJSON_IsArray(pArray)) { // new
+						int nSize = cJSON_GetArraySize(pArray);
+						for (int ii = 0; ii < min(nSize, nMaxSize); ii++) {
+							pCost = cJSON_GetArrayItem(pArray, ii);
+							if (pCost != nullptr) {
+								pDataCost->pedestrian.cost_forest_popular[ii] = cJSON_GetNumberValue(pCost);
+								cntValue++;
+							}
+						}
+					}
+
+					// 코스	
+					pArray = cJSON_GetObjectItem(pItem, "course");
+					if (pArray && cJSON_IsArray(pArray)) { // new
+						int nSize = cJSON_GetArraySize(pArray);
+						for (int ii = 0; ii < min(nSize, nMaxSize); ii++) {
+							pCost = cJSON_GetArrayItem(pArray, ii);
+							if (pCost != nullptr) {
+								pDataCost->pedestrian.cost_forest_course[ii] = cJSON_GetNumberValue(pCost);
+								cntValue++;
+							}
+						}
+					}
+
+					// 경사도
+					pArray = cJSON_GetObjectItem(pItem, "slop");
+					if (pArray && cJSON_IsArray(pArray)) { // new
+						int nSize = cJSON_GetArraySize(pArray);
+						for (int ii = 0; ii < min(nSize, nMaxSize); ii++) {
+							pCost = cJSON_GetArrayItem(pArray, ii);
+							if (pCost != nullptr) {
+								pDataCost->pedestrian.cost_forest_slop[ii] = cJSON_GetNumberValue(pCost);
+								cntValue++;
+							}
+						}
+					}
+				}
+
+				// lane cost
+				pItem = cJSON_GetObjectItem(pData, "lane");
+				if (pItem != NULL) {
+					// 걷기	
+					pArray = cJSON_GetObjectItem(pItem, "walk");
+					if (pArray && cJSON_IsArray(pArray)) { // new
+						int nSize = cJSON_GetArraySize(pArray);
+						for (int ii = 0; ii < min(nSize, nMaxSize); ii++) {
+							pCost = cJSON_GetArrayItem(pArray, ii);
+							if (pCost != nullptr) {
+								pDataCost->pedestrian.cost_lane_walk[ii] = cJSON_GetNumberValue(pCost);
+								cntValue++;
+							}
+						}
+					}
+
+					// 자전거			
+					pArray = cJSON_GetObjectItem(pItem, "bike");
+					if (pArray && cJSON_IsArray(pArray)) { // new
+						int nSize = cJSON_GetArraySize(pArray);
+						for (int ii = 0; ii < min(nSize, nMaxSize); ii++) {
+							pCost = cJSON_GetArrayItem(pArray, ii);
+							if (pCost != nullptr) {
+								pDataCost->pedestrian.cost_lane_bike[ii] = cJSON_GetNumberValue(pCost);
+								cntValue++;
+							}
+						}
+					}
+				}
+
+				// cross cost
+				pItem = cJSON_GetObjectItem(pData, "cross");
+				if (pItem != NULL) {
+					// 걷기					
+					pArray = cJSON_GetObjectItem(pItem, "walk");
+					if (pArray && cJSON_IsArray(pArray)) { // new
+						int nSize = cJSON_GetArraySize(pArray);
+						for (int ii = 0; ii < min(nSize, nMaxSize); ii++) {
+							pCost = cJSON_GetArrayItem(pArray, ii);
+							if (pCost != nullptr) {
+								pDataCost->pedestrian.cost_cross_walk[ii] = cJSON_GetNumberValue(pCost);
+								cntValue++;
+							}
+						}
+					}
+
+					// 자전거					
+					pArray = cJSON_GetObjectItem(pItem, "bike");
+					if (pArray && cJSON_IsArray(pArray)) { // new
+						int nSize = cJSON_GetArraySize(pArray);
+						for (int ii = 0; ii < min(nSize, nMaxSize); ii++) {
+							pCost = cJSON_GetArrayItem(pArray, ii);
+							if (pCost != nullptr) {
+								pDataCost->pedestrian.cost_cross_bike[ii] = cJSON_GetNumberValue(pCost);
+								cntValue++;
+							}
+						}
+					}
+				}
+
+				// angle cost
+				pItem = cJSON_GetObjectItem(pData, "angle");
+				if (pItem != NULL) {
+					// 걷기					
+					pArray = cJSON_GetObjectItem(pItem, "walk");
+					if (pArray && cJSON_IsArray(pArray)) { // new
+						int nSize = cJSON_GetArraySize(pArray);
+						for (int ii = 0; ii < min(nSize, nMaxSize); ii++) {
+							pCost = cJSON_GetArrayItem(pArray, ii);
+							if (pCost != nullptr) {
+								pDataCost->pedestrian.cost_angle_walk[ii] = cJSON_GetNumberValue(pCost);
+								cntValue++;
+							}
+						}
+					}
+
+					// 자전거	
+					pArray = cJSON_GetObjectItem(pItem, "bike");
+					if (pArray && cJSON_IsArray(pArray)) { // new
+						int nSize = cJSON_GetArraySize(pArray);
+						for (int ii = 0; ii < min(nSize, nMaxSize); ii++) {
+							pCost = cJSON_GetArrayItem(pArray, ii);
+							if (pCost != nullptr) {
+								pDataCost->pedestrian.cost_angle_bike[ii] = cJSON_GetNumberValue(pCost);
+								cntValue++;
+							}
+						}
+					}
+				}
+
+				// walk cost
+				pItem = cJSON_GetObjectItem(pData, "walking");
+				if (pItem != NULL) {
+					// TWIN ROAD // 복선
+					pArray = cJSON_GetObjectItem(pItem, "side");
+					if (pArray && cJSON_IsArray(pArray)) { // new
+						int nSize = cJSON_GetArraySize(pArray);
+						for (int ii = 0; ii < min(nSize, nMaxSize); ii++) {
+							pCost = cJSON_GetArrayItem(pArray, ii);
+							if (pCost != nullptr) {
+								pDataCost->pedestrian.cost_walk_side[ii] = cJSON_GetNumberValue(pCost);
+								cntValue++;
+							}
+						}
+					}
+
+					// WALK WITH CAR 차량겸용
+					pArray = cJSON_GetObjectItem(pItem, "with");
+					if (pArray && cJSON_IsArray(pArray)) { // new
+						int nSize = cJSON_GetArraySize(pArray);
+						for (int ii = 0; ii < min(nSize, nMaxSize); ii++) {
+							pCost = cJSON_GetArrayItem(pArray, ii);
+							if (pCost != nullptr) {
+								pDataCost->pedestrian.cost_walk_with[ii] = cJSON_GetNumberValue(pCost);
+								cntValue++;
+							}
+						}
+					}
+
+					// BICYCLE ONLY 자전거전용					
+					pArray = cJSON_GetObjectItem(pItem, "bike");
+					if (pArray && cJSON_IsArray(pArray)) { // new
+						int nSize = cJSON_GetArraySize(pArray);
+						for (int ii = 0; ii < min(nSize, nMaxSize); ii++) {
+							pCost = cJSON_GetArrayItem(pArray, ii);
+							if (pCost != nullptr) {
+								pDataCost->pedestrian.cost_walk_bike[ii] = cJSON_GetNumberValue(pCost);
+								cntValue++;
+							}
+						}
+					}
+
+					// PEDESTRIAN 보행전용					
+					pArray = cJSON_GetObjectItem(pItem, "only");
+					if (pArray && cJSON_IsArray(pArray)) { // new
+						int nSize = cJSON_GetArraySize(pArray);
+						for (int ii = 0; ii < min(nSize, nMaxSize); ii++) {
+							pCost = cJSON_GetArrayItem(pArray, ii);
+							if (pCost != nullptr) {
+								pDataCost->pedestrian.cost_walk_only[ii] = cJSON_GetNumberValue(pCost);
+								cntValue++;
+							}
+						}
+					}
+
+					// VIRTUAL 가상보행					
+					pArray = cJSON_GetObjectItem(pItem, "line");
+					if (pArray && cJSON_IsArray(pArray)) { // new
+						int nSize = cJSON_GetArraySize(pArray);
+						for (int ii = 0; ii < min(nSize, nMaxSize); ii++) {
+							pCost = cJSON_GetArrayItem(pArray, ii);
+							if (pCost != nullptr) {
+								pDataCost->pedestrian.cost_walk_line[ii] = cJSON_GetNumberValue(pCost);
+								cntValue++;
+							}
+						}
+					}
+				}
+
+				// bicycle cost
+				pItem = cJSON_GetObjectItem(pData, "bicycle");
+				if (pItem != NULL) {
+					// BICYCLE ONLY					
+					pArray = cJSON_GetObjectItem(pItem, "bike");
+					if (pArray && cJSON_IsArray(pArray)) { // new
+						int nSize = cJSON_GetArraySize(pArray);
+						for (int ii = 0; ii < min(nSize, nMaxSize); ii++) {
+							pCost = cJSON_GetArrayItem(pArray, ii);
+							if (pCost != nullptr) {
+								pDataCost->pedestrian.cost_bike_only[ii] = cJSON_GetNumberValue(pCost);
+								cntValue++;
+							}
+						}
+					}
+
+					// BICYCLE WITH CAR					
+					pArray = cJSON_GetObjectItem(pItem, "with");
+					if (pArray && cJSON_IsArray(pArray)) { // new
+						int nSize = cJSON_GetArraySize(pArray);
+						for (int ii = 0; ii < min(nSize, nMaxSize); ii++) {
+							pCost = cJSON_GetArrayItem(pArray, ii);
+							if (pCost != nullptr) {
+								pDataCost->pedestrian.cost_bike_with[ii] = cJSON_GetNumberValue(pCost);
+								cntValue++;
+							}
+						}
+					}
+
+					// PEDESTRIAN
+					pArray = cJSON_GetObjectItem(pItem, "walk");
+					if (pArray && cJSON_IsArray(pArray)) { // new
+						int nSize = cJSON_GetArraySize(pArray);
+						for (int ii = 0; ii < min(nSize, nMaxSize); ii++) {
+							pCost = cJSON_GetArrayItem(pArray, ii);
+							if (pCost != nullptr) {
+								pDataCost->pedestrian.cost_bike_walk[ii] = cJSON_GetNumberValue(pCost);
+								cntValue++;
+							}
+						}
+					}
+				}
+			}
+		} // pedestrian
+		else if ((strcmp(szType, strType.c_str()) == 0) &&
+			((strcmp(szType, "vehicle") == 0) || (strcmp(szType, "tms") == 0))) {
+			cJSON* pData = cJSON_GetObjectItem(root, "cost");
+			cJSON* pArray = nullptr;
+			cJSON* pItem = nullptr;
+			cJSON* pCost = nullptr;
+			const int nMaxSize = 10;
+
+			if (pData) {
+				// level cost
+				pItem = cJSON_GetObjectItem(pData, "speed");
+				if (pItem != NULL) {
+					// level0
+					pArray = cJSON_GetObjectItem(pItem, "lv0");
+					if (pArray && cJSON_IsArray(pArray)) { // new
+						int nSize = cJSON_GetArraySize(pArray);
+						for (int ii = 0; ii < min(nSize, nMaxSize); ii++) {
+							pCost = cJSON_GetArrayItem(pArray, ii);
+							if (pCost != nullptr) {
+								pDataCost->vehicle.cost_speed_lv0[ii] = cJSON_GetNumberValue(pCost);
+								cntValue++;
+							}
+						}
+					}
+
+					// level1
+					pArray = cJSON_GetObjectItem(pItem, "lv1");
+					if (pArray && cJSON_IsArray(pArray)) { // new
+						int nSize = cJSON_GetArraySize(pArray);
+						for (int ii = 0; ii < min(nSize, nMaxSize); ii++) {
+							pCost = cJSON_GetArrayItem(pArray, ii);
+							if (pCost != nullptr) {
+								pDataCost->vehicle.cost_speed_lv1[ii] = cJSON_GetNumberValue(pCost);
+								cntValue++;
+							}
+						}
+					}
+
+					// level2
+					pArray = cJSON_GetObjectItem(pItem, "lv2");
+					if (pArray && cJSON_IsArray(pArray)) { // new
+						int nSize = cJSON_GetArraySize(pArray);
+						for (int ii = 0; ii < min(nSize, nMaxSize); ii++) {
+							pCost = cJSON_GetArrayItem(pArray, ii);
+							if (pCost != nullptr) {
+								pDataCost->vehicle.cost_speed_lv2[ii] = cJSON_GetNumberValue(pCost);
+								cntValue++;
+							}
+						}
+					}
+
+					// level3
+					pArray = cJSON_GetObjectItem(pItem, "lv3");
+					if (pArray && cJSON_IsArray(pArray)) { // new
+						int nSize = cJSON_GetArraySize(pArray);
+						for (int ii = 0; ii < min(nSize, nMaxSize); ii++) {
+							pCost = cJSON_GetArrayItem(pArray, ii);
+							if (pCost != nullptr) {
+								pDataCost->vehicle.cost_speed_lv3[ii] = cJSON_GetNumberValue(pCost);
+								cntValue++;
+							}
+						}
+					}
+
+					// level4
+					pArray = cJSON_GetObjectItem(pItem, "lv4");
+					if (pArray && cJSON_IsArray(pArray)) { // new
+						int nSize = cJSON_GetArraySize(pArray);
+						for (int ii = 0; ii < min(nSize, nMaxSize); ii++) {
+							pCost = cJSON_GetArrayItem(pArray, ii);
+							if (pCost != nullptr) {
+								pDataCost->vehicle.cost_speed_lv4[ii] = cJSON_GetNumberValue(pCost);
+								cntValue++;
+							}
+						}
+					}
+
+					// level5
+					pArray = cJSON_GetObjectItem(pItem, "lv5");
+					if (pArray && cJSON_IsArray(pArray)) { // new
+						int nSize = cJSON_GetArraySize(pArray);
+						for (int ii = 0; ii < min(nSize, nMaxSize); ii++) {
+							pCost = cJSON_GetArrayItem(pArray, ii);
+							if (pCost != nullptr) {
+								pDataCost->vehicle.cost_speed_lv5[ii] = cJSON_GetNumberValue(pCost);
+								cntValue++;
+							}
+						}
+					}
+
+					// level6
+					pArray = cJSON_GetObjectItem(pItem, "lv6");
+					if (pArray && cJSON_IsArray(pArray)) { // new
+						int nSize = cJSON_GetArraySize(pArray);
+						for (int ii = 0; ii < min(nSize, nMaxSize); ii++) {
+							pCost = cJSON_GetArrayItem(pArray, ii);
+							if (pCost != nullptr) {
+								pDataCost->vehicle.cost_speed_lv6[ii] = cJSON_GetNumberValue(pCost);
+								cntValue++;
+							}
+						}
+					}
+
+					// level7
+					pArray = cJSON_GetObjectItem(pItem, "lv7");
+					if (pArray && cJSON_IsArray(pArray)) { // new
+						int nSize = cJSON_GetArraySize(pArray);
+						for (int ii = 0; ii < min(nSize, nMaxSize); ii++) {
+							pCost = cJSON_GetArrayItem(pArray, ii);
+							if (pCost != nullptr) {
+								pDataCost->vehicle.cost_speed_lv7[ii] = cJSON_GetNumberValue(pCost);
+								cntValue++;
+							}
+						}
+					}
+
+					// level8
+					pArray = cJSON_GetObjectItem(pItem, "lv8");
+					if (pArray && cJSON_IsArray(pArray)) { // new
+						int nSize = cJSON_GetArraySize(pArray);
+						for (int ii = 0; ii < min(nSize, nMaxSize); ii++) {
+							pCost = cJSON_GetArrayItem(pArray, ii);
+							if (pCost != nullptr) {
+								pDataCost->vehicle.cost_speed_lv8[ii] = cJSON_GetNumberValue(pCost);
+								cntValue++;
+							}
+						}
+					}
+
+					// level9
+					pArray = cJSON_GetObjectItem(pItem, "lv9");
+					if (pArray && cJSON_IsArray(pArray)) { // new
+						int nSize = cJSON_GetArraySize(pArray);
+						for (int ii = 0; ii < min(nSize, nMaxSize); ii++) {
+							pCost = cJSON_GetArrayItem(pArray, ii);
+							if (pCost != nullptr) {
+								pDataCost->vehicle.cost_speed_lv9[ii] = cJSON_GetNumberValue(pCost);
+								cntValue++;
+							}
+						}
+					}
+				}
+
+				// angle cost
+				pItem = cJSON_GetObjectItem(pData, "time");
+				if (pItem != NULL) {
+					// angle 0
+					pArray = cJSON_GetObjectItem(pItem, "ang0");
+					if (pArray && cJSON_IsArray(pArray)) { // new
+						int nSize = cJSON_GetArraySize(pArray);
+						for (int ii = 0; ii < min(nSize, nMaxSize); ii++) {
+							pCost = cJSON_GetArrayItem(pArray, ii);
+							if (pCost != nullptr) {
+								pDataCost->vehicle.cost_time_ang0[ii] = cJSON_GetNumberValue(pCost);
+								cntValue++;
+							}
+						}
+					}
+
+					// recomended
+					pArray = cJSON_GetObjectItem(pItem, "ang45");
+					if (pArray && cJSON_IsArray(pArray)) { // new
+						int nSize = cJSON_GetArraySize(pArray);
+						for (int ii = 0; ii < min(nSize, nMaxSize); ii++) {
+							pCost = cJSON_GetArrayItem(pArray, ii);
+							if (pCost != nullptr) {
+								pDataCost->vehicle.cost_time_ang45[ii] = cJSON_GetNumberValue(pCost);
+								cntValue++;
+							}
+						}
+					}
+
+					pArray = cJSON_GetObjectItem(pItem, "ang90");
+					if (pArray && cJSON_IsArray(pArray)) { // new
+						int nSize = cJSON_GetArraySize(pArray);
+						for (int ii = 0; ii < min(nSize, nMaxSize); ii++) {
+							pCost = cJSON_GetArrayItem(pArray, ii);
+							if (pCost != nullptr) {
+								pDataCost->vehicle.cost_time_ang90[ii] = cJSON_GetNumberValue(pCost);
+								cntValue++;
+							}
+						}
+					}
+
+					pArray = cJSON_GetObjectItem(pItem, "ang135");
+					if (pArray && cJSON_IsArray(pArray)) { // new
+						int nSize = cJSON_GetArraySize(pArray);
+						for (int ii = 0; ii < min(nSize, nMaxSize); ii++) {
+							pCost = cJSON_GetArrayItem(pArray, ii);
+							if (pCost != nullptr) {
+								pDataCost->vehicle.cost_time_ang135[ii] = cJSON_GetNumberValue(pCost);
+								cntValue++;
+							}
+						}
+					}
+
+					pArray = cJSON_GetObjectItem(pItem, "ang180");
+					if (pArray && cJSON_IsArray(pArray)) { // new
+						int nSize = cJSON_GetArraySize(pArray);
+						for (int ii = 0; ii < min(nSize, nMaxSize); ii++) {
+							pCost = cJSON_GetArrayItem(pArray, ii);
+							if (pCost != nullptr) {
+								pDataCost->vehicle.cost_time_ang180[ii] = cJSON_GetNumberValue(pCost);
+								cntValue++;
+							}
+						}
+					}
+
+					pArray = cJSON_GetObjectItem(pItem, "ang225");
+					if (pArray && cJSON_IsArray(pArray)) { // new
+						int nSize = cJSON_GetArraySize(pArray);
+						for (int ii = 0; ii < min(nSize, nMaxSize); ii++) {
+							pCost = cJSON_GetArrayItem(pArray, ii);
+							if (pCost != nullptr) {
+								pDataCost->vehicle.cost_time_ang225[ii] = cJSON_GetNumberValue(pCost);
+								cntValue++;
+							}
+						}
+					}
+
+					pArray = cJSON_GetObjectItem(pItem, "ang270");
+					if (pArray && cJSON_IsArray(pArray)) { // new
+						int nSize = cJSON_GetArraySize(pArray);
+						for (int ii = 0; ii < min(nSize, nMaxSize); ii++) {
+							pCost = cJSON_GetArrayItem(pArray, ii);
+							if (pCost != nullptr) {
+								pDataCost->vehicle.cost_time_ang270[ii] = cJSON_GetNumberValue(pCost);
+								cntValue++;
+							}
+						}
+					}
+
+					pArray = cJSON_GetObjectItem(pItem, "ang315");
+					if (pArray && cJSON_IsArray(pArray)) { // new
+						int nSize = cJSON_GetArraySize(pArray);
+						for (int ii = 0; ii < min(nSize, nMaxSize); ii++) {
+							pCost = cJSON_GetArrayItem(pArray, ii);
+							if (pCost != nullptr) {
+								pDataCost->vehicle.cost_time_ang315[ii] = cJSON_GetNumberValue(pCost);
+								cntValue++;
+							}
+						}
+					}
+				}
+			}
+		} // vehicle
+
+		cJSON_Delete(root);
+	} // root
+#endif //#if defined(USE_CJSON)
+
+	return cntValue;
+}
+
+
+int CDataManager::GetDataCost(IN const uint32_t type, OUT DataCost& dataCost)
+{
+	int retCntCost = 0;
+
+	// cost data file
+	char szCostFile[FILENAME_MAX + 1];
+	char szTarget[FILENAME_MAX + 1] = { 0, };
+	if (type == TYPE_DATA_PEDESTRIAN) {
+		sprintf(szTarget, "pedestrian");
+	} else if (type == TYPE_DATA_TREKKING) {
+		sprintf(szTarget, "forest");
+	} else {
+#if defined(USE_TMS_API)
+		sprintf(szTarget, "tms");
+#else
+		sprintf(szTarget, "vehicle");
+#endif
+	}
+
+#if defined(_WIN32) && defined(_WINDOWS)
+	sprintf_s(szCostFile, FILENAME_MAX, "%s/usr/%s_cost.json", m_szDataPath, szTarget);
+#else
+	snprintf(szCostFile, FILENAME_MAX, "%s/usr/%s_cost.json", m_szDataPath, szTarget);
+#endif
+	FILE* fp = fopen(szCostFile, "rb");
+	if (fp) {
+		static const int MAX_DATACOST_SIZE = 1024 * 128; //128 Kib
+		fseek(fp, 0L, SEEK_END);
+		size_t nFileSize = ftell(fp);
+		fseek(fp, 0L, SEEK_SET);
+		if (!nFileSize || (nFileSize > MAX_DATACOST_SIZE)) {
+			LOG_TRACE(LOG_WARNING, "data cost has wrong file size, file:%s, size:%s", szCostFile, nFileSize);
+		} else {
+			string strJson;
+			const size_t nBuff = 1024;
+			char szBuff[nBuff + 1] = { 0, };
+#if defined(_WIN32)
+			while (fread_s(szBuff, nBuff, nBuff, 1, fp) != 0) {
+#else
+			while (fread(szBuff, nBuff, 1, fp) != 0) {
+#endif
+				strJson.append(szBuff);
+				memset(szBuff, 0x00, nBuff);
+			}
+			strJson.append(szBuff);
+
+			retCntCost = getRequestCost(strJson.c_str(), szTarget, &dataCost);
+			//if (retCntCost > 0) {
+			//	m_pRouteMgr.SetRouteCost(type, &dataCost, cntCost);
+			//}
+		}
+		fclose(fp);
+	}
+
+	return retCntCost;
 }
 
 
@@ -2555,8 +3419,8 @@ void CDataManager::SetDataCost(IN const uint32_t type, IN const DataCost* pCost)
 		{
 			// old 
 			LOG_TRACE(LOG_DEBUG_LINE, "set optimal cost(old), ");
-			LOG_TRACE(LOG_DEBUG_CONTINUE, "dist step : %d, %d, %d, %d, %d, ", m_dataCost.optimal.cost_lv0,
-				m_dataCost.optimal.cost_lv1, m_dataCost.optimal.cost_lv2, m_dataCost.optimal.cost_lv3, m_dataCost.optimal.cost_lv4);
+			LOG_TRACE(LOG_DEBUG_CONTINUE, "dist step : %d, %d, %d, %d, %d, ", m_dataCost.optimal.cost_lv[0],
+				m_dataCost.optimal.cost_lv[1], m_dataCost.optimal.cost_lv[2], m_dataCost.optimal.cost_lv[3], m_dataCost.optimal.cost_lv[4]);
 			LOG_TRACE(LOG_DEBUG_CONTINUE, " max bulding & complex : ");
 			LOG_TRACE(LOG_DEBUG_CONTINUE, "%d, %d", m_dataCost.optimal.cost_bld, m_dataCost.optimal.cost_cpx);
 			LOG_TRACE(LOG_DEBUG_CONTINUE, "\n");
@@ -2565,8 +3429,8 @@ void CDataManager::SetDataCost(IN const uint32_t type, IN const DataCost* pCost)
 
 			// new
 			LOG_TRACE(LOG_DEBUG_LINE, "set optimal arr cost(new), ");
-			LOG_TRACE(LOG_DEBUG_CONTINUE, "dist step : %d, %d, %d, %d, %d, ", m_dataCost.optimal.cost_lv0,
-				m_dataCost.optimal.cost_lv1, m_dataCost.optimal.cost_lv2, m_dataCost.optimal.cost_lv3, m_dataCost.optimal.cost_lv4);
+			LOG_TRACE(LOG_DEBUG_CONTINUE, "dist step : %d, %d, %d, %d, %d, ", m_dataCost.optimal.cost_lv[0],
+				m_dataCost.optimal.cost_lv[1], m_dataCost.optimal.cost_lv[2], m_dataCost.optimal.cost_lv[3], m_dataCost.optimal.cost_lv[4]);
 			LOG_TRACE(LOG_DEBUG_CONTINUE, " max bulding & complex : ");
 			LOG_TRACE(LOG_DEBUG_CONTINUE, "%d, %d", m_dataCost.optimal.cost_bld, m_dataCost.optimal.cost_cpx);
 			LOG_TRACE(LOG_DEBUG_CONTINUE, "\n");
@@ -2719,7 +3583,7 @@ int CDataManager::CalculateCache(unordered_map<uint32_t, FileIndex>& mapNeedMatc
 	//for (; !pqRemoveCandidate.empty(); )
 	for (; cntRemaindCache < cntNeedMatch && !pqRemoveCandidate.empty(); )
 	{
-		// 이미 매칭된 캐쉬와 남은 캐쉬가 최대 캐쉬를 넘지는 못하도록 
+		// 이미 매칭된 캐쉬와 남은 캐쉬가 최대 캐쉬를 넘지는 못하도록
 		if (m_cntMaxCache <= cntRemaindCache + cntMatched) {
 			break;
 		}

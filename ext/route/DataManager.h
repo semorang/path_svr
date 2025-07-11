@@ -16,14 +16,16 @@
 #include "MapBase.h"
 #endif
 
-//#define USE_DATA_CACHE // 파일 일부만 읽어 메모리에 캐싱하자
+#if defined(_WIN32) && defined(_DEBUG)
+#define USE_DATA_CACHE // 파일 일부만 읽어 메모리에 캐싱하자
+#endif
 #define MAX_MESH_COUNT  10000 // 현재 원도의 최대 메쉬 카운트
 #define MAX_CASH_COUNT	300 // 우선 테스트로 n개만 해서 상태 확인 후 확장
 
 #define USE_INAVI_STATIC_DATA
+#define USE_TRAFFIC_LINK_ATTRIBUTE 0 // 트래픽 교통 속도를 링크의 속도 속성에 적용
 
 #pragma pack (push, 1)
-
 // 입구점 정보
 struct stEntryPointInfo {
 	int32_t nAttribute; // 속성, 1: 차량 입구점, 2: 택시 승하차 지점(건물), 3: 택시 승하차 지점(건물군), 4: 택배 차량 하차 거점, 5: 보행자 입구점, 	6: 배달 하차점(차량, 오토바이), 7: 배달 하차점(자전거, 도보)
@@ -42,7 +44,7 @@ struct stOptimalPointInfo {
 
 	// 차량 매칭 타입, 0:일반도로(미매칭), 1:빌딩입구점, 2:단지입구점, 3:단지내도로//, 4:최근접도로
 	// 숲길 매칭 타입, 0:일반도로(미매칭), 1:숲길입구점
-	int32_t nType;	
+	int32_t nType;
 	uint64_t id; // 매칭된 오브젝트 ID, 단지/빌딩/도로/산코드
 	string name;
 	vector<stEntryPointInfo> vtEntryPoint;
@@ -63,6 +65,8 @@ struct stReqOptimal {
 			uint8_t type4th;
 		};
 	};
+	int32_t reqCount;
+	int32_t subOption;
 };
 
 struct FileCacheData {
@@ -86,56 +90,117 @@ struct stLinkMatchTable {
 // 나중에 Cost Manager 따로 두고 관리하는 것도 고려해볼만함.
 typedef struct _tagDataCost {
 	union {
-		double base[128];
+		double base[256];
 		struct {
-			double cost_lv0; double cost_lv1; double cost_lv2; double cost_lv3; double cost_lv4;
-			double cost_lv5; double cost_lv6; double cost_lv7; double cost_lv8; double cost_lv9;
-			double cost_ang0; double cost_ang45; double cost_ang90; double cost_ang135; double cost_ang180;
-			double cost_ang225; double cost_ang270; double cost_ang315;
-			// 18
+			// 0:vehicle, 1:truck으로 2:긴급으로 사용하자 (임시적용: 2025-02-20)
+			// 다른 방식으로 적용 변경되면, 아래의 경로 옵션별 배열로 사용하자 (임시적용: 2025-02-20)
+
+			// 레벨별 도로 기본 속도, 최단거리, 추천, 편한, 최소, 큰길
+			float cost_speed_lv0[ROUTE_OPT_COUNT]; // 0: 고속도로
+			float cost_speed_lv1[ROUTE_OPT_COUNT]; // 1: 도시고속도로, 자동차전용 국도 / 지방도
+			float cost_speed_lv2[ROUTE_OPT_COUNT]; // 2: 국도
+			float cost_speed_lv3[ROUTE_OPT_COUNT]; // 3: 지방도 / 일반도로8차선이상
+			float cost_speed_lv4[ROUTE_OPT_COUNT]; // 4: 일반도로6차선이상
+			float cost_speed_lv5[ROUTE_OPT_COUNT]; // 5: 일반도로4차선이상
+			float cost_speed_lv6[ROUTE_OPT_COUNT]; // 6: 일반도로2차선이상
+			float cost_speed_lv7[ROUTE_OPT_COUNT]; // 7: 일반도로1차선이상
+			float cost_speed_lv8[ROUTE_OPT_COUNT]; // 8: SS도로
+			float cost_speed_lv9[ROUTE_OPT_COUNT]; // 9: GSS도로/단지내도로/통행금지도로/비포장도로
+
+			// 회전별 추가 시간
+			float cost_time_ang0[ROUTE_OPT_COUNT]; // 직진
+			float cost_time_ang45[ROUTE_OPT_COUNT]; // 우측
+			float cost_time_ang90[ROUTE_OPT_COUNT]; // 우회전
+			float cost_time_ang135[ROUTE_OPT_COUNT]; // 급우회전
+			float cost_time_ang180[ROUTE_OPT_COUNT]; // 유턴
+			float cost_time_ang225[ROUTE_OPT_COUNT]; // 급좌회전
+			float cost_time_ang270[ROUTE_OPT_COUNT]; // 좌회전
+			float cost_time_ang315[ROUTE_OPT_COUNT]; // 좌측
+
+			// 90
 		}vehicle;
 		struct
 		{
 			// 차선가중치(걷기/자전거): 최단거리, 추천, 편한, 최소, 큰길
-			double cost_lane_walk0; double cost_lane_walk1; double cost_lane_walk2; double cost_lane_walk3; double cost_lane_walk4;
-			double cost_lane_bike0; double cost_lane_bike1; double cost_lane_bike2; double cost_lane_bike3; double cost_lane_bike4;
+			float cost_lane_walk[ROUTE_OPT_COUNT];
+			float cost_lane_bike[ROUTE_OPT_COUNT];
+			//float cost_lane_walk0; float cost_lane_walk1; float cost_lane_walk2; float cost_lane_walk3; float cost_lane_walk4;
+			//float cost_lane_bike0; float cost_lane_bike1; float cost_lane_bike2; float cost_lane_bike3; float cost_lane_bike4;
 
 			// 횡단보도(걷기/자전거): 최단거리, 추천, 편한, 최소, 큰길
-			double cost_cross_walk0; double cost_cross_walk1; double cost_cross_walk2; double cost_cross_walk3; double cost_cross_walk4;
-			double cost_cross_bike0; double cost_cross_bike1; double cost_cross_bike2; double cost_cross_bike3; double cost_cross_bike4;
+			float cost_cross_walk[ROUTE_OPT_COUNT];
+			float cost_cross_bike[ROUTE_OPT_COUNT];
+			//float cost_cross_walk0; float cost_cross_walk1; float cost_cross_walk2; float cost_cross_walk3; float cost_cross_walk4;
+			//float cost_cross_bike0; float cost_cross_bike1; float cost_cross_bike2; float cost_cross_bike3; float cost_cross_bike4;
 
 			// 회전(걷기/자전거): 최단거리, 추천, 편한, 최소, 큰길
-			double cost_angle_walk0; double cost_angle_walk1; double cost_angle_walk2; double cost_angle_walk3; double cost_angle_walk4;
-			double cost_angle_bike0; double cost_angle_bike1; double cost_angle_bike2; double cost_angle_bike3; double cost_angle_bike4;
+			float cost_angle_walk[ROUTE_OPT_COUNT];
+			float cost_angle_bike[ROUTE_OPT_COUNT];
+			//float cost_angle_walk0; float cost_angle_walk1; float cost_angle_walk2; float cost_angle_walk3; float cost_angle_walk4;
+			//float cost_angle_bike0; float cost_angle_bike1; float cost_angle_bike2; float cost_angle_bike3; float cost_angle_bike4;
+
+			// 보행도로(복선/차량겸용/자전거전용/보행전용/가상보행): 최단거리, 추천, 편한, 최소, 큰길
+			float cost_walk_side[ROUTE_OPT_COUNT];
+			float cost_walk_with[ROUTE_OPT_COUNT];
+			float cost_walk_bike[ROUTE_OPT_COUNT];
+			float cost_walk_only[ROUTE_OPT_COUNT];
+			float cost_walk_line[ROUTE_OPT_COUNT];
+			//float cost_walk_side0; float cost_walk_side1; float cost_walk_side2; float cost_walk_side3; float cost_walk_side4;
+			//float cost_walk_with0; float cost_walk_with1; float cost_walk_with2; float cost_walk_with3; float cost_walk_with4;
+			//float cost_walk_bike0; float cost_walk_bike1; float cost_walk_bike2; float cost_walk_bike3; float cost_walk_bike4;
+			//float cost_walk_only0; float cost_walk_only1; float cost_walk_only2; float cost_walk_only3; float cost_walk_only4;
+			//float cost_walk_line0; float cost_walk_line1; float cost_walk_line2; float cost_walk_line3; float cost_walk_line4;
 
 			// 자전거도로(전용/겸용/보행): 최단거리, 추천, 편한, 최소, 큰길
-			double cost_bike_bike0; double cost_bike_bike1; double cost_bike_bike2; double cost_bike_bike3; double cost_bike_bike4;
-			double cost_bike_with0; double cost_bike_with1; double cost_bike_with2; double cost_bike_with3; double cost_bike_with4;
-			double cost_bike_walk0; double cost_bike_walk1; double cost_bike_walk2; double cost_bike_walk3; double cost_bike_walk4;
+
+			float cost_bike_only[ROUTE_OPT_COUNT];
+			float cost_bike_with[ROUTE_OPT_COUNT];
+			float cost_bike_walk[ROUTE_OPT_COUNT];
+			//float cost_bike_bike0; float cost_bike_bike1; float cost_bike_bike2; float cost_bike_bike3; float cost_bike_bike4;
+			//float cost_bike_with0; float cost_bike_with1; float cost_bike_with2; float cost_bike_with3; float cost_bike_with4;
+			//float cost_bike_walk0; float cost_bike_walk1; float cost_bike_walk2; float cost_bike_walk3; float cost_bike_walk4;
+
 
 			// 숲길(기본): 최단거리, 추천, 편한, 최소, 큰길
-			double cost_forest_base0; double cost_forest_base1; double cost_forest_base2; double cost_forest_base3; double cost_forest_base4;
+			float cost_forest_base[ROUTE_OPT_COUNT];
+			//float cost_forest_base0; float cost_forest_base1; float cost_forest_base2; float cost_forest_base3; float cost_forest_base4;
 
 			// 숲길(인기도): 최단거리, 추천, 편한, 최소, 큰길
-			double cost_forest_popular0; double cost_forest_popular1; double cost_forest_popular2; double cost_forest_popular3; double cost_forest_popular4;
+			float cost_forest_popular[ROUTE_OPT_COUNT];
+			//float cost_forest_popular0; float cost_forest_popular1; float cost_forest_popular2; float cost_forest_popular3; float cost_forest_popular4;
 
 			// 숲길(코스): 최단거리, 추천, 편한, 최소, 큰길
-			double cost_forest_course0; double cost_forest_course1; double cost_forest_course2; double cost_forest_course3; double cost_forest_course4;
+			float cost_forest_course[ROUTE_OPT_COUNT];
+			//float cost_forest_course0; float cost_forest_course1; float cost_forest_course2; float cost_forest_course3; float cost_forest_course4;
 
 			// 숲길(경사도): 최단거리, 추천, 편한, 최소, 큰길
-			double cost_forest_slop0; double cost_forest_slop1; double cost_forest_slop2; double cost_forest_slop3; double cost_forest_slop4;
+			float cost_forest_slop[ROUTE_OPT_COUNT];
+			//float cost_forest_slop0; float cost_forest_slop1; float cost_forest_slop2; float cost_forest_slop3; float cost_forest_slop4;
 
-			// cnt : 60
+			// cnt : 90
 		}pedestrian;
 		struct {
-			double cost_lv0; double cost_lv1; double cost_lv2; double cost_lv3; double cost_lv4;
-			double cost_lv5; double cost_lv6; double cost_lv7; double cost_lv8; double cost_lv9;
-			double cost_mes; double cost_bld; double cost_cpx; double cost_ent; double cost_rod;
+			float cost_lv[10]; // lv0~lv9
+			//float cost_lv0; float cost_lv1; float cost_lv2; float cost_lv3; float cost_lv4;
+			//float cost_lv5; float cost_lv6; float cost_lv7; float cost_lv8; float cost_lv9;
+			float cost_mes; float cost_bld; float cost_cpx; float cost_ent; float cost_rod;
 			// 15
 		}optimal;
 	};
+
+	_tagDataCost()
+	{
+		memset(&base, 0x00, sizeof(base));
+	}
 }DataCost;
 
+#if defined(USE_TMS_API)
+typedef struct _tagStaticSpeedBlock
+{
+	uint64_t ttlid;
+	uint8_t spd;
+}StaticSpeedBlock;
+#endif
 #pragma pack (pop)
 
 
@@ -210,11 +275,12 @@ public:
 	bool LoadStaticData(IN const char* pszFilePath);
 	void SetFileMgr(IN CFileManager* pFileMgr);
 
-	void SetDataPath(IN const char* pszFilePath);
+	void SetDataPath(IN const char* pszDataPath);
 	const char* GetDataPath(void) const;
 
 
 	// set value
+	int GetDataCost(IN const uint32_t type, OUT DataCost& costData);
 	void SetDataCost(IN const uint32_t type, IN const DataCost* pCost);
 
 	// cache
@@ -248,8 +314,9 @@ public:
 	bool AddNameData(IN const stNameInfo * pData);
 
 	// traffic
-	uint8_t GetTrafficSpeed(IN const KeyID link, IN const uint8_t dir, IN OUT uint8_t& type);
-	uint64_t GetTrafficId(IN const KeyID link, IN const uint8_t dir, IN const uint8_t type) const;
+	uint8_t GetTrafficSpeed(IN const KeyID link, IN const uint8_t dir, IN const uint32_t timestamp, IN OUT uint8_t& type);
+	uint64_t GetTrafficId(IN const KeyID link, IN const uint8_t dir, IN const uint8_t type);
+	bool CheckTrafficAlive(uint32_t limit_timestamp);
 
 	// ks
 	bool AddTrafficKSData(IN const uint32_t ks_id, IN const uint32_t tile_nid, IN const uint32_t link_nid, IN const uint8_t dir);
@@ -257,12 +324,13 @@ public:
 	const unordered_map<uint32_t, stTrafficInfoKS*>* GetTrafficKSMapData(void) const;
 
 	// ttl
-	bool AddTrafficTTLData(IN const uint32_t ttl_nid, IN const uint32_t tile_nid, IN const uint32_t link_nid, IN const uint8_t dir);
+	bool AddTrafficTTLData(IN const uint32_t ttl_nid, IN const uint8_t ttl_dir, IN const uint32_t tile_nid, IN const uint32_t link_nid, IN const uint8_t link_dir);
 	bool UpdateTrafficTTLData(IN const uint64_t ttlId, IN const uint8_t speed, uint32_t timestamp);
 	const unordered_map<uint32_t, stTrafficMesh*>* GetTrafficMeshData(void);
 
 	// static
-	uint8_t GetTrafficStaticSpeed(IN const KeyID link, IN const uint8_t dir, IN const uint32_t timestamp = 0);
+	uint8_t GetTrafficStaticSpeed(IN const KeyID link, IN const uint8_t dir, IN const uint32_t timestamp, IN OUT uint8_t& type);
+	bool GetTrafficStaticSpeedBlock(IN const uint32_t timestamp, OUT std::unordered_map<uint64_t, uint8_t>& umapBlock);
 
 	bool AddCourseDataByLink(IN const uint64_t linkId, IN const uint32_t courseId);
 	bool AddLinkDataByCourse(IN const uint32_t courseId, IN const uint64_t linkId);
@@ -317,18 +385,22 @@ public:
 	const char* GetVersionString(IN const uint32_t nDataType);
 
 	// nMatchType : 차량 출/도착지 매칭 옵션(고속도로/터널/지하차도 등은 매칭 안되도록), 이미 매칭되어 들어오는 좌표일 경우에는 사용 안함으로
-	stLinkInfo * GetLinkDataByPointAround(IN const double lng, IN const double lat, IN const int32_t nMaxDist, OUT double& retLng, OUT double& retLat, OUT double& retDist, IN const int32_t nMatchType = TYPE_LINK_MATCH_CARSTOP, IN const int32_t nLinkDataType = TYPE_LINK_DATA_NONE, OUT int32_t* pMatchVtxIdx = nullptr);
+	stLinkInfo * GetLinkDataByPointAround(IN const double lng, IN const double lat, IN const int32_t nMaxDist, OUT double& retLng, OUT double& retLat, OUT double& retDist, IN const int32_t nMatchType = TYPE_LINK_MATCH_CARSTOP, IN const int32_t nLinkDataType = TYPE_LINK_DATA_NONE, IN const int32_t nLinkLimitLevel = -1, IN const TruckOption* pTruckOption = nullptr, OUT int32_t* pMatchVtxIdx = nullptr);
 	int32_t GetLinkVertexDataByPoint(IN const double lng, IN const double lat, IN const int32_t nMaxDist, IN const KeyID linkId, OUT double& retLng, OUT double& retLat, OUT double& retDist);
 	stPolygonInfo* GetPolygonDataByPoint(IN const double lng, IN const double lat, IN const int32_t nType = 0, IN const bool useNeighborMesh = true); // nType 0:입구점있는것만, 1:모두, 2:빌딩만, 3:단지만, useNeighborMesh : 이웃메쉬 확장 검색	
-	stLinkInfo * GetNearRoadByPoint(IN const double lng, IN const double lat, IN const int32_t maxDist, IN const int32_t nMatchType, IN const int32_t nLinkDataType, OUT stEntryPointInfo& entInfo);
-	int32_t GetOptimalPointDataByPoint(IN const double lng, IN const double lat, OUT stOptimalPointInfo* pOptInfo, IN const int32_t nEntType = 0, IN const int32_t nRetCount = 0, IN const int32_t nMatchType = TYPE_LINK_MATCH_CARSTOP, IN const int32_t nLinkDataType = TYPE_LINK_DATA_NONE, IN const int32_t nOption = 0);
+	stLinkInfo * GetNearRoadByPoint(IN const double lng, IN const double lat, IN const int32_t maxDist, IN const int32_t nMatchType, IN const int32_t nLinkDataType, IN const int32_t nLinkLimitLevel, OUT stEntryPointInfo& entInfo);
+	int32_t GetOptimalPointDataByPoint(IN const double lng, IN const double lat, OUT stOptimalPointInfo* pOptInfo, IN const int32_t nEntType = 0, IN const int32_t nReqCount = 0, IN const int32_t nMatchType = TYPE_LINK_MATCH_CARSTOP, IN const int32_t nLinkDataType = TYPE_LINK_DATA_NONE, IN const int32_t nSubOption = 0);
 	// nPolyType, 폴리곤 타입 // 0:알아서, 1:빌딩만, 2:단지만	
+	int32_t GetMultiOptimalPointDataByPoints(IN const vector<SPoint>& vtOrigins, OUT vector<stOptimalPointInfo>& vtOptInfos, IN const int32_t nEntType = 0, IN const int32_t nReqCount = 0, IN const int32_t nSubOption = 0, IN const int32_t nMatchType = TYPE_LINK_MATCH_CARSTOP, IN const int32_t nLinkDataType = TYPE_LINK_DATA_NONE);
 	stLinkInfo * GetNearLinkDataByCourseId(IN const int32_t courseId, IN const double lng, IN const double lat, IN const int32_t nMaxDist, OUT double& retLng, OUT double& retLat, OUT double& retDist);
 
+	int32_t GetRequestMultiOptimalPoints(IN const char* szRequest, OUT vector<SPoint>& vtOrigins, OUT stReqOptimal& reqOpt);
 	// nEntType, 입구점 타입 // 0:알아서, 1: 차량 입구점, 2: 택시 승하차 지점(건물), 3: 택시 승하차 지점(건물군), 4: 택배 차량 하차 거점, 5: 보행자 입구점, 	6: 배달 하차점(차량, 오토바이), 7: 배달 하차점(자전거, 도보)
 	// nOption, 0: 없음, 1: 주변 가까운 도로 무조건 추가
 	///////////////////////////////////////////////////////////////////////////
 	
 	//const char* GetErrorMessage(void);
+
+	bool IsAvoidTruckLink(IN const TruckOption* pTruckOption, IN const stLinkInfo* pLink);
 };
 

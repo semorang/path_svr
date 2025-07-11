@@ -3,13 +3,16 @@
 #include <math.h>
 
 #include "../utils/UserLog.h"
+#include "../utils/Strings.h"
 
 #if defined(USE_PROJ4_LIB)
 #include "../proj4/include/proj.h"
 //#pragma comment(lib, "../proj4/lib/proj.lib")
 #endif
 
-
+#ifndef M_PI
+#define M_PI       3.14159265358979323846
+#endif
 
 // 시계방향. // CW
 bool isRightSide(IN const SPoint* P1, IN const SPoint* P2, IN const SPoint* P3) //const
@@ -162,44 +165,141 @@ bool getPointByDistanceFromCenter(IN const double slng, IN const double slat, IN
 }
 
 
-bool isInBox(IN const double lon, IN const double lat, IN const SBox& inBox, IN const double inMargin)
+void extendDataBox(IN OUT SBox& box, IN const double lng, IN const double lat)
 {
-	if (lon < inBox.Xmin - inMargin) return false;
-	if (lon > inBox.Xmax + inMargin) return false;
-	if (lat < inBox.Ymin - inMargin) return false;
-	if (lat > inBox.Ymax + inMargin) return false;
+	if (lng < box.Xmin || box.Xmin == 0) { box.Xmin = lng; }
+	if (box.Xmax < lng || box.Xmax == 0) { box.Xmax = lng; }
+	if (lat < box.Ymin || box.Ymin == 0) { box.Ymin = lat; }
+	if (box.Ymax < lat || box.Ymax == 0) { box.Ymax = lat; }
+}
+
+
+void extendDataBox(IN OUT SBox& box, IN const SPoint* pCoords, IN const int nCoordCount)
+{
+	if (pCoords != nullptr && nCoordCount > 0) {
+		for (int ii = 0; ii < nCoordCount; ii++) {
+			extendDataBox(box, pCoords[ii].x, pCoords[ii].y);
+		}
+	}
+}
+
+
+void extendDataBox(IN OUT SBox& box, IN const SBox& data)
+{
+	extendDataBox(box, data.Xmin, data.Ymin);
+	extendDataBox(box, data.Xmin, data.Ymax);
+	extendDataBox(box, data.Xmax, data.Ymax);
+	extendDataBox(box, data.Xmax, data.Ymin);
+}
+
+bool isInBox(IN const double lon, IN const double lat, IN const SBox& baseBox, IN const double inMargin)
+{
+	if (lon < baseBox.Xmin - inMargin) return false;
+	if (lon > baseBox.Xmax + inMargin) return false;
+	if (lat < baseBox.Ymin - inMargin) return false;
+	if (lat > baseBox.Ymax + inMargin) return false;
 
 	return true;
 }
 
-
-bool isInPitBox(IN const SBox& fromBox, IN const SBox& inBox)
+// 겹치는지 여부만 판단하는 함수
+bool isBoxOverlap(const SBox& inBox, const SBox& baseBox)
 {
-	if (isInBox(fromBox.Xmin, fromBox.Ymin, inBox)) return true; // LT
-	if (isInBox(fromBox.Xmax, fromBox.Ymin, inBox)) return true; // RT
-	if (isInBox(fromBox.Xmax, fromBox.Ymax, inBox)) return true; // RB
-	if (isInBox(fromBox.Xmin, fromBox.Ymax, inBox)) return true; // LB
+	return !(inBox.Xmax < baseBox.Xmin || 
+		inBox.Xmin > baseBox.Xmax || 
+		inBox.Ymax < baseBox.Ymin || 
+		inBox.Ymin > baseBox.Ymax);
+}
 
-	if ((fromBox.Xmin <= inBox.Xmin && inBox.Xmin <= fromBox.Xmax &&
-		inBox.Ymin <= fromBox.Ymin && fromBox.Ymax <= inBox.Ymax) // L
-		|| (fromBox.Xmin <= inBox.Xmax && inBox.Xmax <= fromBox.Xmax &&
-			inBox.Ymin <= fromBox.Ymin && fromBox.Ymax <= inBox.Ymax) // R
-		|| (fromBox.Ymin <= inBox.Ymin && inBox.Ymin <= fromBox.Ymax &&
-			inBox.Xmin <= fromBox.Xmin && fromBox.Xmax <= inBox.Xmax) // T
-		|| (fromBox.Ymin <= inBox.Ymax && inBox.Ymax <= fromBox.Ymax &&
-			inBox.Xmin <= fromBox.Xmin && fromBox.Xmax <= inBox.Xmax)) { // B
+// 포함 여부 판단 (전체 포함 여부)
+bool isBoxInside(const SBox& inner, const SBox& outer, double margin = 0.0)
+{
+	return (inner.Xmin >= outer.Xmin - margin &&
+		inner.Xmax <= outer.Xmax + margin &&
+		inner.Ymin >= outer.Ymin - margin &&
+		inner.Ymax <= outer.Ymax + margin);
+}
+
+
+bool isInPitBox(IN const SBox& inBox, IN const SBox& baseBox)
+{
+	if (isInBox(inBox.Xmin, inBox.Ymin, baseBox)) return true; // LT
+	if (isInBox(inBox.Xmax, inBox.Ymin, baseBox)) return true; // RT
+	if (isInBox(inBox.Xmax, inBox.Ymax, baseBox)) return true; // RB
+	if (isInBox(inBox.Xmin, inBox.Ymax, baseBox)) return true; // LB
+
+	if ((inBox.Xmin <= baseBox.Xmin && baseBox.Xmin <= inBox.Xmax &&
+		baseBox.Ymin <= inBox.Ymin && inBox.Ymax <= baseBox.Ymax) // L
+		|| (inBox.Xmin <= baseBox.Xmax && baseBox.Xmax <= inBox.Xmax &&
+			baseBox.Ymin <= inBox.Ymin && inBox.Ymax <= baseBox.Ymax) // R
+		|| (inBox.Ymin <= baseBox.Ymin && baseBox.Ymin <= inBox.Ymax &&
+			baseBox.Xmin <= inBox.Xmin && inBox.Xmax <= baseBox.Xmax) // T
+		|| (inBox.Ymin <= baseBox.Ymax && baseBox.Ymax <= inBox.Ymax &&
+			baseBox.Xmin <= inBox.Xmin && inBox.Xmax <= baseBox.Xmax)) { // B
 		return true;
 	}
 
 	// 화면이 메쉬에 포함
-	if (isInBox(inBox.Xmin, inBox.Ymin, fromBox)) return true; // LT
-	if (isInBox(inBox.Xmax, inBox.Ymin, fromBox)) return true; // RT
-	if (isInBox(inBox.Xmax, inBox.Ymax, fromBox)) return true; // RB
-	if (isInBox(inBox.Xmin, inBox.Ymax, fromBox)) return true; // LB
+	if (isInBox(baseBox.Xmin, baseBox.Ymin, inBox)) return true; // LT
+	if (isInBox(baseBox.Xmax, baseBox.Ymin, inBox)) return true; // RT
+	if (isInBox(baseBox.Xmax, baseBox.Ymax, inBox)) return true; // RB
+	if (isInBox(baseBox.Xmin, baseBox.Ymax, inBox)) return true; // LB
 
 	return false;
 }
 
+
+bool isOnPitBox(IN const SBox& onBox, IN const SBox& baseBox)
+{
+	if (isInBox(onBox.Xmin, onBox.Ymin, baseBox)) return true; // LT
+	if (isInBox(onBox.Xmax, onBox.Ymin, baseBox)) return true; // RT
+	if (isInBox(onBox.Xmax, onBox.Ymax, baseBox)) return true; // RB
+	if (isInBox(onBox.Xmin, onBox.Ymax, baseBox)) return true; // LB
+
+	if ((onBox.Xmin <= baseBox.Xmin && baseBox.Xmin <= onBox.Xmax &&
+		baseBox.Ymin <= onBox.Ymin && onBox.Ymax <= baseBox.Ymax) // L
+		|| (onBox.Xmin <= baseBox.Xmax && baseBox.Xmax <= onBox.Xmax &&
+			baseBox.Ymin <= onBox.Ymin && onBox.Ymax <= baseBox.Ymax) // R
+		|| (onBox.Ymin <= baseBox.Ymin && baseBox.Ymin <= onBox.Ymax &&
+			baseBox.Xmin <= onBox.Xmin && onBox.Xmax <= baseBox.Xmax) // T
+		|| (onBox.Ymin <= baseBox.Ymax && baseBox.Ymax <= onBox.Ymax &&
+			baseBox.Xmin <= onBox.Xmin && onBox.Xmax <= baseBox.Xmax)) { // B
+		return true;
+	}
+
+	// 화면이 메쉬에 포함
+	if (isInBox(baseBox.Xmin, baseBox.Ymin, onBox)) return true; // LT
+	if (isInBox(baseBox.Xmax, baseBox.Ymin, onBox)) return true; // RT
+	if (isInBox(baseBox.Xmax, baseBox.Ymax, onBox)) return true; // RB
+	if (isInBox(baseBox.Xmin, baseBox.Ymax, onBox)) return true; // LB
+
+	return false;
+}
+
+
+// WGS84 → Web Mercator (EPSG:3857)
+double lngToX(double lng)
+{
+	return lng * 20037508.34 / 180.0;
+}
+
+double latToY(double lat)
+{
+	double rad = lat * M_PI / 180.0;
+	return log(tan(M_PI / 4.0 + rad / 2.0)) * 20037508.34 / M_PI;
+}
+
+// Web Mercator → WGS84
+double xTolng(double x)
+{
+	return x * 180.0 / 20037508.34;
+}
+
+double yToLat(double y)
+{
+	double rad = y * M_PI / 20037508.34;
+	return atan(sinh(rad)) * 180.0 / M_PI;
+}
 
 //x1, y1  : first point 
 //x2, y2  : Second point
@@ -207,36 +307,68 @@ bool isInPitBox(IN const SBox& fromBox, IN const SBox& inBox)
 //*a, *b  : Projection Point
 //*ir     : Link Ratio
 //void CTrekkingRouteDlg::GetClosestPoint(int x1, int y1, int x2, int y2, int ox, int oy, int *a, int *b, int *ir)
-void getClosestPoint(IN const double x1, IN const double y1, IN const double x2, IN const double y2, IN const double ox, IN const double oy, OUT double *a, OUT double *b, IN OUT double *ir)
+void getClosestPoint(IN const double lng1, IN const double lat1, IN const double lng2, IN const double lat2, IN const double lng3, IN const double lat3, OUT double *lng, OUT double *lat, IN OUT double *ir)
 {
+#if 1
+	double x1 = lngToX(lng1);
+	double y1 = latToY(lat1);
+	double x2 = lngToX(lng2);
+	double y2 = latToY(lat2);
+	double x3 = lngToX(lng3);
+	double y3 = latToY(lat3);
+
 	double dx = x2 - x1;
 	double dy = y2 - y1;
 	double l2 = (dx * dx) + (dy * dy);
-	double precision = IR_PRECISION;
-	//double precision = *ir;
-	//if (precision == 0) {
-	//	precision = IR_PRECISION;
-	//}
 
-	double dbIr = (((ox - x1) * dx) + ((oy - y1) * dy)) / l2 * precision;
+	if (l2 == 0.0) {
+		// x1, y1 == x2, y2 : 선분이 아닌 점일 경우
+		*lng = lng1;
+		*lat = lat1;
+		*ir = 0.0;
+		return;
+	}
+
+	double t = ((x3 - x1) * dx + (y3 - y1) * dy) / l2;
+
+	if (t < 0.0) {
+		*lng = lng1;
+		*lat = lat1;
+	} else if (t > 1.0) {
+		*lng = lng2;
+		*lat = lat2;
+	} else {
+		*lng = xTolng(x1 + t * dx);
+		*lat = yToLat(y1 + t * dy);
+	}
+
+	*ir = t; // 비율 (0~1), 혹은 0보다 작거나 1보다 큼
+#else
+	double dx = lng2 - lng1;
+	double dy = lat2 - lat1;
+	double l2 = (dx * dx) + (dy * dy);
+	double precision = IR_PRECISION;
+
+	double dbIr = (((lng3 - lng1) * dx) + ((lat3 - lat1) * dy)) / l2 * precision;
 
 	if (dbIr < 0) {
-		*a = x1;
-		*b = y1;
+		*lng = lng1;
+		*lat = lat1;
 		//*ir = 0;
 		*ir = dbIr;
 	}
 	else if (dbIr > precision) {
-		*a = x2;
-		*b = y2;
+		*lng = lng2;
+		*lat = lat2;
 		//*ir = precision;
 		*ir = dbIr;
 	}
 	else {
-		*a = x1 + ((dbIr * dx) / precision);
-		*b = y1 + ((dbIr * dy) / precision);
+		*lng = lng1 + ((dbIr * dx) / precision);
+		*lat = lat1 + ((dbIr * dy) / precision);
 		*ir = dbIr;
 	}
+#endif
 }
 
 
@@ -253,7 +385,7 @@ bool initProj4(IN const char* szType)
 	char strcoordType[64] = { 0, };
 	if (szType != nullptr && strlen(szType) > 0) {
 		strcpy(strcoordType, szType);
-		_strupr(strcoordType);
+		strupper(strcoordType);
 	}
 
 	proj_ctxt = proj_context_create();
@@ -334,7 +466,34 @@ bool translateUTMKtoWGS84(IN const double lng, IN const double lat, OUT double& 
 #endif // #if defined(USE_PROJ4_LIB)
 
 
+//////////////////////////////////////////////////////////////////////////////////////////////////////
+// POLYGON
+bool isPointInPolygon(const double x, const double y, const SPoint *pptPolygon, const int32_t nPolygon)
+{
+	int32_t i, j;
+	bool c = false;
 
+	for (i = 0, j = nPolygon - 1; i < nPolygon; j = i++) {
+		if (((((float)pptPolygon[i].y <= (float)y) && ((float)y < (float)pptPolygon[j].y)) ||
+			(((float)pptPolygon[j].y <= (float)y) && ((float)y < (float)pptPolygon[i].y))) &&
+			((float)x < ((float)pptPolygon[j].x - (float)pptPolygon[i].x) * ((float)y - (float)pptPolygon[i].y) / ((float)pptPolygon[j].y - (float)pptPolygon[i].y) + (float)pptPolygon[i].x))
+			c = !c;
+	}
+
+	return c;
+}
+
+
+bool isPointInPolygon(const SPoint *ppt, const SPoint *pptPolygon, const int32_t nPolygon)
+{
+	bool ret = false;
+
+	if (ppt && pptPolygon && nPolygon) {
+		ret = isPointInPolygon(ppt->x, ppt->y, pptPolygon, nPolygon);
+	}
+
+	return ret;
+}
 
 
 // 폴리곤의 중심점을 구하는 함수
@@ -353,7 +512,7 @@ SPoint getPolygonCenter(IN const vector<SPoint>& points)
 }
 
 // 폴리곤 면적을 구하는 함수
-double GetPolygonArea(IN const vector<SPoint>& points) {
+double getPolygonArea(IN const vector<SPoint>& points) {
 	double ret = 0;
 	int i, j;
 	int cnt = points.size();

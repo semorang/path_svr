@@ -45,8 +45,6 @@ public:
 	uint32_t GetPitInRegion(IN const SBox& pRegion, IN const uint32_t cntMaxBuff, OUT stMeshInfo** pMeshInfo);
 
 	stMeshInfo * GetMeshData(IN const uint32_t idx);
-	void ExtendDataBox(IN stMeshInfo * pData, IN const double lng, IN const double lat) const;
-	void ExtendDataBox(IN stMeshInfo * pData, IN const SPoint& coord) const;
 	void CheckNeighborMesh(void);
 	void ArrangementMesh(void);
 

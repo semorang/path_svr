@@ -152,6 +152,7 @@ void Init(const FunctionCallbackInfo<Value>& args) {
    std::string strLogPath;
    std::string strLogFile;
    std::string strDataPath;
+   std::string strFilePath;
    int nPid = 0;
 
    LOG_INITIALIZE();
@@ -160,14 +161,19 @@ void Init(const FunctionCallbackInfo<Value>& args) {
       nPid = args[0].As<Number>()->Value();
       LOG_SET_ID(nPid);
    }
-   if (args.Length() > 1) {      
+   if (args.Length() > 1) {
       String::Utf8Value str(isolate, args[1]);
       strDataPath = *str;
    }
-   if (args.Length() > 2) {      
+   if (args.Length() > 2) {
       String::Utf8Value str(isolate, args[2]);
+      strFilePath = *str;
+   }
+   if (args.Length() > 3) {
+      String::Utf8Value str(isolate, args[3]);
       strLogPath = *str;
    }
+
 
 #if defined(USE_OPTIMAL_POINT_API)
       strLogFile = "log_optimal";
@@ -182,8 +188,13 @@ void Init(const FunctionCallbackInfo<Value>& args) {
 #endif
 
    if (!strLogPath.empty()) {
-      LOG_SET_FILEPATH(strLogPath.c_str(), strLogFile.c_str());
-      LOG_TRACE(LOG_DEBUG, "Init log : %s, %s", strLogPath.c_str(), strLogFile.c_str());  
+      // for base
+      // LOG_SET_KEY(LOG_KEY_BASE);
+      LOG_SET_FILEPATH(LOG_KEY_BASE, strLogPath.c_str(), strLogFile.c_str());
+
+      // for traffic
+      LOG_SET_KEY(LOG_KEY_TRAFFIC);
+      LOG_SET_FILEPATH(LOG_KEY_TRAFFIC, strLogPath.c_str(), "log_traffic");
    }
 
    LOG_TRACE(LOG_DEBUG, "Engine version : %d.%d.%d.%d", 
@@ -209,9 +220,15 @@ void Init(const FunctionCallbackInfo<Value>& args) {
 #endif
   
       LOG_TRACE(LOG_DEBUG, "User data path not defined, will set default : %s", strDataPath.c_str());
+   } else {
+      LOG_TRACE(LOG_DEBUG, "Init data path : %s", strDataPath.c_str());
    }
-   else {
-      LOG_TRACE(LOG_DEBUG, "Init path : %s", strDataPath.c_str());
+
+   if (strFilePath.empty()) {
+      strFilePath = strDataPath;
+      LOG_TRACE(LOG_DEBUG, "User file path not defined, will set default : %s", strFilePath.c_str());
+   } else {
+      LOG_TRACE(LOG_DEBUG, "Init file path : %s", strFilePath.c_str());
    }
 
 	m_pDataMgr.Initialize();
@@ -222,7 +239,7 @@ void Init(const FunctionCallbackInfo<Value>& args) {
    // m_pFileMgr.SetCacheCount(100);
    m_pDataMgr.SetFileMgr(&m_pFileMgr);
    m_pDataMgr.SetDataPath(strDataPath.c_str());
-   m_pFileMgr.SetDataPath(strDataPath.c_str());
+   m_pFileMgr.SetFilePath(strFilePath.c_str());
 
 	m_pFileMgr.SetDataMgr(&m_pDataMgr);
 	m_pRouteMgr.SetDataMgr(&m_pDataMgr);
@@ -613,7 +630,26 @@ void DoRoute(const FunctionCallbackInfo<Value>& args) {
       // LOG_TRACE(LOG_DEBUG, "Route Opt:%d, Avoid:%d, Mobility:%d", opt, avoid, mobility);
 
       // m_pRouteMgr.SetRouteOption(opt, avoid, mobility);
+   
       
+ 	// set route cost
+	int type = TYPE_DATA_NONE;
+#if defined(USE_FOREST_DATA)
+	type = TYPE_DATA_TREKKING;
+#elif defined(USE_PEDESTRIAN_DATA)
+	type = TYPE_DATA_PEDESTRIAN;
+#elif defined(USE_P2P_DATA)
+	type = TYPE_DATA_VEHICLE;
+#else
+	type = TYPE_DATA_VEHICLE;
+#endif
+	DataCost dataCost;
+	int cntCost = m_pDataMgr.GetDataCost(type, dataCost);
+	if (cntCost > 0) {
+		m_pRouteMgr.SetRouteCost(type, &dataCost, cntCost);
+	}
+
+
    #if defined(USE_MOUNTAIN_DATA)
       ret = m_pRouteMgr.Route(3);
    #else
@@ -670,6 +706,25 @@ void DoMultiRoute(const FunctionCallbackInfo<Value>& args) {
       // m_pRouteMgr.SetRouteOption(opt, avoid, mobility);
    }
 
+
+   // set route cost
+   int type = TYPE_DATA_NONE;
+#if defined(USE_FOREST_DATA)
+   type = TYPE_DATA_TREKKING;
+#elif defined(USE_PEDESTRIAN_DATA)
+   type = TYPE_DATA_PEDESTRIAN;
+#elif defined(USE_P2P_DATA)
+   type = TYPE_DATA_VEHICLE;
+#else
+   type = TYPE_DATA_VEHICLE;
+#endif
+   DataCost dataCost;
+   int cntCost = m_pDataMgr.GetDataCost(type, dataCost);
+   if (cntCost > 0) {
+      m_pRouteMgr.SetRouteCost(type, &dataCost, cntCost);
+   }
+
+
 #if defined(USE_MOUNTAIN_DATA)
    if (cntRoute > 1) {
       ret = m_pRouteMgr.Route(cntRoute);
@@ -724,7 +779,7 @@ void GetRouteSummary(const FunctionCallbackInfo<Value>& args) {
    else {
       // info
       Local<Object> routes = Object::New(isolate);
-      mainobj->Set(context, String::NewFromUtf8(isolate, "user_id").ToLocalChecked(), Number::New(isolate, pResult->RequestId));
+      mainobj->Set(context, String::NewFromUtf8(isolate, "user_id").ToLocalChecked(), String::NewFromUtf8(isolate, pResult->reqInfo.RequestId.c_str()).ToLocalChecked());
       mainobj->Set(context, String::NewFromUtf8(isolate, "result_code").ToLocalChecked(), Integer::New(isolate, pResult->ResultCode));
 
       // result
@@ -736,7 +791,7 @@ void GetRouteSummary(const FunctionCallbackInfo<Value>& args) {
       end_coord->Set(context, String::NewFromUtf8(isolate, "x").ToLocalChecked(), Number::New(isolate, pResult->EndResultLink.Coord.x));
       end_coord->Set(context, String::NewFromUtf8(isolate, "y").ToLocalChecked(), Number::New(isolate, pResult->EndResultLink.Coord.y));
       routes->Set(context, String::NewFromUtf8(isolate, "end").ToLocalChecked(), end_coord);
-      routes->Set(context, String::NewFromUtf8(isolate, "option").ToLocalChecked(), Integer::New(isolate, pResult->RouteOption));
+      routes->Set(context, String::NewFromUtf8(isolate, "option").ToLocalChecked(), Integer::New(isolate, pResult->reqInfo.RouteOption));
       // dist
       routes->Set(context, String::NewFromUtf8(isolate, "distance").ToLocalChecked(), Integer::New(isolate, pResult->TotalLinkDist));
       // time
@@ -922,6 +977,44 @@ void GetOptimalPosition(const FunctionCallbackInfo<Value>& args) {
 }
 
 
+void GetMultiOptimalPosition(const FunctionCallbackInfo<Value>& args) {
+   Isolate* isolate = args.GetIsolate();
+   Local<Context> context = isolate->GetCurrentContext();
+
+   int ret;
+   string strJson;
+
+   if (args.Length() < 1) {
+      LOG_TRACE(LOG_DEBUG, "Request Error, function call argument too short : %d, %s", args.Length(), args);
+
+      m_pRoutePkg.GetErrorResult(ROUTE_RESULT_FAILED_WRONG_PARAM, strJson);
+   }
+   else {
+      String::Utf8Value pRequest(isolate, args[0]);
+      string strRequest = *pRequest;
+
+      // request
+      stReqOptimal reqOpt = {0, };
+      vector<SPoint> vtOrigins;
+      vector<stOptimalPointInfo> vtOptInfo;
+
+      ret = m_pDataMgr.GetRequestMultiOptimalPoints(strRequest.c_str(), vtOrigins, reqOpt);
+
+      uint32_t cntItems = m_pDataMgr.GetMultiOptimalPointDataByPoints(vtOrigins, vtOptInfo, reqOpt.typeAll, reqOpt.reqCount);
+
+      m_pRoutePkg.GetMultiOptimalPosition(&vtOptInfo, strJson);
+
+      // result
+   }
+
+   if (!strJson.empty()) {
+      // mainobj->Set(context, String::NewFromUtf8(isolate, "route").ToLocalChecked(), String::NewFromUtf8(isolate, strJson.c_str()).ToLocalChecked());
+   }
+
+   args.GetReturnValue().Set(String::NewFromUtf8(isolate, strJson.c_str()).ToLocalChecked());
+}
+
+
 void GetTable(const FunctionCallbackInfo<Value>& args) {
    Isolate* isolate = args.GetIsolate();
    Local<Context> context = isolate->GetCurrentContext();
@@ -941,17 +1034,16 @@ void GetTable(const FunctionCallbackInfo<Value>& args) {
       // request
       
       // get table
-      vector<vector<stDistMatrix>> vtWeightMatrix;
-      ret = m_pRouteMgr.GetWeightMatrix(strRequest.c_str(), vtWeightMatrix);
+      BaseOption option;
+	  RouteDistMatrix RDM;
+
+      ret = m_pRouteMgr.GetWeightMatrix(strRequest.c_str(), RDM, option);
 
       if (ret != ROUTE_RESULT_SUCCESS) {
          m_pRoutePkg.GetErrorResult(ret, strJson);
       } else {
-         m_pRoutePkg.GetWeightMatrixResult(vtWeightMatrix, strJson);
+         m_pRoutePkg.GetWeightMatrixResult(RDM, strJson);
       }
-      
-      vtWeightMatrix.clear();
-      vector<vector<stDistMatrix>>().swap(vtWeightMatrix);
 
       // result
    }
@@ -999,7 +1091,15 @@ void GetCluster_for_geoyoung(const FunctionCallbackInfo<Value>& args) {
       if (ret != ROUTE_RESULT_SUCCESS) {
          m_pRoutePkg.GetErrorResult(ret, strJson);
       } else {
-         m_pRoutePkg.GetClusteringResult(vtClusters, vtPositionLock, strJson);
+         RouteDistMatrix RDM;
+         Cluster CLUST;
+
+         string strUsrDirectory;
+         strUsrDirectory.append(m_pDataMgr.GetDataPath());
+         strUsrDirectory.append("/usr/rdm/");
+         checkDirectory(strUsrDirectory.c_str());
+
+         m_pRoutePkg.GetClusteringResult(CLUST, RDM, strUsrDirectory.c_str(), strJson);
       }
       
       vtClusters.clear();
@@ -1026,17 +1126,20 @@ void GetCluster(const FunctionCallbackInfo<Value>& args) {
       string strRequest = *pRequest;
 
       // get cluster
-      vector<stDistrict> vtClusters;
-      vector<SPoint> vtPositionLock;
-      ret = m_pRouteMgr.GetCluster(strRequest.c_str(), vtClusters, vtPositionLock);
+      RouteDistMatrix RDM;
+      Cluster CLUST;
+
+      ret = m_pRouteMgr.GetCluster(strRequest.c_str(), RDM, CLUST);
       if (ret != ROUTE_RESULT_SUCCESS) {
          m_pRoutePkg.GetErrorResult(ret, strJson);
       } else {
-         m_pRoutePkg.GetClusteringResult(vtClusters, vtPositionLock, strJson);
+         string strUsrDirectory;
+         strUsrDirectory.append(m_pDataMgr.GetDataPath());
+         strUsrDirectory.append("/usr/rdm/");
+         checkDirectory(strUsrDirectory.c_str());
+         
+         m_pRoutePkg.GetClusteringResult(CLUST, RDM, strUsrDirectory.c_str(), strJson);
       }
-      
-      vtClusters.clear();
-      vector<stDistrict>().swap(vtClusters);
    }
 
    args.GetReturnValue().Set(String::NewFromUtf8(isolate, strJson.c_str()).ToLocalChecked());
@@ -1103,18 +1206,25 @@ void GetWaypoints(const FunctionCallbackInfo<Value>& args) {
       string strRequest = *pRequest;
 
       // get bestway
-      vector<stWaypoints> vtWaypoints;
-      vector<uint32_t> vtBestwaypoints;
-      double totDist = 0.f;
-      int32_t totTime = 0;
-      ret = m_pRouteMgr.GetBestway(strRequest.c_str(), vtWaypoints, vtBestwaypoints, totDist, totTime);
+      RouteDistMatrix RDM;
+      BestWaypoints TSP;
+      
+      ret = m_pRouteMgr.GetBestway(strRequest.c_str(), RDM, TSP);
       if (ret != ROUTE_RESULT_SUCCESS) {
          m_pRoutePkg.GetErrorResult(ret, strJson);
       } else {
-         m_pRoutePkg.GetBestWaypointResult(vtWaypoints, vtBestwaypoints, totDist, totTime, strJson);
+         string strUsrDirectory;
+         strUsrDirectory.append(m_pDataMgr.GetDataPath());
+         strUsrDirectory.append("/usr/rdm/");
+         checkDirectory(strUsrDirectory.c_str());
+
+         // RouteDistMatrixLine RLN;
+         // m_pRouteMgr.GetWeightMatrixRouteLine(strRequest.c_str(), RLN);
+
+         m_pRoutePkg.GetBestWaypointResult(TSP, RDM, strUsrDirectory.c_str(), strJson);
       }
 
-#if 1 // print web view
+#if 0 // print web view
       // cJSON* root = cJSON_CreateObject();
       // for web route view
       ////////////////////////////////////////////////////////////////////////////////
@@ -1152,12 +1262,6 @@ void GetWaypoints(const FunctionCallbackInfo<Value>& args) {
 
       // cJSON_AddStringToObject(root, "url", strURL.c_str());
 #endif 
-
-      vtBestwaypoints.clear();
-      vector<uint32_t>().swap(vtBestwaypoints);
-
-      vtWaypoints.clear();
-      vector<stWaypoints>().swap(vtWaypoints);
    }
 
    args.GetReturnValue().Set(String::NewFromUtf8(isolate, strJson.c_str()).ToLocalChecked());
@@ -1173,7 +1277,7 @@ void UpdateTraffic(const FunctionCallbackInfo<Value>& args) {
    int cnt = args.Length();
 
    if (cnt < 3) {
-      LOG_TRACE(LOG_DEBUG, "function call argument too short : %s", args);
+      LOG_TRACE(LOG_KEY_TRAFFIC, LOG_WARNING, "function call argument too short : %s", args);
    } else {      
       String::Utf8Value strName(isolate, args[0]);
       String::Utf8Value strPath(isolate, args[1]);
@@ -1184,10 +1288,10 @@ void UpdateTraffic(const FunctionCallbackInfo<Value>& args) {
 
       char szTrafiicFilePath[MAX_PATH] = {0,};
       sprintf(szTrafiicFilePath, "%s/%s", strFilePath.c_str(), strFileName.c_str());
-      if (update_imestamp = m_pTrafficMgr.Update(szTrafiicFilePath, TYPE_TRAFFIC_TTL, timeNow)) {
-			LOG_TRACE(LOG_DEBUG, "traffic file loaded: %s", szTrafiicFilePath);
+      if (update_imestamp = m_pTrafficMgr.Update(szTrafiicFilePath, TYPE_SPEED_REAL_TTL, timeNow)) {
+			LOG_TRACE(LOG_KEY_TRAFFIC, LOG_DEBUG, "traffic file loaded: %s", szTrafiicFilePath);
 		} else {
-			LOG_TRACE(LOG_WARNING, "failed, can't load traffic file : %s", szTrafiicFilePath);
+			LOG_TRACE(LOG_KEY_TRAFFIC, LOG_WARNING, "failed, can't load traffic file : %s", szTrafiicFilePath);
 		}
    }
 }
@@ -1236,6 +1340,7 @@ void init(Local<Object> exports) {
    NODE_SET_METHOD(exports, "getwaypoints", GetWaypoints);
 // NODE_SET_METHOD(exports, "getresultstring", GetResultString);
    NODE_SET_METHOD(exports, "getoptimalposition", GetOptimalPosition);
+   NODE_SET_METHOD(exports, "getmultioptimalposition", GetMultiOptimalPosition);
    NODE_SET_METHOD(exports, "updatetraffic", UpdateTraffic);
 }
 

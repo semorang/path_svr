@@ -139,7 +139,7 @@ public:
 	Environment();
 	virtual ~Environment();
 
-	void SetOption(IN const TspOptions* pOpt);
+	void SetOption(IN const TspOption* pOpt);
 
 	bool SetCostTable(IN const vector<vector<stDistMatrix>>& vtDistMatrix, IN const int count);
 
@@ -182,7 +182,7 @@ private:
 
 	vector<tableItemNearlest> genePriority;
 
-	TspOptions options;
+	TspOption tspOption;
 
 	double fitnessSum;
 	double averageValue;

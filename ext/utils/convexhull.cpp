@@ -2,6 +2,7 @@
 #include "CatmullRom.h"
 #include <math.h>
 
+
 int SPointCompare(const void* Q1, const void* Q2)
 {
 	SPoint*p1 = (SPoint*)Q1;
@@ -17,9 +18,57 @@ double ConvexHull_Cross(SPoint *O, SPoint *A, SPoint *B)
 	return (A->x - O->x) * (B->y - O->y) - (A->y - O->y) * (B->x - O->x);
 }
 
+SPoint calculatePoint(IN const SPoint center, IN const double distance, IN const double angle)
+{
+	SPoint result;
+	double radAngle = angle * PI_PRECISION / 180.0;
+	result.y = center.y + distance * cos(radAngle);
+	result.x = center.x + distance * sin(radAngle) / cos(center.y * PI_PRECISION / 180.0);
+	
+	return result;
+}
+
+
+void calculateTriangle(IN const SPoint p1, IN const double distance, OUT vector<SPoint>& vtPoints)
+{
+	array<double, 3> angles = { 0.0, 120.0, 240.0 }; // 각도 설정
+
+	for (const auto& angle : angles) {
+		vtPoints.push_back(calculatePoint(p1, distance, angle));
+	}
+
+	// make closed polygon
+	vtPoints.push_back(vtPoints.front());
+}
+
+void calculateRectangle(SPoint p1, SPoint p2, double distance, OUT vector<SPoint>& vtPoints)
+{
+	// 직선의 방향 벡터 계산
+	double dx = p2.x - p1.x;
+	double dy = p2.y - p1.y;
+	double length = sqrt(dx*dx + dy*dy);
+
+	// 직선의 단위 방향 벡터 계산
+	double ux = dx / length;
+	double uy = dy / length;
+
+	// 직선에 수직인 방향 벡터 계산 (90도 회전)
+	double perp_x = -uy;
+	double perp_y = ux;
+
+	// 사각형 네 점 계산
+	vtPoints.push_back({ p1.x + perp_x * distance, p1.y + perp_y * distance });
+	vtPoints.push_back({ p1.x - perp_x * distance, p1.y - perp_y * distance });
+	vtPoints.push_back({ p2.x - perp_x * distance, p2.y - perp_y * distance });
+	vtPoints.push_back({ p2.x + perp_x * distance, p2.y + perp_y * distance });
+
+	// make closed polygon
+	vtPoints.push_back(vtPoints[0]);
+}
+
 void ConvexHull(IN vector<SPoint> &r, OUT vector<SPoint> &q)
 {
-	if (r.size() > 1)
+	if (r.size() > 2)
 	{
 		vector<SPoint> p(r.size());
 		p.assign(r.begin(), r.end());
@@ -69,6 +118,12 @@ void ConvexHull(IN vector<SPoint> &r, OUT vector<SPoint> &q)
 			q = NewH;
 		}
 		// return h.size();
+	} else if ((r.size() == 2) && (r[0] != r[1])) {
+		q.reserve(4); // make rectangle;
+		calculateRectangle(r[0], r[1], 500 / 100000.0, q); // 500m 반경
+	} else if (r.size() <= 2) {
+		q.reserve(3); // make triangle;
+		calculateTriangle(r[0], 500 / 100000.0, q); // 500m 반경
 	}
 	// else if (p.size() <= 1)
 	// 	return p.size();
@@ -200,9 +255,9 @@ double calc_line_length2D(SPoint& first, SPoint& second)
 	double dF = (first.y + second.y) / 2;
 	double dG = (first.y - second.y) / 2;
 
-	dL = 3.141592 / 180.0 * dL;
-	dF = 3.141592 / 180.0 * dF;
-	dG = 3.141592 / 180.0 * dG;
+	dL = PI_PRECISION / 180.0 * dL;
+	dF = PI_PRECISION / 180.0 * dF;
+	dG = PI_PRECISION / 180.0 * dG;
 
 	dSinG = sin(dG);
 	dCosL = cos(dL);

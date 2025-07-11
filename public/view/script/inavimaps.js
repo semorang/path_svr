@@ -128,3 +128,17 @@ function displaySearchInfowindow(position, title) {
         map.flyTo(position);
     }
 }
+
+
+// 현재 위치로 이동
+function moveToCurrent() {
+    navigator.geolocation.getCurrentPosition(function(pos) {
+        
+        var lng = pos.coords.longitude;
+        var lat = pos.coords.latitude;
+        console.log("current pos : " + pos + " lng: " + lng + " lat: " + lat);
+
+        var position = new inavi.maps.LngLat(lng, lat);
+        map.flyTo(position);
+    })
+}

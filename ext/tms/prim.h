@@ -37,5 +37,4 @@ Travel mst_manhattan_branch_and_bound2(IN const vector<vector<stDistMatrix>>& vt
 Travel mst_manhattan_branch_and_bound(IN const vector<vector<stDistMatrix>>& vtDistMatrix, IN const int count, int start);
 pair<int, vector<int>> tsp_euclidean_branch_and_bound(IN const vector<vector<stDistMatrix>>& vtDistMatrix, IN const int count, int start);
 
-
 #endif // __SHORTEST__

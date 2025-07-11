@@ -9,7 +9,6 @@
 #include <queue>
 #include <algorithm>
 #include <memory>
-#include <stdint.h>
 #include <stdio.h>
 #include <stdexcept>
 #include <time.h>
@@ -42,24 +41,29 @@ using namespace std;
 #define USE_ROUTE_TABLE_LEVEL	7 // 7(1차선이상일반도로) 레벨보다 낮아지면 도로 확장이 어려워짐. 수도권 50 POI 수행 시간 : LV6/교통 == 약 13s/177s, LV7/교통 = 약 33s/244s
 //#define __USE_TEMPLETE // 템플릿 사용
 
-//#define TARGET_FOR_FLEETUNE // 플리튠
 //#define TARGET_FOR_KAKAO_VX // 카카오VX제공
-//#define USE_OPTIMAL_POINT_API // 최적 지점 API
+
+// #define USE_OPTIMAL_POINT_API // 최적 지점 API
 #define USE_ROUTING_POINT_API // 경로 탐색 API
+// #define USE_TMS_API // 특수목적 경로탐색 
 #if defined(TARGET_FOR_KAKAO_VX)
 #	define USE_FOREST_DATA // 카카오숲길
 #	define USE_MOUNTAIN_DATA // 산바운더리 데이터
-#define USE_PEDESTRIAN_DATA // 보행자/자전거 데이터
+#	define USE_PEDESTRIAN_DATA // 보행자/자전거 데이터
 #elif defined(USE_OPTIMAL_POINT_API)
 //#define USE_PEDESTRIAN_DATA // 보행자/자전거 데이터
 #define USE_VEHICLE_DATA // 차량 데이터
 #define USE_BUILDING_DATA // 건물 데이터
 #define USE_COMPLEX_DATA // 단지 데이터
 #elif defined(USE_ROUTING_POINT_API)
-//#	define USE_PEDESTRIAN_DATA // 보행자/자전거 데이터
+#	if defined(USE_TMS_API)
+#	define USE_VEHICLE_DATA // 차량 데이터
+#	else
+// #	define USE_PEDESTRIAN_DATA // 보행자/자전거 데이터
 #	define USE_VEHICLE_DATA // 차량 데이터
 #	define USE_P2P_DATA // P2P 데이터
 //#	define USE_SAMSUNG_HEAVY // 삼성 중공업 데이터
+#	endif
 #endif
 
 
@@ -85,6 +89,7 @@ using namespace std;
 #endif
 
 #define IR_PRECISION 1000.f
+#define PI_PRECISION 3.14159265358979323846
 
 #define SAFE_FREE(x)		{ if (x != nullptr) free(x); (x) = nullptr; }
 #define SAFE_DELETE(x)		{ if (x != nullptr) delete (x); (x) = nullptr; }
@@ -105,14 +110,17 @@ typedef struct tagRECT
 // 0.0.4 add ttl_id & change data file names
 // 0.0.5 add to coordinate for inavi air navigation
 // 0.0.6 add candidate route
+// 0.0.7 merge to request route options to struct data <-- 미리 추가함 2025-02-25
+// 0.0.8 change u-turn status behave action
+// 0.0.9 Turn-left allows a minimum distance applied as 50m to the intersection from start point
 #define ENGINE_VERSION_MAJOR	0
 #define ENGINE_VERSION_MINOR	0
-#define ENGINE_VERSION_PATCH	5
+#define ENGINE_VERSION_PATCH	9
 #define ENGINE_VERSION_BUILD	0
 #elif defined(USE_OPTIMAL_POINT_API)
 #define ENGINE_VERSION_MAJOR	1
 #define ENGINE_VERSION_MINOR	0
-#define ENGINE_VERSION_PATCH	12
+#define ENGINE_VERSION_PATCH	13
 #define ENGINE_VERSION_BUILD	0
 // 1.0.6 fix road param setting, and bycicle -> bicicle
 // 1.0.7 add optimal point angle attribute when data compile step, with data v1.0.3
@@ -121,6 +129,8 @@ typedef struct tagRECT
 // 1.0.10 fix optimal polygon check compare with building and complex 
 // 1.0.11 change max multi core max -> max - 1 
 // 1.0.12 fix cjson print free after using result
+// 1.0.13 add to multi optimal position function
+// 1.0.14 merge to request route options to struct data <-- 미리 추가함 2025-02-25
 #elif defined(USE_ROUTING_POINT_API)
 #	if defined(USE_FOREST_DATA)
 // 0.0.5 add multi modal route (forest entrance + pedestrian)
@@ -136,6 +146,7 @@ typedef struct tagRECT
 // 0.1.5 course id option change route option recommended to shortest, and fix slop value when link dir nagative, population grade applyed
 // 1.0.0 add io name info, and extend search bound forest/wal 50km, course 100km, bicycle 200km
 // 1.0.1 fix to pedestrian route failed process
+// 1.0.2 merge to request route options to struct data <-- 미리 추가함 2025-02-25
 #define ENGINE_VERSION_MAJOR	1
 #define ENGINE_VERSION_MINOR	0
 #define ENGINE_VERSION_PATCH	1
@@ -144,22 +155,57 @@ typedef struct tagRECT
 // 0.0.6 add charging link attribute
 // 0.0.7 fix waypoint guide-type value 3->2
 // 0.0.8 use ttl_id
+// 0.0.9 add cost data table and upgrade using kvx version
+// 0.0.10 check destination link type with current expanded link type and merge to request route options to struct data
+// 0.0.11 fix cost file loading code and change some cost for pedestrian
+// 0.0.12 add guide_type for start-via and start-end case
+// 0.0.13 add bicycle type link match for avoid link
+// 0.0.14 allow bicycle only stairs attribute when use bicycle mobility
 #define ENGINE_VERSION_MAJOR	0
 #define ENGINE_VERSION_MINOR	0
-#define ENGINE_VERSION_PATCH	8
+#define ENGINE_VERSION_PATCH	14
 #define ENGINE_VERSION_BUILD	0
-// 0.0.4 add junction option, fix pedestrian cost value
 #	else // defined(USE_VEHICLE_DATA)
+#		if defined(USE_TMS_API)
+// 0.0.4 add junction option, fix pedestrian cost value
 // 0.0.6 add charging link attribute
 // 0.0.7 fix waypoint guide-type value 3->2
 // 0.0.8 use ttl_id
 // 0.0.9 add link isolate check and avoid matching (for tms)
+// 0.0.10 update traffic data in link using subdata
+// 0.0.11 update auto deviation value for tms
+// 0.0.12 fix tsp ext algorithm for infinite loop
+// 0.0.13 upgrade rdm made speed using min-max position boundary
+// 0.0.14 upgrade log utils - add key and using multi log files
+// 0.0.15 upgrade log utils, change log check by thread
+// 0.0.16 merge to request route options to struct data <-- 미리 추가함 2025-02-25
+// 0.1.0 propagation method change, 첫번쨰 지점 도착시 우선순위 큐의 휴리스틱을 확장 코스트로 변경하여 코스 외곡을 방지 & 먼거리 지점을 우선 타겟팅하여 휴리스특 적용
+// 0.1.1 한계값의 다중 타입 값을 중복처리 하도록 적용
+// 0.1.2 거리 분할 + 체류 시간 포함 적용
+// 0.1.3 시간 분할 + 체류 시간 포함 적용 해야 함 (...ing) 2025.06.02~
+#define ENGINE_VERSION_MAJOR	0
+#define ENGINE_VERSION_MINOR	1
+#define ENGINE_VERSION_PATCH	3
+#define ENGINE_VERSION_BUILD	0
+#		else // #		if defined(USE_TMS_API)
+// 0.0.6 add charging link attribute
+// 0.0.7 fix waypoint guide-type value 3->2
+// 0.0.8 use ttl_id
+// 0.0.9 add link isolate check and avoid matching (for tms)
+// 0.0.10 update traffic data in link using subdata
+// 0.0.11 update auto deviation value for tms
+// 0.0.12 fix tsp ext algorithm for infinite loop
+// 0.0.13 upgrade rdm made speed using min-max position boundary
+// 0.0.14 upgrade log utils - add key and using multi log files
+// 0.0.15 upgrade log utils, change log check by thread
+// 0.0.16 merge to request route options to struct data <-- 미리 추가함 2025-02-25
 #define ENGINE_VERSION_MAJOR	0
 #define ENGINE_VERSION_MINOR	0
-#define ENGINE_VERSION_PATCH	9
+#define ENGINE_VERSION_PATCH	15
 #define ENGINE_VERSION_BUILD	0
-#	endif
-#else
+#		endif // #		if defined(USE_TMS_API)
+#	endif // defined(USE_VEHICLE_DATA)
+#else // #elif defined(USE_ROUTING_POINT_API)
 #define ENGINE_VERSION_MAJOR	1
 #define ENGINE_VERSION_MINOR	0
 #define ENGINE_VERSION_PATCH	0
@@ -167,6 +213,8 @@ typedef struct tagRECT
 #endif
 
 #define USE_CJSON
+
+#define GLOBAL_MESH_ID		0 // 전체 데이터 영역 관리 메시 ID
 
 enum NETWORKTYPE { LINK, NODE };
 enum DIRECTION { BIDIRECTION, FORWARD, DIR_POSITIVE = FORWARD, REVERSE, DIR_NAGATIVE = REVERSE };
@@ -360,7 +408,7 @@ typedef struct _tagstLinkBaseInfo {
 typedef struct _tagstLinkPedestrianInfo {
 	uint64_t dummy_type : 3; // link_type 공유 공간
 	uint64_t bicycle_type : 2; // 자전거도로 타입, 1:자전거전용, 2:보행자/차량겸용 자전거도로, 3:보행도로
-	uint64_t walk_type : 3; //보행자도로 타입, 1:복선도록, 2:차량겸용도로, 3:자전거전용도로, 4:보행전용도로, 5:가상보행도로
+	uint64_t walk_type : 3; //보행자도로 타입, 1:복선도로, 2:차량겸용도로, 3:자전거전용도로, 4:보행전용도로, 5:가상보행도로
 	uint64_t facility_type : 4; // 시설물 타입, 0:미정의, 1:토끼굴, 2:지하보도, 3:육교, 4:고가도로, 5:교량, 6:지하철역, 7:철도, 8:중앙버스정류장, 9:지하상가, 10:건물관통도로, 11:단지도로_공원, 12:단지도로_주거시설, 13:단지도로_관광지, 14:단지도로_기타
 	uint64_t gate_type : 4; // 진입로 타입, 0:미정의, 1:경사로, 2:계단, 3:에스컬레이터, 4:계단/에스컬레이터, 5:엘리베이터, 6:단순연결로, 7:횡단보도, 8:무빙워크, 9:징검다리, 10:의사횡단
 	uint64_t lane_count : 6; // 차선수, 63
@@ -435,8 +483,9 @@ typedef struct _tagstLinkVehicleInfo {
 	//uint32_t JunctionInfo; // 확대도 유무, 0:없음, 1:있음
 	//uint32_t Tpeg; // TPEG 유무(YTN기준), 0:없음, 1:있음
 	uint64_t restriction : 3; // 진입제한 유무, 0:없음, 1:사람, 2:이륜, 3:화물, 4:택시, 5:입주민 외
+	uint64_t water_safe_zone : 1; // 상수원보호구역
 
-	uint64_t veh_reserved : 6; // 
+	uint64_t veh_reserved : 5; // 
 	uint64_t shared : 18; // link_ang 공유 공간
 #endif
 	// shared 대신 링크별 통행코드를(메모리 사이즈 절약차원) 넣으려했으나 그냥 노드의 통행코드 사용하기로 함(2022-12-12)
@@ -447,7 +496,11 @@ typedef struct _tagstLinkVehicleInfo {
 typedef struct _tagstLinkVehicleInfoExt {
 	uint64_t snode_ang : 16; // 360
 	uint64_t enode_ang : 16; // 360
-	uint64_t veh_ext_reserved : 32;
+	uint64_t spd_type_p : 2; // 트래픽 타입
+	uint64_t spd_type_n : 2; // 트래픽 타입
+	uint64_t spd_p : 8; // 정방향속도 // RDM 생성시 트래픽맵에서 읽어오면 너무 느려서 직접 속도 설정
+	uint64_t spd_n : 8; // 역방향속도 // RDM 생성시 트래픽맵에서 읽어오면 너무 느려서 직접 속도 설정
+	uint64_t veh_ext_reserved : 14;
 }stLinkVehicleInfoExt;
 
 typedef struct _tagstLinkTrekkingInfoExt {
@@ -469,6 +522,30 @@ typedef struct _tagstCourseInfo {
 	};
 }stCourseInfo;
 
+
+typedef struct _tagLinkSubInfo
+{
+	union
+	{
+		uint64_t sub_info;
+		stLinkBaseInfo base;
+		stLinkPedestrianInfo ped; // 보행로
+		stLinkTrekkingInfo trk; // 숲길
+		stLinkVehicleInfo veh; // 차로
+	};
+
+	_tagLinkSubInfo() {
+		sub_info = 0;
+	}
+
+	void operator =(const uint64_t& rhs) { sub_info = rhs; }
+	bool operator <=(const uint64_t& rhs) { return sub_info <= rhs; }
+	bool operator >=(const uint64_t& rhs) { return sub_info >= rhs; }
+	bool operator ==(const uint64_t& rhs) { return sub_info == rhs; }
+	bool operator !=(const uint64_t& rhs) { return sub_info != rhs; }
+}stLinkSubInfo;
+
+
 struct stLinkInfo {
 	KeyID link_id;
 	KeyID snode_id;
@@ -482,7 +559,7 @@ struct stLinkInfo {
 		stLinkTrekkingInfo trk;
 		stLinkVehicleInfo veh;
 	};
-#if defined(USE_P2P_DATA) || defined(USE_MOUNTAIN_DATA)
+#if defined(USE_P2P_DATA) || defined(USE_MOUNTAIN_DATA) || defined(USE_TMS_API)
 	union {
 		uint64_t sub_ext; // 확장 정보 // 현재는 고유 ID (mesh(6) + snode(6) + enode(6)
 		stLinkTrekkingInfoExt trk_ext; // 트래킹 확장
@@ -499,8 +576,11 @@ struct stLinkInfo {
 		enode_id.llid = 0;
 		length = 0;
 		sub_info = 0;
-#if defined(USE_P2P_DATA) || defined(USE_MOUNTAIN_DATA)
+#if defined(USE_P2P_DATA) || defined(USE_MOUNTAIN_DATA) || defined(USE_TMS_API)
 		sub_ext = 0;
+#	if defined(USE_TMS_API)
+		veh_ext.spd_n = veh_ext.spd_p = 0xFF; // 
+#	endif
 #endif
 		cntVtx = 0;
 		pVtx = nullptr;
@@ -823,20 +903,20 @@ struct stTrafficInfoKS
 
 struct stTrafficInfoTTL
 {
-	uint32_t ttl_nid;
 	uint32_t timestamp; // 최종 업데이트된 시각
 	uint8_t speed; // 도로 주행 속도 0~255, 255일 경우는 통제, 주행불가
-
-	uint8_t dir; // ttl 방향 (정/역)
+	uint32_t ttl_nid; // ttl id
 	uint32_t link_nid; // ttl 링크에 매칭되는 link id
+	uint8_t ttl_dir : 4; // ttl 방향 (정/역)
+	uint8_t link_dir : 4; // ttl 링크에 매칭되는 link dir (양방향/정/역)
 
 	stTrafficInfoTTL() {
-		ttl_nid = 0;
 		timestamp = 0;
-		speed = 255;
-
-		dir = 0;
+		speed = 0xFF;
+		ttl_nid = 0;
 		link_nid = 0;
+		ttl_dir = 0;
+		link_dir = 0;
 	}
 };
 
@@ -1303,158 +1383,22 @@ struct stLinkContent {
 };
 
 
-typedef struct _tagRouteResultLink {
-	KeyID linkId;
-	KeyID nodeId;
-	uint32_t vertexIdx : 16; // 최대 65353
-	uint32_t linkLength : 16; // 최대 65353
-	uint32_t linkTime : 16; // 최대 65353
-	uint32_t dir : 16; // 최대 65353
-}RouteResultLink;
-
-typedef struct _tagRouteResultLinkEx {
-	KeyID link_id;
-	KeyID node_id;
-	uint64_t link_info;
-	float length; // link length
-	uint32_t time : 16; // link time // 최대 65535 > 18 h
-	uint32_t vtx_off : 12; // vertex 시작 idx // 최대 4096
-	uint32_t vtx_cnt : 12; // vertex 갯수 // 최대 4096
-	uint32_t rlength : 21; // remain length // 최대 2097151 > 2,000km
-	uint32_t rtime : 17; // remain time // 최대 86400 > 31h
-	uint32_t angle : 9; // 진출 각도 // 360도 방식
-	uint32_t dir : 1; // 링크 방향성, 0:정방향, 1:역방향 // MAP API 결과에 맞추기 위해 변경
-	uint32_t guide_type : 4; // 링크 안내 타입, 0:일반, 1:S출발지링크, 2:E도착지링크, 3:V경유지링크, 4:SE출발지-도착지, 5:SV출발지-경유지, 6:VV경유지-경유지, 7, VE경유지-도착지
-	uint32_t reserved : 2;
-#if defined(USE_VEHICLE_DATA)
-	uint8_t speed; // 속도
-	uint8_t speed_type : 4; // 속도 타입, 0:미정의, 1:ttl, 2:ks, 3:static
-	uint8_t speed_level : 4; // 도로 레벨,// 경로레벨, 0:고속도로, 1:도시고속도로, 자동차전용 국도/지방도, 2:국도, 3:지방도/일반도로8차선이상, 4:일반도로6차선이상, 5:일반도로4차선이상, 6:일반도로2차선이상, 7:일반도로1차선이상, 8:SS도로, 9:GSS도로/단지내도로/통행금지도로/비포장도로
-#endif
-}RouteResultLinkEx;
-
-typedef struct _tagRouteResultLinkMatchInfo {
-	SPoint Coord; // 좌표
-	KeyID LinkId; // 링크 ID
-	SPoint MatchCoord; // 링크와 직교 접점 좌표
-	int32_t LinkDataType; // 0:미정의, 1:숲길, 2:보행자/자전거, 3:자동차 // 안씀 --> 0:미정의, 1:명칭사전, 2:메쉬, 3:숲길, 4:보행자/자전거, 5:자동차, 6:건물, 7:단지, 8:입구점, 9:교통정보, 10:산바운더리, 11:코스정보
-	int32_t LinkSplitIdx; // 링크와 직교 접점 좌표의 링크 버텍스 idx
-	int32_t LinkDist; // 직교 접점에서 노드까지의 거리
-	vector<SPoint> LinkVtx; // 좌표점에서 s버텍스
-
-	~_tagRouteResultLinkMatchInfo() {	
-		if (!LinkVtx.empty()) {
-			LinkVtx.clear();
-			vector<SPoint>().swap(LinkVtx);
-		}
-	}
-
-	void Init() {
-		memset(&Coord, 0x00, sizeof(Coord));
-		LinkId.llid = 0;		
-		memset(&MatchCoord, 0x00, sizeof(MatchCoord));
-		LinkDataType = 0;
-		LinkSplitIdx = 0;
-		LinkDist = 0;
-
-		if (!LinkVtx.empty()) {
-			LinkVtx.clear();
-			vector<SPoint>().swap(LinkVtx);
-		}
-	}
-
-	_tagRouteResultLinkMatchInfo& operator=(const _tagRouteResultLinkMatchInfo& rhs) {
-		Coord = rhs.Coord; // 좌표
-		LinkId = rhs.LinkId; // 링크 ID
-		MatchCoord = rhs.MatchCoord; // 링크와 직교 접점 좌표
-		LinkDataType = rhs.LinkDataType;
-		LinkSplitIdx = rhs.LinkSplitIdx; // 링크와 직교 접점 좌표의 링크 버텍스 idx
-		LinkDist = rhs.LinkDist; // 직교 접점에서 노드까지의 거리
-		LinkVtx.assign(rhs.LinkVtx.begin(), rhs.LinkVtx.end()); // 좌표점에서 s버텍스
-
-		return *this;
-	}
-} RouteResultLinkMatchInfo;
-
-
-typedef struct _tagRouteSummary {
-	uint32_t TotalDist;
-	uint32_t TotalTime;
-} RouteSummary;
-
-
-typedef struct _tagRouteResultInfo {
-	uint32_t ResultCode; // 경로 결과 코드, 0:성공, 1~:실패
-
-	uint32_t RequestMode; // 요청 모드
-	uint32_t RequestId; // 요청 ID
-
-	uint32_t RouteOption; // 경로 옵션
-	uint32_t RouteAvoid; // 경로 회피
-	uint32_t RouteMobility; // 이동체
-
-	RouteResultLinkMatchInfo StartResultLink;
-	RouteResultLinkMatchInfo EndResultLink;
-
-	uint32_t TotalLinkDist; // 경로 전체 거리
-	uint32_t TotalLinkCount; // 경로 전체 링크 수
-	uint32_t TotalLinkTime; // 경로 전체 소요 시간 (초)
-
-	// 경로선
-	SBox RouteBox; // 경로선 영역	
-	vector<RouteSummary> RouteSummarys; // 다중 탐색 결과의 개별 경로 요약 정보
-	vector<RouteResultLinkEx> LinkInfo; // 링크 정보
-	vector<SPoint> LinkVertex; // 경로선
-	
-	void Init() {
-		ResultCode = ROUTE_RESULT_FAILED;
-
-		RequestMode = 0;
-		RequestId = 0;
-
-		RouteOption = 0;
-		RouteAvoid = 0;
-		RouteMobility = 0;
-
-		StartResultLink.Init();
-		EndResultLink.Init();
-
-		TotalLinkDist = 0;
-		TotalLinkCount = 0;
-		TotalLinkTime = 0;
-
-		memset(&RouteBox, 0x00, sizeof(RouteBox));
-
-		if (!RouteSummarys.empty()) {
-			RouteSummarys.clear();
-			vector<RouteSummary>().swap(RouteSummarys);
-		}
-		if (!LinkInfo.empty()) {
-			LinkInfo.clear();
-			vector<RouteResultLinkEx>().swap(LinkInfo);
-		}
-		if (!LinkVertex.empty()) {
-			LinkVertex.clear();
-			vector<SPoint>().swap(LinkVertex);
-		}
-	}// Init()
-
-}RouteResultInfo;
-
-
 typedef struct _tagstDistrict
 {
 	int32_t id; // 클러스터 ID
 	double dist; // 예상 거리
 	int32_t time; // 예상 시간
-	uint32_t etd; // 출발 예상 시간
-	uint32_t eta; // 도착 예상 시간
+	int32_t cargo; // 화물 수량
+	uint32_t etd; // 출발 예상 시각
+	uint32_t eta; // 도착 예상 시각
 	SPoint center; // 무게 중심
 
 	vector<int32_t> vtPois;
 	vector<SPoint> vtCoord;
 	vector<SPoint> vtBorder;
 	vector<int32_t> vtTimes;
+	vector<int32_t> vtLayoverTimes;
+	vector<int32_t> vtCargoVolume;
 	vector<int32_t> vtDistances;
 
 	_tagstDistrict()
@@ -1462,17 +1406,131 @@ typedef struct _tagstDistrict
 		id = 0;
 		dist = 0.f;
 		time = 0.f;
+		cargo = 0;
 		etd = 0;
 		eta = 0;
+	}
+
+	void init()
+	{
+		id = 0;
+		dist = 0.f;
+		time = 0.f;
+		cargo = 0;
+		etd = 0;
+		eta = 0;
+		center = { 0, 0 };
+
+		vtPois.clear();
+		vtCoord.clear();
+		vtBorder.clear();
+		vtTimes.clear();
+		vtLayoverTimes.clear();
+		vtCargoVolume.clear();
+		vtDistances.clear();
 	}
 }stDistrict;
 
 
-typedef struct _tagTspOptions
+struct Origins
 {
-	int32_t userId;
+	SPoint position; // 좌표(WGS84)
+	int32_t layoverTime = 0; // 소요시간(초)
+	int32_t cargoVolume = 0; // 화물수량
+
+	// 각 지점별 추가 할당 리소스 정보
+	int32_t weight = 0; // 추가무게(kg)
+	int32_t count = 0; // 추가개수
+	int32_t size = 0; // 추가사이즈(cm, 가로+세로+높이)
+
+	//_tagOrigins()
+	//{
+	//	time = 0;
+	//	weight = 0;
+	//	count = 0;
+	//	size = 0;
+	//}
+};
+
+
+struct TruckOption
+{
+	int32_t height = 0; // 트럭 높이(cm), 제한
+	int32_t weight = 0; // 트럭 중량(kg), 제한
+	int32_t length = 0; // 트럭 길이(cm), 제한
+	int32_t width = 0; // 트럭 너비(cm), 제한
+	int32_t hazardous = 0; // 위험 수하물, 0://일발, 1:위험물, 상수원보호구역진입 제한
+
+	bool isEnableTruckOption() const {
+		return (height || weight || length || width || hazardous) ? true : false;
+	}
+};
+
+typedef struct _tagBaseOption
+{
+	//string userId; // 대입할때 주소복사 되지 않도록 주의할것
+	//string uri; // 데이터 경로, 기본적으로 timestamp 값을 준다.
+	char userId[128];
+	int32_t option; // 탐색 옵션,
+	int32_t avoid; // 회피 옵션,
+	int32_t traffic; // 교통 정보, 0:미사용, 1:실시간(REAL), 2:통계(STATIC), 3:실시간-통계(REAL-STATIC)
+	int32_t free; // 무료 적용, 0:미사용, 1:무료
+	int32_t timestamp;
 	int32_t fileCache;
-	int32_t target;
+	int32_t binary;
+	int32_t mobility;
+	int32_t distance_type; // RDM 생성 타입, 0:미사용(직선거리) 1:경로
+	int32_t compare_type; // RDM 비교 타입, 0:미사용(기본) 1:코스트, 2:거리, 3:시간
+	int32_t expand_method; // RDM 확장 방식, 0:기본, 1:레벨 단계화	
+
+	TruckOption truck; // 트럭옵션
+
+	_tagBaseOption()
+	{
+		//userId = "";
+		//uri = "";
+		memset(userId, 0x00, sizeof(userId));
+		option = 0;
+		avoid = 0;
+		timestamp = 0;
+		traffic = 0;
+		free = 0;
+		fileCache = 0;
+		binary = 0;
+		mobility = TYPE_MOBILITY_VEHICLE;
+		distance_type = 1;
+		compare_type = 0;
+		expand_method = 0;
+	}
+
+	_tagBaseOption& operator=(const _tagBaseOption& rhs)
+	{
+		strcpy(this->userId, rhs.userId);
+		//this->userId = rhs.userId;
+		//this->uri = rhs.uri;
+		this->option = rhs.option;
+		this->avoid = rhs.avoid;
+		this->traffic = rhs.traffic;
+		this->timestamp = rhs.timestamp;
+		this->free = rhs.free;
+		this->fileCache = rhs.fileCache;
+		this->binary = rhs.binary;
+		this->mobility = rhs.mobility;
+
+		this->distance_type = rhs.distance_type;
+		this->compare_type = rhs.compare_type;
+		this->expand_method = rhs.expand_method;
+
+		memcpy(&this->truck, &rhs.truck, sizeof(this->truck));
+
+		return *this;
+	}
+}BaseOption;
+
+
+typedef struct _tagTspOption
+{
+	BaseOption baseOption;
 
 	int32_t algorithm;
 	int32_t geneSize;
@@ -1480,73 +1538,101 @@ typedef struct _tagTspOptions
 	int32_t loopCount;
 	int32_t seed; // 랜덤 seed
 	int32_t compareType;
-
 	int32_t positionLock; // 지점 고정, 0:미사용, 1:출발지 고정, 2:도착지 고정, 3:출발지-도착지 고정, 4:출발지 회귀
 
-	_tagTspOptions()
+	_tagTspOption()
 	{
-		userId = 0;
-		fileCache = 0;
-		target = 0;
-
 		algorithm = TYPE_TSP_ALGORITHM_TSP_GA;
 		geneSize = 0;
 		individualSize = 100;
 		loopCount = 1000;
 		seed = 10000;// 1000 + 49 * 2;
 		compareType = TYPE_TSP_VALUE_DIST;
-
 		positionLock = TYPE_TSP_LOCK_NONE;
 	}
-}TspOptions;
+
+	_tagTspOption& operator=(const _tagTspOption& rhs)
+	{
+		this->baseOption = rhs.baseOption;
+
+		this->algorithm = rhs.algorithm;
+		this->geneSize = rhs.geneSize;
+		this->individualSize = rhs.individualSize;
+		this->loopCount = rhs.loopCount;
+		this->seed = rhs.seed;
+		this->compareType = rhs.compareType;
+		this->positionLock = rhs.positionLock;
+
+		return *this;
+	}
+}TspOption;
 
 
-
-typedef struct _tagClusteringOptions
+typedef struct _tagClusteringOption
 {
-	int32_t userId;
-	int32_t fileCache; // 파일 캐쉬, 0:미사용, 1:읽기, 2:쓰기, 3:읽기-쓰기
-
+	TspOption tspOption;
+	
 	int32_t algorithm;
-	int32_t geneSize;
-	int32_t individualSize;
-	int32_t loopCount;
 	int32_t seed; // 랜덤 seed
 	int32_t compareType;
-	
-	int32_t divisionType; // 분배 타입, 0:갯수균등, 1:거리균등, 2:시간균등
 
+	int32_t divisionType; // 분배 타입, 0:갯수균등, 1:거리균등, 2:시간균등
 	int32_t limitCluster; // 최대 배차(클러스터링) 차량 수
 	int32_t limitValue; // 차량당 최대 운행 가능 값, 거리(미터)/시간(초)-분으로 입력받아 초로 변환
 	int32_t limitDeviation; // 차량당 최대 운행 정보 편차
-
+	int32_t max_spot; // 차량당 최대 운송 가능 개수
+	int32_t max_distance; // 차량당 최대 운행 가능 거리
+	int32_t max_time; // 차량당 최대 운행 가능 시간
+	int32_t max_cargo; // 차량당 최대 적재 가능 화물
 	int32_t reservation; // 예약 시각
 	int32_t reservationType; // 예약 타입, 0:미사용, 1:출발시간, 2:도착시간
-
 	int32_t positionLock; // 지점 고정, 0:미사용, 1:출발지 고정, 2:도착지 고정, 3:출발지-도착지 고정, 4:출발지 회귀
+	int32_t additionalType; // 추가 배당 타입, "0:미사용, 1:갯수, 2:무게(g), 3:사이즈(cm)",
+	int32_t additionalLimit; // 추가 배당 최대 한도
 
-
-	_tagClusteringOptions()
+	_tagClusteringOption()
 	{
-		userId = 0;
-		fileCache = 0;
-
 		algorithm = TYPE_TSP_ALGORITHM_TSP;
-		geneSize = 0;
-		individualSize = 100;
-		loopCount = 1000;
-		seed = 10000;// 1000 + 49 * 2;
+		seed = 10006;// 1000 + 49 * 2;
 		compareType = TYPE_TSP_VALUE_DIST;
 
 		divisionType = 0;
-
 		limitCluster = 0;
 		limitValue = 0;
 		limitDeviation = 0;
-
+		max_spot = 0;
+		max_distance = 0;
+		max_time = 0;
+		max_cargo = 0;
 		reservation = 0;
 		reservationType = 0;
-
 		positionLock = TYPE_TSP_LOCK_NONE;
+		additionalType = 0;
+		additionalLimit = 0;
 	}
-}ClusteringOptions;
+
+	_tagClusteringOption& operator=(const _tagClusteringOption& rhs)
+	{
+		this->tspOption = rhs.tspOption;
+
+		this->algorithm = rhs.algorithm;
+		this->seed = rhs.seed;
+		this->compareType = rhs.compareType;
+
+		this->divisionType = rhs.divisionType;
+		this->limitCluster = rhs.limitCluster;
+		this->limitValue = rhs.limitValue;
+		this->limitDeviation = rhs.limitDeviation;
+		this->max_spot = rhs.max_spot;
+		this->max_distance = rhs.max_distance;
+		this->max_time = rhs.max_time;
+		this->max_cargo = rhs.max_cargo;
+		this->reservation = rhs.reservation;
+		this->reservationType = rhs.reservationType;
+		this->positionLock = rhs.positionLock;
+		this->additionalType = rhs.additionalType;
+		this->additionalLimit = rhs.additionalLimit;
+
+		return *this;
+	}
+}ClusteringOption;

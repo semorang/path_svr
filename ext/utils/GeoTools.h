@@ -19,12 +19,24 @@ double getRealWorldDistance(IN const double slng, IN const double slat, IN const
 bool getPointByDistance(IN const double slng, IN const double slat, IN OUT double& elng, IN OUT double& elat, const double lDistance);
 bool getPointByDistanceFromCenter(IN const double slng, IN const double slat, IN const double& elng, IN const double& elat, IN const double lDistance, IN const bool isRight, OUT double& x, OUT double& y);
 
-bool isInBox(IN const double lon, IN const double lat, IN const SBox& inBox, IN const double inMargin = 0);
-bool isInPitBox(IN const SBox& fromBox, IN const SBox& inBox);
-void getClosestPoint(IN const double x1, IN const double y1, IN const double x2, IN const double y2, IN const double ox, IN const double oy, OUT double *a, OUT double *b, IN OUT double *ir);
+void extendDataBox(IN OUT SBox& box, IN const double lng, IN const double lat);
+void extendDataBox(IN OUT SBox& box, IN const SPoint* pCoords, IN const int nCoordCount);
+void extendDataBox(IN OUT SBox& box, IN const SBox& data);
 
+bool isInBox(IN const double lon, IN const double lat, IN const SBox& baseBox, IN const double inMargin = 0);
+bool isInPitBox(IN const SBox& inBox, IN const SBox& baseBox);
+bool isOnPitBox(IN const SBox& onBox, IN const SBox& baseBox);
+//void getClosestPoint(IN const double x1, IN const double y1, IN const double x2, IN const double y2, IN const double ox, IN const double oy, OUT double *a, OUT double *b, IN OUT double *ir);
+void getClosestPoint(IN const double lng1, IN const double lat1, IN const double lng2, IN const double lat2, IN const double lng3, IN const double lat3, OUT double *lng, OUT double *lat, IN OUT double *ir);
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////
+// POLYGON
+bool isPointInPolygon(const double x, const double y, const SPoint *pptPolygon, const int32_t nPolygon);
+bool isPointInPolygon(const SPoint *ppt, const SPoint *pptPolygon, const int32_t nPolygon);
 SPoint getPolygonCenter(IN const vector<SPoint>& points);
-double GetPolygonArea(IN const vector<SPoint>& points);
+double getPolygonArea(IN const vector<SPoint>& points);
+
+
 
 // for PROJ4
 #if defined(USE_PROJ4_LIB)

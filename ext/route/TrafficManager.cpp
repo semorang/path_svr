@@ -16,8 +16,6 @@
 static char THIS_FILE[] = __FILE__;
 #endif
 
-#define TRAFFIC_DATA_ALIVE	15 * 60 // 교통 정보 유지 시간, 현재 15분
-
 CTrafficManager::CTrafficManager()
 {
 	currentTimestamp = 0;
@@ -93,7 +91,7 @@ bool CTrafficManager::ParsingTTL(IN FILE* fp, IN const int32_t size, IN OUT uint
 	bool ret = false;
 
 	const int timeGap = TRAFFIC_DATA_ALIVE;
-	uint32_t tmNow = timestamp;
+	uint32_t tmReq = timestamp;
 	uint32_t tmData = 0;
 	stTrafficTTLItem trfItem;
 
@@ -101,8 +99,8 @@ bool CTrafficManager::ParsingTTL(IN FILE* fp, IN const int32_t size, IN OUT uint
 	size_t sizeItem = sizeof(trfItem);
 	uint32_t nItemCount = size / sizeof(trfItem);
 
-	if (tmNow <= 0) {
-		tmNow = time(NULL);
+	if (tmReq <= 0) {
+		tmReq = time(NULL);
 	}
 
 	for (int ii = 0; ii < nItemCount; ii++) {
@@ -116,9 +114,9 @@ bool CTrafficManager::ParsingTTL(IN FILE* fp, IN const int32_t size, IN OUT uint
 			tmData = trfItem.id;
 			timestamp = tmData;
 
-			if (tmNow < tmData) { // 데이터가 요청 시각보다 미래 데이터면 무시
+			if (tmReq < tmData) { // 데이터가 요청 시각보다 미래 데이터면 무시
 				break;
-			} else if (tmNow - timeGap > tmData) { // 데이터가 허용 범위 시각보다 과거 데이터면 무시 
+			} else if (tmReq - timeGap > tmData) { // 데이터가 허용 범위 시각보다 과거 데이터면 무시
 				break;
 			}
 
@@ -126,6 +124,10 @@ bool CTrafficManager::ParsingTTL(IN FILE* fp, IN const int32_t size, IN OUT uint
 		} else {
 			m_pDataMgr->UpdateTrafficTTLData(trfItem.id, trfItem.speed, tmData);
 		}
+	}
+
+	if (ret == true) {
+		m_pDataMgr->CheckTrafficAlive(tmReq - timeGap);
 	}
 
 	return ret;
@@ -200,7 +202,7 @@ size_t CTrafficManager::Update(IN const char* szFileName, IN const int type, IN 
 
 	FILE* fp = fopen(szFileName, "rb");
 	if (fp) {
-		if (type == TYPE_TRAFFIC_TTL || type == TYPE_TRAFFIC_KS) {
+		if ((type == TYPE_SPEED_REAL_TTL) || (type == TYPE_SPEED_REAL_KS)) {
 			stTrafficDataHeader trfHeader;
 			size_t dwRead = 0;
 			int nReadValue = 0;
@@ -231,7 +233,7 @@ size_t CTrafficManager::Update(IN const char* szFileName, IN const int type, IN 
 			if (ret == true) {
 				time_t timer = timenow;
 				struct tm* tmData = localtime(&timer);
-				LOG_TRACE(LOG_DEBUG, "traffic data read, %04d-%02d-%02d %02d:%02d:%02d", tmData->tm_year + 1900, tmData->tm_mon + 1, tmData->tm_mday, tmData->tm_hour, tmData->tm_min, tmData->tm_sec);
+				LOG_TRACE(LOG_KEY_TRAFFIC, LOG_DEBUG, "traffic data read: %04d-%02d-%02d %02d:%02d:%02d", tmData->tm_year + 1900, tmData->tm_mon + 1, tmData->tm_mday, tmData->tm_hour, tmData->tm_min, tmData->tm_sec);
 			}
 
 			fclose(fp);
@@ -255,7 +257,6 @@ size_t CTrafficManager::Update(IN const char* szFileName, IN const int type, IN 
 				 //	umap_RealTrafficInfo[ksLinkID] = rtItem;
 				 //} // for
 		}
-
 	}
 
 	//if (nCount > 0) {

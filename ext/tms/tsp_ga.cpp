@@ -3,7 +3,7 @@
 #include "../utils/UserLog.h"
 #include <time.h>
 
-
+#define USE_PARALLEL
 
 int32_t g_valuType = TYPE_TSP_VALUE_DIST; // TYPE_TSP_VALUE_COST; // 0:cost, 1:dist, 2:time
 
@@ -677,7 +677,9 @@ bool Individual::Create(IN const vector<tableItemNearlest>* pNearlest, IN const 
 				pos = idxStart; // 첫 유전자부터 시작
 				if (idxEnd > 1) {
 					curr = (rand() % (idxEnd - 1)) + 1; // 처음과 마지막을 제외한 랜덤 위치
-				}				
+				} else {
+					curr = idxEnd;
+				}
 				chromosome[pos].SetAttribute(curr);
 				created[pos] = visited[curr] = true;
 				idxStart++;
@@ -865,9 +867,10 @@ Environment::Environment()
 
 	ppTables = nullptr;
 	tableCount = 0;
+	fitnessSum = 0.f;
 	averageValue = 0.f;
 	bestValue = 0.f;
-	worstValue = 0.f;	
+	worstValue = 0.f;
 }
 
 
@@ -880,16 +883,16 @@ Environment::~Environment()
 }
 
 
-void Environment::SetOption(IN const TspOptions* pOpt)
+void Environment::SetOption(IN const TspOption* pOpt)
 {
 	if (pOpt == nullptr) {
 		LOG_TRACE(LOG_WARNING, "tsp setting option null is null");
 	}
 
-	memcpy(&options, pOpt, sizeof(options));
+	tspOption = *pOpt;
 
-	if (options.compareType != TYPE_TSP_VALUE_DIST) {
-		g_valuType = options.compareType;
+	if (tspOption.compareType != TYPE_TSP_VALUE_DIST) {
+		g_valuType = tspOption.compareType;
 	}
 }
 
@@ -903,6 +906,7 @@ bool cmpNearlestGene(const tableItem& lhs, const tableItem& rhs) {
 		return lhs.cost < rhs.cost;
 	}
 }
+
 
 bool Environment::SetCostTable(IN const vector<vector<stDistMatrix>>& vtDistMatrix, IN const int count)
 {
@@ -922,22 +926,22 @@ bool Environment::SetCostTable(IN const vector<vector<stDistMatrix>>& vtDistMatr
 	uint32_t maxGene = tableCount;
 
 	// 출발지 고정 & 원점 회귀
-	if (options.positionLock == TYPE_TSP_RECURSICVE) {
+	if (tspOption.positionLock == TYPE_TSP_RECURSIVE) {
 		// 회귀는 마지막 강제 추가
 		tableCount++;
 		maxGene++;
 	}
 	// 출발지-도착지 고정
-	else if (options.positionLock == TYPE_TSP_LOCK_START_END) {
+	else if (tspOption.positionLock == TYPE_TSP_LOCK_START_END) {
 		//maxGene = tableCount - 1;
 		maxGene = tableCount;
 	}	
 	// 출발지 고정
-	else if (options.positionLock == TYPE_TSP_LOCK_START) {
+	else if (tspOption.positionLock == TYPE_TSP_LOCK_START) {
 		maxGene = tableCount;
 	}
 	// 도착지 고정
-	else if (options.positionLock == TYPE_TSP_LOCK_END) {
+	else if (tspOption.positionLock == TYPE_TSP_LOCK_END) {
 		//maxGene = tableCount - 1;
 		maxGene = tableCount;
 	} else {
@@ -953,7 +957,7 @@ bool Environment::SetCostTable(IN const vector<vector<stDistMatrix>>& vtDistMatr
 		uint32_t max = 0;
 
 		tableItemNearlest currentGene;
-		if ((options.positionLock == TYPE_TSP_RECURSICVE) && (ii == maxGene - 1)) {
+		if ((tspOption.positionLock == TYPE_TSP_RECURSIVE) && (ii == maxGene - 1)) {
 			// 회귀는 마지막 강제 추가된 염색체를 첫번째 염색체와 동일하게 적용
 			currentGene.idx = 0;
 		} else {
@@ -962,7 +966,7 @@ bool Environment::SetCostTable(IN const vector<vector<stDistMatrix>>& vtDistMatr
 
 		for (int jj = 0; jj < maxGene; jj++) {
 			tableItem neighborGene;
-			if ((options.positionLock == TYPE_TSP_RECURSICVE) && (jj == maxGene - 1)) {
+			if ((tspOption.positionLock == TYPE_TSP_RECURSIVE) && (jj == maxGene - 1)) {
 				// 회귀는 마지막 강제 추가된 염색체를 첫번째 염색체와 동일하게 적용
 				currentGene.idx = 0;
 			} else {
@@ -1036,7 +1040,7 @@ void Environment::Genesis(IN const uint32_t maxGene, IN const uint32_t maxPopula
 {
 	//srand(time(NULL));
 	//srand(1000 + 49 * 2);
-	srand(options.seed);
+	srand(tspOption.seed);
 
 	nMaxPopulation = maxPopulation;
 
@@ -1054,24 +1058,24 @@ void Environment::Genesis(IN const uint32_t maxGene, IN const uint32_t maxPopula
 		int nEnd = -1;
 
 		// 출발지 고정 & 원점 회귀
-		if (options.positionLock == TYPE_TSP_RECURSICVE) {
+		if (tspOption.positionLock == TYPE_TSP_RECURSIVE) {
 			// 회귀는 마지막 강제 추가
 			newIndi.SetGeneSize(maxGene + 1);
 			nStart = 0;
 			nEnd = 0;
 		}
 		// 출발지-도착지 고정
-		else if (options.positionLock == TYPE_TSP_LOCK_START_END) {
+		else if (tspOption.positionLock == TYPE_TSP_LOCK_START_END) {
 			nStart = 0;
 			nEnd = maxGene - 1;
 		}
 		// 출발지 고정
-		else if (options.positionLock == TYPE_TSP_LOCK_START) {
+		else if (tspOption.positionLock == TYPE_TSP_LOCK_START) {
 			nStart = 0;
 			nEnd = -1;
 		}
 		// 도착지 고정
-		else if (options.positionLock == TYPE_TSP_LOCK_END) {
+		else if (tspOption.positionLock == TYPE_TSP_LOCK_END) {
 			nStart = -1;
 			nEnd = maxGene - 1;
 		} 
@@ -1196,8 +1200,10 @@ void Environment::Selection(OUT vector<Parents>& pairs)
 
 		for (auto & parent : parents) {
 			int idx = 0;
+			int fs = static_cast<uint32_t>(fitnessSum);
+			if (fs <= 0) fs = 1;
 			double sum = 0;
-			int32_t point = rand() % static_cast<uint32_t>(fitnessSum);
+			int32_t point = rand() % fs;
 
 			for (const auto & item : population) {
 				sum += item.GetFitness();
@@ -1527,7 +1533,14 @@ bool Environment::Crossover(IN vector<Parents>& pairs)
 
 	int32_t cur, next;
 
+#ifdef USE_PARALLEL
+#pragma omp parallel firstprivate(cur, next, visited, child)
+#pragma omp for
+	for (int ii = 0; ii < pairs.size(); ii++) {
+		Parents& pair = *&pairs[ii];
+#else
 	for (auto & pair : pairs) {
+#endif
 		//frontSize = fullSize / ((rand() % (fullSize - 2)) + 2); // 2~SIZE 위치 분할 
 		//backSize = fullSize - frontSize;
 
@@ -1567,8 +1580,8 @@ bool Environment::Crossover(IN vector<Parents>& pairs)
 			// front 앞, 
 			//copy(pair.parentL.GetChromosome()->begin(), pair.parentL.GetChromosome()->begin() + frontSize, child.GetChromosome()->begin());
 			::copy(lhs->begin(), lhs->begin() + frontSize, chd->begin());
-			for (int ii = 0; ii < frontSize; ii++) {
-				cur = lhs->at(ii).GetAttribute();
+			for (int jj = 0; jj < frontSize; jj++) {
+				cur = lhs->at(jj).GetAttribute();
 				visited.emplace(cur);
 			}
 
@@ -1577,13 +1590,13 @@ bool Environment::Crossover(IN vector<Parents>& pairs)
 			vector<int32_t> vtRetry;
 			//copy(pair.parentL.GetChromosome()->begin() + frontSize, pair.parentL.GetChromosome()->end(), child.GetChromosome()->begin() + frontSize);
 			::copy(rhs->begin() + frontSize, rhs->end(), chd->begin() + frontSize);
-			for (int ii = frontSize; ii < fullSize; ii++) {
-				cur = rhs->at(ii).GetAttribute();
+			for (int jj = frontSize; jj < fullSize; jj++) {
+				cur = rhs->at(jj).GetAttribute();
 				next = getFisrstVisit(visited, cur, -1);
 
 				// 재시도 할 녀석들
 				if (next < 0) {
-					vtRetry.emplace_back(ii);
+					vtRetry.emplace_back(jj);
 				}
 				else {
 					visited.emplace(cur);
@@ -1603,12 +1616,19 @@ bool Environment::Crossover(IN vector<Parents>& pairs)
 			}
 
 			// 자녀 등록
+#ifdef USE_PARALLEL
+#pragma omp critical
+#endif
 			offsprings.emplace_back(child);
 
 
 			// 유전자 강제 변이
 			Mutation(&child, 50);
+		
 			// 자녀 등록
+#ifdef USE_PARALLEL
+#pragma omp critical
+#endif
 			offsprings.emplace_back(child);
 
 			//child.GetChromosome()->assign(offsprings.back().GetChromosome()->begin(), offsprings.back().GetChromosome()->end());
@@ -1620,11 +1640,9 @@ bool Environment::Crossover(IN vector<Parents>& pairs)
 
 
 	// 세대 교체
-	population.clear();
 	population.assign(offsprings.begin(), offsprings.end());
 
 	generation++;
-
 
 	return true;
 }
@@ -1700,7 +1718,7 @@ void Environment::GetBest(vector<int>& result)
 	for (int ii = 0; ii < population[0].GetChromosome()->size(); ii++) {
 		// 출발지 고정 & 원점 회귀
 		// 회귀는 마지막 강제 추가된 염색체 제외
-		if ((options.positionLock == TYPE_TSP_RECURSICVE) && (ii == tableCount - 1)) {
+		if ((tspOption.positionLock == TYPE_TSP_RECURSIVE) && (ii == tableCount - 1)) {
 			break;
 		}
 		result.emplace_back(population[0].GetChromosome()->at(ii).GetAttribute());

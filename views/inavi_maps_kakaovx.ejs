@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <title>다중경로탐색</title>
+    <title>숲길 탐색</title>
 </head>
 
 <body>
@@ -45,8 +45,35 @@
             <span id="btnGoToJsonResult" class="btn" onclick="gotoJSON()" style="width:65px">JSON보기</span>
         </div>
 
+        <!-- 옵션 div -->
+        <div style="position:absolute;left:10px;top:45px;width:250px;padding:5px;background:rgba(255, 255, 255, 0.8);z-index: 1;font-size:11px;border-radius: 5px;">
+            <input id="courseHiking" onclick="setCourseType(1)" type="radio" name="course" checked style="margin-left: 5px;"/>등산
+            <input id="courseTrail" onclick="setCourseType(2)" type="radio" name="course" style="margin-left: 5px;"/>걷기
+            <input id="courseBike" onclick="setCourseType(3)" type="radio" name="course" style="margin-left: 5px"/>자전거
+            <input id="courseCourse" onclick="setCourseType(4)" type="radio" name="course" style="margin-left: 5px"/>코스
+        </div>
+
+        <!-- 코스ID div -->
+        <div style="position:absolute;left:10px;top:75px;width:250px;padding:5px;background:rgba(255, 255, 255, 0.8);z-index: 1;font-size:13px;border-radius: 5px;">
+            <form onsubmit="doRoute(); return false;">
+                코스ID : <input type="text" value="" id="input_courseid" size="15">
+                <button type="submit">탐색</button>
+            </form>
+            <script>
+                input_courseid.oninput = input_courseid.onpaste = function() {
+                    setCourseId(input_courseid.value);
+                }
+            </script>
+        </div>
+
+        <!-- 이동체 div -->
+        <!-- <div style="position:absolute;left:110px;top:110px;width:250px;padding:5px;background:rgba(255, 255, 255, 0.8);z-index: 1;font-size:11px;border-radius: 5px;">
+            <input id="mobWalk" onclick="setMobility(0)" type="radio" name="mobility" checked style="margin-left: 5px;"/>걷기
+            <input id="mobBicycle" onclick="setMobility(1)" type="radio" name="mobility" style="margin-left: 15px"/>자전거
+        </div> -->
+
         <!-- 검색 div -->
-        <div style="position:absolute;left:10px;top:80px;width:250px;padding:5px;background:rgba(255, 255, 255, 0.8);z-index: 1;font-size:13px;border-radius: 5px;">
+        <div style="position:absolute;left:10px;top:130px;width:250px;padding:5px;background:rgba(255, 255, 255, 0.8);z-index: 1;font-size:13px;border-radius: 5px;">
             <form onsubmit="searchKeyword(); return false;">
                 키워드 : <input type="text" value="아이나비시스템즈" id="keyword" size="15">
                 <button type="submit">검색</button>
@@ -54,7 +81,7 @@
         </div>
 
         <!-- 메뉴 생성 -->
-        <div id="menu_wrap" class="bg_white" style="top:120px">
+        <div id="menu_wrap" class="bg_white" style="top:165px">
             <div id="menu_title" style="text-align:center"><P>검색 결과 목록</P></div>
             <hr>
             <div style="font-size:12px;font-family:'Malgun Gothic', '맑은 고딕', sans-serif;">
@@ -71,33 +98,31 @@
     <script type="text/javascript" src="script/inavimaps.js"></script>
     <script type="text/javascript" src="script/boundarys.js"></script>
     <script type="text/javascript" src="script/typenames.js"></script>
-    <script type="text/javascript" src="script/route.js"></script>
     <script type="text/javascript" src="script/search.js"></script>
+    <script type="text/javascript" src="script/route.js"></script>
     <script type="text/javascript" src="http://code.jquery.com/jquery-1.10.2.js"></script>
 
     <script>
         let result_obj = JSON.parse('<%- JSON.stringify(result) %>');
+        let isSuccess = result_obj.header.isSuccessful;
 
-        let result_mode = result_obj.mode;
-        if (result_mode === "clustering") {
-
+        if (isSuccess) {
+            user_pos = [ result_obj.routes[0].vertex_info[~~((result_obj.routes[0].vertex_info.length) / 2)].x, result_obj.routes[0].vertex_info[~~((result_obj.routes[0].vertex_info.length) / 2)].y ];
         } else {
-            let isSuccess = result_obj.header.isSuccessful;
-
-            if (isSuccess) {
-                user_pos = [ result_obj.route.data[0].vertex_info[~~((result_obj.route.data[0].vertex_info.length) / 2)].x, result_obj.route.data[0].vertex_info[~~((result_obj.route.data[0].vertex_info.length) / 2)].y ];
-            } else {
-                user_pos = [127.110767364419, 37.402186130724];// 아이나비시스템즈
-            }
-
-            user_obj = result_obj.user_info;
+            user_pos = [127.110767364419, 37.402186130724];// 아이나비시스템즈
         }
 
+        user_obj = result_obj.user_info;
+
+        
         // map 사이즈 조절
         var screenHeight = window.innerHeight - 18;
         document.getElementById("map").style.height = screenHeight + "px";
 
-
+        // if (result_mode === "pedestrian") {
+        //     document.title = "보행/자전거 경로탐색"
+        // }
+        
         function initMap() {
 
             map = new inavi.maps.Map({
@@ -108,62 +133,24 @@
 
             initMapObject(map);
 
-            if (result_mode === "clustering") {
-                drawClunster(result_obj.clusters);
-            } else {
-                // 대구 테크노폴리스 도로링크 유효 범위
-                // var boundarys = new inavi.maps.Polyline({
-                //     map: map,
-                //     path: getDaeguBoundary(),
-                //     style: {
-                //         lineColor: "#808080",
-                //         lineWidth: 3,
-                //         lineDasharray: [1, 1],
-                //     },
-                // });
+            // 경로 그리기
+            drawRoutes(result_obj.routes, map, route_offset, route_color);
 
-                // 서울 범위
-                // var boundarys = new inavi.maps.Polyline({
-                //     map: map,
-                //     path: getBukhansanBoundary(),
-                //     style: {
-                //         lineColor: "#808080",
-                //         lineWidth: 3,
-                //         lineDasharray: [1, 1],
-                //     },
-                // });
-
-                // onmouseover
-
-                // outmouseover
-
-                //-- 노드 생성
-
-                if (isSuccess) {
-                    // 경로 그리기
-                    drawiNaviRoutes(result_obj.route.data, map, route_offset, route_color);
-
-                    // 출발지
-                    setDeparture(new inavi.maps.LngLat(user_obj.start.x ,user_obj.start.y));
-                    // 목적지
-                    setDestination(new inavi.maps.LngLat(user_obj.end.x, user_obj.end.y));
-                    // 경유지
-                    if (user_obj.vias != undefined) {
-                        for(var ii=0; ii<user_obj.vias.length; ii++) {
-                            if (user_obj.vias[ii].x != 0 && user_obj.vias[ii].y != 0) {
-                                setWaypoints(ii, new inavi.maps.LngLat(user_obj.vias[ii].x, user_obj.vias[ii].y));
-                            }
-                        }
+            // 출발지
+            setDeparture(new inavi.maps.LngLat(user_obj.start.x ,user_obj.start.y));
+            // 목적지
+            setDestination(new inavi.maps.LngLat(user_obj.end.x, user_obj.end.y));
+            // 경유지
+            if (user_obj.vias != undefined) {
+                for(var ii=0; ii<user_obj.vias.length; ii++) {
+                    if (user_obj.vias[ii].x != 0 && user_obj.vias[ii].y != 0) {
+                        setWaypoints(ii, new inavi.maps.LngLat(user_obj.vias[ii].x, user_obj.vias[ii].y));
                     }
-
-                    // 경로 정보를 커스텀 오버레이로 생성하고 지도에 표시합니다
-                    drawRouteInfo(result_obj.route.data, route_offset, route_color);
                 }
-                else {
-                    alert('경로 탐색 요청 실패')
-                }
-                //-- 마커가 표시될 위치입니다
             }
+
+            // 경로 정보를 커스텀 오버레이로 생성하고 지도에 표시합니다
+            drawRouteInfo(result_obj.routes);
         } // initMap
         
 
@@ -173,8 +160,6 @@
                 alert("출,도착지를 새로 설정하고 사용하세요.")
             } else {
                 var params = new URLSearchParams(window.location.search);
-                var pathsplit = window.location.pathname.split('/');
-                var pathname = '/api/' + pathsplit[pathsplit.length-1];
                 params.set('start', departure_pos.lng.toString() + ',' + departure_pos.lat.toString());
                 params.set('end', destination_pos.lng.toString() + ',' + destination_pos.lat.toString());
                 // var pathname = '/optimalposition'; // window.location.pathname;
@@ -186,8 +171,10 @@
                         params.append('vias', waypoint_pos[ii].lng.toString() + ',' + waypoint_pos[ii].lat.toString());
                     }
                 }
+                params.set('course_type', getCourseType());
+                params.set('course_id', getCourseId());
 
-                getiNaviRoutes(pathname, params);
+                getRoutes('/api/kakaovx/', params);
             
                 setRouteType(0);
             }
@@ -196,12 +183,12 @@
 
         // 경로 결과를 새창에서 JSON 결과로 보내도록 하자
         function gotoJSON() {
+            setRouteType(0);
+
             if (departure_pos === undefined || destination_pos === undefined ) {
                 alert("출,도착지를 새로 설정하고 사용하세요.")
             } else {
                 var params = new URLSearchParams(window.location.search);
-                var pathsplit = window.location.pathname.split('/');
-                var pathname = '/api/' + pathsplit[pathsplit.length-1];
                 params.set('start', departure_pos.lng.toString() + ',' + departure_pos.lat.toString());
                 params.set('end', destination_pos.lng.toString() + ',' + destination_pos.lat.toString());
                 // var pathname = '/optimalposition'; // window.location.pathname;
@@ -213,9 +200,18 @@
                         params.set('vias', waypoint_pos[ii].lng.toString() + ',' + waypoint_pos[ii].lat.toString());
                     }
                 }
+                params.set('option', getOption());
+                params.set('mobility', getMobility());
+                params.set('junction', true);
+
+                params.set('course_type', getCourseType());
+                params.set('course_id', getCourseId());
+
                 // params.set('opt', 8);
                 // params.set('target', 'inavi');
+                var pathname = '/api/kakaovx'; // window.location.pathname;
                 var route2url = pathname + '?' + params.toString();
+                // var route2url = window.location.pathname + '?' + params.toString();
 
                 console.log("request route : " + route2url.toString());
 
@@ -228,24 +224,40 @@
         function searchKeyword() {
             var keyword = document.getElementById('keyword').value;
 
-            // if (!keyword.replace(/^\s+|\s+$/g, '')) {
-            //     alert('키워드를 입력해주세요');
-            //     return false;
-            // }
+            if (!keyword.replace(/^\s+|\s+$/g, '')) {
+                alert('키워드를 입력해주세요');
+                return false;
+            }
 
             console.log("request, search keyword: " + keyword)
 
             // var pathname = 'https://api-maps.cloud.toast.com/maps/v3.0/appkeys/uuLPV7fHLk6NIVfCPnBv/searches';
+            // var pathname = 'https://maps.inavi.com/maps/v3.0/appkeys/<%=javascriptkey%>/searches'
             var pathname = 'https://dev-maps.inavi.com/maps/v3.0/appkeys/<%=javascriptkey%>/searches'
-            // var search2url = pathname + '?&query=' + keyword.toString() + '&reqcount=' + 10;
 
-            getSearch(pathname, keyword);
+            getSearch(pathname, keyword);    
         }
 
+        
     </script>
-    <script type="text/javascript"
-        src="https://dev-maps.inavi.com/maps/v3.0/appkeys/<%=javascriptkey%>/maps?callback=initMap"></script>
+    <!-- <script type="text/javascript"
+        src="https://maps.inavi.com/maps/v3.0/appkeys/<%=javascriptkey%>/maps?callback=initMap"></script> -->
     <!-- <script src="/script/position.js"></script> -->
+
+    <!-- <script type="text/javascript"
+    src="https://maps1.inavi.com:8085/maps/v3.0/appkeys/uuLPV7fHLk6NIVfCPnBv/maps?callback=initMap"></script> -->
+    <script type="text/javascript"
+    src="https://dev-maps.inavi.com/maps/v3.0/appkeys/<%=javascriptkey%>/maps?callback=initMap"></script>
+    <!-- <script type="text/javascript"
+    src="https://maps1.inavi.com:8085/maps/v3.0/appkeys/uuLPV7fHLk6NIVfCPnBv/maps?callback=initMap"></script> -->
+
+    <!-- https://maps1.inavi.com:8085/forest/#12.09/37.76827/128.56872
+    숲길망 데어터 웹지도 관련해서 아래 인증 서버로 접속 정보 변경 하시면 숲길망 지도 사용 가며
+    https://maps1.inavi.com:8085/maps/v3.0/appkeys/uuLPV7fHLk6NIVfCPnBv/maps?callback=initMap
+    -->
+
+    <!-- uuLPV7fHLk6NIVfCPnBv -->
+    <!-- 3cbfd55815743b0a8cfb7d4dc6a6d11331570d2d -->
 
 </body>
 

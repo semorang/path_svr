@@ -15,3 +15,8 @@ char * encoding(const char *text_input, char *source, char *target);
 
 char* trim(char *line);
 char* strupper(char* str);
+char* strlower(char* str);
+
+const char* getDistanceString(const int dist);
+const char* getDurationString(const int time, const bool contraction = false);
+const char* getCostString(const double cost);

@@ -118,42 +118,85 @@ void boxMerge(IN OUT SBox& lhs, IN const SBox& rhs)
 }
 
 
-size_t linkMerge(IN OUT vector<SPoint>& lhs, IN const vector<SPoint>& rhs)
+enum
+{
+	CASE_MERGE_DEFAULT = 0,
+	CASE_MERGE_TAIL_HEAD,
+	CASE_MERGE_TAIL_TAIL,
+	CASE_MERGE_HEAD_HEAD,
+	CASE_MERGE_HEAD_TAIL
+}; // 0:default, 1: tail + head, 2: tail + tail, 3: head + head, 4: head + tail
+
+
+int linkMerge(IN OUT vector<SPoint>& lhs, IN const vector<SPoint>& rhs, IN const bool isAllowDuplicates)
 {
 	size_t lhsCnt = lhs.size();
 	size_t rhsCnt = rhs.size();
 
-	if (lhsCnt <= 0)
+	int mergeCase = CASE_MERGE_DEFAULT;
+
+	if (lhsCnt <= 0 || rhsCnt <= 0) {
+		mergeCase = CASE_MERGE_DEFAULT;
+	}
+	// 유턴 후 다시 지나가는 길이 있을 수 있으니 4가지 케이스 처리 우선 필요
+	else if (lhs.at(0).equal(rhs.at(rhsCnt - 1)) && lhs.at(lhsCnt - 1).equal(rhs.at(0))) { // l-head + r-tail && l-tail + r-head ==> tail + head
+		mergeCase = CASE_MERGE_TAIL_HEAD;
+	} 
+	else if (lhs.at(0).equal(rhs.at(0)) && lhs.at(lhsCnt - 1).equal(rhs.at(rhsCnt - 1))) { // l-head + r-head && l-tail + r-tail ==> tail + tail
+		mergeCase = CASE_MERGE_TAIL_TAIL;
+	} 
+	else if (lhs.at(lhsCnt - 1).equal(rhs.at(rhsCnt - 1)) && lhs.at(0).equal(rhs.at(0))) { // l-tail + r-tail && l-head + r-head ==> head + head
+		mergeCase = CASE_MERGE_HEAD_HEAD;
+	} 
+	else if (lhs.at(lhsCnt - 1).equal(rhs.at(0)) && lhs.at(0).equal(rhs.at(rhsCnt - 1))) { // l-tail + r-head && l-had + r-tail ==> head + tail
+		mergeCase = CASE_MERGE_HEAD_TAIL;
+	}
+	// 회귀 모델이 될 수 있기에 tail with head/tail 확인 구문이 우선나와야 함.	
+	else if (lhs.at(lhsCnt - 1).equal(rhs.at(0))) { // tail with head
+		mergeCase = CASE_MERGE_TAIL_HEAD;
+	}	
+	else if (lhs.at(lhsCnt - 1).equal(rhs.at(rhsCnt - 1))) { // tail with tail
+		mergeCase = CASE_MERGE_TAIL_TAIL;
+	}	
+	else if (lhs.at(0).equal(rhs.at(0))) { // head with head
+		mergeCase = CASE_MERGE_HEAD_HEAD;
+	}	
+	else if (lhs.at(0).equal(rhs.at(rhsCnt - 1))) { // head with tail
+		mergeCase = CASE_MERGE_HEAD_TAIL;
+	} 
+	else {
+		mergeCase = CASE_MERGE_DEFAULT;
+	}
+
+
+	switch (mergeCase) {
+	case CASE_MERGE_TAIL_HEAD: // tail with head
 	{
-		lhs.assign(rhs.begin(), rhs.end());
-	}
-	else if (rhsCnt <= 0) {
-		// do not thing
-	}
-	// 회귀 모델이 될 수 있기에 tail with head/tail 확인 구문이 우선나와야 함.
-	// tail with head
-	else if (lhs.at(lhsCnt - 1).equal(rhs.at(0))) {
+		if (!isAllowDuplicates) {
+			lhs.pop_back();
+		}
+
 		lhs.insert(lhs.end(), rhs.begin(), rhs.end());
-	}
-	// tail with tail
-	else if (lhs.at(lhsCnt - 1).equal(rhs.at(rhsCnt - 1))) {
-		lhs.insert(lhs.end(), rhs.rbegin(), rhs.rend());
-	}
-	// head with head
-	else if (lhs.at(0).equal(rhs.at(0)))
+	} break;
+	case CASE_MERGE_TAIL_TAIL: // tail with tail
 	{
+		if (!isAllowDuplicates) {
+			lhs.pop_back();
+		}
+
+		lhs.insert(lhs.end(), rhs.rbegin(), rhs.rend());
+	} break;
+	case CASE_MERGE_HEAD_HEAD: // head with head
+	{
+		if (!isAllowDuplicates) {
+			lhs.erase(lhs.begin());
+		}
+
 		// 먼저 들어온놈을 뒤집고, 나중에 들어온 놈을 뒤에 연결, 2024-05-30
 		vector<SPoint>ptTmp;
 		ptTmp.assign(lhs.rbegin(), lhs.rend());
-		//for (int ii = rhsCnt - 1; ii >= 0; --ii)
-		//{
-		//	ptTmp.push_back(rhs[ii]);
-		//}
 		ptTmp.insert(ptTmp.end(), rhs.begin(), rhs.end());
-		//for (int ii = 0; ii < lhsCnt; ii++)
-		//{
-		//	ptTmp.push_back(lhs[ii]);
-		//}
+
 		lhs.swap(ptTmp);
 
 		// 그전에는 반대로 함
@@ -169,9 +212,8 @@ size_t linkMerge(IN OUT vector<SPoint>& lhs, IN const vector<SPoint>& rhs)
 		////	ptTmp.push_back(lhs[ii]);
 		////}
 		//lhs.swap(ptTmp);
-	}
-	// head with tail
-	else if (lhs.at(0).equal(rhs.at(rhsCnt - 1)))
+	} break;
+	case CASE_MERGE_HEAD_TAIL: // head with tail
 	{
 		//lhs.reserve(lhs.size() + rhs.size());
 		//for (int ii = 0; ii < lhsCnt; ii++)
@@ -183,17 +225,14 @@ size_t linkMerge(IN OUT vector<SPoint>& lhs, IN const vector<SPoint>& rhs)
 		// 회귀 모델이 될 수 있기에 tail with head 확인 구문이 우선나와야 함.
 
 		// 먼저 들어온놈을 뒤집고, 나중에 들어온 놈을 뒤에 연결, 2024-05-30
+		if (!isAllowDuplicates) {
+			lhs.erase(lhs.begin());
+		}
+
 		vector<SPoint>ptTmp;
 		ptTmp.assign(lhs.rbegin(), lhs.rend());
-		//for (int ii = rhsCnt - 1; ii >= 0; --ii)
-		//{
-		//	ptTmp.push_back(rhs[ii]);
-		//}
 		ptTmp.insert(ptTmp.end(), rhs.rbegin(), rhs.rend());
-		//for (int ii = 0; ii < lhsCnt; ii++)
-		//{
-		//	ptTmp.push_back(lhs[ii]);
-		//}
+
 		lhs.swap(ptTmp);
 
 		// 그전에는 반대로 함
@@ -203,59 +242,104 @@ size_t linkMerge(IN OUT vector<SPoint>& lhs, IN const vector<SPoint>& rhs)
 		//ptTmp.assign(rhs.begin(), rhs.end());
 		//ptTmp.insert(ptTmp.end(), lhs.begin(), lhs.end());
 		//lhs.swap(ptTmp);
-	}
-	else
+	} break;
+	default: // CASE_MERGE_DEFAULT
 	{
-		LOG_TRACE(LOG_ERROR, "Failed, vertext merge match point not exist, begin: %.5f, %.5f, end: %.5f, %.5f", rhs.at(0).x, rhs.at(0).y, rhs.at(rhsCnt - 1).x, rhs.at(rhsCnt - 1).y);
-
-		lhs.insert(lhs.end(), rhs.begin(), rhs.end());
+		if (lhsCnt <= 0) {
+			lhs.assign(rhs.begin(), rhs.end());
+		} else if (rhsCnt <= 0) {
+			// do not thing
+		} else {
+			LOG_TRACE(LOG_ERROR, "Failed, vertext merge match point not exist, begin: %.5f, %.5f, end: %.5f, %.5f", rhs.at(0).x, rhs.at(0).y, rhs.at(rhsCnt - 1).x, rhs.at(rhsCnt - 1).y);
+			lhs.insert(lhs.end(), rhs.begin(), rhs.end());
+			
+			return -1;
+		}
 	}
+	}; // switch
 
 	return lhs.size();
 }
 
 
-size_t linkMerge(IN OUT vector<SPoint>& lhs, IN const SPoint * pData, IN const uint32_t cntData)
+int linkMerge(IN OUT vector<SPoint>& lhs, IN const SPoint * pData, IN const uint32_t cntData, IN const bool isAllowDuplicates)
 {
 	size_t lhsCnt = lhs.size();
 	size_t rhsCnt = cntData;
 	const SPoint* rhs = pData;
 
-	if (lhs.empty())
-	{
-		lhs.assign(rhs, rhs + cntData);
+	int mergeCase = CASE_MERGE_DEFAULT; 
+
+	if (lhsCnt <= 0 || rhsCnt <= 0) {
+		mergeCase = CASE_MERGE_DEFAULT;
+	}
+	// 유턴 후 다시 지나가는 길이 있을 수 있으니 4가지 케이스 처리 우선 필요
+	else if (lhs.at(0).equal(rhs[rhsCnt-1]) && lhs.at(lhsCnt-1).equal(rhs[0])) { // l-head + r-tail && l-tail + r-head ==> tail + head
+		mergeCase = CASE_MERGE_TAIL_HEAD;
+	} 
+	else if (lhs.at(0).equal(rhs[0]) && lhs.at(lhsCnt-1).equal(rhs[rhsCnt-1])) { // l-head + r-head && l-tail + r-tail ==> tail + tail
+		mergeCase = CASE_MERGE_TAIL_TAIL;
+	} 
+	else if (lhs.at(lhsCnt - 1).equal(rhs[rhsCnt - 1]) && lhs.at(0).equal(rhs[0])) { // l-tail + r-tail && l-head + r-head ==> head + head
+		mergeCase = CASE_MERGE_HEAD_HEAD;
+	} 
+	else if (lhs.at(lhsCnt - 1).equal(rhs[0]) && lhs.at(0).equal(rhs[rhsCnt - 1])) { // l-tail + r-head && l-head + r-tail ==> head + tail
+		mergeCase = CASE_MERGE_HEAD_TAIL;
 	}
 	// 회귀 모델이 될 수 있기에 tail with head/tail 확인 구문이 우선나와야 함.
-	// tail with head
-	else if (lhs.at(lhsCnt - 1).equal(rhs[0])) {
-		lhs.insert(lhs.end(), rhs, rhs + rhsCnt);
+	else if (lhs.at(lhsCnt - 1).equal(rhs[0])) { // tail with head
+		mergeCase = CASE_MERGE_TAIL_HEAD;
+	}	
+	else if (lhs.at(lhsCnt - 1).equal(rhs[rhsCnt - 1])) { // tail with tail
+		mergeCase = CASE_MERGE_TAIL_TAIL;
+	}	
+	else if (lhs.at(0).equal(rhs[0])) { // head with head
+		mergeCase = CASE_MERGE_HEAD_HEAD;
+	}	
+	else if (lhs.at(0).equal(rhs[rhsCnt - 1])) { // head with tail
+		mergeCase = CASE_MERGE_HEAD_TAIL;
 	}
-	// tail with tail
-	else if (lhs.at(lhsCnt - 1).equal(rhs[rhsCnt - 1])) {
+	else {
+		mergeCase = CASE_MERGE_DEFAULT;
+	}
+
+
+	switch (mergeCase) {
+	case CASE_MERGE_TAIL_HEAD: // tail with head
+	{ 
+		if (!isAllowDuplicates) {
+			lhs.pop_back();
+		}
+
+		lhs.insert(lhs.end(), rhs, rhs + rhsCnt);
+	} break;
+	case CASE_MERGE_TAIL_TAIL: // tail with tail
+	{ 
 		//lhs.insert(lhs.end(), rhs.rbegin(), rhs.rend());
+		if (!isAllowDuplicates) {
+			lhs.pop_back();
+		}
+
 		for (int ii = rhsCnt - 1; ii >= 0; --ii) {
 			lhs.emplace_back(rhs[ii]);
 		}
-	}
-	// head with head
-	else if (lhs.at(0).equal(rhs[0]))
+	} break;
+	case CASE_MERGE_HEAD_HEAD: // head with head
 	{
+		if (!isAllowDuplicates) {
+			lhs.erase(lhs.begin());
+		}
+
 		vector<SPoint>ptTmp;
 		//ptTmp.assign(rhs.rbegin(), rhs.rend());
-		for (int ii = rhsCnt - 1; ii >= 0; --ii)
-		{
+		for (int ii = rhsCnt - 1; ii >= 0; --ii) {
 			ptTmp.emplace_back(rhs[ii]);
 		}
 		ptTmp.insert(ptTmp.end(), lhs.begin(), lhs.end());
-		//for (int ii = 0; ii < lhsCnt; ii++)
-		//{
-		//	ptTmp.push_back(lhs[ii]);
-		//}
 
 		lhs.swap(ptTmp);
-	}
-	// head with tail
-	else if (lhs.at(0).equal(rhs[rhsCnt - 1]))
+	} break;
+	case CASE_MERGE_HEAD_TAIL: // head with tail
 	{
 		//lhs.reserve(lhs.size() + rhs.size());
 		//for (int ii = 0; ii < lhsCnt; ii++)
@@ -264,6 +348,9 @@ size_t linkMerge(IN OUT vector<SPoint>& lhs, IN const SPoint * pData, IN const u
 		//}
 		//lhs.swap(rhs);
 
+		if (!isAllowDuplicates) {
+			lhs.erase(lhs.begin());
+		}
 
 		vector<SPoint>ptTmp;
 		//ptTmp.reserve(lhs.size() + rhs.size());
@@ -272,13 +359,21 @@ size_t linkMerge(IN OUT vector<SPoint>& lhs, IN const SPoint * pData, IN const u
 		ptTmp.insert(ptTmp.end(), lhs.begin(), lhs.end());
 
 		lhs.swap(ptTmp);
-	}
-	else
+	} break;
+	default: // CASE_MERGE_DEFAULT
 	{
-		LOG_TRACE(LOG_ERROR, "Failed, vertext merge match point not exist, begin: %.5f, %.5f, end: %.5f, %.5f", rhs[0].x, rhs[0].y, rhs[rhsCnt - 1].x, rhs[rhsCnt - 1].y);
+		if (lhsCnt <= 0) {
+			lhs.assign(rhs, rhs + cntData);
+		} else if (rhsCnt <= 0) {
+			// do not thing
+		} else {
+			LOG_TRACE(LOG_ERROR, "Failed, vertext merge match point not exist, begin: %.5f, %.5f, end: %.5f, %.5f", rhs[0].x, rhs[0].y, rhs[rhsCnt - 1].x, rhs[rhsCnt - 1].y);
+			lhs.insert(lhs.end(), rhs, rhs + rhsCnt);
 
-		lhs.insert(lhs.end(), rhs, rhs + rhsCnt);
+			return -1;
+		}
 	}
+	}; // switch
 
 	return lhs.size();
 }
@@ -1778,40 +1873,17 @@ bool CFileBase::SaveData(IN const char* szFilePath)
 		LOG_TRACE(LOG_ERROR, "Failed, file name not exist");
 		return false;
 	}
+	
+	// path check
+	if (checkDirectory(szFilePath) == false) {
+		LOG_TRACE(LOG_ERROR, "Error, Can't create save directory : %s", szFilePath);
+		return false;
+	}
 
 	size_t offFile = 0;
 	size_t offItem = 0;
 	size_t retWrite = 0;
 	size_t retRead = 0;
-
-
-	// path check
-	char* pTok = strrchr((char*)szFileName, '/');
-	if (pTok != nullptr) {
-		char szPath[MAX_PATH] = { 0, };
-		strncpy(szPath, szFileName, (pTok - szFileName));
-#if defined(_WIN32)
-		// check directory created
-		if (_access_s(szPath, 0) != 0) {
-			LOG_TRACE(LOG_DEBUG, "save directory was not created : %s", szPath);
-
-			if (_mkdir(szPath) != 0) {
-				LOG_TRACE(LOG_ERROR, "Error, Can't create save directory : %s", szPath);
-				return false;
-			}
-		}
-#else
-		// check directory created
-		if (access(szPath, W_OK) != 0) {
-			LOG_TRACE(LOG_DEBUG, "save directory was not created : %s", szPath);
-
-			if (mkdir(szPath, S_IRWXU | S_IRWXG | S_IRWXO) == -1) {
-				LOG_TRACE(LOG_ERROR, "Error, Can't create save directory : %s", szPath);
-				return false;
-			}
-		}
-#endif
-	}
 
 	/////////////////////////////////////////
 	// data
@@ -2070,36 +2142,13 @@ size_t CFileBase::WriteBody(FILE* fp, IN const uint32_t fileOff)
 	int cntMesh = GetMeshCount();
 	for (ii = 0; ii < cntMesh; ii++)
 	{
+		offItem = 0;
 		pMesh = GetMeshData(ii);
 		if (!pMesh)
 		{
 			LOG_TRACE(LOG_ERROR, "Failed, can't access mesh, idx:%d", ii);
 			return 0;
 		}
-
-
-		// write body
-		memset(&fileBody, 0x00, sizeFileBody);
-
-		jj = 0;
-		fileBody.idTile = pMesh->mesh_id.tile_id;
-
-		// --> index로 이동
-		//if (pMesh->neighbors.size() > 8) {
-		//	LOG_TRACE(LOG_ERROR, "Error, --------------- Mesh neighbor count overflow, id:%d, %d", pMesh->mesh_id.tile_id, pMesh->neighbors.size());
-		//}
-		//for (unordered_set<uint32_t>::const_iterator it = pMesh->neighbors.begin(); it != pMesh->neighbors.end(); it++) {
-		//	fileBody.idNeighborTile[jj++] = *it;
-		//}
-
-		if ((retWrite = fwrite(&fileBody, sizeFileBody, 1, fp)) != 1)
-		{
-			LOG_TRACE(LOG_ERROR, "Failed, can't write body[%d], written:%d", ii, retWrite);
-			return 0;
-		}
-
-		offItem = sizeFileBody;
-
 
 #if defined(USE_VEHICLE_DATA)
 		if (m_nDataType == TYPE_DATA_VEHICLE) {
@@ -2120,147 +2169,136 @@ size_t CFileBase::WriteBody(FILE* fp, IN const uint32_t fileOff)
 			cntLink = pMesh->links.size();
 		}
 
+		
+		if ((cntNode > 0) || (cntLink > 0)) {
+			// write body
+			memset(&fileBody, 0x00, sizeFileBody);
+			fileBody.idTile = pMesh->mesh_id.tile_id;
+			fileBody.net.cntNode = cntNode;
+			fileBody.net.cntLink = cntLink;
 
-		// write node
-		for (jj = 0; jj < cntNode; jj++)
-		{
-#if defined(USE_VEHICLE_DATA)
-			if (m_nDataType == TYPE_DATA_VEHICLE) {
-				pNode = m_pDataMgr->GetVNodeDataById(pMesh->vnodes[jj]);
+			if ((retWrite = fwrite(&fileBody, sizeFileBody, 1, fp)) != 1) {
+				LOG_TRACE(LOG_ERROR, "Failed, can't write body[%d], written:%d", ii, retWrite);
+				return 0;
 			}
-			else 
+			offItem = sizeFileBody;
+
+			// write node
+			for (jj = 0; jj < cntNode; jj++) {
+#if defined(USE_VEHICLE_DATA)
+				if (m_nDataType == TYPE_DATA_VEHICLE) {
+					pNode = m_pDataMgr->GetVNodeDataById(pMesh->vnodes[jj]);
+				} else
 #endif
 #if defined(USE_PEDESTRIAN_DATA)
-			if (m_nDataType == TYPE_DATA_PEDESTRIAN) {
-				pNode = m_pDataMgr->GetWNodeDataById(pMesh->wnodes[jj]);
-			}
-			else
+				if (m_nDataType == TYPE_DATA_PEDESTRIAN) {
+					pNode = m_pDataMgr->GetWNodeDataById(pMesh->wnodes[jj]);
+				} else
 #endif
-			{
-				pNode = m_pDataMgr->GetFNodeDataById(pMesh->nodes[jj]);
-			}
-			
-			if (!pNode)
-			{
-				LOG_TRACE(LOG_ERROR, "Failed, can't access node, idx:%d, tile_id:%d", jj, pMesh->mesh_id.nid);
-				return 0;
-			}
+				{
+					pNode = m_pDataMgr->GetFNodeDataById(pMesh->nodes[jj]);
+				}
 
-			if (pNode->sub_info == NOT_USE)
-				continue;
-
-			fileNode.node_id = pNode->node_id;
-			fileNode.sub_info = pNode->sub_info;
-			fileNode.edgenode_id = pNode->edgenode_id;
-			memcpy(&fileNode.coord, &pNode->coord, sizeof(fileNode.coord));
-			memcpy(fileNode.connnodes, pNode->connnodes, sizeof(fileNode.connnodes));
-			memcpy(fileNode.conn_attr, pNode->conn_attr, sizeof(fileNode.conn_attr));
-
-			if ((retWrite = fwrite(&fileNode, sizeof(fileNode), 1, fp)) != 1)
-			{
-				LOG_TRACE(LOG_ERROR, "Failed, can't write node[%d], tile_id:%d, id:%d", jj, fileNode.node_id.tile_id, fileNode.node_id.nid);
-				return 0;
-			}
-
-			fileBody.link.cntNode++;
-			offItem += sizeof(fileNode);
-		} // write node
-
-#if defined(_DEBUG)
-		LOG_TRACE(LOG_DEBUG, "Save data, mesh:%d, node cnt:%lld", pMesh->mesh_id.tile_id, jj);
-#endif
-
-		// write link
-		for (jj = 0; jj < cntLink; jj++)
-		{
-#if defined(USE_VEHICLE_DATA)
-			if (m_nDataType == TYPE_DATA_VEHICLE) {
-				pLink = m_pDataMgr->GetVLinkDataById(pMesh->vlinks[jj]);// GetLinkDataById(pMesh->links[jj]);
-			}
-			else 
-#endif
-#if defined(USE_PEDESTRIAN_DATA)
-			if (m_nDataType == TYPE_DATA_PEDESTRIAN) {
-				pLink = m_pDataMgr->GetWLinkDataById(pMesh->wlinks[jj]);// GetLinkDataById(pMesh->links[jj]);
-			}
-			else
-#endif
-			{
-				pLink = m_pDataMgr->GetFLinkDataById(pMesh->links[jj]);// GetLinkDataById(pMesh->links[jj]);
-			}
-			
-			if (!pLink)
-			{
-				LOG_TRACE(LOG_ERROR, "Failed, can't access link, idx:%d, tile_id:%d", jj, pMesh->mesh_id.nid);
-				return 0;
-			}
-
-			if (pLink->sub_info == NOT_USE)
-				continue;
-
-			fileLink.link_id = pLink->link_id;
-			fileLink.sub_info = pLink->sub_info;
-			fileLink.snode_id = pLink->snode_id;
-			fileLink.enode_id = pLink->enode_id;
-			fileLink.length = pLink->length;
-			fileLink.name_idx = pLink->name_idx;
-			fileLink.cntVertex = pLink->getVertexCount();
-#if defined(USE_P2P_DATA) || defined(USE_MOUNTAIN_DATA)
-			fileLink.sub_ext = pLink->sub_ext;
-#endif
-
-			if ((retWrite = fwrite(&fileLink, sizeof(fileLink), 1, fp)) != 1)
-			{
-				LOG_TRACE(LOG_ERROR, "Failed, can't write link[%d], tile_id:%d, id:%d", jj, fileLink.link_id.tile_id, fileLink.link_id.nid);
-				return 0;
-			}
-
-			fileBody.link.cntLink++;
-			offItem += sizeof(fileLink);
-
-
-			// write vertex
-			if (fileLink.cntVertex > 0) {
-				if (!(retWrite = pLink->writeVertex(fp))) {
-					LOG_TRACE(LOG_ERROR, "Failed, can't write link[%d] vertex, tile_id:%d, id:%d, cnt:%d", jj, pLink->link_id.tile_id, pLink->link_id.nid, fileLink.cntVertex);
+				if (!pNode) {
+					LOG_TRACE(LOG_ERROR, "Failed, can't access node, idx:%d, tile_id:%d", jj, pMesh->mesh_id.nid);
 					return 0;
 				}
-				offItem += retWrite;
-			}
-			//for (uint32_t kk = 0; kk < fileLink.cntVertex; kk++)
-			//{
-			//	//if ((retWrite = fwrite(&pLink->vtPts[kk], sizeof(SPoint), 1, fp)) != 1)
-			//	{
-			//		LOG_TRACE(LOG_ERROR, "Failed, can't write link[%d] vertext[%d], ", jj, kk);
-			//		return 0;
-			//	}
-			//	offItem += sizeof(SPoint);
-			//}
-		} // write link
+
+				if (pNode->sub_info == NOT_USE)
+					continue;
+
+				fileNode.node_id = pNode->node_id;
+				fileNode.sub_info = pNode->sub_info;
+				fileNode.edgenode_id = pNode->edgenode_id;
+				memcpy(&fileNode.coord, &pNode->coord, sizeof(fileNode.coord));
+				memcpy(fileNode.connnodes, pNode->connnodes, sizeof(fileNode.connnodes));
+				memcpy(fileNode.conn_attr, pNode->conn_attr, sizeof(fileNode.conn_attr));
+
+				if ((retWrite = fwrite(&fileNode, sizeof(fileNode), 1, fp)) != 1) {
+					LOG_TRACE(LOG_ERROR, "Failed, can't write node[%d], tile_id:%d, id:%d", jj, fileNode.node_id.tile_id, fileNode.node_id.nid);
+					return 0;
+				}
+
+				offItem += sizeof(fileNode);
+			} // write node
 
 #if defined(_DEBUG)
-		LOG_TRACE(LOG_DEBUG, "Save data, mesh:%d, link cnt:%lld", pMesh->mesh_id.tile_id, jj);
+			LOG_TRACE(LOG_DEBUG, "Save data, mesh:%d, node cnt:%lld", pMesh->mesh_id.tile_id, jj);
 #endif
-		
 
-		// re-write body size & off
-		if (offItem > sizeFileBody)
-		{
-			fileBody.szData = offItem;
+			// write link
+			for (jj = 0; jj < cntLink; jj++) {
+	#if defined(USE_VEHICLE_DATA)
+				if (m_nDataType == TYPE_DATA_VEHICLE) {
+					pLink = m_pDataMgr->GetVLinkDataById(pMesh->vlinks[jj]);// GetLinkDataById(pMesh->links[jj]);
+				} else
+	#endif
+	#if defined(USE_PEDESTRIAN_DATA)
+				if (m_nDataType == TYPE_DATA_PEDESTRIAN) {
+					pLink = m_pDataMgr->GetWLinkDataById(pMesh->wlinks[jj]);// GetLinkDataById(pMesh->links[jj]);
+				} else
+	#endif
+				{
+					pLink = m_pDataMgr->GetFLinkDataById(pMesh->links[jj]);// GetLinkDataById(pMesh->links[jj]);
+				}
 
-			fseek(fp, offItem * -1, SEEK_CUR);
+				if (!pLink) {
+					LOG_TRACE(LOG_ERROR, "Failed, can't access link, idx:%d, tile_id:%d", jj, pMesh->mesh_id.nid);
+					return 0;
+				}
 
-			if ((retWrite = fwrite(&fileBody, sizeFileBody, 1, fp)) != 1)
-			{
-				LOG_TRACE(LOG_ERROR, "Failed, can't re-write node[%d], tile_id:%d, id:%d", ii, fileNode.node_id.tile_id, fileNode.node_id.nid);
-				return 0;
+				if (pLink->sub_info == NOT_USE)
+					continue;
+
+				fileLink.link_id = pLink->link_id;
+				fileLink.sub_info = pLink->sub_info;
+				fileLink.snode_id = pLink->snode_id;
+				fileLink.enode_id = pLink->enode_id;
+				fileLink.length = pLink->length;
+				fileLink.name_idx = pLink->name_idx;
+				fileLink.cntVertex = pLink->getVertexCount();
+	#if defined(USE_P2P_DATA) || defined(USE_MOUNTAIN_DATA)
+				fileLink.sub_ext = pLink->sub_ext;
+	#endif
+
+				if ((retWrite = fwrite(&fileLink, sizeof(fileLink), 1, fp)) != 1) {
+					LOG_TRACE(LOG_ERROR, "Failed, can't write link[%d], tile_id:%d, id:%d", jj, fileLink.link_id.tile_id, fileLink.link_id.nid);
+					return 0;
+				}
+
+				offItem += sizeof(fileLink);
+
+
+				// write vertex
+				if (fileLink.cntVertex > 0) {
+					if (!(retWrite = pLink->writeVertex(fp))) {
+						LOG_TRACE(LOG_ERROR, "Failed, can't write link[%d] vertex, tile_id:%d, id:%d, cnt:%d", jj, pLink->link_id.tile_id, pLink->link_id.nid, fileLink.cntVertex);
+						return 0;
+					}
+					offItem += retWrite;
+				}
+			} // write link
+
+#if defined(_DEBUG)
+			LOG_TRACE(LOG_DEBUG, "Save data, mesh:%d, link cnt:%lld", pMesh->mesh_id.tile_id, jj);
+#endif
+
+			// re-write body size & off
+			if (offItem > sizeFileBody) {
+				fileBody.szData = offItem;
+
+				fseek(fp, offItem * -1, SEEK_CUR);
+
+				if ((retWrite = fwrite(&fileBody, sizeFileBody, 1, fp)) != 1) {
+					LOG_TRACE(LOG_ERROR, "Failed, can't re-write node[%d], tile_id:%d, id:%d", ii, fileNode.node_id.tile_id, fileNode.node_id.nid);
+					return 0;
+				}
+
+				fseek(fp, offItem - sizeFileBody, SEEK_CUR);
 			}
-
-			fseek(fp, offItem - sizeFileBody, SEEK_CUR);
-		}
-
+		}		
 		// re-set index size & off buff
-		m_vtIndex[ii].szBody = fileBody.szData;
+		m_vtIndex[ii].szBody = offItem;
 		m_vtIndex[ii].offBody = offFile;
 
 		// update file offset
@@ -2345,7 +2383,9 @@ bool CFileBase::LoadData(IN const char* szFilePath)
 	// for cache
 #if defined(USE_DATA_CACHE)
 	//if (m_nDataType != TYPE_DATA_MESH) // 메쉬는 캐싱 인덱스이기에 바디를 읽어둠
-	return true;
+	if (m_nDataType != TYPE_DATA_TRAFFIC) {
+		return true;
+	}
 #endif
 
 	// read body
@@ -2443,7 +2483,7 @@ bool CFileBase::LoadDataByIdx(IN const uint32_t idx)
 
 
 	// node
-	for (uint32_t ii = 0; ii < fileBody.link.cntNode; ii++)
+	for (uint32_t ii = 0; ii < fileBody.net.cntNode; ii++)
 	{
 		// read node
 		if ((retRead = fread(&fileNode, sizeof(fileNode), 1, fp)) != 1)
@@ -2467,7 +2507,7 @@ bool CFileBase::LoadDataByIdx(IN const uint32_t idx)
 	}
 
 	// link
-	for (uint32_t ii = 0; ii < fileBody.link.cntLink; ii++)
+	for (uint32_t ii = 0; ii < fileBody.net.cntLink; ii++)
 	{
 		// read link
 		if ((retRead = fread(&fileLink, sizeof(fileLink), 1, fp)) != 1)
@@ -2537,8 +2577,8 @@ size_t CFileBase::ReadBase(FILE* fp)
 
 	offFile = sizeBase;
 
-	LOG_TRACE(LOG_DEBUG, "Read data, base, type:%s, ver:%d.%d.%d.%d, header:%d",
-		stFileBase.szType, stFileBase.version[0], stFileBase.version[1], stFileBase.version[2], stFileBase.version[3], stFileBase.szHeader);
+	LOG_TRACE(LOG_DEBUG, "Read data, base, type:%s, ver:%d.%d.%d.%d, size:%d",
+		stFileBase.szType, stFileBase.version[0], stFileBase.version[1], stFileBase.version[2], stFileBase.version[3], sizeBase);
 
 	if (m_pDataMgr != nullptr) {
 		m_pDataMgr->SetVersion(GetDataType(), stFileBase.version[0], stFileBase.version[1], stFileBase.version[2], stFileBase.version[3]);
@@ -2568,7 +2608,7 @@ size_t CFileBase::ReadHeader(FILE* fp)
 	offFile = sizeHeader;	
 
 
-	LOG_TRACE(LOG_DEBUG, "Read data, header, cnt index:%d", m_fileHeader.cntIndex);
+	LOG_TRACE(LOG_DEBUG, "Read data, header, size:%d, index cnt:%d", sizeHeader, m_fileHeader.cntIndex);
 
 	return offFile;
 }
@@ -2607,7 +2647,162 @@ size_t CFileBase::ReadIndex(FILE* fp)
 
 
 size_t CFileBase::ReadBody(FILE* fp)
-{
+{	
+#if 0 // using omp
+	if (!fp) {
+		LOG_TRACE(LOG_ERROR, "Failed, input param null, fp:%p", fp);
+		return 0;
+	}
+
+	FileBody fileBody = { 0, };
+	FileNode fileNode = { 0, };
+	FileLink fileLink = { 0, };
+
+	size_t offFile = 0;
+	size_t retRead = 0;
+	const size_t sizeBody = sizeof(FileBody);
+
+	stMeshInfo* pMesh;
+	stNodeInfo* pNode;
+	stLinkInfo* pLink;
+
+	size_t nTotalLinks = 0;
+	size_t nTotalNodes = 0;
+
+	//for (vector<FileIndex>::const_iterator it = m_vtIndex.begin(); it != m_vtIndex.end(); it++)
+	for (int ii = 0; ii < m_vtIndex.size(); ii++)
+	{
+		// read body
+		if (m_vtIndex[ii].szBody <= 0) {
+			continue;
+		}
+		else if (m_vtIndex[ii].offBody <= 0) {
+			LOG_TRACE(LOG_ERROR, "Failed, index body info invalid, off:%d, size:%d", m_vtIndex[ii].offBody, m_vtIndex[ii].szBody);
+			return 0;
+		}
+
+		fseek(fp, m_vtIndex[ii].offBody, SEEK_SET);
+		if ((retRead = fread(&fileBody, sizeBody, 1, fp)) != 1) {
+			LOG_TRACE(LOG_ERROR, "Failed, can't read body, offset:%d", m_vtIndex[ii].offBody);
+			return 0;
+		}
+
+		if (m_vtIndex[ii].idTile != m_vtIndex[ii].idTile) {
+			LOG_TRACE(LOG_ERROR, "Failed, index tile info not match with body, index tile id:%d vs body tile id:%d", m_vtIndex[ii].idTile, m_vtIndex[ii].idTile);
+			return 0;
+		}
+
+		// mesh
+		pMesh = GetMeshDataById(m_vtIndex[ii].idTile);
+		if (!pMesh) {
+			pMesh = new stMeshInfo;
+
+			pMesh->mesh_id.tile_id = m_vtIndex[ii].idTile;
+			memcpy(&pMesh->mesh_box, &m_vtIndex[ii].rtTile, sizeof(pMesh->mesh_box));
+			memcpy(&pMesh->data_box, &m_vtIndex[ii].rtData, sizeof(pMesh->data_box));
+			for (int ii = 0; ii < 8; ii++) {
+				if (m_vtIndex[ii].idNeighborTile[ii] <= 0) {
+					continue;
+				}
+				pMesh->neighbors.emplace(m_vtIndex[ii].idNeighborTile[ii]);
+			} // for
+			AddMeshData(pMesh);
+		}
+		else {
+			// extend rect
+			//memcpy(&pMesh->data_box, &m_vtIndex[idx].rtData, sizeof(pMesh->data_box));
+			for (int ii = 0; ii < 8; ii++) {
+				if (m_vtIndex[ii].idNeighborTile[ii] <= 0) {
+					continue;
+				}
+				pMesh->neighbors.emplace(m_vtIndex[ii].idNeighborTile[ii]);
+			} // for
+		}
+
+
+		// node
+		for (uint32_t ii = 0; ii < fileBody.link.cntNode; ii++) {
+			// read node
+			if ((retRead = fread(&fileNode, sizeof(fileNode), 1, fp)) != 1) {
+				LOG_TRACE(LOG_ERROR, "Failed, can't read node, mesh_id:%d, idx:%d", m_vtIndex[ii].idTile, ii);
+				return 0;
+			}
+
+			//pMesh->nodes.push_back(fileNode.node_id);
+
+			pNode = new stNodeInfo;
+			pNode->node_id = fileNode.node_id;
+			pNode->sub_info = fileNode.sub_info;
+			pNode->edgenode_id = fileNode.edgenode_id;
+			memcpy(&pNode->coord, &fileNode.coord, sizeof(pNode->coord));
+			memcpy(pNode->connnodes, fileNode.connnodes, sizeof(KeyID) * pNode->base.connnode_count);
+			memcpy(pNode->conn_attr, fileNode.conn_attr, sizeof(uint16_t) * pNode->base.connnode_count);
+
+			AddNodeData(pNode);
+		}
+		nTotalNodes += fileBody.link.cntNode;
+#if defined(_DEBUG)
+		//LOG_TRACE(LOG_DEBUG, "Data loading, node data loaded, mesh:%d, node cnt:%lld", pMesh->mesh_id.tile_id, fileBody.link.cntNode);
+#endif
+
+		// link
+		for (uint32_t ii = 0; ii < fileBody.link.cntLink; ii++) {
+			// read link
+			if ((retRead = fread(&fileLink, sizeof(fileLink), 1, fp)) != 1) {
+				LOG_TRACE(LOG_ERROR, "Failed, can't read link, mesh_id:%d, idx:%d", m_vtIndex[ii].idTile, ii);
+				return 0;
+			}
+
+			if (!fileLink.cntVertex) {
+				LOG_TRACE(LOG_WARNING, "Warning, link vertex empty, mesh_id:%d, link_id:%d, link_idx:%d, idx:%d", fileLink.link_id.tile_id, fileLink.link_id.nid, ii);
+				continue;
+			}
+			//pMesh->links.emplace_back(fileLink.link_id);
+
+			pLink = new stLinkInfo;
+			pLink->link_id = fileLink.link_id;
+			pLink->sub_info = fileLink.sub_info;
+			//pLink->link_idx = stLink.link_idx;
+			pLink->snode_id = fileLink.snode_id;
+			pLink->enode_id = fileLink.enode_id;
+			pLink->length = fileLink.length;
+			pLink->name_idx = fileLink.name_idx;
+#if defined(USE_P2P_DATA) || defined(USE_MOUNTAIN_DATA)
+			pLink->sub_ext = fileLink.sub_ext;
+#endif
+
+			if (!pLink->readVertex(fp, fileLink.cntVertex)) {
+				LOG_TRACE(LOG_ERROR, "Failed, can't read vertex, mesh_id:%d, link_id:%d, link_idx:%d, idx:%d", pLink->link_id.tile_id, pLink->link_id.nid, ii);
+				return 0;
+			}
+			//for (uint32_t jj = 0; jj < fileLink.cntVertex; jj++)
+			//{
+			//	// read link
+			//	SPoint ptVertex;
+			//	if ((retRead = fread(&ptVertex, sizeof(ptVertex), 1, fp)) != 1)
+			//	{
+			//		LOG_TRACE(LOG_ERROR, "Failed, can't read vertex, mesh_id:%d, link idx:%d, idx:%d", m_vtIndex[ii].idTile, ii, jj);
+			//		return 0;
+			//	}
+			//	pLink->vtPts.emplace_back(ptVertex);
+			//}
+
+			AddLinkData(pLink);
+		} // for
+
+		offFile += m_vtIndex[ii].szBody;
+
+		nTotalLinks += fileBody.link.cntLink;
+#if defined(_DEBUG)
+		//LOG_TRACE(LOG_DEBUG, "Data loading, link data loaded, mesh:%d, link cnt:%lld", pMesh->mesh_id.tile_id, fileBody.link.cntLink);
+#endif
+	} // for
+
+	LOG_TRACE(LOG_DEBUG, "Data loading, mesh cnt:%lld, node cnt:%lld link cnt:%lld", m_vtIndex.size(), nTotalNodes, nTotalLinks);
+
+	return offFile;
+
+#else // using omp
 	if (!fp) {
 		LOG_TRACE(LOG_ERROR, "Failed, input param null, fp:%p", fp);
 		return 0;
@@ -2685,7 +2880,7 @@ size_t CFileBase::ReadBody(FILE* fp)
 
 
 		// node
-		for (uint32_t ii = 0; ii < fileBody.link.cntNode; ii++)
+		for (uint32_t ii = 0; ii < fileBody.net.cntNode; ii++)
 		{
 			// read node
 			if ((retRead = fread(&fileNode, sizeof(fileNode), 1, fp)) != 1)
@@ -2706,13 +2901,13 @@ size_t CFileBase::ReadBody(FILE* fp)
 
 			AddNodeData(pNode);
 		}
-		nTotalNodes += fileBody.link.cntNode;
+		nTotalNodes += fileBody.net.cntNode;
 #if defined(_DEBUG)
 		//LOG_TRACE(LOG_DEBUG, "Data loading, node data loaded, mesh:%d, node cnt:%lld", pMesh->mesh_id.tile_id, fileBody.link.cntNode);
 #endif
 
 		// link
-		for (uint32_t ii = 0; ii < fileBody.link.cntLink; ii++)
+		for (uint32_t ii = 0; ii < fileBody.net.cntLink; ii++)
 		{
 			// read link
 			if ((retRead = fread(&fileLink, sizeof(fileLink), 1, fp)) != 1)
@@ -2760,15 +2955,16 @@ size_t CFileBase::ReadBody(FILE* fp)
 
 		offFile += it->szBody;
 
-		nTotalLinks += fileBody.link.cntLink;
+		nTotalLinks += fileBody.net.cntLink;
 #if defined(_DEBUG)
 		//LOG_TRACE(LOG_DEBUG, "Data loading, link data loaded, mesh:%d, link cnt:%lld", pMesh->mesh_id.tile_id, fileBody.link.cntLink);
 #endif
 	} // for
 
-	LOG_TRACE(LOG_DEBUG, "Data loading, mesh cnt:%lld, node cnt:%lld link cnt:%lld", m_vtIndex.size(), nTotalNodes, nTotalLinks);
+	LOG_TRACE(LOG_DEBUG, "Read data, body, node cnt:%lld, link cnt:%lld", nTotalNodes, nTotalLinks);
 
 	return offFile;
+#endif // // using omp
 }
 
 

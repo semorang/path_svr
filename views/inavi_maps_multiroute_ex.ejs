@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <title>다중경로탐색</title>
+    <title>다중 경로선 표시하기</title>
 </head>
 
 <body>
@@ -67,12 +67,14 @@
     </div>
 
     
+
     <link rel="stylesheet" href="css/maps_inavi.css" />
     <script type="text/javascript" src="script/inavimaps.js"></script>
     <script type="text/javascript" src="script/boundarys.js"></script>
     <script type="text/javascript" src="script/typenames.js"></script>
     <script type="text/javascript" src="script/route.js"></script>
     <script type="text/javascript" src="script/search.js"></script>
+    <script type="text/javascript" src="script/tms.js"></script>
     <script type="text/javascript" src="http://code.jquery.com/jquery-1.10.2.js"></script>
 
     <script>
@@ -80,18 +82,21 @@
 
         let result_mode = result_obj.mode;
         if (result_mode === "clustering") {
-
+            document.title = "클러스터링"
+        } else if (result_mode === 'tsp') {
+            document.title = "TSP"
         } else {
             let isSuccess = result_obj.header.isSuccessful;
 
             if (isSuccess) {
-                user_pos = [ result_obj.route.data[0].vertex_info[~~((result_obj.route.data[0].vertex_info.length) / 2)].x, result_obj.route.data[0].vertex_info[~~((result_obj.route.data[0].vertex_info.length) / 2)].y ];
+                user_pos = [ result_obj.routes[0].vertex_info[~~((result_obj.routes[0].vertex_info.length) / 2)].x, result_obj.routes[0].vertex_info[~~((result_obj.routes[0].vertex_info.length) / 2)].y ];
             } else {
                 user_pos = [127.110767364419, 37.402186130724];// 아이나비시스템즈
             }
 
             user_obj = result_obj.user_info;
         }
+
 
         // map 사이즈 조절
         var screenHeight = window.innerHeight - 18;
@@ -105,68 +110,41 @@
                 container: "map",
                 zoom: 17
             });
-
+            
             initMapObject(map);
 
             if (result_mode === "clustering") {
                 drawClunster(result_obj.clusters);
+            } else if (result_mode === "tsp") {
+                drawBestwaypoint(result_obj.waypoints);
+                reqBestwayRoute(result_obj.waypoints);
             } else {
-                // 대구 테크노폴리스 도로링크 유효 범위
-                // var boundarys = new inavi.maps.Polyline({
-                //     map: map,
-                //     path: getDaeguBoundary(),
-                //     style: {
-                //         lineColor: "#808080",
-                //         lineWidth: 3,
-                //         lineDasharray: [1, 1],
-                //     },
-                // });
+                // 경로 그리기
+                drawRoutes(result_obj.routes, map, route_offset, route_color);
 
-                // 서울 범위
-                // var boundarys = new inavi.maps.Polyline({
-                //     map: map,
-                //     path: getBukhansanBoundary(),
-                //     style: {
-                //         lineColor: "#808080",
-                //         lineWidth: 3,
-                //         lineDasharray: [1, 1],
-                //     },
-                // });
-
-                // onmouseover
-
-                // outmouseover
-
-                //-- 노드 생성
-
-                if (isSuccess) {
-                    // 경로 그리기
-                    drawiNaviRoutes(result_obj.route.data, map, route_offset, route_color);
-
-                    // 출발지
-                    setDeparture(new inavi.maps.LngLat(user_obj.start.x ,user_obj.start.y));
-                    // 목적지
-                    setDestination(new inavi.maps.LngLat(user_obj.end.x, user_obj.end.y));
-                    // 경유지
-                    if (user_obj.vias != undefined) {
-                        for(var ii=0; ii<user_obj.vias.length; ii++) {
-                            if (user_obj.vias[ii].x != 0 && user_obj.vias[ii].y != 0) {
-                                setWaypoints(ii, new inavi.maps.LngLat(user_obj.vias[ii].x, user_obj.vias[ii].y));
-                            }
+                // 출발지
+                setDeparture(new inavi.maps.LngLat(user_obj.start.x ,user_obj.start.y));
+                // 목적지
+                setDestination(new inavi.maps.LngLat(user_obj.end.x, user_obj.end.y));
+                // 경유지
+                if (user_obj.vias != undefined) {
+                    for(var ii=0; ii<user_obj.vias.length; ii++) {
+                        if (user_obj.vias[ii].x != 0 && user_obj.vias[ii].y != 0) {
+                            setWaypoints(ii, new inavi.maps.LngLat(user_obj.vias[ii].x, user_obj.vias[ii].y));
                         }
                     }
+                }
+                else if (user_obj.via != undefined) {
+                    document.getElementById('btnVia').className = 'checked_btn';
+                    setWaypoint(new inavi.maps.LngLat(user_obj.via.x, user_obj.via.y));
+                } else {
+                    setWaypoint(null);
+                }
 
-                    // 경로 정보를 커스텀 오버레이로 생성하고 지도에 표시합니다
-                    drawRouteInfo(result_obj.route.data, route_offset, route_color);
-                }
-                else {
-                    alert('경로 탐색 요청 실패')
-                }
-                //-- 마커가 표시될 위치입니다
+                // 경로 정보를 커스텀 오버레이로 생성하고 지도에 표시합니다
+                drawRouteInfo(result_obj.routes);
             }
         } // initMap
-        
-
 
         function doRoute() {
             if (typeRouteStep == 0 || departure_pos === undefined || destination_pos === undefined ) {
@@ -174,7 +152,7 @@
             } else {
                 var params = new URLSearchParams(window.location.search);
                 var pathsplit = window.location.pathname.split('/');
-                var pathname = '/api/' + pathsplit[pathsplit.length-1];
+                var pathname = '/api/' + pathsplit[pathsplit.length-1];                
                 params.set('start', departure_pos.lng.toString() + ',' + departure_pos.lat.toString());
                 params.set('end', destination_pos.lng.toString() + ',' + destination_pos.lat.toString());
                 // var pathname = '/optimalposition'; // window.location.pathname;
@@ -187,9 +165,9 @@
                     }
                 }
 
-                getiNaviRoutes(pathname, params);
-            
-                setRouteType(0);
+                getRoutes(pathname, params);
+
+                setRouteType(0)
             }
         }
 
@@ -200,8 +178,6 @@
                 alert("출,도착지를 새로 설정하고 사용하세요.")
             } else {
                 var params = new URLSearchParams(window.location.search);
-                var pathsplit = window.location.pathname.split('/');
-                var pathname = '/api/' + pathsplit[pathsplit.length-1];
                 params.set('start', departure_pos.lng.toString() + ',' + departure_pos.lat.toString());
                 params.set('end', destination_pos.lng.toString() + ',' + destination_pos.lat.toString());
                 // var pathname = '/optimalposition'; // window.location.pathname;
@@ -213,33 +189,35 @@
                         params.set('vias', waypoint_pos[ii].lng.toString() + ',' + waypoint_pos[ii].lat.toString());
                     }
                 }
-                // params.set('opt', 8);
-                // params.set('target', 'inavi');
+                var pathname = '/api/multiroute'; // window.location.pathname;
                 var route2url = pathname + '?' + params.toString();
+                // var route2url = window.location.pathname + '?' + params.toString();
 
                 console.log("request route : " + route2url.toString());
 
-                window.open(route2url, '_blank');                    
+                window.open(route2url, '_blank');     
+                
+                setRouteType(0);
             }
         }
 
 
-        // 키워드 검색 
+        // // 키워드 검색 
         function searchKeyword() {
             var keyword = document.getElementById('keyword').value;
 
-            // if (!keyword.replace(/^\s+|\s+$/g, '')) {
-            //     alert('키워드를 입력해주세요');
-            //     return false;
-            // }
+            if (!keyword.replace(/^\s+|\s+$/g, '')) {
+                alert('키워드를 입력해주세요');
+                return false;
+            }
 
             console.log("request, search keyword: " + keyword)
 
             // var pathname = 'https://api-maps.cloud.toast.com/maps/v3.0/appkeys/uuLPV7fHLk6NIVfCPnBv/searches';
             var pathname = 'https://dev-maps.inavi.com/maps/v3.0/appkeys/<%=javascriptkey%>/searches'
-            // var search2url = pathname + '?&query=' + keyword.toString() + '&reqcount=' + 10;
+            //     var search2url = pathname + '?&query=' + keyword.toString() + '&reqcount=' + 10;
 
-            getSearch(pathname, keyword);
+            getSearch(pathname, keyword);    
         }
 
     </script>

@@ -237,6 +237,25 @@ app.get('/api/optimalposition', timeout('5s'), function(req, res) {
 });
 
 
+app.post('/api/multi_optimalposition', timeout('5s'), function(req, res) {
+    let startTime = logout("start multi_optimalposition, ip : " + request_ip.getClientIp(req));
+
+    logout("client req : " + JSON.stringify(req.body));
+
+    let ret = route.multi_optimalposition(req.headers.authorization, req.body);
+
+    if (ret.header.resultCode == 0) {
+        logout("result: success, code: " + ret.header.resultCode + ", cnt: " + ret.datas.length);
+    } else {
+        logout("result: failed, code: " + ret.header.resultCode + ", msg: " + ret.header.resultMessage);
+    }
+
+    res.send(ret);
+
+    logout("end optimalposition, ", startTime);
+});
+
+
 app.get('/view/optimalposition', timeout('5s'), function(req, res) {
     let startTime = logout("start optimal(view), ip : " + request_ip.getClientIp(req));
 

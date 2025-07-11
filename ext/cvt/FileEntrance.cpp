@@ -273,13 +273,13 @@ bool CFileEntrance::GenServiceData()
 			entInfo.x = m_vtEntrance[ii].x;
 			entInfo.y = m_vtEntrance[ii].y;
 
-			if (entInfo.ent_code == TYPE_OPTIMAL_ENTRANCE_PARCEL_CAR) // 택배입구점
-			{
-				LOG_TRACE(LOG_INFO, "Parcel EntranceInfo type:%d, id:%d, x:%.5f, y:%.5f", m_vtEntrance[ii].MatchType, m_vtEntrance[ii].Id, entInfo.x, entInfo.y);
-			}
+			//if (entInfo.ent_code == TYPE_OPTIMAL_ENTRANCE_PARCEL_CAR) // 택배입구점
+			//{
+			//	LOG_TRACE(LOG_INFO, "Parcel EntranceInfo type:%d, id:%d, x:%.5f, y:%.5f", m_vtEntrance[ii].MatchType, m_vtEntrance[ii].Id, entInfo.x, entInfo.y);
+			//}
 			
 			size_t tick_prev = TICK_COUNT();
-			stLinkInfo* pLink = m_pDataMgr->GetNearRoadByPoint(entInfo.x, entInfo.y, 1000, TYPE_LINK_MATCH_CARSTOP_EX, TYPE_LINK_DATA_VEHICLE, entPointInfo);
+			stLinkInfo* pLink = m_pDataMgr->GetNearRoadByPoint(entInfo.x, entInfo.y, 1000, TYPE_LINK_MATCH_CARSTOP_EX, TYPE_LINK_DATA_VEHICLE, -1, entPointInfo);
 #if defined(USE_MULTIPROCESS)
 #pragma omp atomic
 #endif

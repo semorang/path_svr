@@ -1,5 +1,8 @@
-#if defined(_WIN32)
+#if defined(_WINDOWS) || (_WIN32)
 #include "../stdafx.h"
+#include <windows.h>
+#include <direct.h>
+#include <io.h>
 #endif
 
 #include "FileName.h"

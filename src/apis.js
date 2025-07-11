@@ -12,7 +12,7 @@ exports.distancematrix = function(key, req) {
     // 사용자 키 확인
     var user = auth.checkAuth(key);
     if (user != null && user.length > 0) {
-        logout("client user:'" + user + "', req: " + JSON.stringify(req));
+        logout("client user:'" + user + "', mode=" + ((req.mode !== undefined) ? req.mode : "null") + ", cache=" + ((req.cache !== undefined) ? req.cache : "null") + ", cnt=" + ((req.origins !== undefined) ? req.origins.length : "null"));
             
         ret = route.gettable(req);
     } else {
@@ -46,7 +46,7 @@ exports.clustering = function(key, req) {
     // 사용자 키 확인
     var user = auth.checkAuth(key);
     if (user != null && user.length > 0) {
-        logout("client user:'" + user + "', req: " + JSON.stringify(req));
+        logout("client user:'" + user + "', mode=" + ((req.mode !== undefined) ? req.mode : "null") + ", cache=" + ((req.cache !== undefined) ? req.cache : "null") + ", cnt=" + ((req.origins !== undefined) ? req.origins.length : "null"));
             
         ret = route.getcluster(req);
     } else {
@@ -122,6 +122,8 @@ exports.bestwaypoints = function(key, req) {
     // 사용자 키 확인
     var user = auth.checkAuth(key);
     if (user != null && user.length > 0) {
+        logout("client user:'" + user + "', mode=" + ((req.mode !== undefined) ? req.mode : "null") + ", cache=" + ((req.cache !== undefined) ? req.cache : "null") + ", cnt=" + ((req.origins !== undefined) ? req.origins.length : "null"));
+
         ret = route.getbestways(req);
     } else {
         var header = {

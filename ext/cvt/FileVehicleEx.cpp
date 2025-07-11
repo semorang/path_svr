@@ -49,7 +49,7 @@ bool CFileVehicleEx::ParseData(IN const char* fname)
 	char szNodeToLinkMatching[MAX_PATH] = { 0, };
 	sprintf(szNodeToLinkMatching, "%s/%s", m_szWorkPath, "node-link-matching.bin");
 
-	LOG_TRACE(LOG_DEBUG, "LOG, start, node link matching data file : %s", szNodeToLinkMatching);
+	time_t timeStart = LOG_TRACE(LOG_DEBUG, "LOG, start, node link matching data file : %s", szNodeToLinkMatching);
 
 	FILE* fpNodeLinkMatching = fopen(szNodeToLinkMatching, "rb");
 	if (!fpNodeLinkMatching) {
@@ -244,7 +244,7 @@ bool CFileVehicleEx::ParseData(IN const char* fname)
 		unordered_map<uint64_t, uint64_t>().swap(umapNodeLinkMatching);
 	}
 
-	LOG_TRACE(LOG_DEBUG, "LOG, finished, link ex data parsing file");
+	LOG_TRACE(LOG_DEBUG, timeStart, "LOG, finished, link ex data parsing file");
 
 	return GenServiceData();
 }
@@ -253,7 +253,7 @@ bool CFileVehicleEx::ParseData(IN const char* fname)
 bool CFileVehicleEx::GenServiceData()
 {
 	// 클래스에 추가
-	LOG_TRACE(LOG_DEBUG, "LOG, start, add link ex data to map");
+	time_t timeStart = LOG_TRACE(LOG_DEBUG, "LOG, start, add vehicle ex data to class");
 
 	const int cntItem = m_vtVehicleEx.size();
 
@@ -280,7 +280,7 @@ bool CFileVehicleEx::GenServiceData()
 
 	Release();
 
-	LOG_TRACE(LOG_DEBUG, "LOG, finished, add link ex data to map");
+	LOG_TRACE(LOG_DEBUG, timeStart, "LOG, finished, add link ex data to map");
 
 	return true;
 }
@@ -298,6 +298,10 @@ size_t CFileVehicleEx::ReadBody(FILE* fp)
 	size_t offFile = 0;
 	size_t retRead = 0;
 	const size_t sizeBody = sizeof(FileBody);
+
+	size_t nTotalLinks = 0;
+	size_t nTotalNodes = 0;
+	size_t nTotalData = 0;
 
 	for (int32_t idx = 0; idx < m_vtIndex.size(); idx++)
 	{
@@ -329,35 +333,28 @@ size_t CFileVehicleEx::ReadBody(FILE* fp)
 		}
 
 		int readItems = 0;
-		int32_t cntNode = 0;
-		int32_t cntLink = 0;
-		if ((retRead = fread(&cntNode, sizeof(cntNode), 1, fp)) != 1) {
-			LOG_TRACE(LOG_ERROR, "Failed, can't read node count");
-			fclose(fp);
-			return false;
-		}
-		readItems += sizeof(cntNode);
 
-		if ((retRead = fread(&cntLink, sizeof(cntLink), 1, fp)) != 1) {
-			LOG_TRACE(LOG_ERROR, "Failed, can't read link count");
-			fclose(fp);
-			return false;
-		}
-		readItems += sizeof(cntLink);
-
-		for (int ii = 0; ii < fileBody.cntData; ii++) {
+		for (int ii = 0; ii < fileBody.net.cntNode; ii++) {
 			stExtendInfo* pExtInfo = new stExtendInfo();
 			int readItem = pExtInfo->read(fp);
 			if (readItem > 0) {
 				// add to map
-				if (ii < cntNode) {
-					//m_pDataMgr->AddLinkExData(pExtInfo, TYPE_NODE_DATA_VEHICLE);
-				} else {
-					m_pDataMgr->AddLinkExData(pExtInfo, TYPE_DATA_VEHICLE);
-				}
+				m_pDataMgr->AddLinkExData(pExtInfo, TYPE_NODE_DATA_VEHICLE);
 				readItems += readItem;
 			}
 		} // for
+		nTotalData += readItems;
+
+		for (int ii = 0; ii < fileBody.net.cntLink; ii++) {
+			stExtendInfo* pExtInfo = new stExtendInfo();
+			int readItem = pExtInfo->read(fp);
+			if (readItem > 0) {
+				// add to map
+				m_pDataMgr->AddLinkExData(pExtInfo, TYPE_DATA_VEHICLE);
+				readItems += readItem;
+			}
+		} // for
+		nTotalData += readItems;
 
 		if (readItems != fileBody.szData) {
 			LOG_TRACE(LOG_ERROR, "Failed, body data size not matching from read file size, tile_id:%d, body:%d vs file:%d", fileBody.idTile, fileBody.szData, readItems);
@@ -366,6 +363,8 @@ size_t CFileVehicleEx::ReadBody(FILE* fp)
 
 		offFile += m_vtIndex[idx].szBody;
 	} // for
+
+	LOG_TRACE(LOG_DEBUG, "Read data, body, node cnt:%lld, link cnt:%lld, ext cnt:%lld", nTotalNodes, nTotalLinks, nTotalData);
 
 	return offFile;
 }
@@ -394,10 +393,12 @@ bool CFileVehicleEx::LoadDataByIdx(IN const uint32_t idx)
 	size_t retRead = 0;
 
 	// read body
-	if (m_vtIndex[idx].offBody <= 0 || m_vtIndex[idx].szBody <= 0)
-	{
-		LOG_TRACE(LOG_ERROR, "Failed, index body info invalid, off:%d, size:%d", m_vtIndex[idx].offBody, m_vtIndex[idx].szBody);
+	// read body
+	if (m_vtIndex[idx].szBody <= 0) {
 		fclose(fp);
+		return true;
+	} else if (m_vtIndex[idx].offBody <= 0) {
+		LOG_TRACE(LOG_ERROR, "Failed, index body info invalid, off:%d", m_vtIndex[idx].offBody);
 		return false;
 	}
 
@@ -416,33 +417,28 @@ bool CFileVehicleEx::LoadDataByIdx(IN const uint32_t idx)
 		return false;
 	}
 
+	if (fileBody.szData <= 0) {
+		return true;
+	}
+
 	int readItems = 0;
-	int32_t cntNode = 0;
-	int32_t cntLink = 0;
-	if ((retRead = fread(&cntNode, sizeof(cntNode), 1, fp)) != 1) {
-		LOG_TRACE(LOG_ERROR, "Failed, can't read node count");
-		fclose(fp);
-		return false;
-	}
-	readItems += sizeof(cntNode);
 
-	if ((retRead = fread(&cntLink, sizeof(cntLink), 1, fp)) != 1) {
-		LOG_TRACE(LOG_ERROR, "Failed, can't read link count");
-		fclose(fp);
-		return false;
-	}
-	readItems += sizeof(cntLink);
-
-	for (int ii = 0; ii < fileBody.cntData; ii++) {
+	for (int ii = 0; ii < fileBody.net.cntNode; ii++) {
 		stExtendInfo* pExtInfo = new stExtendInfo();
 		int readItem = pExtInfo->read(fp);
 		if (readItem > 0) {
 			// add to map
-			if (ii < cntNode) {
-				//m_pDataMgr->AddLinkExData(pExtInfo, TYPE_NODE_DATA_VEHICLE);
-			} else {
-				m_pDataMgr->AddLinkExData(pExtInfo, TYPE_DATA_VEHICLE);
-			}
+			m_pDataMgr->AddLinkExData(pExtInfo, TYPE_NODE_DATA_VEHICLE);
+			readItems += readItem;
+		}
+	} // for
+
+	for (int ii = 0; ii < fileBody.net.cntLink; ii++) {
+		stExtendInfo* pExtInfo = new stExtendInfo();
+		int readItem = pExtInfo->read(fp);
+		if (readItem > 0) {
+			// add to map
+			m_pDataMgr->AddLinkExData(pExtInfo, TYPE_DATA_VEHICLE);
 			readItems += readItem;
 		}
 	} // for
@@ -493,30 +489,16 @@ size_t CFileVehicleEx::WriteBody(FILE* fp, IN const uint32_t fileOff)
 	long offItem = 0;
 	const size_t sizeFileBody = sizeof(fileBody);
 
-	uint32_t ii;
-
-
-	
 	// write body
 	stMeshInfo* pMesh = nullptr;
 	int cntMesh = GetMeshCount();
-	for (ii = 0; ii < cntMesh; ii++) {
+	for (int32_t ii = 0; ii < cntMesh; ii++) {
+		offItem = 0;
 		pMesh = GetMeshData(ii);
 		if (!pMesh) {
 			LOG_TRACE(LOG_ERROR, "Failed, can't access mesh, idx:%d", ii);
 			return 0;
 		}
-
-		// write body
-		memset(&fileBody, 0x00, sizeFileBody);
-
-		fileBody.idTile = pMesh->mesh_id.tile_id;
-
-		if ((retWrite = fwrite(&fileBody, sizeFileBody, 1, fp)) != 1) {
-			LOG_TRACE(LOG_ERROR, "Failed, can't write body[%d], written:%d", ii, retWrite);
-			return 0;
-		}
-		offItem = sizeFileBody;
 
 		MapExtend* pMapLinkEx = m_pDataMgr->GetMapExtend();
 		if (!pMapLinkEx) {
@@ -526,45 +508,42 @@ size_t CFileVehicleEx::WriteBody(FILE* fp, IN const uint32_t fileOff)
 
 		const stExtendMeshInfo* pMapMesh = pMapLinkEx->GetMapMeshData(pMesh->mesh_id.tile_id);
 		if (pMapMesh != nullptr) {
-			// write data count
-			int32_t cntItem = pMapMesh->mapNode.size();
-			if ((retWrite = fwrite(&cntItem, sizeof(cntItem), 1, fp)) != 1) {
-				LOG_TRACE(LOG_ERROR, "Failed, can't write map node size, written:%d", retWrite);
-				return 0;
-			}
-			fileBody.szData += sizeof(cntItem);
-
-			cntItem = pMapMesh->mapLink.size();
-			if ((retWrite = fwrite(&cntItem, sizeof(cntItem), 1, fp)) != 1) {
-				LOG_TRACE(LOG_ERROR, "Failed, can't write map link size, written:%d", retWrite);
-				return 0;
-			}
-			fileBody.szData += sizeof(cntItem);
-
-			// write data
-			for (const auto& item : pMapMesh->mapNode) {
-				fileBody.szData += item.second->write(fp);
-				fileBody.cntData++;
-			}
-
-			for (const auto& item : pMapMesh->mapLink) {
-				fileBody.szData += item.second->write(fp);
-				fileBody.cntData++;
-			}
-
-			offItem += fileBody.szData;
-
-			// re-write body size & off
-			if (offItem > sizeFileBody) {
-				fseek(fp, offItem * -1, SEEK_CUR);
+			if (!pMapMesh->mapNode.empty() || !pMapMesh->mapLink.empty()) {
+				// write body
+				memset(&fileBody, 0x00, sizeFileBody);
+				fileBody.idTile = pMesh->mesh_id.tile_id;
+				fileBody.net.cntNode = pMapMesh->mapNode.size();
+				fileBody.net.cntLink = pMapMesh->mapLink.size();
 
 				if ((retWrite = fwrite(&fileBody, sizeFileBody, 1, fp)) != 1) {
-					LOG_TRACE(LOG_ERROR, "Failed, can't re-write body[%d], written:%d", ii, retWrite);
+					LOG_TRACE(LOG_ERROR, "Failed, can't write body[%d], written:%d", ii, retWrite);
 					return 0;
 				}
+				offItem = sizeFileBody;
 
-				fseek(fp, offItem - sizeFileBody, SEEK_CUR);
-			}
+				// write data
+				for (const auto& item : pMapMesh->mapNode) {
+					fileBody.szData += item.second->write(fp);
+				}
+
+				for (const auto& item : pMapMesh->mapLink) {
+					fileBody.szData += item.second->write(fp);
+				}
+
+				offItem += fileBody.szData;
+
+				// re-write body size & off
+				if (offItem > sizeFileBody) {
+					fseek(fp, offItem * -1, SEEK_CUR);
+
+					if ((retWrite = fwrite(&fileBody, sizeFileBody, 1, fp)) != 1) {
+						LOG_TRACE(LOG_ERROR, "Failed, can't re-write body[%d], written:%d", ii, retWrite);
+						return 0;
+					}
+
+					fseek(fp, offItem - sizeFileBody, SEEK_CUR);
+				}
+			}			
 		} else {
 #if defined(__DEBUG)
 			LOG_TRACE(LOG_DEBUG, "mesh dosen't have any extend data, mesh_id:%d", pMesh->mesh_id.tile_id);

@@ -8,6 +8,7 @@
 #include "../shp/shpio.h"
 #include "../utils/UserLog.h"
 #include "../utils/Strings.h"
+#include "../utils/GeoTools.h"
 #include "../route/MMPoint.hpp"
 #include "../route/DataManager.h"
 
@@ -34,19 +35,24 @@ unordered_set<int32_t> g_arrTestMesh = {
 	185203, 185208, 185213, 185218, 186203, 186208, 186213, 186218, // 백운산
 	185202, 185207, 185212, 185217, 186202, 186207, 186212, 186217,
 	185201, 185206, 185211, 185216, 186201, 186206, 186211, 186216,
-	// 50
+	// 80
+
+	//223115, 223116, 223117, 223118, 224103 // 대구 p2p 실증지역 for KS 
 
 #if defined(USE_FOREST_DATA)
 	// 설악산 - 78
-	232612, 232613, 232710, 232711, 232712, 232713, 232810, 232811, 232812, 232813, 242110,
-	232617, 232618, 232715, 232716, 232717, 232718, 232815, 232816, 232817, 232818,
-	242115, 233602, 233603, 233700, 233701, 233702, 233703, 233800, 233801, 233802,
-	233803, 243100, 233607, 233608, 233750, 233705, 233706, 233707, 233708, 233805,
-	233806, 233807, 233808, 243105, 233612, 233613, 233710, 233711, 233712, 233713,
-	233810, 233811, 233812, 233813, 243110, 233617, 233618, 233715, 233716, 233717,
-	233718, 233815, 233816, 233817, 233818, 243115, 234602, 234603, 234700, 234701,
-	234702, 234703, 234800, 234801, 234802, 234803, 244100,
+	//232612, 232613, 232710, 232711, 232712, 232713, 232810, 232811, 232812, 232813, 242110,
+	//232617, 232618, 232715, 232716, 232717, 232718, 232815, 232816, 232817, 232818,
+	//242115, 233602, 233603, 233700, 233701, 233702, 233703, 233800, 233801, 233802,
+	//233803, 243100, 233607, 233608, 233750, 233705, 233706, 233707, 233708, 233805,
+	//233806, 233807, 233808, 243105, 233612, 233613, 233710, 233711, 233712, 233713,
+	//233810, 233811, 233812, 233813, 243110, 233617, 233618, 233715, 233716, 233717,
+	//233718, 233815, 233816, 233817, 233818, 243115, 234602, 234603, 234700, 234701,
+	//234702, 234703, 234800, 234801, 234802, 234803, 244100,
 #endif
+
+	// 홍도,흑산도 (섬)
+	116310, 116315, 116316, 117213, 117218, 117310, 117315, 117316
 };
 
 
@@ -116,8 +122,14 @@ bool CFileMesh::ParseData(IN const char* fname)
 
 
 	//데이터 얻기
-	LOG_TRACE(LOG_DEBUG, "LOG, start, raw data parsing file : %s, rec cnt:%d", fname, nRecCount);
+	time_t timeStart = LOG_TRACE(LOG_DEBUG, "LOG, start, raw data parsing file : %s, rec cnt:%d", fname, nRecCount);
 
+	// 전체 메쉬 등록
+	stMeshInfo* pMeshGlobal = new stMeshInfo();
+	pMeshGlobal->mesh_id.llid = GLOBAL_MESH_ID;
+	//memcpy(&pMesh->mesh_box, GetMeshRegion(), sizeof(pMesh->mesh_box));
+	//memcpy(&pMesh->data_box, GetMeshRegion(), sizeof(pMesh->data_box));
+	
 	for (int idxRec = 0; idxRec < nRecCount; idxRec++) {
 		stWalkMesh mesh;
 
@@ -174,24 +186,36 @@ bool CFileMesh::ParseData(IN const char* fname)
 
 
 		if (nShpType == 3) {
-			stMeshInfo* pMesh = new stMeshInfo;
-
+			stMeshInfo* pMesh = new stMeshInfo();
 			pMesh->mesh_id.tile_id = mesh.MeshID;
 			for (vector<uint32_t>::const_iterator it = mesh.vtNeighbors.begin(); it != mesh.vtNeighbors.end(); it++) {
 				pMesh->neighbors.emplace(*it);
-			}			
+			}
 			memcpy(&pMesh->mesh_box, &mesh.meshBox, sizeof(SBox));
+			memcpy(&pMesh->data_box, &mesh.meshBox, sizeof(SBox));
 
 			m_mapMesh.insert(pair<uint32_t, stMeshInfo*>((uint32_t)pMesh->mesh_id.tile_id, pMesh));
+
+			// global mesh rect update
+			if (pMesh->mesh_id.tile_id != GLOBAL_MESH_ID) {
+				extendDataBox(pMeshGlobal->mesh_box, pMesh->mesh_box);
+				extendDataBox(pMeshGlobal->data_box, pMesh->data_box);
+			}
 		}
 	} // for
+
+	// 전체 메쉬 등록
+	m_mapMesh.insert(pair<uint32_t, stMeshInfo*>((uint32_t)pMeshGlobal->mesh_id.tile_id, pMeshGlobal));
+
+
+	shpReader.Close();
 
 	if (g_isUseTestMesh) {
 		LOG_TRACE(LOG_DEBUG, "LOG, Using test mesh option, test mesh cnt : %d", g_arrTestMesh.size());
 	}
 	LOG_TRACE(LOG_DEBUG, "LOG, min-max mesh_id: %d - %d, added cnt : %d", smallestMeshId, biggestMeshId, m_mapMesh.size());
 
-	shpReader.Close();
+	LOG_TRACE(LOG_DEBUG, timeStart, "LOG, finished");
 
 	return GenServiceData();
 }
@@ -209,7 +233,7 @@ bool CFileMesh::GenServiceData()
 
 
 	// 클래스에 추가
-	LOG_TRACE(LOG_DEBUG, "LOG, start, add data to class");
+	time_t timeStart = LOG_TRACE(LOG_DEBUG, "LOG, start, add data to class");
 
 	for (itMesh = m_mapMesh.begin(); itMesh != m_mapMesh.end(); itMesh++) {
 		if (!AddMeshData(itMesh->second)) {
@@ -220,7 +244,7 @@ bool CFileMesh::GenServiceData()
 
 	Release();
 	
-	LOG_TRACE(LOG_DEBUG, "LOG, finished");
+	LOG_TRACE(LOG_DEBUG, timeStart, "LOG, finished");
 
 	return true;
 }
@@ -286,6 +310,7 @@ size_t CFileMesh::WriteIndex(FILE* fp)
 			return 0;
 		}
 
+		memset(&fileIndex, 0x00, sizeIndex);
 		fileIndex.idxTile = idx;
 		fileIndex.idTile = pMesh->mesh_id.tile_id;
 		if (pMesh->neighbors.size() > 8) {
@@ -510,7 +535,7 @@ size_t CFileMesh::ReadBody(FILE* fp)
 #endif
 	}
 
-	LOG_TRACE(LOG_DEBUG, "Data loading, mesh cnt:%lld", m_vtIndex.size());
+	LOG_TRACE(LOG_DEBUG, "Read data, body, mesh cnt:%lld", m_vtIndex.size());
 
 	return offFile;
 }

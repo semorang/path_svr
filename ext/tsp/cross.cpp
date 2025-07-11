@@ -9,6 +9,10 @@
 #include "cross.h"
 #endif
 
+#include <stdint.h>
+
+#include "../utils/UserLog.h"
+
 TCross::TCross( int N ){
 	fMaxNumOfABcycle = 2000; // sets the maximum number of ab cycle
 	fN = N;
@@ -140,7 +144,9 @@ void TCross::setParents( const TIndi& tPa1, const TIndi& tPa2, int flagC[10], in
 	}
 }
 
-void TCross::doIt( TIndi& tKid, TIndi& tPa2, int numOfKids, int flagP, int flagC[ 10 ], vector<vector<int>>& fEdgeFreq ){
+bool TCross::doIt( TIndi& tKid, TIndi& tPa2, int numOfKids, int flagP, int flagC[ 10 ], vector<vector<int>>& fEdgeFreq ){
+	bool ret = false;
+
 	int Num;
 	int jnum, centerAB;
 	int gain;
@@ -187,7 +193,6 @@ void TCross::doIt( TIndi& tKid, TIndi& tPa2, int numOfKids, int flagP, int flagC
 		gain = 0;
 		fNumOfAppliedCycle = 0;
 		fNumOfModiEdge = 0;
-
 		fNumOfAppliedCycle = fNumOfABcycleInEset;
 		for( int k = 0; k < fNumOfAppliedCycle; ++k ){
 			fAppliedCylce[ k ] = fABcycleInEset[ k ];
@@ -195,8 +200,10 @@ void TCross::doIt( TIndi& tKid, TIndi& tPa2, int numOfKids, int flagP, int flagC
 			this->changeSol( tKid, jnum, flagP );
 			gain += fGainAB[ jnum ];
 		}
-
-		this->makeUnit();
+		
+		if (this->makeUnit() == false) {
+			return false;
+		}
 		this->makeCompleteSol( tKid );
 		gain += fGainModi;
 
@@ -226,7 +233,6 @@ void TCross::doIt( TIndi& tKid, TIndi& tPa2, int numOfKids, int flagP, int flagC
 				fBestModiEdge[ s ][ 2 ] = fModiEdge[ s ][ 2 ];
 				fBestModiEdge[ s ][ 3 ] = fModiEdge[ s ][ 3 ];
 			}
-
 		}
 		this->backToPa1( tKid );
 		tKid.fEvaluationValue = tKid.fEvaluationValue + gain;
@@ -236,6 +242,10 @@ void TCross::doIt( TIndi& tKid, TIndi& tPa2, int numOfKids, int flagP, int flagC
 		tKid.fEvaluationValue = tKid.fEvaluationValue - BestGain;
 		this->incrementEdgeFreq( fEdgeFreq );
 	}
+
+	ret = true;
+
+	return ret;
 }
 
 void TCross::setABcycle( const TIndi& tPa1, const TIndi& tPa2, int flagC[ 10 ], int numOfKids ){
@@ -535,6 +545,8 @@ void TCross::makeCompleteSol( TIndi& tKid ){
 			if( tKid.fLink[ curr ][ 0 ] != pre ) next = tKid.fLink[ curr ][ 0 ];
 			else next = tKid.fLink[ curr ][ 1 ];
 			if( next == st ) break;
+			//if (fNumOfElementInCU >= fListOfCenterUnit.size()) break; // 오류회피처리 2025-02-05
+			if (fNumOfElementInCU >= fListOfCenterUnit.size() - 2) break; // 오류회피처리 2025-06-12
 		}
 		fListOfCenterUnit[ fNumOfElementInCU ] = fListOfCenterUnit[ 0 ];
 		fListOfCenterUnit[ fNumOfElementInCU+1 ] = fListOfCenterUnit[ 1 ];
@@ -550,7 +562,8 @@ void TCross::makeCompleteSol( TIndi& tKid ){
 		for( int s = 1; s <= fNumOfElementInCU; ++s ){
 			a = fListOfCenterUnit[ s ];
 
-			for( near_num = 1; near_num <= nearMax; ++near_num ){
+			//for( near_num = 1; near_num <= nearMax; ++near_num ){
+			for (near_num = 1; near_num < nearMax; ++near_num) {
 				c = eval->fNearCity[ a ][ near_num ];
 				if( fCenterUnit[ c ] == 0 ){
 					for( j1 = 0; j1 < 2; ++j1 ){
@@ -642,7 +655,9 @@ void TCross::makeCompleteSol( TIndi& tKid ){
 	}
 }
 
-void TCross::makeUnit(){
+bool TCross::makeUnit(){
+	bool ret = false;
+
 	int flag = 1;
 	for( int s = 0; s < fNumOfSPL; ++s ){
 		if( fSegPosiList[ s ] == 0 ){
@@ -678,6 +693,14 @@ void TCross::makeUnit(){
 	for( int s = 0; s < fNumOfSeg; ++s ) fSegUnit[ s ] = -1;
 	fNumOfUnit = 0;
 
+	// 무한 루프 오류, 임시 처리
+#if defined(_DEBUG)
+	static const uint32_t MAX_LOOP_COUNT = INT32_MAX / 100;// 100000000;
+#else
+	static const uint32_t MAX_LOOP_COUNT = INT32_MAX / 10;
+#endif
+	uint32_t cnt_loop = 0;
+
 	int p_st, p1, p2, p_next, p_pre;
 	int segNum;
 	while(1){
@@ -693,8 +716,6 @@ void TCross::makeUnit(){
 		}
 		if( flag == 0 ) break;
 
-		// 무한 루프 오류, 임시 처리
-		int cnt_loop = 0;
 		while(1){ // loop
 			segNum = fPosiSeg[ p1 ];
 			fSegUnit[ segNum ] = fNumOfUnit;
@@ -712,9 +733,9 @@ void TCross::makeUnit(){
 			p_pre = p2;
 			p1 = p_next;
 
-			if (cnt_loop > 100) {
-				printf("cross::makeUnit, exit loop\n");
-				break;
+			if (cnt_loop++ > MAX_LOOP_COUNT) {
+				LOG_TRACE(LOG_WARNING, "cross::makeUnit(), exit loop"); // 오류회피처리 2025-02-05
+				return false;
 			}
 		}
 	}
@@ -740,6 +761,10 @@ void TCross::makeUnit(){
 		}
 	}
 	fNumOfSeg = tmpNumOfSeg + 1;
+
+	ret = true;
+
+	return ret;
 }
 
 void TCross::backToPa1( TIndi& tKid ){

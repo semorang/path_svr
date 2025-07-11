@@ -28,9 +28,11 @@ public:
 	KeyID SetDeparture(IN const double lng, IN const double lat, IN const int matchType  = TYPE_LINK_MATCH_NONE);
 	KeyID SetWaypoint(IN const double lng, IN const double lat, IN const int matchType = TYPE_LINK_MATCH_NONE);
 	KeyID SetDestination(IN const double lng, IN const double lat, IN const int matchType = TYPE_LINK_MATCH_NONE);
-	void SetRouteOption(IN const vector<uint32_t>& routes, IN const vector<uint32_t>& avoids, IN const uint32_t mobility = 0);
+	void SetRouteOption(IN const vector<uint32_t>& routes, IN const vector<uint32_t>& avoids, IN const uint32_t timestamp = 0, IN const uint32_t traffic = 0, IN const uint32_t mobility = 0);
 	void AddRouteOption(IN const uint32_t option, IN const uint32_t avoid = 0, IN const uint32_t mobility = 0);
 	void SetRouteSubOption(IN const uint64_t sub);
+	void SetRouteFreeOption(IN const uint32_t free);
+	void SetRouteTruckOption(IN const TruckOption* pOption);
 	void SetRouteDirOption(IN const uint32_t departuretDir, IN const uint32_t waypointDir, IN const uint32_t destinationDir);
 	void SetRouteCost(IN const uint32_t type, IN const DataCost* pCost, IN const uint32_t cntCost = 0);
 
@@ -42,9 +44,11 @@ public:
 	const SPoint* GetDestination(IN const bool useMatch = false);
 
 	int Route(const int opt = 0/*packet*/);
-	int GetWeightMatrix(IN const char* szRequest, OUT vector<vector<stDistMatrix>>& vtWeightMatrix);
-	int GetBestway(IN const char* szRequest, OUT vector<stWaypoints>& vtWaypoints, OUT vector<uint32_t>& vtBestWaypoints, OUT double& dist, OUT int32_t& time);
-	int GetCluster(IN const char* szRequest, OUT vector<stDistrict>& vtCluster, OUT vector<SPoint>& vtPositionLock);
+
+	int GetWeightMatrix(IN const char* szRequest, OUT RouteDistMatrix& RDM, OUT BaseOption& option);
+	int GetWeightMatrixRouteLine(IN const char* szRequest, OUT RouteDistMatrixLine& RDMLN);
+	int GetBestway(IN const char* szRequest, IN RouteDistMatrix& RDM, OUT BestWaypoints& TSP);
+	int GetCluster(IN const char* szRequest, IN RouteDistMatrix& RDM, OUT Cluster& CLUST);
 	int GetBoundary(IN const vector<SPoint>& vtPois, OUT vector<SPoint>& vtBoundary, OUT SPoint& center);
 
 	int GetCluster_for_geoyoung(IN const int32_t cntCluster, OUT vector<stDistrict>& vtCluster);
@@ -66,7 +70,7 @@ public:
 
 	// for TSP
 #if defined(USE_TSP_MODULE)
-	int GetBestWaypointResult(IN const TspOptions* pOpt, IN const vector<vector<stDistMatrix>>& vtDistMatrix, OUT vector<uint32_t>& vtBestWaypoints, OUT double& dist, OUT int32_t& time);
+	int GetBestWaypointResult(IN const RouteDistMatrix& RDM, IN OUT BestWaypoints& TSP);
 #endif
 
 
@@ -80,7 +84,8 @@ private:
 	int DoMultiComplexRouting(IN const int32_t routeCount/*, IN const int32_t routeOptions[], IN const int32_t routeAvoids[]*/);
 	// int setNode(/*FLAG, Packet*/);
 	int DoCourse(/*Packet*/);
-	int DoTabulate(IN const vector<SPoint>vtOrigins, OUT RequestRouteInfo& reqInfo, OUT vector<vector<stDistMatrix>>& vtDistMatrix);
+	int DoTabulate(IN OUT RouteDistMatrix& RDM, OUT RequestRouteInfo& reqInfo);
+	int DoDistanceTabulate(IN OUT RouteDistMatrix& RDM);
 
 	KeyID SetPosition(IN const double lng, IN const double lat, IN const int matchType, OUT RouteLinkInfo& pointLinkInfo);
 
@@ -98,9 +103,13 @@ private:
 	vector<uint32_t> m_vtRouteOpt;
 	vector<uint32_t> m_vtAvoidOpt;
 	uint32_t m_nMobilityOpt;
+	uint32_t m_nTimestampOpt;
+	uint32_t m_nFreeOpt; // 무료 적용, 0:미사용, 1:무료
+	uint32_t m_nTrafficOpt; // 교통 정보, 0:미사용, 1:실시간(REAL), 2:통계(STATIC), 3:실시간-통계(REAL-STATIC)
 
 	// 경탐 세부옵션, 임시방법이고, 좀더 깔끔한 다른 방식을 고민해 보자, 2023.11.07
 	stRouteSubOption m_routeSubOpt;
+	stRouteTruckOption m_routeTruckOpt;
 
 	int32_t m_nDepartureDirIgnore; // 출발지 방향성 무시
 	int32_t m_nWaypointDirIgnore; // 경유지 방향성 무시

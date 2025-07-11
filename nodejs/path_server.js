@@ -13,9 +13,9 @@ const fsextra = require('fs-extra');
 const cfg = require('dotenv').config();
 // const addon = require('./build/Release/trekking_svr.node');
 // const addon = require('./core_modules/walk_route.node');
-const route = require('../src/route');
-const logout = require('../src/logs');
-const apis = require('../src/apis');
+const route = require('../src/route.js');
+const logout = require('../src/logs.js');
+const apis = require('../src/apis.js');
 const times = require('../src/times.js')
 // const escapeJSON = require('escape-json-noide');
 // const addon = require('bindings')('openAPI')
@@ -112,8 +112,8 @@ app.post('/api/setdatacost', function(req, res) {
 app.get('/summary', function(req, res) {
     const startTime = logout("start route summary request");
 
-    logout("client IP : " + request_ip.getClientIp(req));
-    logout("client req : " + JSON.stringify(req.query));
+    // logout("client IP : " + request_ip.getClientIp(req));
+    // logout("client req : " + JSON.stringify(req.query));
 
     var ret = route.doroute(req, 'summary');
 
@@ -133,8 +133,8 @@ app.get('/summary', function(req, res) {
 app.get('/api/route', function(req, res) {
     const startTime = logout("start route request");
 
-    logout("client IP : " + request_ip.getClientIp(req));
-    logout("client req : " + JSON.stringify(req.query));
+    // logout("client IP : " + request_ip.getClientIp(req));
+    // logout("client req : " + JSON.stringify(req.query));
 
     req.query.mobility = "3"; // 기본 자동차 모드
 
@@ -162,8 +162,8 @@ app.get('/api/route', function(req, res) {
 app.get('/api/multiroute', function(req, res) {
     const startTime = logout("start multiroute request");
 
-    logout("client IP : " + request_ip.getClientIp(req));
-    logout("client req : " + JSON.stringify(req.query));
+    // logout("client IP : " + request_ip.getClientIp(req));
+    // logout("client req : " + JSON.stringify(req.query));
 
     req.query.mobility = "3"; // 기본 자동차 모드
 
@@ -194,6 +194,9 @@ app.get('/path', function(req, res) {
 app.get('/api/path', function(req, res) {
     const startTime = logout("start multiroute request");
 
+    // logout("client IP : " + request_ip.getClientIp(req));
+    // logout("client req : " + JSON.stringify(req.query));
+
     // 2p2 path 전용 옵션
     req.query.target = "p2p";
     req.query.mobility = "4"; // 기본 자율주행 자동차 모드
@@ -201,10 +204,8 @@ app.get('/api/path', function(req, res) {
         req.query.option = "4"; // 기본 큰길 옵션 
     }
 
-    logout("client IP : " + request_ip.getClientIp(req));
-    logout("client req : " + JSON.stringify(req.query));
-
     const key = "2Y41Z0H-7QS4Z5X-JZJBHJQ-95BSGD6";
+
     var ret = route.domultiroute(key, req.query, "");
 
     if (ret.header.isSuccessful == true) {
@@ -222,8 +223,8 @@ app.get('/api/path', function(req, res) {
 app.get('/api/kakaovx', function(req, res) {
     const startTime = logout("start kakaovx route request");
 
-    logout("client IP : " + request_ip.getClientIp(req));
-    logout("client req : " + JSON.stringify(req.query));
+    // logout("client IP : " + request_ip.getClientIp(req));
+    // logout("client req : " + JSON.stringify(req.query));
 
     req.query.target = "kakaovx";
 
@@ -245,8 +246,8 @@ app.get('/api/kakaovx', function(req, res) {
 app.get('/view/kakaovx', function(req, res) {
     const startTime = logout("start kakaovx request");
 
-    logout("client IP : " + request_ip.getClientIp(req));
-    logout("client req : " + JSON.stringify(req.query));
+    // logout("client IP : " + request_ip.getClientIp(req));
+    // logout("client req : " + JSON.stringify(req.query));
 
     req.query.target = "kakaovx";
     const api = req.query.api;
@@ -305,8 +306,8 @@ app.get('/view/route', function(req, res) {
 app.get('/view/multiroute', function(req, res) {
     const startTime = logout("start multiroute(view) request");
 
-    logout("client IP : " + request_ip.getClientIp(req));
-    logout("client req : " + JSON.stringify(req.query));
+    // logout("client IP : " + request_ip.getClientIp(req));
+    // logout("client req : " + JSON.stringify(req.query));
 
     req.query.mobility = "3"; // 기본 자동차 모드
 
@@ -442,15 +443,15 @@ app.get('/view/route_result', function(req, res) {
 app.get('/view/path', function(req, res) {
     const startTime = logout("start pathview request");
 
+    // logout("client IP : " + request_ip.getClientIp(req));
+    // logout("client req : " + JSON.stringify(req.query));
+        
     // 2p2 path 전용 옵션
     req.query.target = "p2p";
     req.query.mobility = "4"; // 기본 자율주행 자동차 모드
     if (req.query.option == undefined) {
         req.query.option = "4"; // 기본 큰길 옵션 
     }
-
-    logout("client IP : " + request_ip.getClientIp(req));
-    logout("client req : " + JSON.stringify(req.query));
 
     const api = req.query.api;
     const key = "716Y8EX-0MWMZ0Y-JQ1PTWF-QZHEMZK";
@@ -613,7 +614,7 @@ app.get('/api/clustering/appkeys/:userkey', function(req, res) {
 
 
 app.post('/api/clustering', function(req, res) {
-    const startTime = logout("start clustering request" + ": " + req);
+    const startTime = logout("start clustering request");
 
     ret = apis.clustering(req.headers.authorization, req.body);
 
@@ -625,7 +626,7 @@ app.post('/api/clustering', function(req, res) {
 
 // clustering boundary api 호출
 app.get('/api/boundary/appkeys/:userkey', function(req, res) {
-    logout("start boundary request");
+    const startTime = logout("start boundary request");
 
     const key = req.params.userkey;
     const mode = req.query.mode;
@@ -641,7 +642,7 @@ app.get('/api/boundary/appkeys/:userkey', function(req, res) {
 
 
 app.post('/api/boundary', function(req, res) {
-    logout("start boundary request");
+    const startTime = logout("start boundary request");
 
     const key = req.headers.authorization;
     const mode = req.body.mode;
@@ -652,7 +653,7 @@ app.post('/api/boundary', function(req, res) {
 
     res.send(ret);
 
-    logout("end boundary request");
+    logout("end boundary request", startTime);
 });
 
 
@@ -719,25 +720,58 @@ const keepalive_timeout = 5000; // 연결 유지 타임아웃: 5초, 기본값:5
 
 // traffic 처리 로직
 const time_gap = 10 * 1000; // n초 간격으로 새로운 교통정보 파일 확인
+const ttl_svr_ip = '133.186.159.224';
+const ttl_svr_port = 30012;
 const traffic = require('../src/traffic.js')
-const trafficPath = process.env.DATA_PATH + "/traffic";
-const trafficManager = new traffic(trafficPath);
-trafficManager.on('newFile', ({ fileName, filePath, timeStamp }) => {
-    console.log(`traffic watcher received new file: ${fileName}, ${filePath}, ${timeStamp}`);
+const trafficPath = process.env.DATA_PATH + "/../traffic";
+const trafficManagerKS = new traffic();
+const trafficManagerTTL = new traffic();
+const trafficManagerKSR = new traffic();
+const trafficManagerRTM = new traffic();
 
-    route.updatetraffic(fileName, filePath, timeStamp);
+trafficManagerKS.initialize(ttl_svr_ip, ttl_svr_port, 'ks', trafficPath);
+trafficManagerTTL.initialize(ttl_svr_ip, ttl_svr_port, 'ttl', trafficPath);
+trafficManagerKSR.initialize(ttl_svr_ip, ttl_svr_port, 'ksr', trafficPath);
+trafficManagerRTM.initialize(ttl_svr_ip, ttl_svr_port, 'rtm', trafficPath);
+
+trafficManagerKS.on('newFile', ({ title, path, timestamp }) => {
+    // logout(`traffic update from file: ${title}, ${path}, ${timestamp}`);
+    logout(`traffic(ks) update from file: ${title}`);
+
+    route.updatetraffic(title, path, timestamp);
 });
 
-//setInterval(() => trafficManager.checkFolder(), time_gap);
+trafficManagerTTL.on('newFile', ({ title, path, timestamp }) => {
+    // logout(`traffic update from file: ${title}, ${path}, ${timestamp}`);
+    logout(`traffic(ttl) update from file: ${title}`);
+
+    route.updatetraffic(title, path, timestamp);
+});
+
+trafficManagerKSR.on('newFile', ({ title, path, timestamp }) => {
+    // logout(`traffic update from file: ${title}, ${path}, ${timestamp}`);
+    logout(`traffic(ksr) update from file: ${title}`);
+
+    // route.updatetraffic(title, path, timestamp);
+});
+
+trafficManagerRTM.on('newFile', ({ title, path, timestamp }) => {
+    // logout(`traffic update from file: ${title}, ${path}, ${timestamp}`);
+    logout(`traffic(rtm) update from file: ${title}`);
+
+    // route.updatetraffic(title, path, timestamp);
+});
+
+// setInterval(() => trafficManager.checkFolder(), time_gap);
 
 
 const server = app.listen(cur_port, function () {
     let data_path = process.env.DATA_PATH;
     let file_path = process.env.FILE_PATH;
     let log_path = process.env.LOG_PATH;
-
+    
     // var cur_time = cur_date.toFormat('YYYY-MM-DD HH24:MI:SS');
-    logout("start vehicle route server response at " + cur_ip.address() + ":" + cur_port);
+    logout("start path route server response at " + cur_ip.address() + ":" + cur_port);
     logout("OS : " + os.type());
     logout("process pid:" + cur_pid);
 

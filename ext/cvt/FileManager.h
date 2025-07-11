@@ -50,7 +50,7 @@ private:
 	CFileEntrance m_fileEntrance;
 
 protected:
-	char m_szDataPath[FILENAME_MAX];
+	char m_szFilePath[FILENAME_MAX];
 	
 
 #if defined(__USE_TEMPLETE)
@@ -63,7 +63,7 @@ public:
 	bool Initialize(void);
 	void Release(void);
 
-	void SetDataPath(IN const char* pszDataPath);
+	void SetFilePath(IN const char* pszFilePath);
 	void SetBuildPath(IN const char* szSrcPath, IN const char* szWorkPath, IN const char* szDstPath);
 
 	void SetDataMgr(CDataManager* pDataMgr);

@@ -293,9 +293,9 @@ function getRoute(path, params)
             // set route result
             releaseRoute();
 
-            drawRoute(result, map, route_offset[0], route_color[0]);
+            drawRoutes(result.routes, map, route_offset, route_color);
 
-            drawRouteInfo(result);
+            drawRouteInfo(result.routes);
         } else {
             alert('err code: ' + header.resultCode + '\nerr msg: ' + header.resultMessage)
         }
@@ -312,6 +312,173 @@ let distanceOverlay;
 
 
 let routeMarker = new Array();
+
+
+// draw map item <-- 현재는 안쓰는 걸로 2025-02-24
+function drawRoute(result, map) {
+    result_obj = result;
+
+    user_obj = result_obj.user_info;
+    cnt_route = result_obj.routes.length;
+
+    user_pos.x = result_obj.routes[0].x;
+    user_pos.y = result_obj.routes[0].y;
+
+    var bounds = new Array();
+
+    // 경로 그리기
+    for (var ii = cnt_route - 1; ii >= 0; --ii) {
+        let result_dat = result_obj.routes[ii];
+        // var cntLink = result_dat.link_info.length;
+        // var cntVtx = result_dat.vertex_info.length;
+        // var cntJct = result_dat.junction_info.length;
+
+        var vertices = new Array();
+        var vertex_offset = 0;
+
+        // 경로선 생성
+        var via_idx = 0;
+        result_dat.link_info.forEach(function(link) {
+            for (var vtx = 0; vtx < link.vertex_count; vtx++) {
+                // 경로선 확장
+                bounds.push([result_dat.vertex_info[vertex_offset].x, result_dat.vertex_info[vertex_offset].y]);
+                
+                vertices.push([result_dat.vertex_info[vertex_offset].x, result_dat.vertex_info[vertex_offset].y]);
+                vertex_offset++;
+            }
+
+            // if (ii != 0 && link.guide_type != 0) {
+            //     via_idx++;
+
+            //     // // 경로선 추가
+            //     // links.push(new inavi.maps.Polyline({
+            //     //     map: map,
+            //     //     path: vertices,
+            //     //     style: {
+            //     //         lineOffset: off,
+            //     //         lineColor: color,
+            //     //         // lineColor: colors[via_idx++ % colors.length],
+            //     //         lineWidth: 5,
+            //     //         lineOpacity: 0.7,
+            //     //     },
+            //     // }));
+                
+            //     // // 초기화
+            //     // vertices.splice(0);
+            // }
+        }); // forEach
+
+        links.push(new inavi.maps.Polyline({
+            map: map,
+            path: vertices,
+            style: {
+                lineOffset: route_offset[ii],
+                lineColor: route_color[ii],
+                // lineColor: colors[via_idx++ % colors.length],
+                lineWidth: 5,
+                lineOpacity: 0.8,
+            },
+        }));
+
+        // // 초기화
+        // vertices.splice(0);
+
+        //-- 경로선 생성
+
+
+        // 노드 생성
+        // 경로에 노드를 생성합니다
+        // var off = 0;
+        // // 마지막 목적지의 종료 노드까지 처리하기 위해 for를 +1해서 돌림
+        // for (var ii = 0; ii < cntLink; ii++) {
+        //     nodes.push(new inavi.maps.Circle({
+        //         map: map,
+        //         position: [result_dat.vertex_info[off].x, result_dat.vertex_info[off].y], // 원 중심 좌표
+        //         radius: 0.005, // 원 반지름 킬로미터 단위
+        //         style: {
+        //             fillOpacity: 0.5,  // 채우기 불투명도 입니다
+        //             fillColor: "#CFE7FF",
+        //             fillOutlineColor: "#DB4455",
+        //         },
+        //     }));
+
+        //     off += result_dat.link_info[ii].vertex_count;
+        //     if (off >= result_dat.vertex_info.length) {
+        //         break;
+        //     }                
+        // } // for
+
+        // // 마지막 목적지의 종료 노드까지 처리하기 위해 
+        // if (result_dat.vertex_info[off - 1] != undefined) {
+        //     nodes.push(new inavi.maps.Circle({
+        //         map: map,
+        //         position: [result_dat.vertex_info[off - 1].x, result_dat.vertex_info[off - 1].y], // 원 중심 좌표
+        //         radius: 0.005, // 원 반지름 킬로미터 단위
+        //         style: {
+        //             fillOpacity: 0.5,  // 채우기 불투명도 입니다
+        //             fillColor: "#CFE7FF",
+        //             fillOutlineColor: "#DB4455",
+        //         },
+        //     }));
+        // }
+        //-- 노드 생성
+
+        // 정션 생성
+        // KakaoVX 스타일
+        // if (result_dat.junction_info != undefined) {
+        //     result_dat.junction_info.forEach(function(jct) {
+        //         jct.junction.forEach(function(lnk) {
+        //             var junctions = new Array();
+        //             lnk.vertices.forEach(function(coord) {
+        //                 junctions.push([coord.x, coord.y]);
+        //             }); // forEach vtx
+                    
+        //             links.push(new inavi.maps.Polyline({
+        //                 map: map,
+        //                 path: junctions,
+        //                 style: {
+        //                     lineColor: "#F09B59", //"#FFC90E",
+        //                     lineWidth: 2,
+        //                     // lineOpacity: 0.7,
+        //                 },
+        //             }));
+        //         });// forEach lnk
+        //     }); // forEach jct
+        // }
+        if (result_dat.junction_info != undefined) {
+            result_dat.junction_info.forEach(function(jct) {
+                var vertices = new Array();
+                jct.vertices.forEach(function(coord) {
+                    vertices.push([coord.x, coord.y]);
+                }); // forEach vtx
+                
+                links.push(new inavi.maps.Polyline({
+                    map: map,
+                    path: vertices,
+                    style: {
+                        // lineColor: "#F09B59", //"#FFC90E",
+                        lineColor: "#309BF9", //"#FFC90E",
+                        lineWidth: 3,
+                        lineDasharray: [2, 1], // (1픽셀 x lineWidth) 라인, (1픽셀 x lineWidth) 공백 표시 반복.
+                        // lineOpacity: 0.7,
+                    },
+                }));
+            }); // forEach jct
+        }              
+        //-- 정션 생성
+    }
+
+
+
+
+    map.fitCoordinates(bounds, {
+        padding: 90,
+        // heading: 90,
+        // tilt: 30,
+        // duration: 1000
+    });
+}
+
 
 // draw map item
 function drawRoutes(routes, map, offsets, colors) {
@@ -336,12 +503,15 @@ function drawRoutes(routes, map, offsets, colors) {
         for (var ii=0; ii<cntLink; ii++) {
             for (var vtx = 0; vtx < route.link_info[ii].vertex_count; vtx++) {
                 // 경로선 확장
-                vertices_all.push([route.vertex_info[vertex_offset].x, route.vertex_info[vertex_offset].y]);                    
-                vertices.push([route.vertex_info[vertex_offset].x, route.vertex_info[vertex_offset].y]);
+                if (route.vertex_info[vertex_offset] != undefined) {
+                    vertices_all.push([route.vertex_info[vertex_offset].x, route.vertex_info[vertex_offset].y]);                    
+                    vertices.push([route.vertex_info[vertex_offset].x, route.vertex_info[vertex_offset].y]);
+                }                
                 vertex_offset++;
             }
     
-            if (ii != 0 && route.link_info[ii].guide_type != 0) {   
+            if ((route.link_info[ii].guide_type != 0) &&
+                 (ii != 0) || (ii == 0 && cntLink <= 1)) {
                 // 경로선 추가
                 links.push(new inavi.maps.Polyline({
                     map: map,

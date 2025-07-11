@@ -206,6 +206,52 @@ int sTrfCache::speed(uint8_t* spd, int ptn_id, int time_idx,
   return 0;
 }
 
+int sTrfCache::speed_block(std::vector<uint8_t>& vtblock, int ptn_id, int time_idx)
+{
+	// 기본 시작위치 구하기 -> 여기에 추가로 (ttl idx/_item_cnt_in_tblk)/_eblk_ksize 값을 더해야한다
+	int eblk_idx_base = (ptn_id   * _eblk_cnt_in_ptn) +	///< 패턴 단위
+		(time_idx * _eblk_cnt_in_time); ///< 시간 단위
+
+	// 필요한 시간대 ttl spd 정보 모두 로드
+	for (int i = 0; i < _tblk_real_cnt; ++i) {
+		int eblk_idx = eblk_idx_base + ((int)(i / _eblk_ksize));
+		if (_cache_tbl[eblk_idx] == NULL) {
+			int ret = _cq.push(eblk_idx);
+			if (ret >= 0) {
+				unload_block(ret);
+			}
+			ret = load_block(eblk_idx);
+			if (ret) return ret;
+		}
+	}
+
+	int cntItem = 0;
+
+	// 마지막 블록 제외하고 속도 가져온다
+	// 마지막 블록은 2048개 이하를 저장하고 있을 수 있다
+	for (int i = 0; i < _tblk_real_cnt - 1; ++i) {
+		for (int j = 0; j < _item_cnt_in_tblk; ++j)	// item idx
+		{
+			int eblk_idx = eblk_idx_base + ((int)(i / _eblk_ksize));
+			int iidx = traffic_item_idx(0, i, j);
+			int tmp_spd = _cache_tbl[eblk_idx][iidx];
+
+			vtblock[cntItem++] = tmp_spd;
+		}
+	}
+	// 마지막 블록 속도 가져오기
+	// 통계파일로는 ttl id개수를 알 수 없다
+	int otherCnt = vtblock.size() % _item_cnt_in_tblk;	// 마지막 블록에서 가져올 속도 개수
+	for (int i = 0; i < otherCnt; ++i) {
+		int eblk_idx = eblk_idx_base + ((int)((_tblk_real_cnt - 1) / _eblk_ksize));
+		int iidx = traffic_item_idx(0, _tblk_real_cnt - 1, i);
+		int tmp_spd = _cache_tbl[eblk_idx][iidx];
+
+		vtblock[cntItem++] = tmp_spd;
+	}
+
+	return cntItem;
+}
 /**
  *  @brief  speed_block
  */

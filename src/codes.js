@@ -62,6 +62,28 @@ const ROUTE_OPTIONS = {
     ROUTE_OPT_AUTOMATION : 8, // 자율주행 전용
 }
 
+// mobility type
+const MOBILITY_TYPE = {
+    TYPE_MOBILITY_PEDESTRIAN : 0, // 보행자
+	TYPE_MOBILITY_BICYCLE : 1, // 자전거
+	TYPE_MOBILITY_MOTORCYCLE : 2, // 오토바이
+	TYPE_MOBILITY_VEHICLE : 3, // 자동차
+	TYPE_MOBILITY_AUTONOMOUS : 4, // 자율주행
+	TYPE_MOBILITY_TRUCK : 5, // 트럭
+	TYPE_MOBILITY_EMERGENCY : 6, // 긴급
+	TYPE_MOBILITY_COUNT : 7,
+}
+
+const LINK_MATCH_TYPE = {
+	TYPE_LINK_MATCH_NONE : 0, // 미지정
+	TYPE_LINK_MATCH_CARSTOP : 1, // 차량 승하자
+	TYPE_LINK_MATCH_CARSTOP_EX : 2, // 차량 승하자 + 단지내도로(건물입구점 재확인시, 단지도로에 매칭된 입구점을 확인하기 위해 포함)
+	TYPE_LINK_MATCH_CARENTRANCE : 3, // 차량 진출입 전용
+	TYPE_LINK_MATCH_FOR_TABLE : 4, // 방문지 테이블용 , 2차선 이상만
+	TYPE_LINK_MATCH_FOR_HD : 5, // P2P HD 경로 탐색 용, sd-hd 매칭되는 링크만 선택
+	TYPE_LINK_MATCH_FOR_FOREST : 6, // 숲길 경로 링크 선택, 숲길(우선), 보행자길
+	TYPE_LINK_MATCH_FOR_BICYCLE : 7, // PM(킥보드, 자전거)
+}
 
 // route avoids
 const ROUTE_AVOIDS_TRK = {
@@ -265,6 +287,10 @@ module.exports = {
     // route avoids
     ROUTE_AVOIDS_TRK,
     ROUTE_AVOIDS_PED,
+
+    // type
+    MOBILITY_TYPE,
+    LINK_MATCH_TYPE,
 
     // errors
     ERROR_CODES,

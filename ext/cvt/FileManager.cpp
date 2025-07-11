@@ -28,7 +28,7 @@ CFileManager::CFileManager()
 //#if defined (USE_PEDESTRIAN_DATA)
 //	m_trackShpMgr.SetFileManager(this);
 //#endif
-	memset(m_szDataPath, 0x00, sizeof(m_szDataPath));
+	memset(m_szFilePath, 0x00, sizeof(m_szFilePath));
 }
 
 CFileManager::~CFileManager()
@@ -48,9 +48,9 @@ void CFileManager::Release(void)
 
 }
 
-void CFileManager::SetDataPath(IN const char* pszDataPath)
+void CFileManager::SetFilePath(IN const char* pszFilePath)
 {
-	strcpy(m_szDataPath, pszDataPath);
+	strcpy(m_szFilePath, pszFilePath);
 }
 
 void CFileManager::SetBuildPath(IN const char* szSrcPath, IN const char* szWorkPath, IN const char* szDstPath)
@@ -270,50 +270,52 @@ bool CFileManager::SaveData(IN const char* pszFilePath)
 
 bool CFileManager::LoadData(void)
 {
-	m_fileName.LoadData(m_szDataPath);
+	m_fileName.LoadData(m_szFilePath);
 
-	m_fileMesh.LoadData(m_szDataPath);
+	m_fileMesh.LoadData(m_szFilePath);
 
 #if defined(USE_FOREST_DATA)
 #	if defined(USE_FOREST_DATA)
-	if (m_fileForest.LoadData(m_szDataPath) == true) {
+	if (m_fileForest.LoadData(m_szFilePath) == true) {
 		memcpy(&m_rtBox, m_fileTrekking.GetMeshRegion(), sizeof(m_rtBox));
 	}
 #	else
-	if (m_fileTrekking.LoadData(m_szFilm_szDataPathePath) == true) {
+	if (m_fileTrekking.LoadData(m_szFilm_szFilePathePath) == true) {
 		memcpy(&m_rtBox, m_fileTrekking.GetMeshRegion(), sizeof(m_rtBox));
 	}
 #	endif // #	if defined(USE_FOREST_DATA)
-	if (m_fileMountain.LoadData(m_szDataPath) == true) {
+	if (m_fileMountain.LoadData(m_szFilePath) == true) {
 		memcpy(&m_rtBox, m_fileMountain.GetMeshRegion(), sizeof(m_rtBox));
 	}
 #endif
 
 #if defined(USE_PEDESTRIAN_DATA)
-	if (m_filePedestrian.LoadData(m_szDataPath) == true) {
+	if (m_filePedestrian.LoadData(m_szFilePath) == true) {
 		memcpy(&m_rtBox, m_filePedestrian.GetMeshRegion(), sizeof(m_rtBox));
 	}
-	m_fileExtend.LoadData(m_szDataPath);
+	m_fileExtend.LoadData(m_szFilePath);
 #endif
 
 #if defined(USE_VEHICLE_DATA)
-	if (m_fileVehicle.LoadData(m_szDataPath) == true) {
+	if (m_fileVehicle.LoadData(m_szFilePath) == true) {
 		memcpy(&m_rtBox, m_fileVehicle.GetMeshRegion(), sizeof(m_rtBox));
 	}
-	m_fileVehicleEx.LoadData(m_szDataPath);
+	m_fileVehicleEx.LoadData(m_szFilePath);
 #if defined(USE_ROUTING_POINT_API)
-	m_fileTraffic.LoadData(m_szDataPath);
+#if !defined(_WIN32) || !defined(_DEBUG)
+	m_fileTraffic.LoadData(m_szFilePath);
+#endif
 #endif
 #endif
 
 #if defined(USE_COMPLEX_DATA)
-	m_fileComplex.LoadData(m_szDataPath);
+	m_fileComplex.LoadData(m_szFilePath);
 #endif
 #if defined(USE_BUILDING_DATA)
-	m_fileBuilding.LoadData(m_szDataPath);
+	m_fileBuilding.LoadData(m_szFilePath);
 #endif
 #if defined(USE_COMPLEX_DATA) | defined(USE_BUILDING_DATA)
-	m_fileEntrance.LoadData(m_szDataPath);
+	m_fileEntrance.LoadData(m_szFilePath);
 #endif
 
 	return true;
@@ -339,9 +341,6 @@ bool CFileManager::LoadDataByIdx(IN const uint32_t idx)
 #if defined(USE_VEHICLE_DATA)
 	m_fileVehicle.LoadDataByIdx(idx);
 	m_fileVehicleEx.LoadDataByIdx(idx);
-#if defined(USE_ROUTING_POINT_API)
-	m_fileTraffic.LoadDataByIdx(idx);	
-#endif
 #endif
 #if defined(USE_COMPLEX_DATA)
 	m_fileComplex.LoadDataByIdx(idx);
@@ -380,9 +379,6 @@ bool CFileManager::GetData(IN const uint32_t idTile)
 #if defined(USE_VEHICLE_DATA)
 	ret |= m_fileVehicle.LoadDataByIdx(idTile);
 	ret |= m_fileVehicleEx.LoadDataByIdx(idTile);
-#if defined(USE_ROUTING_POINT_API)
-	ret |= m_fileTraffic.LoadDataByIdx(idTile);	
-#endif
 #endif
 
 #if defined(USE_COMPLEX_DATA)

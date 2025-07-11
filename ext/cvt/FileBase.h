@@ -14,9 +14,10 @@
 // 1.0.3 -> stEntranceInfo에 angle 추가
 // 1.0.4 -> 폴리곤 parts offset 데이터 사이즈 변경 uint8_t --> uint16_t
 // 1.0.5 -> 파일 명칭 및 확장자 변경
+// 1.0.6 -> add entry restriction, 진출입 제한 속성 추가
 #	define FILE_VERSION_MAJOR	1
 #	define FILE_VERSION_MINOR	0
-#	define FILE_VERSION_PATCH	5
+#	define FILE_VERSION_PATCH	6
 #elif defined(USE_ROUTING_POINT_API)
 #	if defined(USE_FOREST_DATA)
 // 1.0.3 -> 숲길 네트워크에 그룹ID 추가, 각 지점간 동일 산(동일 네트워크 연결) 여부 확인 용
@@ -25,23 +26,27 @@
 // 1.0.6 -> 폴리곤 parts offset 데이터 사이즈 변경 uint8_t --> uint16_t
 // 1.0.7 -> 인기도 등급 적용, uint32_t:12 --> uint32_t:4
 // 1.0.8 -> 파일 명칭 및 확장자 변경
+// 1.0.9 -> body size 0 데이터 저장 하지 않도록 함
 #	define FILE_VERSION_MAJOR	1
 #	define FILE_VERSION_MINOR	0
-#	define FILE_VERSION_PATCH	8
+#	define FILE_VERSION_PATCH	9
 #	elif defined(USE_PEDESTRIAN_DATA)
 // 1.0.1 -> 폴리곤 parts offset 데이터 사이즈 변경 uint8_t --> uint16_t
 // 1.0.2 -> 노드 명칭 정보 유무 추가
 // 1.0.3 -> 파일 명칭 및 확장자 변경
+// 1.0.4 -> body size 0 데이터 저장 하지 않도록 함
 #	define FILE_VERSION_MAJOR	1
 #	define FILE_VERSION_MINOR	0
-#	define FILE_VERSION_PATCH	3
+#	define FILE_VERSION_PATCH	4
 #	elif defined(USE_VEHICLE_DATA)
 // 0.0.1 -> 폴리곤 parts offset 데이터 사이즈 변경 uint8_t --> uint16_t
 // 0.0.2 -> TTL_ID를 포함한 차량 네트워크 V1.0.2 20240401
 // 0.0.3 -> 파일 명칭 및 확장자 변경
+// 0.0.4 -> 교통속도 데이터를 링크에 속성추가하여 바로 적용 : match with engine 0.0.10
+// 0.0.5 -> body size 0 데이터 저장 하지 않도록 함
 #	define FILE_VERSION_MAJOR	0
 #	define FILE_VERSION_MINOR	0
-#	define FILE_VERSION_PATCH	3
+#	define FILE_VERSION_PATCH	5
 #	endif
 #else
 #	define FILE_VERSION_MAJOR	0
@@ -148,7 +153,7 @@ typedef struct _tagFileBody {
 		struct {
 			uint32_t cntNode;	// 노드 갯수
 			uint32_t cntLink;	// 링크 갯수
-		} link;
+		} net;
 		struct {
 			uint32_t cntPolygon; // 폴리곤 갯수
 			uint32_t reserved; // 예약
@@ -212,8 +217,13 @@ typedef struct _tagNameDicIndex {
 
 
 void boxMerge(IN OUT SBox& lhs, IN const SBox& rhs);
-size_t linkMerge(IN OUT vector<SPoint>& lhs, IN const vector<SPoint>& rhs);
-size_t linkMerge(IN OUT vector<SPoint>& lhs, IN const SPoint * pData, IN const uint32_t cntData);
+#if defined(USE_P2P_DATA)
+int linkMerge(IN OUT vector<SPoint>& lhs, IN const vector<SPoint>& rhs, IN const bool isAllowDuplicates = true);
+int linkMerge(IN OUT vector<SPoint>& lhs, IN const SPoint * pData, IN const uint32_t cntData, IN const bool isAllowDuplicates = true);
+#else
+int linkMerge(IN OUT vector<SPoint>& lhs, IN const vector<SPoint>& rhs, IN const bool isAllowDuplicates = false);
+int linkMerge(IN OUT vector<SPoint>& lhs, IN const SPoint * pData, IN const uint32_t cntData, IN const bool isAllowDuplicates = false);
+#endif
 int32_t linkProjection(IN stLinkInfo* pData, IN const double& lng, IN const double& lat, IN const int32_t nMaxDist, OUT double& retLng, OUT double& retLat, OUT double& retDist, IN OUT double& retIr);
 
 class CDataManager;

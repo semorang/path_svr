@@ -12,33 +12,6 @@ static char THIS_FILE[] = __FILE__;
 #endif
 
 
-bool isPointInPolygon(const double x, const double y, const SPoint *pptPolygon, const int32_t nPolygon)
-{
-	int32_t i, j;
-	bool c = false;
-
-	for (i = 0, j = nPolygon - 1; i < nPolygon; j = i++) {
-		if (((((float)pptPolygon[i].y <= (float)y) && ((float)y < (float)pptPolygon[j].y)) ||
-			(((float)pptPolygon[j].y <= (float)y) && ((float)y < (float)pptPolygon[i].y))) &&
-			((float)x < ((float)pptPolygon[j].x - (float)pptPolygon[i].x) * ((float)y - (float)pptPolygon[i].y) / ((float)pptPolygon[j].y - (float)pptPolygon[i].y) + (float)pptPolygon[i].x))
-			c = !c;
-	}
-
-	return c;
-}
-
-bool isPointInPolygon(const SPoint *ppt, const SPoint *pptPolygon, const int32_t nPolygon)
-{
-	bool ret = false;
-
-	if (ppt && pptPolygon && nPolygon) {
-		ret = isPointInPolygon(ppt->x, ppt->y, pptPolygon, nPolygon);
-	}
-	
-	return ret;
-}
-
-
 MapPolygon::MapPolygon()
 {
 }

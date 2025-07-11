@@ -21,13 +21,22 @@ typedef enum {
 //#endif
 void LOG_INITIALIZE(void);
 void LOG_RELEASE(void);
-void LOG_SET_FILEPATH(const char* szFilePath, const char* szFileName);
 void LOG_SET_ID(const int id);
-void LOG_SET_LEVLE(const int lvl);
-time_t LOG_TRACE(LOG_LEVEL lvl, const char *fmt, ...);
-time_t LOG_TRACE_TM(LOG_LEVEL lvl, time_t stm, const char *fmt, ...);
+void LOG_SET_LEVEL(const int lvl);
+void LOG_SET_KEY(const char* szKey);
+void LOG_SET_FILEPATH(const char* szKey, const char* szFilePath, const char* szFileName);
+
+time_t LOG_TRACE(const LOG_LEVEL lvl, const char *fmt, ...);
+time_t LOG_TRACE(const LOG_LEVEL lvl, const time_t stm, const char *fmt, ...);
 time_t LOG_TRACE_EX(const char* func, const int line, LOG_LEVEL lvl, const char *fmt, ...);
+time_t LOG_TRACE(const char* szKey, const LOG_LEVEL lvl, const char *fmt, ...);
+time_t LOG_TRACE(const char* szKey, const LOG_LEVEL lvl, const time_t stm, const char *fmt, ...);
+
 size_t TICK_COUNT();
+
+time_t LOG_PRINT(const char* szKey, const LOG_LEVEL lvl, const time_t tm, const char* fmt, va_list args, const char* func = nullptr, const int line = -1);
+
+bool checkDirectory(const char* szFileName);
 
 typedef struct _tagLOGTIME {
 	int year;
@@ -39,4 +48,9 @@ typedef struct _tagLOGTIME {
 	int millisecond;
 }LOGTIME;
 
-#define LOG_PRINT(lvl, fmt, ...)	LOG_TRACE_EX(__FUNCTION__, __LINE__, lvl, fmt, ##__VA_ARGS__) 
+time_t LOG_TIME(LOGTIME& logTime, time_t tmCurrent = 0);
+
+#define LOG_TRACE_DEBUG(lvl, fmt, ...)	LOG_TRACE_EX(__FUNCTION__, __LINE__, lvl, fmt, ##__VA_ARGS__) 
+
+#define LOG_KEY_BASE "base"
+#define LOG_KEY_TRAFFIC "traffic"

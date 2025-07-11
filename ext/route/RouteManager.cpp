@@ -32,7 +32,10 @@ CRouteManager::CRouteManager()
 	m_vtAvoidOpt.clear();
 	vector<uint32_t>().swap(m_vtAvoidOpt);
 
+	m_nTimestampOpt = 0;
+	m_nTrafficOpt = 0;
 	m_nMobilityOpt = 0;
+	m_nFreeOpt = 0;
 	m_routeSubOpt.option = 0;
 
 	m_nDepartureDirIgnore = 0;
@@ -67,7 +70,10 @@ bool CRouteManager::Initialize(void)
 	m_vtAvoidOpt.clear();
 	vector<uint32_t>().swap(m_vtAvoidOpt);
 
+	m_nTimestampOpt = 0;
+	m_nTrafficOpt = 0;
 	m_nMobilityOpt = 0;
+	m_nFreeOpt = 0;
 	m_routeSubOpt.option = 0;
 
 	m_nDepartureDirIgnore = 0;
@@ -105,6 +111,7 @@ void CRouteManager::SetDataMgr(CDataManager* pDataMgr)
 	{
 		m_pDataMgr = pDataMgr;
 		m_pRoutePlan->SetDataMgr(pDataMgr);
+		m_pTmsMgr->SetDataMgr(pDataMgr);
 	}
 }
 
@@ -193,12 +200,14 @@ KeyID CRouteManager::SetDestination(IN const double lng, IN const double lat, IN
 }
 
 
-void CRouteManager::SetRouteOption(IN const vector<uint32_t>& options, IN const vector<uint32_t>& avoids, IN const uint32_t mobility)
+void CRouteManager::SetRouteOption(IN const vector<uint32_t>& options, IN const vector<uint32_t>& avoids, IN const uint32_t timestamp, IN const uint32_t traffic, IN const uint32_t mobility)
 {
 	m_vtRouteOpt.clear();
 	m_vtRouteOpt.assign(options.begin(), options.end());
 	m_vtAvoidOpt.clear();
 	m_vtAvoidOpt.assign(avoids.begin(), avoids.end());
+	m_nTimestampOpt = timestamp;
+	m_nTrafficOpt = traffic;
 	m_nMobilityOpt = mobility;
 }
 
@@ -269,6 +278,20 @@ void CRouteManager::SetRouteSubOption(IN const uint64_t sub)
 	//	}
 	//}
 #endif
+}
+
+
+void CRouteManager::SetRouteFreeOption(IN const uint32_t free)
+{
+	m_nFreeOpt = free;
+}
+
+
+void CRouteManager::SetRouteTruckOption(IN const TruckOption* pOption)
+{
+	if (pOption != nullptr) {
+		m_routeTruckOpt.setTruckOption(pOption);
+	}
 }
 
 
@@ -390,24 +413,33 @@ const vector<RouteResultInfo>* CRouteManager::GetMultiRouteResults(void) const
 
 
 #if defined(USE_TSP_MODULE)
-int CRouteManager::GetBestWaypointResult(IN const TspOptions* pOpt, IN const vector<vector<stDistMatrix>>& vtDistMatrix, OUT vector<uint32_t>& vtBestWaypoints, OUT double& dist, OUT int32_t& time)
+int CRouteManager::GetBestWaypointResult(IN const RouteDistMatrix& RDM, IN OUT BestWaypoints& TSP)
 {
 	int ret = -1;
 
 	vector<stWaypoints> vtRawData;
-
+	stWaypoints newWay;
 	int32_t idx = 0;
 
 	if (m_linkDeparture.Coord.has()) {
-		vtRawData.push_back({ idx++, m_linkDeparture.Coord.x, m_linkDeparture.Coord.y });
+		newWay.nId = idx++;
+		newWay.x = m_linkDeparture.Coord.x;
+		newWay.y = m_linkDeparture.Coord.y;
+		vtRawData.push_back(newWay);
 	}
 
-	for (vector<RouteLinkInfo>::iterator it = m_linkWaypoints.begin(); it != m_linkWaypoints.end(); it++) {
-		vtRawData.push_back({ idx++, it->Coord.x, it->Coord.y });
+	for (const auto& way : m_linkWaypoints) {
+		newWay.nId = idx++;
+		newWay.x = way.Coord.x;
+		newWay.y = way.Coord.y;
+		vtRawData.push_back(newWay);
 	}
 
 	if (m_linkDestination.Coord.has()) {
-		vtRawData.push_back({ idx++, m_linkDestination.Coord.x, m_linkDestination.Coord.y });
+		newWay.nId = idx++;
+		newWay.x = m_linkDestination.Coord.x;
+		newWay.y = m_linkDestination.Coord.y;
+		vtRawData.push_back(newWay);
 	}
 
 #if 0
@@ -415,13 +447,13 @@ int CRouteManager::GetBestWaypointResult(IN const TspOptions* pOpt, IN const vec
 
 	if (pOpt->algorityhmType == 1) {
 		for (const auto& coord : vtRawData) {
-			vtBestWaypoints.emplace_back(coord.nId);
+			vtBestWays.emplace_back(coord.nId);
 		}
 	}
 	else if (pOpt->algorityhmType == 2) {
 		//auto result = mst_manhattan_branch_and_bound2(ppResultTables, vtRawData.size(), 0);
 		auto result = mst_manhattan_branch_and_bound(ppResultTables, vtRawData.size(), 0);
-		vtBestWaypoints.assign(result.path.begin(), result.path.end());
+		vtBestWays.assign(result.path.begin(), result.path.end());
 	}
 #if !defined(USE_REAL_ROUTE_TSP)
 	else if (pOpt->algorityhmType == 3) {
@@ -440,7 +472,7 @@ int CRouteManager::GetBestWaypointResult(IN const TspOptions* pOpt, IN const vec
 		LOG_TRACE(LOG_DEBUG, "end, best waypoint result");
 		env.printOn(0);
 
-		env.getBest(vtBestWaypoints);
+		env.getBest(vtBestWays);
 	}
 #endif // #if !defined(USE_REAL_ROUTE_TSP)
 	else {
@@ -506,20 +538,20 @@ int CRouteManager::GetBestWaypointResult(IN const TspOptions* pOpt, IN const vec
 			//newWorld.Print();
 		} // for
 
-		newWorld.GetBest(vtBestWaypoints);
+		newWorld.GetBest(vtBestWays);
 	}
 	
-	if (vtRawData.size() != vtBestWaypoints.size()) {
-		LOG_TRACE(LOG_DEBUG, "result count not match with orignal count, ori:%d != ret:%d", vtRawData.size(), vtBestWaypoints.size());
+	if (vtRawData.size() != vtBestWays.size()) {
+		LOG_TRACE(LOG_DEBUG, "result count not match with orignal count, ori:%d != ret:%d", vtRawData.size(), vtBestWays.size());
 		return ret;
 	}
 
-	LOG_TRACE(LOG_DEBUG_LINE, "index  :", vtBestWaypoints.size());
-	for (idx = 0; idx < vtBestWaypoints.size(); idx++)
+	LOG_TRACE(LOG_DEBUG_LINE, "index  :", vtBestWays.size());
+	for (idx = 0; idx < vtBestWays.size(); idx++)
 	{
 		LOG_TRACE(LOG_DEBUG_CONTINUE, "%3d| ", idx);
 	}
-	LOG_TRACE(LOG_DEBUG_CONTINUE, " => \n", vtBestWaypoints.size());
+	LOG_TRACE(LOG_DEBUG_CONTINUE, " => \n", vtBestWays.size());
 
 	uint32_t totalDist = 0;
 	uint32_t idxFirst = 0;
@@ -527,7 +559,7 @@ int CRouteManager::GetBestWaypointResult(IN const TspOptions* pOpt, IN const vec
 	idx = 0;
 
 	LOG_TRACE(LOG_DEBUG_LINE, "result :");
-	for (const auto& item : vtBestWaypoints)
+	for (const auto& item : vtBestWays)
 	{
 		LOG_TRACE(LOG_DEBUG_CONTINUE, "%3d>", item); //→
 		
@@ -550,7 +582,7 @@ int CRouteManager::GetBestWaypointResult(IN const TspOptions* pOpt, IN const vec
 		LOG_TRACE(LOG_DEBUG_CONTINUE, "\n");
 	}
 #else
-	m_pTmsMgr->GetBestway(pOpt, vtDistMatrix, vtRawData, vtBestWaypoints, dist, time);
+	m_pTmsMgr->GetBestway(&TSP.option, RDM.vtDistMatrix, TSP.vtWaypoints, TSP.vtBestWays, TSP.totalDist, TSP.totalTime);	
 #endif
 	// 기존 포인터 삭제
 	InitPoints();
@@ -559,7 +591,7 @@ int CRouteManager::GetBestWaypointResult(IN const TspOptions* pOpt, IN const vec
 	int newIdx = 0;
 
 	for (oldIdx = 0; oldIdx < vtRawData.size(); oldIdx++) {
-		newIdx = vtBestWaypoints[oldIdx];
+		newIdx = TSP.vtBestWays[oldIdx];
 
 		if (oldIdx == 0) {
 			// 첫번째값을 출발지로 변경
@@ -622,7 +654,9 @@ int CRouteManager::SingleRoute()
 #endif
 
 #if defined(USE_P2P_DATA)
-	GetCandidateRoute();
+	if (ret == ROUTE_RESULT_SUCCESS) {
+		GetCandidateRoute();
+	}
 #endif
 
 	return ret;
@@ -659,10 +693,17 @@ const int CRouteManager::GetCandidateRoute(void)
 		routePlans[ii].SetRouteCost(m_pRoutePlan->GetRouteCost());
 
 		reqInfos[ii].RequestId = uid;
+#if defined(USE_P2P_DATA)
+		reqInfos[ii].RequestMode = 100; // 대안경로
+#endif
+		reqInfos[ii].RequestTime = m_nTimestampOpt;
+		reqInfos[ii].RequestTraffic = m_nTrafficOpt;
+		reqInfos[ii].MobilityOption = m_nMobilityOpt;
+		reqInfos[ii].FreeOption = m_nFreeOpt;
 		reqInfos[ii].RouteOption = m_vtRouteOpt[0];
 		reqInfos[ii].AvoidOption = m_vtAvoidOpt[0];
-		reqInfos[ii].MobilityOption = m_nMobilityOpt;
 		reqInfos[ii].RouteSubOption = m_routeSubOpt;
+		reqInfos[ii].RouteTruckOption = m_routeTruckOpt;
 		reqInfos[ii].StartDirIgnore = m_nDepartureDirIgnore;
 		reqInfos[ii].WayDirIgnore = m_nWaypointDirIgnore;
 		reqInfos[ii].EndDirIgnore = m_nDestinationDirIgnore;
@@ -670,7 +711,7 @@ const int CRouteManager::GetCandidateRoute(void)
 		RouteLinkInfo linkInfo;
 		// 시작 지점 정보 변경
 		// start 
-			
+		
 		linkInfo.init();
 		linkInfo.KeyType = TYPE_KEY_LINK;
 		linkInfo.LinkDataType = m_linkDeparture.LinkDataType;
@@ -748,7 +789,6 @@ const int CRouteManager::GetCandidateRoute(void)
 		// 위 벡터들 통합
 		reqInfos[ii].vtPointsInfo.emplace_back(m_linkDestination);
 
-
 		KeyID keyId = { 0, };
 
 		vtRouteInfos[ii].resize(reqInfos[ii].vtPoints.size());
@@ -760,11 +800,11 @@ const int CRouteManager::GetCandidateRoute(void)
 
 			result.ResultCode = vtRouteResults[ii][0].ResultCode; // 경로 결과 코드, 0:성공, 1~:실패
 
-			result.RequestMode = vtRouteResults[ii][0].RequestMode; // 요청 모드
-			result.RequestId = vtRouteResults[ii][0].RequestId; // 요청 ID
-
-			result.RouteOption = vtRouteResults[ii][0].RouteOption; // 경로 옵션
-			result.RouteAvoid = vtRouteResults[ii][0].RouteAvoid; // 경로 회피
+			result.reqInfo.SetOption(&vtRouteResults[ii][0].reqInfo);
+			//result.RequestMode = vtRouteResults[ii][0].RequestMode; // 요청 모드
+			//result.RequestId = vtRouteResults[ii][0].RequestId; // 요청 ID
+			//result.RouteOption = vtRouteResults[ii][0].RouteOption; // 경로 옵션
+			//result.RouteAvoid = vtRouteResults[ii][0].RouteAvoid; // 경로 회피
 
 			result.StartResultLink = vtRouteResults[ii][vtRouteResults[ii].size() - 1].StartResultLink;
 			result.EndResultLink = vtRouteResults[ii][0].EndResultLink;
@@ -776,7 +816,7 @@ const int CRouteManager::GetCandidateRoute(void)
 					continue; // 이종간 경로 탐색 무시된 케이스
 				}
 
-				summary.TotalDist = route.TotalLinkDist;
+				summary.TotalDist = static_cast<uint32_t>(route.TotalLinkDist);
 				summary.TotalTime = route.TotalLinkTime;
 				result.RouteSummarys.emplace_back(summary);
 
@@ -839,6 +879,8 @@ int CRouteManager::DoRouting(/*Packet*/)
 
 	const uint32_t uid = 12345678;
 
+	time_t timeStart = LOG_TRACE(LOG_DEBUG, "DoRouting, request ways: %d", m_linkWaypoints.size() + 2);
+
 #if 0
 	if (m_linkWaypoints.empty()) {
 		if ((ret = m_pRoutePlan->DoRoute(uid, m_linkDeparture.Coord, m_linkDestination.Coord, m_linkDeparture.LinkId, m_linkDestination.LinkId, m_nRouteOpt, m_nAvoidOpt, m_nDepartureDirIgnore, m_nDestinationDirIgnore, &m_routeResult)) == ROUTE_RESULT_SUCCESS)
@@ -851,10 +893,14 @@ int CRouteManager::DoRouting(/*Packet*/)
 	{
 		RequestRouteInfo reqInfo;
 		reqInfo.RequestId = uid;
+		reqInfo.RequestTime = m_nTimestampOpt;
+		reqInfo.RequestTraffic = m_nTrafficOpt;
+		reqInfo.MobilityOption = m_nMobilityOpt;
+		reqInfo.FreeOption = m_nFreeOpt;
 		reqInfo.RouteOption = m_vtRouteOpt[0];
 		reqInfo.AvoidOption = m_vtAvoidOpt[0];
-		reqInfo.MobilityOption = m_nMobilityOpt;
 		reqInfo.RouteSubOption = m_routeSubOpt;
+		reqInfo.RouteTruckOption = m_routeTruckOpt;
 		reqInfo.StartDirIgnore = m_nDepartureDirIgnore;
 		reqInfo.WayDirIgnore = m_nWaypointDirIgnore;
 		reqInfo.EndDirIgnore = m_nDestinationDirIgnore;
@@ -944,11 +990,12 @@ int CRouteManager::DoRouting(/*Packet*/)
 
 			result.ResultCode = vtRouteResult[0].ResultCode; // 경로 결과 코드, 0:성공, 1~:실패
 
-			result.RequestMode = vtRouteResult[0].RequestMode; // 요청 모드
-			result.RequestId = vtRouteResult[0].RequestId; // 요청 ID
-
-			result.RouteOption = vtRouteResult[0].RouteOption; // 경로 옵션
-			result.RouteAvoid = vtRouteResult[0].RouteAvoid; // 경로 회피
+			result.reqInfo.SetOption(&vtRouteResult[0].reqInfo);
+			//result.RequestMode = vtRouteResult[0].RequestMode; // 요청 모드
+			//result.RequestId = vtRouteResult[0].RequestId; // 요청 ID
+			//result.RequestTime = vtRouteResult[0].RequestTime; // 요청 시각
+			//result.RouteOption = vtRouteResult[0].RouteOption; // 경로 옵션
+			//result.RouteAvoid = vtRouteResult[0].RouteAvoid; // 경로 회피
 
 			result.StartResultLink = vtRouteResult[vtRouteResult.size() - 1].StartResultLink;
 			result.EndResultLink = vtRouteResult[0].EndResultLink;
@@ -957,7 +1004,7 @@ int CRouteManager::DoRouting(/*Packet*/)
 			// for (int ii = vtRouteResult.size() - 1; ii >= 0; --ii) {
 			for (const auto& route : vtRouteResult) {
 				// summarys
-				summary.TotalDist = route.TotalLinkDist;
+				summary.TotalDist = static_cast<uint32_t>(route.TotalLinkDist);
 				summary.TotalTime = route.TotalLinkTime;
 				result.RouteSummarys.emplace_back(summary);
 
@@ -980,6 +1027,8 @@ int CRouteManager::DoRouting(/*Packet*/)
 			m_vtRouteResult.emplace_back(result);
 		}
 	}
+
+	LOG_TRACE(LOG_DEBUG, timeStart, "DoRouting, result: %d", ret);
 
 	return ret;
 }
@@ -1004,6 +1053,8 @@ int CRouteManager::DoMultiRouting(IN const int32_t routeCount/*, IN const int32_
 
 	m_vtRouteResult.resize(routeCount);
 
+	time_t timeStart = LOG_TRACE(LOG_DEBUG, "DoMultiRouting, request cnt: %d", routeCount);
+
 #if defined(USE_MULTIPROCESS)
 #pragma omp parallel for
 #endif
@@ -1013,10 +1064,14 @@ int CRouteManager::DoMultiRouting(IN const int32_t routeCount/*, IN const int32_
 		routePlans[ii].SetRouteCost(m_pRoutePlan->GetRouteCost());
 
 		reqInfos[ii].RequestId = uid;
+		reqInfos[ii].RequestTime = m_nTimestampOpt;
+		reqInfos[ii].RequestTraffic = m_nTrafficOpt;
+		reqInfos[ii].MobilityOption = m_nMobilityOpt;
+		reqInfos[ii].FreeOption = m_nFreeOpt;
 		reqInfos[ii].RouteOption = m_vtRouteOpt[ii];
 		reqInfos[ii].AvoidOption = m_vtAvoidOpt[ii];
-		reqInfos[ii].MobilityOption = m_nMobilityOpt;
 		reqInfos[ii].RouteSubOption = m_routeSubOpt;
+		reqInfos[ii].RouteTruckOption = m_routeTruckOpt;
 		reqInfos[ii].StartDirIgnore = m_nDepartureDirIgnore;
 		reqInfos[ii].WayDirIgnore = m_nWaypointDirIgnore;
 		reqInfos[ii].EndDirIgnore = m_nDestinationDirIgnore;
@@ -1098,11 +1153,13 @@ int CRouteManager::DoMultiRouting(IN const int32_t routeCount/*, IN const int32_
 
 			m_vtRouteResult[ii].ResultCode = vtRouteResults[ii][0].ResultCode; // 경로 결과 코드, 0:성공, 1~:실패
 
-			m_vtRouteResult[ii].RequestMode = vtRouteResults[ii][0].RequestMode; // 요청 모드
-			m_vtRouteResult[ii].RequestId = vtRouteResults[ii][0].RequestId; // 요청 ID
-
-			m_vtRouteResult[ii].RouteOption = vtRouteResults[ii][0].RouteOption; // 경로 옵션
-			m_vtRouteResult[ii].RouteAvoid = vtRouteResults[ii][0].RouteAvoid; // 경로 회피
+			m_vtRouteResult[ii].reqInfo.SetOption(&vtRouteResults[ii][0].reqInfo);
+			//m_vtRouteResult[ii].RequestMode = vtRouteResults[ii][0].RequestMode; // 요청 모드
+			//m_vtRouteResult[ii].RequestId = vtRouteResults[ii][0].RequestId; // 요청 ID
+			//m_vtRouteResult[ii].RequestTime = vtRouteResults[ii][0].RequestTime; // 요청 ID
+			//m_vtRouteResult[ii].RequestTraffic = vtRouteResults[ii][0].RequestTraffic; 
+			//m_vtRouteResult[ii].RouteOption = vtRouteResults[ii][0].RouteOption; // 경로 옵션
+			//m_vtRouteResult[ii].RouteAvoid = vtRouteResults[ii][0].RouteAvoid; // 경로 회피
 
 			m_vtRouteResult[ii].StartResultLink = vtRouteResults[ii][vtRouteResults[ii].size() - 1].StartResultLink;
 			m_vtRouteResult[ii].EndResultLink = vtRouteResults[ii][0].EndResultLink;
@@ -1115,7 +1172,7 @@ int CRouteManager::DoMultiRouting(IN const int32_t routeCount/*, IN const int32_
 					continue; // 이종간 경로 탐색 무시된 케이스
 				}
 
-				summary.TotalDist = route.TotalLinkDist;
+				summary.TotalDist = static_cast<uint32_t>(route.TotalLinkDist);
 				summary.TotalTime = route.TotalLinkTime;
 				m_vtRouteResult[ii].RouteSummarys.emplace_back(summary);
 
@@ -1136,6 +1193,8 @@ int CRouteManager::DoMultiRouting(IN const int32_t routeCount/*, IN const int32_
 			} // for
 		}
 	} // for
+
+	LOG_TRACE(LOG_DEBUG, timeStart, "DoMultiRouting, result: %d", ret);
 
 	return ret;
 }
@@ -1179,12 +1238,18 @@ int CRouteManager::DoComplexRouting(/*Packet*/)
 
 	const uint32_t uid = 12345678;
 
+	time_t timeStart = LOG_TRACE(LOG_DEBUG, "DoComplexRouting, request ways: %d", m_linkWaypoints.size() + 2);
+
 	RequestRouteInfo reqInfo;
 	reqInfo.RequestId = uid;
+	reqInfo.RequestTime = m_nTimestampOpt;
+	reqInfo.RequestTraffic = m_nTrafficOpt;
+	reqInfo.MobilityOption = m_nMobilityOpt;
+	reqInfo.FreeOption = m_nFreeOpt;
 	reqInfo.RouteOption = m_vtRouteOpt[0];
 	reqInfo.AvoidOption = m_vtAvoidOpt[0];
-	reqInfo.MobilityOption = m_nMobilityOpt;
 	reqInfo.RouteSubOption = m_routeSubOpt;
+	reqInfo.RouteTruckOption = m_routeTruckOpt;
 	reqInfo.StartDirIgnore = m_nDepartureDirIgnore;
 	reqInfo.WayDirIgnore = m_nWaypointDirIgnore;
 	reqInfo.EndDirIgnore = m_nDestinationDirIgnore;
@@ -1439,11 +1504,11 @@ int CRouteManager::DoComplexRouting(/*Packet*/)
 
 		result.ResultCode = vtRouteResult[0].ResultCode; // 경로 결과 코드, 0:성공, 1~:실패
 
-		result.RequestMode = vtRouteResult[0].RequestMode; // 요청 모드
-		result.RequestId = vtRouteResult[0].RequestId; // 요청 ID
-
-		result.RouteOption = vtRouteResult[0].RouteOption; // 경로 옵션
-		result.RouteAvoid = vtRouteResult[0].RouteAvoid; // 경로 회피
+		result.reqInfo.SetOption(&vtRouteResult[0].reqInfo);
+		//result.RequestMode = vtRouteResult[0].RequestMode; // 요청 모드
+		//result.RequestId = vtRouteResult[0].RequestId; // 요청 ID
+		//result.RouteOption = vtRouteResult[0].RouteOption; // 경로 옵션
+		//result.RouteAvoid = vtRouteResult[0].RouteAvoid; // 경로 회피
 
 		result.StartResultLink = vtRouteResult[vtRouteResult.size() - 1].StartResultLink;
 		result.EndResultLink = vtRouteResult[0].EndResultLink;
@@ -1456,7 +1521,7 @@ int CRouteManager::DoComplexRouting(/*Packet*/)
 				continue; // 이종간 경로 탐색 무시된 케이스
 			}
 
-			summary.TotalDist = route.TotalLinkDist;
+			summary.TotalDist = static_cast<uint32_t>(route.TotalLinkDist);
 			summary.TotalTime = route.TotalLinkTime;
 			result.RouteSummarys.emplace_back(summary);
 
@@ -1478,6 +1543,8 @@ int CRouteManager::DoComplexRouting(/*Packet*/)
 
 		m_vtRouteResult.emplace_back(result);
 	}
+
+	LOG_TRACE(LOG_DEBUG, timeStart, "DoComplexRouting, result: %d", ret);
 
 	return ret;
 }
@@ -1502,6 +1569,8 @@ int CRouteManager::DoMultiComplexRouting(IN const int32_t routeCount/*, IN const
 
 	m_vtRouteResult.resize(routeCount);
 
+	time_t timeStart = LOG_TRACE(LOG_DEBUG, "DoMultiComplexRouting, request cnt: %d", routeCount);
+
 #if defined(USE_MULTIPROCESS)
 #pragma omp parallel for
 #endif
@@ -1511,10 +1580,14 @@ int CRouteManager::DoMultiComplexRouting(IN const int32_t routeCount/*, IN const
 		routePlans[ii].SetRouteCost(m_pRoutePlan->GetRouteCost());
 
 		reqInfos[ii].RequestId = uid;
+		reqInfos[ii].RequestTime = m_nTimestampOpt;
+		reqInfos[ii].RequestTraffic = m_nTrafficOpt;
+		reqInfos[ii].MobilityOption = m_nMobilityOpt;
+		reqInfos[ii].FreeOption = m_nFreeOpt;
 		reqInfos[ii].RouteOption = m_vtRouteOpt[ii];
 		reqInfos[ii].AvoidOption = m_vtAvoidOpt[ii];
-		reqInfos[ii].MobilityOption = m_nMobilityOpt;
 		reqInfos[ii].RouteSubOption = m_routeSubOpt;
+		reqInfos[ii].RouteTruckOption = m_routeTruckOpt;
 		reqInfos[ii].StartDirIgnore = m_nDepartureDirIgnore;
 		reqInfos[ii].WayDirIgnore = m_nWaypointDirIgnore;
 		reqInfos[ii].EndDirIgnore = m_nDestinationDirIgnore;
@@ -1753,11 +1826,11 @@ int CRouteManager::DoMultiComplexRouting(IN const int32_t routeCount/*, IN const
 
 			m_vtRouteResult[ii].ResultCode = vtRouteResults[ii][0].ResultCode; // 경로 결과 코드, 0:성공, 1~:실패
 
-			m_vtRouteResult[ii].RequestMode = vtRouteResults[ii][0].RequestMode; // 요청 모드
-			m_vtRouteResult[ii].RequestId = vtRouteResults[ii][0].RequestId; // 요청 ID
-
-			m_vtRouteResult[ii].RouteOption = vtRouteResults[ii][0].RouteOption; // 경로 옵션
-			m_vtRouteResult[ii].RouteAvoid = vtRouteResults[ii][0].RouteAvoid; // 경로 회피
+			m_vtRouteResult[ii].reqInfo.SetOption(&vtRouteResults[ii][0].reqInfo);
+			//m_vtRouteResult[ii].RequestMode = vtRouteResults[ii][0].RequestMode; // 요청 모드
+			//m_vtRouteResult[ii].RequestId = vtRouteResults[ii][0].RequestId; // 요청 ID
+			//m_vtRouteResult[ii].RouteOption = vtRouteResults[ii][0].RouteOption; // 경로 옵션
+			//m_vtRouteResult[ii].RouteAvoid = vtRouteResults[ii][0].RouteAvoid; // 경로 회피
 
 			m_vtRouteResult[ii].StartResultLink = vtRouteResults[ii][vtRouteResults[ii].size() - 1].StartResultLink;
 			m_vtRouteResult[ii].EndResultLink = vtRouteResults[ii][0].EndResultLink;
@@ -1770,7 +1843,7 @@ int CRouteManager::DoMultiComplexRouting(IN const int32_t routeCount/*, IN const
 					continue; // 이종간 경로 탐색 무시된 케이스
 				}
 
-				summary.TotalDist = route.TotalLinkDist;
+				summary.TotalDist = static_cast<uint32_t>(route.TotalLinkDist);
 				summary.TotalTime = route.TotalLinkTime;
 				m_vtRouteResult[ii].RouteSummarys.emplace_back(summary);
 
@@ -1792,11 +1865,13 @@ int CRouteManager::DoMultiComplexRouting(IN const int32_t routeCount/*, IN const
 		}
 	}
 
+	LOG_TRACE(LOG_DEBUG, timeStart, "DoMultiComplexRouting, result: %d", ret);
+
 	return ret;
 }
 
 
-int CRouteManager::GetWeightMatrix(IN const char* szRequest, OUT vector<vector<stDistMatrix>>& vtWeightMatrix)
+int CRouteManager::GetWeightMatrix(IN const char* szRequest, OUT RouteDistMatrix& RDM, OUT BaseOption& option)
 {
 	int ret = RESULT_FAILED;
 
@@ -1805,46 +1880,107 @@ int CRouteManager::GetWeightMatrix(IN const char* szRequest, OUT vector<vector<s
 		return ret;
 	}
 
-	vector<SPoint> vtOrigins;
-	TspOptions tspOpt;
-	ClusteringOptions clustOpt;
+	time_t timeStart = LOG_TRACE(LOG_DEBUG, "GetWeightMatrix request: %s", szRequest);
 
-	uint32_t crc = m_pTmsMgr->GetRequestCluster(szRequest, vtOrigins, tspOpt, clustOpt);
 
-	const int cntOrigins = vtOrigins.size();
+	uint32_t crc = m_pTmsMgr->ParsingRequestWeightMatrix(szRequest, option, RDM.vtOrigins, RDM.vtDistMatrix, RDM.typeCreate);
+	const int cntOrigins = RDM.vtOrigins.size();
 
 	// get table
-	string strFileName;
-	string strWMPath = m_pDataMgr->GetDataPath();
-	strWMPath += "/usr/result_table_";
-	strWMPath += to_string(clustOpt.userId);
-	strWMPath += ".bin";
+	const int MAX_RDM_BUFF = 1024;
+	char szFileName[MAX_RDM_BUFF] = { 0, };
+	char szFilePath[MAX_RDM_BUFF] = { 0, };
+	LOGTIME timeNow;
+	time_t tmNow = LOG_TIME(timeNow, RDM.tmCreate);
 
 	bool isRead = false;
 	bool isWritten = false;
-	const int32_t dataSize = sizeof(stDistMatrix::nTotalDist) + sizeof(stDistMatrix::nTotalTime) + sizeof(stDistMatrix::dbTotalCost);
+	const int32_t sizeItem = sizeof(stDistMatrix); // sizeof(stDistMatrix::nTotalDist) + sizeof(stDistMatrix::nTotalTime) + sizeof(stDistMatrix::dbTotalCost);
 
 	RequestRouteInfo reqInfo;
-	reqInfo.RequestId = clustOpt.userId;
+	reqInfo.RequestId = option.userId;
+	reqInfo.RequestTime = option.timestamp;
+	reqInfo.RequestTraffic = option.traffic;
+	reqInfo.MobilityOption = option.mobility;
+	reqInfo.FreeOption = option.free;
 
-	if (clustOpt.fileCache == 1 || clustOpt.fileCache == 3) { // read, read-write
-		ret = m_pTmsMgr->LoadWeightMatrix(strWMPath.c_str(), cntOrigins, dataSize, crc, reqInfo, vtWeightMatrix);
-		if (ret == ROUTE_RESULT_SUCCESS) {
-			isRead = true;
-		}
+	reqInfo.RouteSubOption.rdm.distance_type = option.distance_type;
+	reqInfo.RouteSubOption.rdm.compare_type = option.compare_type;
+	reqInfo.RouteSubOption.rdm.expand_method = option.expand_method;
+
+	reqInfo.RouteTruckOption.setTruckOption(&option.truck);
+
+	// add rdm timestamp
+	RDM.strUser = reqInfo.RequestId;
+	RDM.tmCreate = time(NULL); // current time
+
+	if ((RDM.typeCreate != 0) && (!RDM.vtDistMatrix.empty())) {
+		// 선행 RDM 데이터 획득했으면 여기서 완료
+		LOG_TRACE(LOG_DEBUG, "restore distance matrix, success, type:%d", RDM.typeCreate);
+		ret = RESULT_OK;
 	}
+	else if (option.distance_type == 0) {
+		// 직선거리 테이블 생성
+		ret = DoDistanceTabulate(RDM);
+	} else {
+		sprintf(szFileName, "result_rdm_u%s_t%04d%02d%02d%02d%02d%02d", RDM.strUser.c_str(), timeNow.year, timeNow.month, timeNow.day, timeNow.hour, timeNow.minute, timeNow.second);
+		sprintf(szFilePath, "%s/usr/rdm/%s.rdm", m_pDataMgr->GetDataPath(), szFileName);
 
-	// 캐쉬된 WM이 없으면 새로 생성
-	if (!isRead) {
-		ret = DoTabulate(vtOrigins, reqInfo, vtWeightMatrix);
-		// 테이블 데이터 미리 읽어 저장하면서 사용하자
-		if ((ret == ROUTE_RESULT_SUCCESS) && (clustOpt.fileCache == 2 || clustOpt.fileCache == 3)) { // write, read-write)) {
-			ret = m_pTmsMgr->SaveWeightMatrix(strWMPath.c_str(), &reqInfo, cntOrigins, dataSize, crc, vtWeightMatrix);
-			if (ret == ROUTE_RESULT_SUCCESS) {
-				isWritten = true;
+		if (RDM.vtDistMatrix.empty() && (option.fileCache == 1 || option.fileCache == 3)) { // read, read-write
+			BaseOption optionFile;
+			ret = m_pTmsMgr->LoadWeightMatrix(szFilePath, cntOrigins, sizeItem, crc, optionFile, RDM.vtOrigins, RDM.vtDistMatrix);
+			if (ret == RESULT_OK) {
+				isRead = true;
+				memcpy(&option, &optionFile, sizeof(BaseOption)); // 저장된 rdm 옵션으로 변경
+
+				LOG_TRACE(LOG_DEBUG, "LoadWeightMatrix, success, cache:%s", szFilePath);
 			}
 		}
+
+		// 캐쉬된 WM이 없으면 새로 생성
+		if (RDM.vtDistMatrix.empty() && !isRead) {
+			ret = DoTabulate(RDM, reqInfo);
+			// 테이블 데이터 미리 읽어 저장하면서 사용하자
+			if ((ret == RESULT_OK) && (option.fileCache == 2 || option.fileCache == 3 || option.binary == 1 || option.binary == 3)) { // write, read-write)) {
+				ret = m_pTmsMgr->SaveWeightMatrix(szFilePath, &option, cntOrigins, sizeItem, crc, RDM.vtOrigins, RDM.vtDistMatrix);				
+				if (ret == RESULT_OK) {
+					isWritten = true;
+				}
+			}
+
+			// 테이블 데이터 미리 읽어 저장하면서 사용하자
+			if ((ret == RESULT_OK) && (option.binary == 2 || option.binary == 3)) { // Route line)) {
+				sprintf(szFilePath, "%s/usr/rdm/%s.rln", m_pDataMgr->GetDataPath(), szFileName);
+				ret = m_pTmsMgr->SaveWeightMatrixRouteLine(szFilePath, RDM.vtPathMatrix);
+				if (ret == RESULT_OK) {
+					isWritten = true;
+				}
+			}
+		} else {
+			ret = RESULT_OK;
+		}
 	}
+
+	LOG_TRACE(LOG_DEBUG, timeStart, "GetWeightMatrix, result: %d", ret);
+
+	return ret;
+}
+
+
+int CRouteManager::GetWeightMatrixRouteLine(IN const char* szRequest, OUT RouteDistMatrixLine& RDMLN)
+{
+	int ret = RESULT_FAILED;
+
+	if (szRequest == nullptr && strlen(szRequest) <= 0) {
+		LOG_TRACE(LOG_WARNING, "GetWeightMatrix request failed, request string is null or zero size");
+		return ret;
+	}
+
+	time_t timeStart = LOG_TRACE(LOG_DEBUG, "GetWeightMatrixRouteLine request: %s", szRequest);
+
+	ret = m_pTmsMgr->ParsingRequestWeightMatrixRouteLine(szRequest, RDMLN.strFileName, RDMLN.sizeFile, RDMLN.vtPathFileIndex);
+
+	LOG_TRACE(LOG_DEBUG, timeStart, "GetWeightMatrixRouteLine, result: %d", ret);
 
 	return ret;
 }
@@ -1863,7 +1999,7 @@ int CRouteManager::GetCluster_for_geoyoung(IN const int32_t cntCluster, OUT vect
 
 	// add original coordinates
 	int cntVias = GetWayPointCount();
-	LOG_TRACE(LOG_DEBUG, "GetCluster_for_geoyoung, vias : %d", cntVias);
+	time_t timeStart = LOG_TRACE(LOG_DEBUG, "GetCluster_for_geoyoung, vias : %d", cntVias);
 
 	vector<SPoint> vtOrigins;
 	vtOrigins.reserve(cntVias + 2);
@@ -1910,72 +2046,41 @@ int CRouteManager::GetCluster_for_geoyoung(IN const int32_t cntCluster, OUT vect
 		vtCluster.emplace_back(cluster);
 	} // for
 
-	LOG_TRACE(LOG_DEBUG, "GetCluster_for_geoyoung, added : %d", cntAdded);
-
 	ret = ROUTE_RESULT_SUCCESS;
+
+	LOG_TRACE(LOG_DEBUG, timeStart, "GetCluster_for_geoyoung, result: %d", ret);
 
 	return ret;
 }
 
 
-int CRouteManager::GetCluster(IN const char* szRequest, OUT vector<stDistrict>& vtCluster, OUT vector<SPoint>& vtPositionLock)
+int CRouteManager::GetCluster(IN const char* szRequest, IN RouteDistMatrix& RDM, OUT Cluster& CLUST)
 {
 	int ret = RESULT_FAILED;
 
-	if (!vtCluster.empty()) {
-		vtCluster.clear();
-		vector<stDistrict>().swap(vtCluster);
+	time_t timeStart = LOG_TRACE(LOG_DEBUG, "GetCluster request : %s", szRequest);
+
+	if (!CLUST.vtDistrict.empty()) {
+		CLUST.vtDistrict.clear();
+		vector<stDistrict>().swap(CLUST.vtDistrict);
 	}
 
-	if (szRequest == nullptr && strlen(szRequest) <= 0)
-	{
+	if (szRequest == nullptr && strlen(szRequest) <= 0) {
 		LOG_TRACE(LOG_WARNING, "GetCluster request failed, request string is null or zero size");
 		return ret;
 	}
 
-	vector<vector<stDistMatrix>> vtWeightMatrix;
-	vector<SPoint> vtOrigins;
-	TspOptions tspOpt;
-	ClusteringOptions clustOpt;
-
-	uint32_t crc = m_pTmsMgr->GetRequestCluster(szRequest, vtOrigins, tspOpt, clustOpt);
-
-	const int cntOrigins = vtOrigins.size();
-
 	// get table
-	string strWMPath = m_pDataMgr->GetDataPath();
-	strWMPath += "/usr/result_table_";
-	strWMPath += to_string(clustOpt.userId);
-	strWMPath += ".bin";
+	ret = GetWeightMatrix(szRequest, RDM, CLUST.option.tspOption.baseOption);
 
-	bool isRead = false;
-	bool isWritten = false;
-	const int32_t dataSize = sizeof(stDistMatrix::nTotalDist) + sizeof(stDistMatrix::nTotalTime) + sizeof(stDistMatrix::dbTotalCost);
+	uint32_t crc = m_pTmsMgr->ParsingRequestCluster(szRequest, CLUST.option, RDM.vtOrigins);
+	const int cntOrigins = RDM.vtOrigins.size();
 
-	RequestRouteInfo reqInfo;
-	reqInfo.RequestId = clustOpt.userId;
-
-	if (clustOpt.fileCache == 1 || clustOpt.fileCache == 3) { // read, read-write
-		ret = m_pTmsMgr->LoadWeightMatrix(strWMPath.c_str(), cntOrigins, dataSize, crc, reqInfo, vtWeightMatrix);
-		if (ret == ROUTE_RESULT_SUCCESS) {
-			isRead = true;
-		}
+	if (cntOrigins <= 0) {
+		return ROUTE_RESULT_FAILED_WRONG_PARAM;
 	}
 
-	// 캐쉬된 WM이 없으면 새로 생성
-	if (!isRead) {
-		ret = DoTabulate(vtOrigins, reqInfo, vtWeightMatrix);
-		// 테이블 데이터 미리 읽어 저장하면서 사용하자
-		if ((ret == ROUTE_RESULT_SUCCESS) && (clustOpt.fileCache == 2 || clustOpt.fileCache == 3)) { // write, read-write)) {
-			ret = m_pTmsMgr->SaveWeightMatrix(strWMPath.c_str(), &reqInfo, cntOrigins, dataSize, crc, vtWeightMatrix);
-			if (ret == ROUTE_RESULT_SUCCESS) {
-				isWritten = true;
-			}
-		}
-	}
-
-	if (ret == RESULT_OK) {
-		// get cluster
+	// get cluster
 	//#define USE_GN_KMEANS_ALORITHM // k-means 알고리즘 사용
 #if defined(USE_KMEANS_ALORITHM)
 		double** ppWeightMatrix = nullptr;
@@ -2205,87 +2310,59 @@ int CRouteManager::GetCluster(IN const char* szRequest, OUT vector<stDistrict>& 
 		SAFE_DELETE_ARR(ppWeightMatrix);
 
 #else // #define USE_KMEANS_ALORITHM // k-means 알고리즘 사용
-
-		ret = m_pTmsMgr->GetCluster(&tspOpt, &clustOpt, vtWeightMatrix, vtOrigins, vtCluster, vtPositionLock);
-
+	ret = m_pTmsMgr->GetCluster(&CLUST.option, RDM.vtDistMatrix, RDM.vtOrigins, CLUST.vtDistrict, CLUST.vtPositionLock);
 #endif // #define USE_KMEANS_ALORITHM // k-means 알고리즘 사용
+
+
+	if (!RDM.vtDistMatrix.empty()) {
+		RDM.vtDistMatrix.clear();
+		vector<vector<stDistMatrix>>().swap(RDM.vtDistMatrix);
 	}
 
-	if (!vtWeightMatrix.empty()) {
-		vtWeightMatrix.clear();
-		vector<vector<stDistMatrix>>().swap(vtWeightMatrix);
-	}
+	LOG_TRACE(LOG_DEBUG, timeStart, "GetCluster, result: %d", ret);
 
 	return ret;
 }
 
 
-int CRouteManager::GetBestway(IN const char* szRequest, OUT vector<stWaypoints>& vtWaypoints, OUT vector<uint32_t>& vtBestWaypoints, OUT double& dist, OUT int32_t& time)
+int CRouteManager::GetBestway(IN const char* szRequest, IN RouteDistMatrix& RDM, OUT BestWaypoints& TSP)
 {
 	int ret = RESULT_FAILED;
+
+	time_t timeStart = LOG_TRACE(LOG_DEBUG, "GetBestway, request: %s", szRequest);
 
 	if (szRequest == nullptr && strlen(szRequest) <= 0) {
 		LOG_TRACE(LOG_WARNING, "GetBestway request failed, request string is null or zero size");
 		return ret;
 	}
+	
+	// get table	
+	ret = GetWeightMatrix(szRequest, RDM, TSP.option.baseOption);
+	
+	uint32_t crc = m_pTmsMgr->ParsingRequestBestway(szRequest, TSP.option, RDM.vtOrigins);
+	
+	const int cntOrigins = RDM.vtOrigins.size();	
+	if (cntOrigins <= 0) {
+		return ROUTE_RESULT_FAILED_WRONG_PARAM;
+	}
 
-	vector<SPoint> vtOrigins;
-	TspOptions tspOpt;
+	if (ret == RESULT_OK) {
 
-	uint32_t crc = m_pTmsMgr->GetRequestBestway(szRequest, vtOrigins, tspOpt);
+		stWaypoints waypoint;
+		int idx = 0;
+		for (const auto& pt : RDM.vtOrigins) {
+			waypoint.nId = idx++;
+			waypoint.x = pt.position.x;
+			waypoint.y = pt.position.y;
+			waypoint.nLayoverTime = pt.layoverTime;
 
-	const int cntOrigins = vtOrigins.size();
-
-	vector<vector<stDistMatrix>> vtWeightMatrix;
-
-	// get table
-	string strWMPath = m_pDataMgr->GetDataPath();
-	strWMPath += "/usr/result_table_";
-	strWMPath += to_string(tspOpt.userId);
-	strWMPath += ".bin";
-
-	bool isRead = false;
-	bool isWritten = false;
-	const int32_t dataSize = sizeof(stDistMatrix::nTotalDist) + sizeof(stDistMatrix::nTotalTime) + sizeof(stDistMatrix::dbTotalCost);
-
-	RequestRouteInfo reqInfo;
-	reqInfo.RequestId = tspOpt.userId;
-
-	if (tspOpt.fileCache == 1 || tspOpt.fileCache == 3) { // read, read-write
-		ret = m_pTmsMgr->LoadWeightMatrix(strWMPath.c_str(), cntOrigins, dataSize, crc, reqInfo, vtWeightMatrix);
-		if (ret == ROUTE_RESULT_SUCCESS) {
-			isRead = true;
+			TSP.vtWaypoints.emplace_back(waypoint);
 		}
+		
+		ret = m_pTmsMgr->GetBestway(&TSP.option, RDM.vtDistMatrix, TSP.vtWaypoints, TSP.vtBestWays, TSP.totalDist, TSP.totalTime);
 	}
 
-	// 캐쉬된 WM이 없으면 새로 생성
-	if (!isRead) {
-		ret = DoTabulate(vtOrigins, reqInfo, vtWeightMatrix);
-		// 테이블 데이터 미리 읽어 저장하면서 사용하자
-		if ((ret == ROUTE_RESULT_SUCCESS) && (tspOpt.fileCache == 2 || tspOpt.fileCache == 3)) { // write, read-write)) {
-			ret = m_pTmsMgr->SaveWeightMatrix(strWMPath.c_str(), &reqInfo, cntOrigins, dataSize, crc, vtWeightMatrix);
-			if (ret == ROUTE_RESULT_SUCCESS) {
-				isWritten = true;
-			}
-		}
-	}
-
-	stWaypoints waypoint;
-	int idx = 0;
-	for (const auto& pt : vtOrigins) {
-		waypoint.nId = idx++;
-		waypoint.x = pt.x;
-		waypoint.y = pt.y;
-
-		vtWaypoints.emplace_back(waypoint);
-	}
-
-	ret = m_pTmsMgr->GetBestway(&tspOpt, vtWeightMatrix, vtWaypoints, vtBestWaypoints, dist, time);
-
-	if (!vtWeightMatrix.empty()) {
-		vtWeightMatrix.clear();
-		vector<vector<stDistMatrix>>().swap(vtWeightMatrix);
-	}
+	LOG_TRACE(LOG_DEBUG, timeStart, "GetBestway, result: %d, dist:%.2f, time:%d", ret, TSP.totalDist, TSP.totalTime);
 
 	return ret;
 }
@@ -2319,16 +2396,21 @@ int CRouteManager::DoCourse(/*Packet*/)
 
 	const uint32_t uid = 12345678;
 
+	time_t timeStart = LOG_TRACE(LOG_DEBUG, "DoCourse, request");
+
 	RequestRouteInfo reqInfo;
 	reqInfo.RequestId = uid;
+	reqInfo.RequestTime = m_nTimestampOpt;
+	reqInfo.RequestTraffic = m_nTrafficOpt;
+	reqInfo.MobilityOption = m_nMobilityOpt;
+	reqInfo.FreeOption = m_nFreeOpt;
 	reqInfo.RouteOption = ROUTE_OPT_SHORTEST;//m_vtRouteOpt[0]; // 추천은 속성 영향을 안받는 짧은 길 사용
 	reqInfo.AvoidOption = m_vtAvoidOpt[0];
-	reqInfo.MobilityOption = m_nMobilityOpt;
 	reqInfo.RouteSubOption = m_routeSubOpt;
+	reqInfo.RouteTruckOption = m_routeTruckOpt;
 	reqInfo.StartDirIgnore = m_nDepartureDirIgnore;
 	reqInfo.WayDirIgnore = m_nWaypointDirIgnore;
 	reqInfo.EndDirIgnore = m_nDestinationDirIgnore;
-	reqInfo.RouteSubOption = m_routeSubOpt;
 
 	// start 
 	reqInfo.vtPoints.emplace_back(m_linkDeparture.Coord);
@@ -2429,11 +2511,11 @@ int CRouteManager::DoCourse(/*Packet*/)
 
 			result.ResultCode = vtRouteResult[0].ResultCode; // 경로 결과 코드, 0:성공, 1~:실패
 
-			result.RequestMode = vtRouteResult[0].RequestMode; // 요청 모드
-			result.RequestId = vtRouteResult[0].RequestId; // 요청 ID
-
-			result.RouteOption = vtRouteResult[0].RouteOption; // 경로 옵션
-			result.RouteAvoid = vtRouteResult[0].RouteAvoid; // 경로 회피
+			result.reqInfo.SetOption(&vtRouteResult[0].reqInfo);
+			//result.RequestMode = vtRouteResult[0].RequestMode; // 요청 모드
+			//result.RequestId = vtRouteResult[0].RequestId; // 요청 ID
+			//result.RouteOption = vtRouteResult[0].RouteOption; // 경로 옵션
+			//result.RouteAvoid = vtRouteResult[0].RouteAvoid; // 경로 회피
 
 			result.StartResultLink = vtRouteResult[vtRouteResult.size() - 1].StartResultLink;
 			result.EndResultLink = vtRouteResult[0].EndResultLink;
@@ -2442,7 +2524,7 @@ int CRouteManager::DoCourse(/*Packet*/)
 			// for (int ii = vtRouteResult.size() - 1; ii >= 0; --ii) {
 			for (const auto& route : vtRouteResult) {
 				// summarys
-				summary.TotalDist = route.TotalLinkDist;
+				summary.TotalDist = static_cast<uint32_t>(route.TotalLinkDist);
 				summary.TotalTime = route.TotalLinkTime;
 				result.RouteSummarys.emplace_back(summary);
 
@@ -2466,25 +2548,35 @@ int CRouteManager::DoCourse(/*Packet*/)
 		}
 	}
 
+	LOG_TRACE(LOG_DEBUG, timeStart, "DoCourse, result: %d", ret);
+
 	return ret;
 }
 
-int CRouteManager::DoTabulate(IN const vector<SPoint>vtOrigins, OUT RequestRouteInfo& reqInfo, OUT vector<vector<stDistMatrix>>& vtDistMatrix)
+
+int CRouteManager::DoTabulate(IN OUT RouteDistMatrix& RDM, OUT RequestRouteInfo& reqInfo)
 {
 	int ret = -1;
+
+	const vector<Origins>* pvtOrigins = &RDM.vtOrigins;
+	if (pvtOrigins == nullptr) {
+		return ret;
+	}
 
 	stOptimalPointInfo optStartInfo, optEndInfo;
 
 	// 좌표 설정
 	KeyID sID, eID, wID;
 
-	Initialize();
+	int cntOrigin = pvtOrigins->size();
 
+	time_t timeStart = LOG_TRACE(LOG_DEBUG, "DoTabulate, requst cnt: %d", cntOrigin);
 	int matchLinkType = TYPE_LINK_MATCH_FOR_TABLE;
 
-	int cntOrigin = vtOrigins.size();
+	Initialize();
+
 	for (int ii = 0; ii < cntOrigin; ii++) {
-		SPoint coord = { vtOrigins[ii].x, vtOrigins[ii].y };
+		SPoint coord = { pvtOrigins->at(ii).position.x, pvtOrigins->at(ii).position.y };
 		if (ii == 0) { // start
 			// get optimal start point
 #if defined(USE_OPTIMAL_POINT_API)
@@ -2514,7 +2606,7 @@ int CRouteManager::DoTabulate(IN const vector<SPoint>vtOrigins, OUT RequestRoute
 			}
 
 			if (eID.llid == NULL_VALUE) {
-				LOG_TRACE(LOG_DEBUG, "failed, set end projection, %.6f, %.6f", vtOrigins[cntOrigin - 1].x, vtOrigins[cntOrigin - 1].y);
+				LOG_TRACE(LOG_DEBUG, "failed, set end projection, %.6f, %.6f", pvtOrigins->at(cntOrigin - 1).position.x, pvtOrigins->at(cntOrigin - 1).position.y);
 			}
 		} else { // via
 #if defined(USE_OPTIMAL_POINT_API)
@@ -2532,19 +2624,28 @@ int CRouteManager::DoTabulate(IN const vector<SPoint>vtOrigins, OUT RequestRoute
 		}
 	} // for
 
+	if (reqInfo.RequestId.empty()){
+		reqInfo.RequestId = "13578642";
+	}
+	if (reqInfo.RequestTime == 0) {
+		reqInfo.RequestTime = time(NULL);
+	}
+
 	vector<uint32_t>vtRouteOpt = { ROUTE_OPT_COMFORTABLE, ROUTE_OPT_RECOMMENDED, ROUTE_OPT_SHORTEST, ROUTE_OPT_MAINROAD };
 	vector<uint32_t>vtAvoidOpt = { ROUTE_AVOID_NONE, ROUTE_AVOID_NONE, ROUTE_AVOID_NONE, ROUTE_AVOID_NONE };
-	int nMobility = TYPE_MOBILITY_VEHICLE;
 
-	SetRouteOption(vtRouteOpt, vtAvoidOpt, nMobility);
+	SetRouteOption(vtRouteOpt, vtAvoidOpt, reqInfo.RequestTime, reqInfo.RequestTraffic, reqInfo.MobilityOption);
+	SetRouteSubOption(reqInfo.RouteSubOption.option);
+	SetRouteFreeOption(reqInfo.FreeOption);
+	SetRouteTruckOption(reqInfo.RouteTruckOption.option());
 
-	if ((reqInfo.RequestId == 0) || (reqInfo.RequestId == NULL_VALUE)){
-		reqInfo.RequestId = 13578642;
-	}
+	//reqInfo.RequestTime = m_nTimestampOpt;
+	//reqInfo.RequestTraffic = m_nTrafficOpt;
+	//reqInfo.MobilityOption = m_nMobilityOpt;
 	reqInfo.RouteOption = m_vtRouteOpt[0];
 	reqInfo.AvoidOption = m_vtAvoidOpt[0];
-	reqInfo.MobilityOption = m_nMobilityOpt;
-	reqInfo.RouteSubOption = m_routeSubOpt;
+	//reqInfo.RouteSubOption = m_routeSubOpt;
+
 	reqInfo.StartDirIgnore = m_nDepartureDirIgnore;
 	reqInfo.WayDirIgnore = m_nWaypointDirIgnore;
 	reqInfo.EndDirIgnore = m_nDestinationDirIgnore;
@@ -2571,13 +2672,73 @@ int CRouteManager::DoTabulate(IN const vector<SPoint>vtOrigins, OUT RequestRoute
 	reqInfo.vtKeyType.emplace_back(m_linkDestination.KeyType);
 	reqInfo.vtLinkDataType.emplace_back(m_linkDestination.LinkDataType);
 
-	ret = m_pRoutePlan->DoTabulate(&reqInfo, vtDistMatrix);
-
+	ret = m_pRoutePlan->DoTabulate(&reqInfo, RDM);
 	if (ret != ROUTE_RESULT_SUCCESS) {
 		LOG_TRACE(LOG_WARNING, "failed, get weight matrix");
 	}
+
 	// release
 	Release();
+
+	LOG_TRACE(LOG_DEBUG, timeStart, "DoTabulate, result: %d", ret);
+
+	return ret;
+}
+
+
+
+int CRouteManager::DoDistanceTabulate(IN OUT RouteDistMatrix& RDM)
+{
+	int ret = ROUTE_RESULT_SUCCESS;
+
+	const vector<Origins>* pvtOrigins = &RDM.vtOrigins;
+	if (pvtOrigins == nullptr) {
+		return ret;
+	}
+
+	int cntOrigin = pvtOrigins->size();
+
+	time_t timeStart = LOG_TRACE(LOG_DEBUG, "DoDistanceTabulate, requst cnt: %d", cntOrigin);
+
+	int matchLinkType = TYPE_LINK_MATCH_FOR_TABLE;
+	KeyID matchID;
+
+	for (int ii = 0; ii < cntOrigin; ii++) {
+		SPoint coord = { pvtOrigins->at(ii).position.x, pvtOrigins->at(ii).position.y };
+
+		// get optimal start point
+		RouteLinkInfo pointLinkInfo;
+#if defined(USE_OPTIMAL_POINT_API)
+		stOptimalPointInfo optEndInfo;
+		if (m_pDataMgr->GetOptimalPointDataByPoint(coord.x, coord.y, &optEndInfo, 0, 0, matchLinkType) > 0) {
+			matchID = SetPosition(optEndInfo.vtEntryPoint[0].x, optEndInfo.vtEntryPoint[0].y, matchLinkType, pointLinkInfo);
+		} else
+#endif
+		{
+			matchID = SetPosition(coord.x, coord.y, matchLinkType, pointLinkInfo);
+			coord.x = pointLinkInfo.MatchCoord.x;
+			coord.y = pointLinkInfo.MatchCoord.y;
+		}
+
+		if (matchID.llid == NULL_VALUE) {
+			LOG_TRACE(LOG_DEBUG, "failed, set DoDistanceTabulate projection, %.6f, %.6f", coord.x, coord.y);
+		}
+
+		vector<stDistMatrix> vtRowsMatrix;
+
+		for (int jj = 0; jj < cntOrigin; jj++) {
+			stDistMatrix distMatrix;
+			if (ii != jj) {
+				distMatrix.nTotalDist = getRealWorldDistance(coord.x, coord.y, pvtOrigins->at(jj).position.x, pvtOrigins->at(jj).position.y);
+				distMatrix.dbTotalCost = distMatrix.nTotalTime = distMatrix.nTotalDist; // 다른 속성은 거리 정보를 사용
+			}
+			vtRowsMatrix.emplace_back(distMatrix);
+		}
+
+		RDM.vtDistMatrix.emplace_back(vtRowsMatrix);
+	} // for
+
+	LOG_TRACE(LOG_DEBUG, timeStart, "DoDistanceTabulate, result: %d", ret);
 
 	return ret;
 }
@@ -2604,6 +2765,8 @@ KeyID CRouteManager::SetPosition(IN const double lng, IN const double lat, IN co
 		} else {
 			newMatchType = getCourseLinkMatchType(m_routeSubOpt);
 		}
+#elif defined(USE_PEDESTRIAN_DATA)
+		newLinkType = TYPE_LINK_DATA_PEDESTRIAN;
 #endif
 
 		for (int ii = 0; ii< MAX_SEARCH_RANGE; ii++) {
@@ -2621,11 +2784,13 @@ KeyID CRouteManager::SetPosition(IN const double lng, IN const double lat, IN co
 			}
 #endif
 
-#if defined(USE_PEDESTRIAN_DATA)
+#if defined(USE_FOREST_DATA) || defined(USE_PEDESTRIAN_DATA)
+#	if defined(USE_FOREST_DATA)
 			// 숲길보다 보행자 도로를 좁게 매칭하자(숲길 우선 매칭), 자전거는 보행자용 자전거 옵션 사용
-			if ((pLink == nullptr) && ((m_routeSubOpt.mnt.course_type == TYPE_TRE_HIKING) || (newLinkType == TYPE_LINK_DATA_PEDESTRIAN)))
-			//if (pLink == nullptr)	
-			{
+			if ((pLink == nullptr) && ((m_routeSubOpt.mnt.course_type == TYPE_TRE_HIKING) || (newLinkType == TYPE_LINK_DATA_PEDESTRIAN))) {
+#	else
+			if ((pLink == nullptr) && (newLinkType == TYPE_LINK_DATA_PEDESTRIAN)) {
+#	endif
 				pLink = m_pDataMgr->GetLinkDataByPointAround(lng, lat, searchRange[ii], pointLinkInfo.MatchCoord.x, pointLinkInfo.MatchCoord.y, retDist, newMatchType, TYPE_LINK_DATA_PEDESTRIAN);
 			}
 #endif
@@ -2644,10 +2809,12 @@ KeyID CRouteManager::SetPosition(IN const double lng, IN const double lat, IN co
 
 				if (pLink->base.link_type == TYPE_LINK_DATA_PEDESTRIAN) {
 					pointLinkInfo.Payed = pLink->ped.walk_charge;
+				} else if (pLink->base.link_type == TYPE_LINK_DATA_VEHICLE) {
+					pointLinkInfo.Payed = pLink->veh.charge;
 				}
 
 				if (ii > 0) {
-					LOG_TRACE(LOG_DEBUG, "position projection, link tile:%d, id:%d, range_lv:%d, dist:%d", pointLinkInfo.LinkId.tile_id, pointLinkInfo.LinkId.nid, ii, retDist);
+					LOG_TRACE(LOG_DEBUG, "position projection, link id:%lld, tile:%d, id:%d, range_lv:%d, dist:%.2f", pointLinkInfo.LinkId.llid, pointLinkInfo.LinkId.tile_id, pointLinkInfo.LinkId.nid, ii, retDist);
 				}
 				break;
 			}

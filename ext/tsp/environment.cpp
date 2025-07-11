@@ -9,6 +9,8 @@
 #include "environment.h"
 #endif
 
+#include "../utils/UserLog.h"
+
 // #include <math.h>
 // #include <iostream>
 // using namespace std;
@@ -25,6 +27,7 @@ TEnvironment::~TEnvironment(){
 	delete fEvaluator;
 	delete tCross;
 }
+
 
 void TEnvironment::define(const vector<stWaypoints>& vtCities, const vector<vector<stDistMatrix>>& vtDistMatrix, const int compareType) {
 	fEvaluator->setInstance(vtCities, vtDistMatrix, compareType);
@@ -56,7 +59,6 @@ void TEnvironment::doIt(){
 	this->fTimeInit = clock();
 	this->init();
 	this->getEdgeFreq();
-
 	while( 1 ){
 		this->setAverageBest();
 		//printf( "%d:\t%d\t%lf\n", fCurNumOfGen, fBestValue, fAverageValue );
@@ -66,13 +68,12 @@ void TEnvironment::doIt(){
 		this->selectForMating();
 
 		for (int s = 0; s < Npop; ++s) {
-			// printf("doIt, generateKids:%d\n", s);
 			this->generateKids(s);
 		}
 
 		++fCurNumOfGen;
-		// printf("doIt, cnt:%d\n", fCurNumOfGen);
 	}
+
 	this->fTimeEnd = clock();
 }
 
@@ -147,9 +148,7 @@ void TEnvironment::selectForMating(){
 void TEnvironment::generateKids( int s ){
 	// tCurPop[fIndexForMating[s]] gets replaced by the best solution in tCross->DoIt()
 	// fEdgeFreq[][] 同时被更新
-	// printf("generateKids, setParents\n");
 	tCross->setParents( tCurPop[fIndexForMating[s]], tCurPop[fIndexForMating[s+1]], fFlagC, Nch );
-	// printf("generateKids, doIt\n");
 	tCross->doIt( tCurPop[fIndexForMating[s]], tCurPop[fIndexForMating[s+1]], Nch, 1, fFlagC, fEdgeFreq );
 	fAccumurateNumCh += tCross->fNumOfGeneratedCh;
 }
@@ -157,7 +156,7 @@ void TEnvironment::generateKids( int s ){
 void TEnvironment::getEdgeFreq(){
 	int  k0, k1, N = fEvaluator->Ncity;
 	// std::cout << fEdgeFreq.size() << " " << fEdgeFreq[0].size() << std::endl;
-	printf("%zd %zd\n", fEdgeFreq.size(), fEdgeFreq[0].size());
+	LOG_TRACE(LOG_DEBUG, "TEnvironment::getEdgeFreq(), rowsSize:%d, colsSize:%d", fEdgeFreq.size(), fEdgeFreq[0].size());
 	for( int j1 = 0; j1 < N; ++j1 )
 		for( int j2 = 0; j2 < N; ++j2 )
 			fEdgeFreq[ j1 ][ j2 ] = 0;

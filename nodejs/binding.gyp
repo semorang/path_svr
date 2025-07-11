@@ -21,6 +21,7 @@
                 "../ext/utils/UserLog.cpp",
                 "../ext/utils/Strings.cpp",
                 "../ext/utils/GeoTools.cpp",
+                "../ext/utils/DataConvertor.cpp",
                 "../ext/utils/Vector2D.cpp",
                 "../ext/utils/CatmullRom.cpp",
                 "../ext/utils/convexhull.cpp",
@@ -115,7 +116,7 @@
                         },
                     },
                     # 'include_dirs': ["../ext/libjson/include"],
-                    'libraries': [                            
+                    'libraries': [
                         '-lnafxcw.lib', '-llibcmtd.lib', '-lC:/__Work/Trekking/Trekking/libs/libz/lib/zlib.lib', '-lC:/__Work/Trekking/Trekking/libs/libz/lib/zlib_x64.lib', '-LC:/__Work/Trekking/Trekking/libs/libz/lib',
                         # '-L<some library directory>'
                     ],

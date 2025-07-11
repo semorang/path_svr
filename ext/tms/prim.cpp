@@ -64,7 +64,6 @@ struct cmpTravel {
 };
 
 
-
 Travel mst_manhattan_branch_and_bound(IN const vector<vector<stDistMatrix>>& vtDistMatrix, IN const int count, int start)
 {
 	Travel best_path;

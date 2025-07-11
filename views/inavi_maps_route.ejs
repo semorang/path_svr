@@ -25,6 +25,11 @@
             <span id="btnSkyview" class="btn" onclick="setMapType('skyview')">스카이뷰</span>
         </div>
 
+        <!-- 현위치이동동 div 입니다 -->
+        <div class="custom_typecontrol radius_border" style="position:absolute;top:120px;right:10px;overflow:hidden;width:30px;height:30px;margin:0;z-index:1;border:1">
+            <span id="btnTarget" class="btn" onclick="moveToCurrent()" style="display:flex;width:30px;height:30px;justify-content:center"><img id="target" src="images/icons/icon-target-7506947-30x30.png" width="30" height="30"></span>
+        </div>
+        
         <!-- 경로탐색 컨트롤 div 입니다 -->
         <div class="custom_typecontrol radius_border" style="position:absolute;top:10px;left:10px;overflow:hidden;width:250px;height:30px;margin:0;z-index:1;border:1">
             <span id="btnStart" class="btn" onclick="setRouteType(1)" style="width:50px">출발</span>
@@ -50,8 +55,8 @@
             <input id="optShotest" onclick="setOption(0)" type="radio" name="option" style="margin-left: 5px;"/>짧은길
             <input id="optRecommended" onclick="setOption(1)" type="radio" name="option" checked style="margin-left: 5px;"/>추천길
             <input id="optComfortable" onclick="setOption(2)" type="radio" name="option" style="margin-left: 15px"/>편한길
-            <input id="optFastest" onclick="setOption(3)" type="radio" name="option" style="margin-left: 15px"/>빠른길
-            <!-- <input id="optMainroad" onclick="setOption(2)" type="radio" name="option" style="margin-left: 15px"/>큰길 -->
+            <!-- <input id="optFastest" onclick="setOption(3)" type="radio" name="option" style="margin-left: 15px"/>빠른길 -->
+            <input id="optMainroad" onclick="setOption(4)" type="radio" name="option" style="margin-left: 15px"/>큰길
         </div>
 
         <!-- 이동체 div -->
@@ -86,28 +91,32 @@
     <script type="text/javascript" src="script/inavimaps.js"></script>
     <script type="text/javascript" src="script/boundarys.js"></script>
     <script type="text/javascript" src="script/typenames.js"></script>
-    <script type="text/javascript" src="script/search.js"></script>
     <script type="text/javascript" src="script/route.js"></script>
+    <script type="text/javascript" src="script/search.js"></script>
     <script type="text/javascript" src="http://code.jquery.com/jquery-1.10.2.js"></script>
 
     <script>
         let result_obj = JSON.parse('<%- JSON.stringify(result) %>');
-        let isSuccess = result_obj.header.isSuccessful;
-
-        let user_obj = result_obj.user_info;
         let cnt_route = 0;
-        let user_pos = [127.110767364419, 37.402186130724];// 아이나비시스템즈
 
+        user_obj = result_obj.user_info;
+        let result_mode = user_obj.mode;
+        if (result_mode === "pedestrian") {
+            document.title = "보행/자전거 경로탐색"
+        }
+
+        let isSuccess = result_obj.header.isSuccessful;
         if (isSuccess) {
             cnt_route = result_obj.routes.length;
             user_pos = [ result_obj.routes[0].vertex_info[~~((result_obj.routes[0].vertex_info.length) / 2)].x, result_obj.routes[0].vertex_info[~~((result_obj.routes[0].vertex_info.length) / 2)].y ];
+        } else {
+             user_pos = [127.110767364419, 37.402186130724];// 아이나비시스템즈
         }
 
         // map 사이즈 조절
         var screenHeight = window.innerHeight - 18;
         document.getElementById("map").style.height = screenHeight + "px";
 
-        let distanceOverlay;
 
         function initMap() {
 
@@ -117,30 +126,8 @@
                 zoom: 17
             });
 
+            initMapObject(map);
 
-            // 지도 클릭 이벤트 등록
-            map.on("click", function (mouseEvent) {
-                // var lnglat = mouseEvent.lngLat;
-                // var pathname = window.location.pathname;
-                // var move2url = pathname + '?lng=' + lnglat.lng + '&lat=' + lnglat.lat + '&type=0&api=inavi';
-                // window.open(move2url, '_self');
-
-                // alert('클릭 기능 아직 미적용')
-                console.log('클릭된 좌표 : ' + mouseEvent.lngLat.lng + ", " + mouseEvent.lngLat.lat);
-                setMapClick(mouseEvent.lngLat);
-            });
-            //-- 지도 클릭 이벤트 등록
-
-
-            marker = new inavi.maps.Marker({
-                map: map,
-                center: user_pos,
-            });
-            marker.setVisible(false);
-
-
-            // 인포윈도우
-            searchinfoWindow = new inavi.maps.InfoWindow({ map: map, zIndex: 1, opacity: 0, offset: [0, -45], closeButton: false });
 
 
             // 대구 테크노폴리스 도로링크 유효 범위
@@ -169,50 +156,15 @@
 
             // outmouseover
 
+
+
+
             //-- 노드 생성
-
-
-
-            // 마커가 표시될 위치입니다
-            markers.push(
-                // 시작점
-                new inavi.maps.Marker({
-                    map: map,
-                    // icon: "https://www.fivepin.co.kr/resources/images/PoiMarker/marker_1_on.png",
-                    icon: "images/flags/ico_road_flag_start.png",
-                    offset: [13, -4], // 깃발 봉위치를 센터로
-                    position: [0, 0],
-                    visibility: false,
-                    title: "출발지",
-                }));
-            markers.push(
-                // 종료점
-                new inavi.maps.Marker({
-                    map: map,
-                    // icon: "https://www.fivepin.co.kr/resources/images/PoiMarker/marker_3_on.png",
-                    icon: "images/flags/ico_road_flag_arrive.png",
-                    offset: [13, -4], // 깃발 봉위치를 센터로
-                    position: [0, 0],
-                    visibility: false,
-                    title: "목적지",
-                }));
-            for(var ii=0; ii<100; ii++) {
-                markers.push(
-                // 경유지
-                new inavi.maps.Marker({
-                    map: map,
-                    // icon: "https://www.fivepin.co.kr/resources/images/PoiMarker/marker_2_on.png",
-                    icon: "images/flags/ico_road_flag_via.png",
-                    offset: [13, -4], // 깃발 봉위치를 센터로
-                    position: [0, 0],
-                    visibility: false,
-                    title: "경유지"+ii,
-                }));
-            }
 
             if (isSuccess) {
                 // 경로 그리기
-                drawRoute(result_obj, map);
+                //drawRoute(result_obj, map);
+                drawRoutes(result_obj.routes, map, route_offset, route_color);
 
                 // 출발지
                 setDeparture(new inavi.maps.LngLat(user_obj.start.x ,user_obj.start.y));
@@ -228,7 +180,7 @@
                 }
 
                 // 경로 정보를 커스텀 오버레이로 생성하고 지도에 표시합니다
-                drawRouteInfo();
+                drawRouteInfo(result_obj.routes);
             }
             else {
                 alert('경로 탐색 요청 실패')
@@ -300,203 +252,6 @@
         }
 
 
-        function redrawRoute(map) {
-            if (links != undefined && links.length) {
-                links.forEach(element => element.setMap(map));
-            }
-
-            if (nodes != undefined && nodes.length) {
-                nodes.forEach(element => element.setMap(map));
-            }
-
-            if (distanceOverlay != undefined) {
-                distanceOverlay.setMap(map);
-            }
-        }
-
-
-        // draw map item
-        function drawRoute(result, map) {
-            result_obj = result;
-
-            user_obj = result_obj.user_info;
-            cnt_route = result_obj.routes.length;
-
-            user_pos.x = result_obj.routes[0].x;
-            user_pos.y = result_obj.routes[0].y;
-
-            var bounds = new Array();
-
-            // 경로 그리기
-            for (var ii = cnt_route - 1; ii >= 0; --ii) {
-                let result_dat = result_obj.routes[ii];
-                // var cntLink = result_dat.link_info.length;
-                // var cntVtx = result_dat.vertex_info.length;
-                // var cntJct = result_dat.junction_info.length;
-
-                var vertices = new Array();
-                var vertex_offset = 0;
-
-                // 경로선 생성
-                var via_idx = 0;
-                result_dat.link_info.forEach(function(link) {
-                    for (var vtx = 0; vtx < link.vertex_count; vtx++) {
-                        // 경로선 확장
-                        bounds.push([result_dat.vertex_info[vertex_offset].x, result_dat.vertex_info[vertex_offset].y]);
-                        
-                        vertices.push([result_dat.vertex_info[vertex_offset].x, result_dat.vertex_info[vertex_offset].y]);
-                        vertex_offset++;
-                    }
-
-                    // if (ii != 0 && link.guide_type != 0) {
-                    //     via_idx++;
-
-                    //     // // 경로선 추가
-                    //     // links.push(new inavi.maps.Polyline({
-                    //     //     map: map,
-                    //     //     path: vertices,
-                    //     //     style: {
-                    //     //         lineOffset: off,
-                    //     //         lineColor: color,
-                    //     //         // lineColor: colors[via_idx++ % colors.length],
-                    //     //         lineWidth: 5,
-                    //     //         lineOpacity: 0.7,
-                    //     //     },
-                    //     // }));
-                        
-                    //     // // 초기화
-                    //     // vertices.splice(0);
-                    // }
-                }); // forEach
-
-                links.push(new inavi.maps.Polyline({
-                    map: map,
-                    path: vertices,
-                    style: {
-                        lineOffset: route_offset[ii],
-                        lineColor: route_color[ii],
-                        // lineColor: colors[via_idx++ % colors.length],
-                        lineWidth: 5,
-                        lineOpacity: 0.8,
-                    },
-                }));
-
-                // // 초기화
-                // vertices.splice(0);
-
-                //-- 경로선 생성
-
-
-                // 노드 생성
-                // 경로에 노드를 생성합니다
-                // var off = 0;
-                // // 마지막 목적지의 종료 노드까지 처리하기 위해 for를 +1해서 돌림
-                // for (var ii = 0; ii < cntLink; ii++) {
-                //     nodes.push(new inavi.maps.Circle({
-                //         map: map,
-                //         position: [result_dat.vertex_info[off].x, result_dat.vertex_info[off].y], // 원 중심 좌표
-                //         radius: 0.005, // 원 반지름 킬로미터 단위
-                //         style: {
-                //             fillOpacity: 0.5,  // 채우기 불투명도 입니다
-                //             fillColor: "#CFE7FF",
-                //             fillOutlineColor: "#DB4455",
-                //         },
-                //     }));
-
-                //     off += result_dat.link_info[ii].vertex_count;
-                //     if (off >= result_dat.vertex_info.length) {
-                //         break;
-                //     }                
-                // } // for
-
-                // // 마지막 목적지의 종료 노드까지 처리하기 위해 
-                // if (result_dat.vertex_info[off - 1] != undefined) {
-                //     nodes.push(new inavi.maps.Circle({
-                //         map: map,
-                //         position: [result_dat.vertex_info[off - 1].x, result_dat.vertex_info[off - 1].y], // 원 중심 좌표
-                //         radius: 0.005, // 원 반지름 킬로미터 단위
-                //         style: {
-                //             fillOpacity: 0.5,  // 채우기 불투명도 입니다
-                //             fillColor: "#CFE7FF",
-                //             fillOutlineColor: "#DB4455",
-                //         },
-                //     }));
-                // }
-                //-- 노드 생성
-
-                // 정션 생성
-                // KakaoVX 스타일
-                // if (result_dat.junction_info != undefined) {
-                //     result_dat.junction_info.forEach(function(jct) {
-                //         jct.junction.forEach(function(lnk) {
-                //             var junctions = new Array();
-                //             lnk.vertices.forEach(function(coord) {
-                //                 junctions.push([coord.x, coord.y]);
-                //             }); // forEach vtx
-                            
-                //             links.push(new inavi.maps.Polyline({
-                //                 map: map,
-                //                 path: junctions,
-                //                 style: {
-                //                     lineColor: "#F09B59", //"#FFC90E",
-                //                     lineWidth: 2,
-                //                     // lineOpacity: 0.7,
-                //                 },
-                //             }));
-                //         });// forEach lnk
-                //     }); // forEach jct
-                // }
-                if (result_dat.junction_info != undefined) {
-                    result_dat.junction_info.forEach(function(jct) {
-                        var vertices = new Array();
-                        jct.vertices.forEach(function(coord) {
-                            vertices.push([coord.x, coord.y]);
-                        }); // forEach vtx
-                        
-                        links.push(new inavi.maps.Polyline({
-                            map: map,
-                            path: vertices,
-                            style: {
-                                // lineColor: "#F09B59", //"#FFC90E",
-                                lineColor: "#309BF9", //"#FFC90E",
-                                lineWidth: 3,
-                                lineDasharray: [2, 1], // (1픽셀 x lineWidth) 라인, (1픽셀 x lineWidth) 공백 표시 반복.
-                                // lineOpacity: 0.7,
-                            },
-                        }));
-                    }); // forEach jct
-                }              
-                //-- 정션 생성
-            }
-
-
-
-
-            map.fitCoordinates(bounds, {
-                padding: 90,
-                // heading: 90,
-                // tilt: 30,
-                // duration: 1000
-            });
-        }
-
-
-        // 커스텀 오버레이를 생성하고 지도에 표시합니다
-        function drawRouteInfo() {                                
-            distanceOverlay = new inavi.maps.CustomInfoWindow({
-                map: map, // 커스텀오버레이를 표시할 지도입니다
-                content: getResultHtmlContent(result_obj.routes[0].summary.distance, result_obj.routes[0].summary.time),  // 커스텀오버레이에 표시할 내용입니다
-                position: markers[1].getPosition(), // 커스텀오버레이를 표시할 위치입니다.
-                // xAnchor: 0,
-                // yAnchor: 0,
-                anchor: 'top-right',
-                zIndex: 3,
-                opacity: 0.8,
-                closeButton: true
-            });
-        }
-
-
         // 키워드 검색 
         function searchKeyword() {
             var keyword = document.getElementById('keyword').value;
@@ -505,40 +260,19 @@
                 alert('키워드를 입력해주세요');
                 return false;
             }
+            console.log("request, search keyword: " + keyword)
 
             // var pathname = 'https://api-maps.cloud.toast.com/maps/v3.0/appkeys/uuLPV7fHLk6NIVfCPnBv/searches';
             var pathname = 'https://dev-maps.inavi.com/maps/v3.0/appkeys/<%=javascriptkey%>/searches'
-            var search2url = pathname + '?&query=' + keyword.toString() + '&reqcount=' + 10;
+            // var search2url = pathname + '?&query=' + keyword.toString() + '&reqcount=' + 10;
 
-            console.log("request, search data: " + keyword)
-
-            $.ajax({
-                type: 'get',         // 타입 (get, post, put 등등)
-                url: search2url,       // 요청할 서버 url
-                // async: false,         // 비동기화 여부 (default : true)
-                success: function(result) {                
-                    var header = result.header;
-                    if (header.isSuccessful == true) {      
-                        console.log("response, search data: " + result.search.totalcount)
-
-                        // set search result
-                        displaySearchList(result.search);
-                    } else {
-                        alert('err code: ' + header.resultCode + '\nerr msg: ' + header.resultMessage)
-                    }
-                },
-                error: function(request, status, error) {
-                    alert('통합 검색 요청 실패')
-                },
-                complete: function(xhr, status) {
-                }
-            });    
+            getSearch(pathname, keyword);
         }
 
     </script>
     <script type="text/javascript"
-        src="https://maps.inavi.com/maps/v3.0/appkeys/<%=javascriptkey%>/maps?callback=initMap"></script> -->
-    <!-- <script src="/script/position.js"></script>
+        src="https://dev-maps.inavi.com/maps/v3.0/appkeys/<%=javascriptkey%>/maps?callback=initMap"></script>
+    <!-- <script src="/script/position.js"></script> -->
 
 </body>
 

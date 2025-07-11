@@ -40,12 +40,13 @@ int sTrfCtrl::init(const char* map_path, int cache_size,
  *          이 값들은 컨버터에서 전처리되어서 나오믄 안되는 값들임..
  *          그러나 나오면..-_-?
  */
-int sTrfCtrl::speed(uint8_t* spd, int trf_blk_idx, int item_idx, 
-                    time_t timer, float link_length) {
-  /// 속도 자체가 없는 링크는 error로 처리한다.
-  if (trf_blk_idx >= _tblk_real_cnt) {
-    return -0xfe;
-  }
+int sTrfCtrl::speed(uint8_t* spd, int trf_blk_idx, int item_idx,
+	time_t timer, float link_length)
+{
+	/// 속도 자체가 없는 링크는 error로 처리한다.
+	if (trf_blk_idx >= _tblk_real_cnt) {
+		return -0xfe;
+	}
 
   /**
    *  ※ 진입 시점의 속도를 구하는 방법
@@ -143,6 +144,18 @@ int sTrfCtrl::speed(uint8_t* spd, int trf_blk_idx, int item_idx,
 #endif
 
   return 0;
+}
+
+int sTrfCtrl::speed_block(std::vector<uint8_t>& vtblock, time_t timer)
+{
+	// UTC기준이므로 필히 +9시간 해야한다.
+	const int local_timer = (timer + TIMEZONE_OFFSET) % SEC_IN_DAY;
+	const int tidx = local_timer / (_interval * 60);
+	int pidx = (timer - _start_timer) >= _ptn_over_timer ? NEXTDAY : TODAY;
+
+	_cache->speed_block(vtblock, _ptn_list[pidx], tidx);
+
+	return 0;
 }
 
 /*
