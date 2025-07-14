@@ -43,9 +43,11 @@ using namespace std;
 
 //#define TARGET_FOR_KAKAO_VX // 카카오VX제공
 
-// #define USE_OPTIMAL_POINT_API // 최적 지점 API
+//#define USE_OPTIMAL_POINT_API // 최적 지점 API
 #define USE_ROUTING_POINT_API // 경로 탐색 API
-// #define USE_TMS_API // 특수목적 경로탐색 
+//#define USE_TMS_API // 특수목적 경로탐색 
+//#define USE_PM_API // 보행/자전거/킥보드 전용 경로탐색
+
 #if defined(TARGET_FOR_KAKAO_VX)
 #	define USE_FOREST_DATA // 카카오숲길
 #	define USE_MOUNTAIN_DATA // 산바운더리 데이터
@@ -58,8 +60,9 @@ using namespace std;
 #elif defined(USE_ROUTING_POINT_API)
 #	if defined(USE_TMS_API)
 #	define USE_VEHICLE_DATA // 차량 데이터
+#	elif defined(USE_PM_API)
+#	define USE_PEDESTRIAN_DATA // 보행자/자전거 데이터
 #	else
-// #	define USE_PEDESTRIAN_DATA // 보행자/자전거 데이터
 #	define USE_VEHICLE_DATA // 차량 데이터
 #	define USE_P2P_DATA // P2P 데이터
 //#	define USE_SAMSUNG_HEAVY // 삼성 중공업 데이터

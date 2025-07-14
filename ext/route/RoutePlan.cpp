@@ -2543,6 +2543,171 @@ const bool isAvoidLink(IN const CDataManager* pDataMgr, IN const stLinkInfo* pLi
 }
 
 
+bool checkAvoidTurnLeft(IN const RequestRouteInfo* reqInfo, IN const CandidateLink* pCurInfo, IN const stNodeInfo* pNodeNext, IN const stLinkInfo* pLinkNext, IN const int angle)
+{
+	// 일반 경로(최초탐색, 정차 후 출발)일 경우(대안경로 등은 무시), 출발지 바로 다음이 좌회전이고 거리가 너무 짧으면 좌회전 회피
+	// 최소 회전 반경은 첫 차로에서 50m로, 이후는 30m로 // 4차선 이상 도로만 적용 // 3개 이상 연결로
+
+	bool ret = false;
+
+	if (reqInfo == nullptr || pCurInfo == nullptr || pNodeNext == nullptr || pLinkNext == nullptr) {
+		return ret;
+	}
+
+	// 첫번째 링크가 너무 짧아 다음 링크 까지 보는데, 이전 링크에서 직진한 경우만 보자
+	if ((reqInfo->RequestMode == 0) && (pCurInfo->depth <= 0 || pCurInfo->depth <= 1) &&
+		(pNodeNext->base.connnode_count >= 3) && (pLinkNext->veh.lane_cnt >= 4) && (200 <= angle && angle <= 300)) {
+		static const int dist1st = 50; // 최초 차로 변경 시 최소 50m 필요
+		static const int dist2nd = 30; // 이후 차로 변경 시 최소 30m 필요
+
+		int maxDist = dist1st + (pLinkNext->veh.lane_cnt / 2 - 2) * dist2nd;
+		if (pLinkNext->veh.link_type == 2) { // 분리도로일 경우
+			maxDist = dist1st + (pLinkNext->veh.lane_cnt - 2) * dist2nd;
+		}
+
+		if ((maxDist > pCurInfo->distTreavel) && // 너무 짧은데
+			((pCurInfo->depth == 0) || // 첫 링크 이거나
+			(((pCurInfo->depth == 1) && (340 <= pCurInfo->angle || pCurInfo->angle <= 20))))) { // 이전 링크에서 직진으로 이어진 경우
+			ret = true;
+		}
+	}
+
+	return ret;
+}
+
+
+int getEntryAngle(IN const int angStart, IN const int angEnd)
+{
+	int retAngle = 0;
+
+	retAngle = abs(180 - angStart + angEnd + 360) % 360;
+
+	return retAngle;
+}
+
+
+const int getAngle(IN const stLinkInfo* pLink, IN const int dir, IN const bool useTail = true) // dir, 1:정, 2:역, useTail, 종료 링크 사용 여부
+{
+	int retAng = 0;
+
+	if (pLink == nullptr) {
+		LOG_TRACE(LOG_WARNING, "warning, get link angle param null");
+		return retAng;
+	}
+
+#if defined(USE_FOREST_DATA) 
+	// 구조체의 자릿수 부족으로 필요 시점에 직접 계산
+	MMPoint<double> coord1;
+	MMPoint<double> coord2;
+
+	int cntLinkVtx = pLink->getVertexCount();
+
+	// ang
+	if (cntLinkVtx >= 2) {
+		if (dir == 1) { // 정, to enode
+						// enode ang
+			if (useTail == true) {
+				coord1 = { pLink->getVertexX(cntLinkVtx - 1), pLink->getVertexY(cntLinkVtx - 1) };
+				coord2 = { pLink->getVertexX(cntLinkVtx - 2), pLink->getVertexY(cntLinkVtx - 2) };
+			} else {
+				coord1 = { pLink->getVertexX(0), pLink->getVertexY(0) };
+				coord2 = { pLink->getVertexX(1), pLink->getVertexY(1) };
+			}
+		} else { // 역, to snode			
+				 // snode ang
+			if (useTail == true) {
+				coord1 = { pLink->getVertexX(0), pLink->getVertexY(0) };
+				coord2 = { pLink->getVertexX(1), pLink->getVertexY(1) };
+			} else {
+				coord1 = { pLink->getVertexX(cntLinkVtx - 1), pLink->getVertexY(cntLinkVtx - 1) };
+				coord2 = { pLink->getVertexX(cntLinkVtx - 2), pLink->getVertexY(cntLinkVtx - 2) };
+			}
+		}
+		retAng = coord1.azimuth(coord2);
+	}
+#else // #if defined(USE_FOREST_DATA) 
+	if (dir == 1) { // 정
+#if defined(USE_P2P_DATA)
+		if (!useTail) {
+			retAng = pLink->veh_ext.snode_ang;
+		} else {
+			retAng = pLink->veh_ext.enode_ang;
+		}
+#else
+		if (!useTail) {
+			retAng = pLink->base.snode_ang;
+		} else {
+			retAng = pLink->base.enode_ang;
+		}
+#endif
+	} else { // 역
+#if defined(USE_P2P_DATA)
+		if (!useTail) {
+			retAng = pLink->veh_ext.enode_ang;
+		} else {
+			retAng = pLink->veh_ext.snode_ang;
+		}
+#else
+		if (!useTail) {
+			retAng = pLink->base.enode_ang;
+		} else {
+			retAng = pLink->base.snode_ang;
+		}
+#endif
+	}
+#endif // #if defined(USE_FOREST_DATA) 
+
+	return retAng;
+}
+
+
+const int getPathAngle(IN const stLinkInfo* pPrevLink, IN const stLinkInfo* pNextLink)
+{
+	int ang = 0;
+	int dir = 0;
+
+	// 이전 링크 각도
+	if ((pPrevLink->enode_id.llid == pNextLink->enode_id.llid) || (pPrevLink->enode_id.llid == pNextLink->snode_id.llid)) { // 정, 이전 링크의 enode 연결
+		if (pPrevLink->link_id.dir != 2) { // 일방(역)에 시작점이 일치하면 불가
+			dir = 1; // 정 - e에서 나가는
+		}
+	} else { // 다음 링크의 enode 연결
+		if (pPrevLink->link_id.dir != 1) { // 일방(정)에 종료점이 일치하면 불가
+			dir = 2; // 역 - s에서 나가는 
+		}
+	}
+
+	if (dir == 0) {
+		return ang;
+	}
+
+	int angStart = getAngle(pPrevLink, dir);
+
+
+	// 다음 링크 각도
+	if ((pPrevLink->enode_id.llid == pNextLink->snode_id.llid) || (pPrevLink->snode_id.llid == pNextLink->snode_id.llid)) { // 정, 다음 링크의 snode 연결
+		if (pNextLink->link_id.dir != 2) { // 일방(역)에 시작점이 일치하면 불가
+			dir = 1; // 정 - s로 들어오는 나가는
+		}
+	} else { // 다음 링크의 enode 연결
+		if (pNextLink->link_id.dir != 1) { // 일방(정)에 종료점이 일치하면 불가
+			dir = 2; // 역 - e로 들어오는 
+		}
+	}
+
+	if (dir == 0) {
+		return ang;
+	}
+
+	int angEnd = getAngle(pNextLink, dir, false);
+
+	// 각도
+	ang = getEntryAngle(angStart, angEnd);
+
+	return ang;
+}
+
+
 const int CRoutePlan::AddNextLinks(IN RouteInfo* pRouteInfo, IN const CandidateLink* pCurInfo)
 {
 	KeyID candidateId;
@@ -2624,7 +2789,7 @@ const int CRoutePlan::AddNextLinks(IN RouteInfo* pRouteInfo, IN const CandidateL
 			return -1;
 		}
 	}
-	angStart = GetAngle(pLink, dirTarget);
+	angStart = getAngle(pLink, dirTarget);
 
 	pNodeNext = m_pDataMgr->GetNodeDataById(nextNodeId, pLink->base.link_type);
 
@@ -2679,51 +2844,20 @@ const int CRoutePlan::AddNextLinks(IN RouteInfo* pRouteInfo, IN const CandidateL
 			if ((pLink->link_id.llid == pNodeNext->connnodes[ii].llid) && (retPassCode != PASS_CODE_UTURN)) { // 자기 자신은 제외
 				continue;
 			}
-			
+		}
+
+
+		pLinkNext = m_pDataMgr->GetLinkDataById(pNodeNext->connnodes[ii], pLink->base.link_type);
+		if (!pLinkNext) {
+			LOG_TRACE(LOG_ERROR, "Failed, can't find link, id:%d", pNodeNext->connnodes[ii].llid);
+			continue;
+		}
+#if defined(USE_VEHICLE_DATA)
+		else if (pLink->base.link_type == TYPE_LINK_DATA_VEHICLE) {
 			// 트럭 회피 옵션
 			if (m_pDataMgr->IsAvoidTruckLink(pRouteInfo->reqInfo.RouteTruckOption.option(), pLinkNext)) {
 				continue;
 			}
-		}
-
-		//if (dir == 1) // 정방향
-		//{
-
-		//}
-		//else if (dir == 2) // 역방향
-		//{
-
-		//}
-		//else
-		{
-			pLinkNext = m_pDataMgr->GetLinkDataById(pNodeNext->connnodes[ii], pLink->base.link_type);
-			if (!pLinkNext) {
-				LOG_TRACE(LOG_ERROR, "Failed, can't find link, id:%d", pNodeNext->connnodes[ii].llid);
-				continue;
-			}
-
-#if defined(USE_PEDESTRIAN_DATA)
-			if (pLinkNext->base.link_type == TYPE_LINK_DATA_PEDESTRIAN) {
-				isPayedLink = pLinkNext->ped.walk_charge;
-			}
-#elif defined(USE_VEHICLE_DATA)
-			if (pLinkNext->base.link_type == TYPE_LINK_DATA_VEHICLE) {
-				isPayedLink = pLinkNext->veh.charge;
-			}
-#endif
-
-			// 무료 적용 옵션일 경우, 출도착이 무료고 유료 링크면 패스
-			if ((pRouteInfo->reqInfo.FreeOption == 1) && (isPayedArea == 0) && (isPayedLink == 1)) {
-				continue;
-				// costAdditional = 1000.; 또는 가중치 증가 
-			}
-
-			// 낮은 레벨은 제외
-#if defined(USE_TMS_API)
-			//if (pLinkNext->veh.level > USE_ROUTE_TABLE_LEVEL) { // 일반도로 이상만 따져보자
-			//	continue;
-			//}
-#endif
 
 #if defined(USE_P2P_DATA)
 			if ((pRouteInfo->reqInfo.RouteOption == ROUTE_OPT_MAINROAD) && (pLinkNext->veh.hd_flag != 1) && // HD 링크와 매칭 정보가 없으면 통행 불가
@@ -2738,143 +2872,168 @@ const int CRoutePlan::AddNextLinks(IN RouteInfo* pRouteInfo, IN const CandidateL
 			} else if ((pRouteInfo->reqInfo.RequestMode == 100) && (pLinkNext->veh.hd_flag != 1)) { // 대안경로 요청일 경우, HD만 매칭
 				continue;
 			}
-#elif defined(USE_FOREST_DATA)
+#endif
+
+			// 낮은 레벨은 제외
+#if defined(USE_TMS_API)
+			//if (pLinkNext->veh.level > USE_ROUTE_TABLE_LEVEL) { // 일반도로 이상만 따져보자
+			//	continue;
+			//}
+#endif
+
+			isPayedLink = pLinkNext->veh.charge;
+		}
+#endif
+#if defined(USE_FOREST_DATA)
+		else if (pLinkNext->base.link_type == TYPE_LINK_DATA_TREKKING) {
 			// 숲길은 등산로를 기본으로 하고, 둘레길, 자전거길, 종주길 등은 기본 경로 탐색 시 제외하자
 			bool isAvoid = isAvoidLink(m_pDataMgr, pLinkNext, pRouteInfo->AvoidOption, pRouteInfo->RouteSubOpt);
 			if (isAvoid) {
 				continue;
 			}
+		}
+#endif
+#if defined(USE_PEDESTRIAN_DATA)
+		else if (pLinkNext->base.link_type == TYPE_LINK_DATA_PEDESTRIAN) {
+			if ((pRouteInfo->reqInfo.MobilityOption == TYPE_MOBILITY_BICYCLE) && (pLinkNext->ped.bicycle_control == 3)) {
+				continue; // 자전거 통행 금지
+			}
+
+			isPayedLink = pLinkNext->ped.walk_charge;
+		}
 #endif
 
-			candidateId.parents_id = pLink->link_id.nid;
-			candidateId.current_id = pLinkNext->link_id.nid;
-
-			if (!IsVisitedLink(pRouteInfo, candidateId)) { // && !IsAddedLink(pLink->link_id)) {
-				if (pNodeNext->coord.x == pLinkNext->getVertexX(0) && pNodeNext->coord.y == pLinkNext->getVertexY(0)) { // 다음 링크의 snode 연결
-					if (pLinkNext->link_id.dir == 2) { // 일방(역)에 시작점이 일치하면 불가
-						continue;
-					}
-					dirTarget = 1; // 정 - s에서 나가는
-				} else { // 다음 링크의 enode 연결
-					if (pLinkNext->link_id.dir == 1) { // 일방(정)에 종료점이 일치하면 불가
-						continue;
-					}
-					dirTarget = 2; // 역 - e에서 나가는 
-				}
-				angEnd = GetAngle(pLinkNext, dirTarget, false);
-				angDiff = abs(180 - angStart + angEnd + 360) % 360;
-
-#if defined(USE_P2P_DATA)
-				// 일반 경로(최초탐색, 정차 후 출발)일 경우(대안경로 등은 무시), 출발지 바로 다음의 좌회전이고 거리가 너무 짧으면 무시
-				// 최소 회전 반경을 첫 차로는 50m로, 이후는 30m로 // 4차선 이상 도로만 적용 // 3개 이상 연결로
-				if ((pRouteInfo->reqInfo.RequestMode == 0) && (pCurInfo->depth <= 0) && 
-					(pNodeNext->base.connnode_count >= 3) && (pLinkNext->veh.lane_cnt >= 4) && (200 <= angDiff && angDiff <= 300)) {
-					static const int dist1st = 50; // 차로 변경 시 최소 50m 필요
-					static const int dist2nd = 30; // 차로 변경 시 최소 30m 필요
-
-					int maxDist = dist1st + (pLinkNext->veh.lane_cnt / 2 - 2) * dist2nd;
-					if (pLinkNext->veh.link_type == 2) { // 분리도로일 경우
-						maxDist = dist1st + (pLinkNext->veh.lane_cnt - 2) * dist2nd;
-					}
-					if (maxDist > pCurInfo->dist) {
-						continue;
-					}
-				}
-#endif
-
-				// 고도 차이
-				// 현재 숲길 데이터에만 존재
-				if (pLinkNext->base.link_type == TYPE_LINK_DATA_TREKKING && pNodeNext->node_id != pNode->node_id) {
-					altDiff = pNodeNext->trk.z_value - pNode->trk.z_value;
-					if (altDiff != 0) {
-						altCost = get_road_slope(static_cast<int32_t>(pLinkNext->length), altDiff);
-					}
-				}
+		// 무료 적용 옵션일 경우, 출도착이 무료고 유료 링크면 패스
+		if ((pRouteInfo->reqInfo.FreeOption == 1) && (isPayedArea == 0) && (isPayedLink == 1)) {
+			continue;
+			// costAdditional = 1000.; 또는 가중치 증가 
+		}
 
 
-				double distFactor = getDistanceFactor(pRouteInfo->StartLinkInfo.Coord.x, pRouteInfo->StartLinkInfo.Coord.y, pRouteInfo->EndLinkInfo.Coord.x, pRouteInfo->EndLinkInfo.Coord.y, pLinkNext, pRouteInfo->reqInfo.RouteOption);
+		candidateId.parents_id = pLink->link_id.nid;
+		candidateId.current_id = pLinkNext->link_id.nid;
 
-#if defined(USE_TMS_API)
-				if (distFactor < 0) { // rdm에서 일정 거리 이상의 낮은 도로는 무시하자					
+		if (!IsVisitedLink(pRouteInfo, candidateId)) { // && !IsAddedLink(pLink->link_id)) {
+			if (pNodeNext->coord.x == pLinkNext->getVertexX(0) && pNodeNext->coord.y == pLinkNext->getVertexY(0)) { // 다음 링크의 snode 연결
+				if (pLinkNext->link_id.dir == 2) { // 일방(역)에 시작점이 일치하면 불가
 					continue;
 				}
+				dirTarget = 1; // 정 - s에서 나가는
+			} else { // 다음 링크의 enode 연결
+				if (pLinkNext->link_id.dir == 1) { // 일방(정)에 종료점이 일치하면 불가
+					continue;
+				}
+				dirTarget = 2; // 역 - e에서 나가는 
+			}
+			angEnd = getAngle(pLinkNext, dirTarget, false);
+			angDiff = getEntryAngle(angStart, angEnd);
+
+#if defined(USE_P2P_DATA)
+			if (checkAvoidTurnLeft(&pRouteInfo->reqInfo, pCurInfo, pNodeNext, pLinkNext, angDiff) == true) {
+				continue;
+			}
 #endif
 
-				// 다음 링크의 끝노드 위치를 기준으로 휴리스틱 계산하는게 맞을 듯
-				int nextLinkIdx = 0;
-				if (dirTarget == 1) { // 정 - s에서 나가는
-					nextLinkIdx = pLinkNext->getVertexCount() - 1; // 멀리있는 노드는 e
+			// 고도 차이
+			// 현재 숲길 데이터에만 존재
+			if (pLinkNext->base.link_type == TYPE_LINK_DATA_TREKKING && pNodeNext->node_id != pNode->node_id) {
+				altDiff = pNodeNext->trk.z_value - pNode->trk.z_value;
+				if (altDiff != 0) {
+					altCost = get_road_slope(static_cast<int32_t>(pLinkNext->length), altDiff);
 				}
+			}
 
-				heuristicCost = getHueristicCost(pRouteInfo->StartLinkInfo.Coord.x, pRouteInfo->StartLinkInfo.Coord.y, pRouteInfo->EndLinkInfo.Coord.x, pRouteInfo->EndLinkInfo.Coord.y, pLinkNext->getVertexX(nextLinkIdx), pLinkNext->getVertexY(nextLinkIdx), pLinkNext->base.link_type, pRouteInfo->reqInfo.RouteOption, distFactor);
 
-				uint8_t curSpeed = SPEED_NOT_AVALABLE;
-				uint8_t curSpeedType = pRouteInfo->reqInfo.RequestTraffic;
+			double distFactor = getDistanceFactor(pRouteInfo->StartLinkInfo.Coord.x, pRouteInfo->StartLinkInfo.Coord.y, pRouteInfo->EndLinkInfo.Coord.x, pRouteInfo->EndLinkInfo.Coord.y, pLinkNext, pRouteInfo->reqInfo.RouteOption);
+
+#if defined(USE_TMS_API)
+			if (distFactor < 0) { // rdm에서 일정 거리 이상의 낮은 도로는 무시하자					
+				continue;
+			}
+#endif
+
+			// 다음 링크의 끝노드 위치를 기준으로 휴리스틱 계산하는게 맞을 듯
+			int nextLinkIdx = 0;
+			if (dirTarget == 1) { // 정 - s에서 나가는
+				nextLinkIdx = pLinkNext->getVertexCount() - 1; // 멀리있는 노드는 e
+			}
+
+			heuristicCost = getHueristicCost(pRouteInfo->StartLinkInfo.Coord.x, pRouteInfo->StartLinkInfo.Coord.y, pRouteInfo->EndLinkInfo.Coord.x, pRouteInfo->EndLinkInfo.Coord.y, pLinkNext->getVertexX(nextLinkIdx), pLinkNext->getVertexY(nextLinkIdx), pLinkNext->base.link_type, pRouteInfo->reqInfo.RouteOption, distFactor);
+
+			uint8_t curSpeed = SPEED_NOT_AVALABLE;
+			uint8_t curSpeedType = pRouteInfo->reqInfo.RequestTraffic;
 #if defined(USE_VEHICLE_DATA) // && defined(USE_TRAFFIC_DATA)
-				if (pLinkNext->veh.level <= 6) {
+			if (pLinkNext->veh.level <= 6) {
 #	if USE_TRAFFIC_LINK_ATTRIBUTE // use link speed
-					if (dirTarget == DIR_POSITIVE) {
-						curSpeed = pLinkNext->veh_ext.spd_p;
-						curSpeedType = pLinkNext->veh_ext.spd_type_p;
-					} else { // if (dirTarget == DIR_NAGATIVE) {
-						curSpeed = pLinkNext->veh_ext.spd_n;
-						curSpeedType = pLinkNext->veh_ext.spd_type_n;
-					}
-#	else // use traffic map speed
-					curSpeed = m_pDataMgr->GetTrafficSpeed(pLinkNext->link_id, dirTarget, pRouteInfo->reqInfo.RequestTime, curSpeedType);
-#	endif // #if USE_TRAFFIC_LINK_ATTRIBUTE
+				if (dirTarget == DIR_POSITIVE) {
+					curSpeed = pLinkNext->veh_ext.spd_p;
+					curSpeedType = pLinkNext->veh_ext.spd_type_p;
+				} else { // if (dirTarget == DIR_NAGATIVE) {
+					curSpeed = pLinkNext->veh_ext.spd_n;
+					curSpeedType = pLinkNext->veh_ext.spd_type_n;
 				}
+#	else // use traffic map speed
+				curSpeed = m_pDataMgr->GetTrafficSpeed(pLinkNext->link_id, dirTarget, pRouteInfo->reqInfo.RequestTime, curSpeedType);
+#	endif // #if USE_TRAFFIC_LINK_ATTRIBUTE
+			}
 #endif
-				// 트리 등록
-				costReal = GetCost(&pRouteInfo->reqInfo, pLinkNext, dirTarget, 0, curSpeed);
-				//costTreavel = GetTravelCost(pLinkNext, pLink, curSpeed, costReal, angDiff, pRouteInfo->RouteOption, pRouteInfo->AvoidOption, pRouteInfo->MobilityOption, isPayedArea); // 이전 링크/노드(단점 유턴) 속성에 의해 비용이 높아진 상태 반영
-				costTreavel = GetTravelCost(&pRouteInfo->reqInfo, pLinkNext, pLink, &pRouteInfo->EndLinkInfo, curSpeed, costReal, angDiff);
+			// 주변 링크를 확인하고, 최대 속도를 주변 링크 속도 이하로 조정
+			//if ((curSpeed == SPEED_NOT_AVALABLE) && (pCurInfo->speed != SPEED_NOT_AVALABLE) && (pLinkNext->veh.level >= pLink->veh.level)) {
+			//	if (GetLinkSpeed(pLinkNext->link_id, pLinkNext->veh.level, pRouteInfo->reqInfo.RouteOption) > pCurInfo->speed) {
+			//		curSpeed = pCurInfo->speed;
+			//	}
+			//}
+
+			// 트리 등록
+			costReal = GetCost(&pRouteInfo->reqInfo, pLinkNext, dirTarget, 0, curSpeed);
+			//costTreavel = GetTravelCost(pLinkNext, pLink, curSpeed, costReal, angDiff, pRouteInfo->RouteOption, pRouteInfo->AvoidOption, pRouteInfo->MobilityOption, isPayedArea); // 이전 링크/노드(단점 유턴) 속성에 의해 비용이 높아진 상태 반영
+			costTreavel = GetTravelCost(&pRouteInfo->reqInfo, pLinkNext, pLink, &pRouteInfo->EndLinkInfo, curSpeed, costReal, angDiff);
 				
 
 #if defined(USE_FOREST_DATA)
-				// 코스 데이터 가중치 부여, 코스탐색옵션 전용 && 최단 제외
-				if ((pRouteInfo->RouteOption != ROUTE_OPT_SHORTEST) && (pRouteInfo->RouteSubOpt.mnt.course_type == TYPE_TRE_CROSS))	{
-					costTreavel = GetCourseCost(pRouteInfo, pLinkNext, costTreavel);
-				}
+			// 코스 데이터 가중치 부여, 코스탐색옵션 전용 && 최단 제외
+			if ((pRouteInfo->RouteOption != ROUTE_OPT_SHORTEST) && (pRouteInfo->RouteSubOpt.mnt.course_type == TYPE_TRE_CROSS))	{
+				costTreavel = GetCourseCost(pRouteInfo, pLinkNext, costTreavel);
+			}
 #endif
 
-				nextCandidate.parents_id = pCurInfo->parentLinkId.nid;
-				nextCandidate.current_id = pCurInfo->linkId.nid;
+			nextCandidate.parents_id = pCurInfo->parentLinkId.nid;
+			nextCandidate.current_id = pCurInfo->linkId.nid;
 
-				pItem = new CandidateLink;
-				pItem->candidateId = nextCandidate; // 후보 ID
-				pItem->parentLinkId = pCurInfo->linkId;	// 부모 링크 ID
-				pItem->linkId = pLinkNext->link_id; // 링크 ID
-				pItem->nodeId = pNodeNext->node_id;	// 노드 ID
-				pItem->dist = pLinkNext->length;	// 실 거리
-				pItem->time = costReal; // 실 시간
-				pItem->cost = costTreavel + costAdditional; // 논리적 주행 시간
-				pItem->distTreavel = pCurInfo->distTreavel + pItem->time;	// 누적 거리
-				pItem->timeTreavel = pCurInfo->timeTreavel + costReal; // 누적 시간
-				pItem->costTreavel = pCurInfo->costTreavel + pItem->cost;	// 계산 비용
-				// pItem->costHeuristic = pCurInfo->costTreavel + heuristicCost;	// 가중치 계산 비용 // old
-				pItem->costHeuristic = pItem->costTreavel + heuristicCost;	// 가중치 계산 비용
-				pItem->linkDataType = pCurInfo->linkDataType;
-				pItem->depth = pCurInfo->depth + 1;	// 탐색 깊이
-				pItem->visited = false; // 방문 여부
-				pItem->dir = dirTarget; // 탐색방향
+			pItem = new CandidateLink;
+			pItem->candidateId = nextCandidate; // 후보 ID
+			pItem->parentLinkId = pCurInfo->linkId;	// 부모 링크 ID
+			pItem->linkId = pLinkNext->link_id; // 링크 ID
+			pItem->nodeId = pNodeNext->node_id;	// 노드 ID
+			pItem->dist = pLinkNext->length;	// 실 거리
+			pItem->time = costReal; // 실 시간
+			pItem->cost = costTreavel + costAdditional; // 논리적 주행 시간
+			pItem->distTreavel = pCurInfo->distTreavel + pItem->time;	// 누적 거리
+			pItem->timeTreavel = pCurInfo->timeTreavel + costReal; // 누적 시간
+			pItem->costTreavel = pCurInfo->costTreavel + pItem->cost;	// 계산 비용
+			// pItem->costHeuristic = pCurInfo->costTreavel + heuristicCost;	// 가중치 계산 비용 // old
+			pItem->costHeuristic = pItem->costTreavel + heuristicCost;	// 가중치 계산 비용
+			pItem->linkDataType = pCurInfo->linkDataType;
+			pItem->depth = pCurInfo->depth + 1;	// 탐색 깊이
+			pItem->visited = false; // 방문 여부
+			pItem->dir = dirTarget; // 탐색방향
+			pItem->angle = angDiff; // 진입각도
 #if defined(USE_VEHICLE_DATA)
-				pItem->speed = curSpeed;
-				pItem->speed_type = curSpeedType;
-				pItem->speed_level = pLinkNext->veh.level;
+			pItem->speed = curSpeed;
+			pItem->speed_type = curSpeedType;
+			pItem->speed_level = pLinkNext->veh.level;
 #endif
-				pItem->pPrevLink = const_cast<CandidateLink*>(pCurInfo);
+			pItem->pPrevLink = const_cast<CandidateLink*>(pCurInfo);
 
-				// 링크 방문 목록 등록
-				pRouteInfo->mRoutePass.emplace(candidateId.llid, pItem);
-				pRouteInfo->pqDijkstra.emplace(pItem);
+			// 링크 방문 목록 등록
+			pRouteInfo->mRoutePass.emplace(candidateId.llid, pItem);
+			pRouteInfo->pqDijkstra.emplace(pItem);
 
-				cntLinks++;
+			cntLinks++;
 
 #if defined(USE_SHOW_ROUTE_SATATUS)
-				//LOG_TRACE(LOG_DEBUG, "id:%lld(real cost:%f, heuristic cost:%f, lv:%d) ", newItem.linkId.llid, newItem.costReal, newItem.costHeuristic, newItem.depth);
+			//LOG_TRACE(LOG_DEBUG, "id:%lld(real cost:%f, heuristic cost:%f, lv:%d) ", newItem.linkId.llid, newItem.costReal, newItem.costHeuristic, newItem.depth);
 #endif
-			}
 		}
 	} // for
 
@@ -2965,7 +3124,7 @@ const int CRoutePlan::AddPrevLinks(IN RouteInfo* pRouteInfo, IN const CandidateL
 			return -1;
 		}
 	}
-	angEnd = GetAngle(pLink, dirTarget, false);
+	angEnd = getAngle(pLink, dirTarget, false);
 
 	pNodePrev = m_pDataMgr->GetNodeDataById(prevNodeId, pLink->base.link_type);
 
@@ -3019,43 +3178,19 @@ const int CRoutePlan::AddPrevLinks(IN RouteInfo* pRouteInfo, IN const CandidateL
 			if ((pLink->link_id.llid == pNodePrev->connnodes[ii].llid) && (retPassCode != PASS_CODE_UTURN)) { // (유턴이 아닌) 자기 자신은 제외
 				continue;
 			}
-			
+		}
+
+
+		pLinkPrev = m_pDataMgr->GetLinkDataById(pNodePrev->connnodes[ii], pLink->base.link_type);
+		if (!pLinkPrev) {
+			LOG_TRACE(LOG_ERROR, "Failed, can't find link, id:%d", pNodePrev->connnodes[ii].llid);
+			continue;
+		}
+#if defined(USE_VEHICLE_DATA)
+		else if (pLinkPrev->base.link_type == TYPE_LINK_DATA_VEHICLE) {
 			// 트럭 회피 옵션
 			if (m_pDataMgr->IsAvoidTruckLink(pRouteInfo->reqInfo.RouteTruckOption.option(), pLinkPrev)) {
 				continue;
-			}
-		}
-
-		//if (dir == 1) // 정방향
-		//{
-
-		//}
-		//else if (dir == 2) // 역방향
-		//{
-
-		//}
-		//else
-		{
-			pLinkPrev = m_pDataMgr->GetLinkDataById(pNodePrev->connnodes[ii], pLink->base.link_type);
-			if (!pLinkPrev) {
-				LOG_TRACE(LOG_ERROR, "Failed, can't find link, id:%d", pNodePrev->connnodes[ii].llid);
-				continue;
-			}
-
-#if defined(USE_PEDESTRIAN_DATA)
-			if (pLinkPrev->base.link_type == TYPE_LINK_DATA_PEDESTRIAN) {
-				isPayedLink = pLinkPrev->ped.walk_charge;
-			}
-#elif defined(USE_VEHICLE_DATA)
-			if (pLinkPrev->base.link_type == TYPE_LINK_DATA_VEHICLE) {
-				isPayedLink = pLinkPrev->veh.charge;
-			}
-#endif
-
-			// 무료 적용 옵션일 경우, 출도착이 무료고 유료 링크면 패스
-			if ((pRouteInfo->reqInfo.FreeOption == 1) && (isPayedArea == 0) && (isPayedLink == 1)) {
-				continue;
-				// costAdditional = 1000.; 또는 가중치 증가 
 			}
 
 #if defined(USE_P2P_DATA)
@@ -3069,147 +3204,167 @@ const int CRoutePlan::AddPrevLinks(IN RouteInfo* pRouteInfo, IN const CandidateL
 			} else if ((pLinkPrev->veh.link_type == 8) && (pLinkPrev->veh.level > 3)) { // 지방도 이하 레벨의 유턴 도로는 금지
 				continue;
 			}
-#elif defined(USE_FOREST_DATA)
+#endif
+
+			isPayedLink = pLinkPrev->veh.charge;
+		}
+#endif
+#if defined(USE_FOREST_DATA)
+		else if (pLinkPrev->base.link_type == TYPE_LINK_DATA_TREKKING) {
 			// 숲길은 등산로를 기본으로 하고, 둘레길, 자전거길, 종주길 등은 기본 경로 탐색 시 제외하자
 			bool isAvoid = isAvoidLink(m_pDataMgr, pLinkPrev, pRouteInfo->AvoidOption, pRouteInfo->RouteSubOpt);
 			if (isAvoid) {
 				continue;
 			}
+		}
+#endif
+#if defined(USE_PEDESTRIAN_DATA)
+		else if (pLinkPrev->base.link_type == TYPE_LINK_DATA_PEDESTRIAN) {
+			if ((pRouteInfo->reqInfo.MobilityOption == TYPE_MOBILITY_BICYCLE) && (pLinkPrev->ped.bicycle_control == 3)) {
+				continue; // 자전거 통행 금지
+			}
+
+			isPayedLink = pLinkPrev->ped.walk_charge;
+		}
 #endif
 
-			// 역방향은 순서 바뀌어야 할 듯, 2025-03-18
-			candidateId.parents_id = pLinkPrev->link_id.nid;
-			candidateId.current_id = pLink->link_id.nid; 
-			//candidateId.parents_id = pLink->link_id.nid;
-			//candidateId.current_id = pLinkPrev->link_id.nid;
-
-			if (!IsVisitedLink(pRouteInfo, candidateId, true)) { // && !IsAddedLink(pLink->link_id)) {
-				if (pNodePrev->coord.x == pLinkPrev->getVertexX(0) && pNodePrev->coord.y == pLinkPrev->getVertexY(0)) { // 다음 링크의 snode 연결
-					if (pLinkPrev->link_id.dir == 2) { // 일방(정)에 종료점이 일치하면 불가
-						continue;
-					}
-					dirTarget = 2; // 역 - s로 들어오는
-				} else { // 다음 링크의 enode 연결
-					if (pLinkPrev->link_id.dir == 1) { // 일방(역)에 시작점이 일치하면 불가
-						continue;
-					}
-					dirTarget = 1; // 정 - e로 들어오는
-				}
-				angStart = GetAngle(pLinkPrev, dirTarget);
-				angDiff = abs(180 - angStart + angEnd + 360) % 360;
-
-#if defined(USE_P2P_DATA)
-				// 일반 경로(최초탐색, 정차 후 출발)일 경우(대안경로 등은 무시), 출발지 바로 다음의 좌회전이고 거리가 너무 짧으면 무시
-				// 최소 회전 반경을 차로당 50m로 // 4차선 이상 도로만 적용 // 3개 이상 연결로
-				if ((pRouteInfo->reqInfo.RequestMode == 0) && (pCurInfo->depth <= 0) &&
-					(pNodePrev->base.connnode_count >= 3) && (pLinkPrev->veh.lane_cnt >= 4) && (200 <= angDiff && angDiff <= 300)) {
-					static const int minDist = 50; // 차로 변경 시 최소 50m 필요
-					int maxDist = (pLinkPrev->veh.lane_cnt / 2 - 1) * minDist;
-					if (pLinkPrev->veh.link_type == 2) { // 분리도로일 경우
-						maxDist = (pLinkPrev->veh.lane_cnt - 1) * minDist;
-					}
-					if (maxDist > pCurInfo->dist) {
-						continue;
-					}
-				}
-#endif
-
-				// 고도 차이
-				// 현재 숲길 데이터에만 존재
-				if (pLinkPrev->base.link_type == TYPE_LINK_DATA_TREKKING && pNodePrev->node_id != pNode->node_id) {
-					altDiff = pNode->trk.z_value - pNodePrev->trk.z_value;
-					if (altDiff != 0) {
-						altCost = get_road_slope(static_cast<int32_t>(pLinkPrev->length), altDiff);
-					}
-				}
+		// 무료 적용 옵션일 경우, 출도착이 무료고 유료 링크면 패스
+		if ((pRouteInfo->reqInfo.FreeOption == 1) && (isPayedArea == 0) && (isPayedLink == 1)) {
+			continue;
+			// costAdditional = 1000.; 또는 가중치 증가 
+		}
 
 
-				double distFactor = getDistanceFactor(pRouteInfo->StartLinkInfo.Coord.x, pRouteInfo->StartLinkInfo.Coord.y, pRouteInfo->EndLinkInfo.Coord.x, pRouteInfo->EndLinkInfo.Coord.y, pLinkPrev, pRouteInfo->reqInfo.RouteOption);
+		// 역방향은 순서 바뀌어야 할 듯, 2025-03-18
+		candidateId.parents_id = pLinkPrev->link_id.nid;
+		candidateId.current_id = pLink->link_id.nid; 
+		//candidateId.parents_id = pLink->link_id.nid;
+		//candidateId.current_id = pLinkPrev->link_id.nid;
 
-#if defined(USE_TMS_API)
-				if (distFactor < 0) { // rdm에서 일정 거리 이상의 낮은 도로는 무시하자					
+		if (!IsVisitedLink(pRouteInfo, candidateId, true)) { // && !IsAddedLink(pLink->link_id)) {
+			if (pNodePrev->coord.x == pLinkPrev->getVertexX(0) && pNodePrev->coord.y == pLinkPrev->getVertexY(0)) { // 다음 링크의 snode 연결
+				if (pLinkPrev->link_id.dir == 2) { // 일방(정)에 종료점이 일치하면 불가
 					continue;
 				}
+				dirTarget = 2; // 역 - s로 들어오는
+			} else { // 다음 링크의 enode 연결
+				if (pLinkPrev->link_id.dir == 1) { // 일방(역)에 시작점이 일치하면 불가
+					continue;
+				}
+				dirTarget = 1; // 정 - e로 들어오는
+			}
+			angStart = getAngle(pLinkPrev, dirTarget);
+			angDiff = getEntryAngle(angStart, angEnd);
+
+#if defined(USE_P2P_DATA)
+			if (checkAvoidTurnLeft(&pRouteInfo->reqInfo, pCurInfo, pNodePrev, pLinkPrev, angDiff) == true) {
+				continue;
+			}
 #endif
 
-				// 이전 링크의 끝노드 위치를 기준으로 휴리스틱 계산하는게 맞을 듯, next와 다르게 방향성 맞는지 한번 확인 필요(2025-02-07)
-				int nextLinkIdx = 0;
-				if (dirTarget == 2) { // 역 - s로 들어오는
-					nextLinkIdx = pLinkPrev->getVertexCount() - 1; // 멀리있는 노드는 e
+			// 고도 차이
+			// 현재 숲길 데이터에만 존재
+			if (pLinkPrev->base.link_type == TYPE_LINK_DATA_TREKKING && pNodePrev->node_id != pNode->node_id) {
+				altDiff = pNode->trk.z_value - pNodePrev->trk.z_value;
+				if (altDiff != 0) {
+					altCost = get_road_slope(static_cast<int32_t>(pLinkPrev->length), altDiff);
 				}
+			}
 
-				heuristicCost = getHueristicCost(pRouteInfo->StartLinkInfo.Coord.x, pRouteInfo->StartLinkInfo.Coord.y, pRouteInfo->EndLinkInfo.Coord.x, pRouteInfo->EndLinkInfo.Coord.y, pLinkPrev->getVertexX(nextLinkIdx), pLinkPrev->getVertexY(nextLinkIdx), pLinkPrev->base.link_type, pRouteInfo->reqInfo.RouteOption, distFactor);
 
-				uint8_t curSpeed = SPEED_NOT_AVALABLE;
-				uint8_t curSpeedType = pRouteInfo->reqInfo.RequestTraffic;
+			double distFactor = getDistanceFactor(pRouteInfo->StartLinkInfo.Coord.x, pRouteInfo->StartLinkInfo.Coord.y, pRouteInfo->EndLinkInfo.Coord.x, pRouteInfo->EndLinkInfo.Coord.y, pLinkPrev, pRouteInfo->reqInfo.RouteOption);
+
+#if defined(USE_TMS_API)
+			if (distFactor < 0) { // rdm에서 일정 거리 이상의 낮은 도로는 무시하자					
+				continue;
+			}
+#endif
+
+			// 이전 링크의 끝노드 위치를 기준으로 휴리스틱 계산하는게 맞을 듯, next와 다르게 방향성 맞는지 한번 확인 필요(2025-02-07)
+			int nextLinkIdx = 0;
+			if (dirTarget == 2) { // 역 - s로 들어오는
+				nextLinkIdx = pLinkPrev->getVertexCount() - 1; // 멀리있는 노드는 e
+			}
+
+			heuristicCost = getHueristicCost(pRouteInfo->StartLinkInfo.Coord.x, pRouteInfo->StartLinkInfo.Coord.y, pRouteInfo->EndLinkInfo.Coord.x, pRouteInfo->EndLinkInfo.Coord.y, pLinkPrev->getVertexX(nextLinkIdx), pLinkPrev->getVertexY(nextLinkIdx), pLinkPrev->base.link_type, pRouteInfo->reqInfo.RouteOption, distFactor);
+
+			uint8_t curSpeed = SPEED_NOT_AVALABLE;
+			uint8_t curSpeedType = pRouteInfo->reqInfo.RequestTraffic;
 #if defined(USE_VEHICLE_DATA) // && defined(USE_TRAFFIC_DATA)
-				if (pLinkPrev->veh.level <= 6) {
+			if (pLinkPrev->veh.level <= 6) {
 #	if USE_TRAFFIC_LINK_ATTRIBUTE // use link speed
-					if (dirTarget == DIR_POSITIVE) {
-						curSpeed = pLinkPrev->veh_ext.spd_p;
-						curSpeedType = pLinkPrev->veh_ext.spd_type_p;
-					} else { // if (dirTarget == DIR_NAGATIVE) {
-						curSpeed = pLinkPrev->veh_ext.spd_n;
-						curSpeedType = pLinkPrev->veh_ext.spd_type_n;
-					}
-#	else // use traffic map speed
-					curSpeed = m_pDataMgr->GetTrafficSpeed(pLinkPrev->link_id, dirTarget, pRouteInfo->reqInfo.RequestTime, curSpeedType);
-#	endif // #if USE_TRAFFIC_LINK_ATTRIBUTE
+				if (dirTarget == DIR_POSITIVE) {
+					curSpeed = pLinkPrev->veh_ext.spd_p;
+					curSpeedType = pLinkPrev->veh_ext.spd_type_p;
+				} else { // if (dirTarget == DIR_NAGATIVE) {
+					curSpeed = pLinkPrev->veh_ext.spd_n;
+					curSpeedType = pLinkPrev->veh_ext.spd_type_n;
 				}
+#	else // use traffic map speed
+				curSpeed = m_pDataMgr->GetTrafficSpeed(pLinkPrev->link_id, dirTarget, pRouteInfo->reqInfo.RequestTime, curSpeedType);
+#	endif // #if USE_TRAFFIC_LINK_ATTRIBUTE
+			}
 #endif
-				// 트리 등록
-				costReal = GetCost(&pRouteInfo->reqInfo, pLinkPrev, dirTarget, 0, curSpeed);
-				//costTreavel = GetTravelCost(pLinkPrev, pLink, curSpeed, costReal, angDiff, pRouteInfo->RouteOption, pRouteInfo->AvoidOption, pRouteInfo->MobilityOption, isPayedArea); // 이전 링크/노드(단점 유턴) 속성에 의해 비용이 높아진 상태 반영
-				costTreavel = GetTravelCost(&pRouteInfo->reqInfo, pLinkPrev, pLink, &pRouteInfo->StartLinkInfo, curSpeed, costReal, angDiff);
+			// 주변 링크를 확인하고, 최대 속도를 주변 링크 속도 이하로 조정
+			//if ((curSpeed == SPEED_NOT_AVALABLE) && (pCurInfo->speed != SPEED_NOT_AVALABLE) && (pLinkPrev->veh.level >= pLink->veh.level)) {
+			//	if (GetLinkSpeed(pLinkPrev->link_id, pLinkPrev->veh.level, pRouteInfo->reqInfo.RouteOption) > pCurInfo->speed) {
+			//		curSpeed = pCurInfo->speed;
+			//	}
+			//}
+
+			// 트리 등록
+			costReal = GetCost(&pRouteInfo->reqInfo, pLinkPrev, dirTarget, 0, curSpeed);
+			//costTreavel = GetTravelCost(pLinkPrev, pLink, curSpeed, costReal, angDiff, pRouteInfo->RouteOption, pRouteInfo->AvoidOption, pRouteInfo->MobilityOption, isPayedArea); // 이전 링크/노드(단점 유턴) 속성에 의해 비용이 높아진 상태 반영
+			costTreavel = GetTravelCost(&pRouteInfo->reqInfo, pLinkPrev, pLink, &pRouteInfo->StartLinkInfo, curSpeed, costReal, angDiff);
 
 
 #if defined(USE_FOREST_DATA)
-				// 코스 데이터 가중치 부여, 코스탐색옵션 전용 && 최단 제외
-				if ((pRouteInfo->RouteOption != ROUTE_OPT_SHORTEST) && (pRouteInfo->RouteSubOpt.mnt.course_type == TYPE_TRE_CROSS)) {
-					costTreavel = GetCourseCost(pRouteInfo, pLinkPrev, costTreavel);
-				}
+			// 코스 데이터 가중치 부여, 코스탐색옵션 전용 && 최단 제외
+			if ((pRouteInfo->RouteOption != ROUTE_OPT_SHORTEST) && (pRouteInfo->RouteSubOpt.mnt.course_type == TYPE_TRE_CROSS)) {
+				costTreavel = GetCourseCost(pRouteInfo, pLinkPrev, costTreavel);
+			}
 #endif
 
-				// 역방향은 순서 바뀌어야 할 듯, 2025-03-18
-				prevCandidate.parents_id = pCurInfo->linkId.nid;
-				prevCandidate.current_id = pCurInfo->parentLinkId.nid;
-				//nextCandidate.parents_id = pCurInfo->parentLinkId.nid;
-				//nextCandidate.current_id = pCurInfo->linkId.nid;
+			// 역방향은 순서 바뀌어야 할 듯, 2025-03-18
+			prevCandidate.parents_id = pCurInfo->linkId.nid;
+			prevCandidate.current_id = pCurInfo->parentLinkId.nid;
+			//nextCandidate.parents_id = pCurInfo->parentLinkId.nid;
+			//nextCandidate.current_id = pCurInfo->linkId.nid;
 
-				pItem = new CandidateLink;
-				pItem->candidateId = prevCandidate; // 후보 ID
-				pItem->parentLinkId = pCurInfo->linkId;	// 자식 링크 ID
-				pItem->linkId = pLinkPrev->link_id; // 링크 ID
-				pItem->nodeId = pNodePrev->node_id;	// 노드 ID
-				pItem->dist = pLinkPrev->length;	// 실 거리
-				pItem->time = costReal; // 실 시간
-				pItem->cost = costTreavel + costAdditional; // 논리적 주행 시간
-				pItem->distTreavel = pCurInfo->distTreavel + pItem->dist;	// 누적 거리
-				pItem->timeTreavel = pCurInfo->timeTreavel + pItem->time; // 누적 시간
-				pItem->costTreavel = pCurInfo->costTreavel + pItem->cost;	// 계산 비용
-				// pItem->costHeuristic = pCurInfo->costTreavel + heuristicCost;	// 가중치 계산 비용 // old
-				pItem->costHeuristic = pItem->costTreavel + heuristicCost;	// 가중치 계산 비용
-				pItem->linkDataType = pCurInfo->linkDataType;
-				pItem->depth = pCurInfo->depth + 1;	// 탐색 깊이
-				pItem->visited = false; // 방문 여부
-				pItem->dir = dirTarget; // 탐색방향
+			pItem = new CandidateLink;
+			pItem->candidateId = prevCandidate; // 후보 ID
+			pItem->parentLinkId = pCurInfo->linkId;	// 자식 링크 ID
+			pItem->linkId = pLinkPrev->link_id; // 링크 ID
+			pItem->nodeId = pNodePrev->node_id;	// 노드 ID
+			pItem->dist = pLinkPrev->length;	// 실 거리
+			pItem->time = costReal; // 실 시간
+			pItem->cost = costTreavel + costAdditional; // 논리적 주행 시간
+			pItem->distTreavel = pCurInfo->distTreavel + pItem->dist;	// 누적 거리
+			pItem->timeTreavel = pCurInfo->timeTreavel + pItem->time; // 누적 시간
+			pItem->costTreavel = pCurInfo->costTreavel + pItem->cost;	// 계산 비용
+			// pItem->costHeuristic = pCurInfo->costTreavel + heuristicCost;	// 가중치 계산 비용 // old
+			pItem->costHeuristic = pItem->costTreavel + heuristicCost;	// 가중치 계산 비용
+			pItem->linkDataType = pCurInfo->linkDataType;
+			pItem->depth = pCurInfo->depth + 1;	// 탐색 깊이
+			pItem->visited = false; // 방문 여부
+			pItem->dir = dirTarget; // 탐색방향
+			pItem->angle = angDiff; // 진입각도
 #if defined(USE_VEHICLE_DATA)
-				pItem->speed = curSpeed;
-				pItem->speed_type = curSpeedType;
-				pItem->speed_level = pLinkPrev->veh.level;
+			pItem->speed = curSpeed;
+			pItem->speed_type = curSpeedType;
+			pItem->speed_level = pLinkPrev->veh.level;
 #endif
-				pItem->pPrevLink = const_cast<CandidateLink*>(pCurInfo);
+			pItem->pPrevLink = const_cast<CandidateLink*>(pCurInfo);
 
-				// 링크 방문 목록 등록
-				pRouteInfo->mRouteReversePass.emplace(candidateId.llid, pItem);				
-				pRouteInfo->pqDijkstra.emplace(pItem);
+			// 링크 방문 목록 등록
+			pRouteInfo->mRouteReversePass.emplace(candidateId.llid, pItem);				
+			pRouteInfo->pqDijkstra.emplace(pItem);
 
-				cntLinks++;
+			cntLinks++;
 
 #if defined(USE_SHOW_ROUTE_SATATUS)
-				//LOG_TRACE(LOG_DEBUG, "id:%lld(real cost:%f, heuristic cost:%f, lv:%d) ", newItem.linkId.llid, newItem.costReal, newItem.costHeuristic, newItem.depth);
+			//LOG_TRACE(LOG_DEBUG, "id:%lld(real cost:%f, heuristic cost:%f, lv:%d) ", newItem.linkId.llid, newItem.costReal, newItem.costHeuristic, newItem.depth);
 #endif
-			}
 		}
 	} // for
 
@@ -3300,7 +3455,7 @@ const int CRoutePlan::AddPrevLinksEx(IN RouteInfo* pRouteInfo, IN const Candidat
 			return -1;
 		}
 	}
-	angEnd = GetAngle(pLink, dirTarget, false);
+	angEnd = getAngle(pLink, dirTarget, false);
 
 	pNodePrev = m_pDataMgr->GetNodeDataById(prevNodeId, pLink->base.link_type);
 
@@ -3371,41 +3526,22 @@ const int CRoutePlan::AddPrevLinksEx(IN RouteInfo* pRouteInfo, IN const Candidat
 				}
 			} else
 #endif			
-			if ((pLink->link_id.llid == pNodePrev->connnodes[ii].llid) && (retPassCode != PASS_CODE_UTURN)) { // (유턴이 아닌) 자기 자신은 제외
-				continue;
-			}
+				if ((pLink->link_id.llid == pNodePrev->connnodes[ii].llid) && (retPassCode != PASS_CODE_UTURN)) { // (유턴이 아닌) 자기 자신은 제외
+					continue;
+				}
 		}
 
-		//if (dir == 1) // 정방향
-		//{
 
-		//}
-		//else if (dir == 2) // 역방향
-		//{
-
-		//}
-		//else
-		{
-			pLinkPrev = m_pDataMgr->GetLinkDataById(pNodePrev->connnodes[ii], pLink->base.link_type);
-			if (!pLinkPrev) {
-				LOG_TRACE(LOG_ERROR, "Failed, can't find link, id:%d", pNodePrev->connnodes[ii].llid);
+		pLinkPrev = m_pDataMgr->GetLinkDataById(pNodePrev->connnodes[ii], pLink->base.link_type);
+		if (!pLinkPrev) {
+			LOG_TRACE(LOG_ERROR, "Failed, can't find link, id:%d", pNodePrev->connnodes[ii].llid);
+			continue;
+		}
+#if defined(USE_VEHICLE_DATA)
+		else if (pLinkPrev->base.link_type == TYPE_LINK_DATA_VEHICLE) {
+			// 트럭 회피 옵션
+			if (m_pDataMgr->IsAvoidTruckLink(pRouteInfo->reqInfo.RouteTruckOption.option(), pLinkPrev)) {
 				continue;
-			}
-
-#if defined(USE_PEDESTRIAN_DATA)
-			if (pLinkPrev->base.link_type == TYPE_LINK_DATA_PEDESTRIAN) {
-				isPayedLink = pLinkPrev->ped.walk_charge;
-			}
-#elif defined(USE_VEHICLE_DATA)
-			if (pLinkPrev->base.link_type == TYPE_LINK_DATA_VEHICLE) {
-				isPayedLink = pLinkPrev->veh.charge;
-			}
-#endif
-
-			// 무료 적용 옵션일 경우, 출도착이 무료고 유료 링크면 패스
-			if ((pRouteInfo->reqInfo.FreeOption == 1) && (isPayedArea == 0) && (isPayedLink == 1)) {
-				continue;
-				// costAdditional = 1000.; 또는 가중치 증가 
 			}
 
 #if defined(USE_P2P_DATA)
@@ -3419,159 +3555,167 @@ const int CRoutePlan::AddPrevLinksEx(IN RouteInfo* pRouteInfo, IN const Candidat
 			} else if ((pLinkPrev->veh.link_type == 8) && (pLinkPrev->veh.level > 3)) { // 지방도 이하 레벨의 유턴 도로는 금지
 				continue;
 			}
-#elif defined(USE_FOREST_DATA)
+#endif
+
+			isPayedLink = pLinkPrev->veh.charge;
+		}
+#endif
+#if defined(USE_FOREST_DATA)
+		else if (pLinkPrev->base.link_type == TYPE_LINK_DATA_TREKKING) {
 			// 숲길은 등산로를 기본으로 하고, 둘레길, 자전거길, 종주길 등은 기본 경로 탐색 시 제외하자
 			bool isAvoid = isAvoidLink(m_pDataMgr, pLinkPrev, pRouteInfo->AvoidOption, pRouteInfo->RouteSubOpt);
 			if (isAvoid) {
 				continue;
 			}
+		}
 #endif
-
-			// 트럭 회피 옵션
-			if (m_pDataMgr->IsAvoidTruckLink(pRouteInfo->reqInfo.RouteTruckOption.option(), pLinkPrev)) {
-				continue;
+#if defined(USE_PEDESTRIAN_DATA)
+		else if (pLinkPrev->base.link_type == TYPE_LINK_DATA_PEDESTRIAN) {
+			if ((pRouteInfo->reqInfo.MobilityOption == TYPE_MOBILITY_BICYCLE) && (pLinkPrev->ped.bicycle_control == 3)) {
+				continue; // 자전거 통행 금지
 			}
 
-			// 역방향은 순서 바뀌어야 할 듯, 2025-03-18
-			candidateId.parents_id = pLinkPrev->link_id.nid;
-			candidateId.current_id = pLink->link_id.nid;
-			//candidateId.parents_id = pLink->link_id.nid;
-			//candidateId.current_id = pLinkPrev->link_id.nid;
-
-			if (!IsVisitedLink(pRouteInfo, candidateId, true)) { // && !IsAddedLink(pLink->link_id)) {
-				if (pNodePrev->coord.x == pLinkPrev->getVertexX(0) && pNodePrev->coord.y == pLinkPrev->getVertexY(0)) { // 다음 링크의 snode 연결
-					if (pLinkPrev->link_id.dir == 1) { // 일방(정)에 종료점이 일치하면 불가
-						continue;
-					}
-					dirTarget = 2; // 역 - s로 나가는
-				} else { // 다음 링크의 enode 연결
-					if (pLinkPrev->link_id.dir == 2) { // 일방(역)에 시작점이 일치하면 불가
-						continue;
-					}
-					dirTarget = 1; // 정 - e로 나가는
-				}
-				angStart = GetAngle(pLinkPrev, dirTarget);
-				angDiff = abs(180 - angStart + angEnd + 360) % 360;
-
-#if defined(USE_P2P_DATA)
-				// 일반 경로(최초탐색, 정차 후 출발)일 경우(대안경로 등은 무시), 출발지 바로 다음의 좌회전이고 거리가 너무 짧으면 무시
-				// 최소 회전 반경을 차로당 50m로 // 4차선 이상 도로만 적용 // 3개 이상 연결로
-				if ((pRouteInfo->reqInfo.RequestMode == 0) && (pCurInfo->depth <= 0) &&
-					(pNodePrev->base.connnode_count >= 3) && (pLinkPrev->veh.lane_cnt >= 4) && (200 <= angDiff && angDiff <= 300)) {
-					static const int minDist = 50; // 차로 변경 시 최소 50m 필요
-					int maxDist = (pLinkPrev->veh.lane_cnt / 2 - 1) * minDist;
-					if (pLinkPrev->veh.link_type == 2) { // 분리도로일 경우
-						maxDist = (pLinkPrev->veh.lane_cnt - 1) * minDist;
-					}
-					if (maxDist > pCurInfo->dist) {
-						continue;
-					}
-				}
+			isPayedLink = pLinkPrev->ped.walk_charge;
+		}
 #endif
 
-				// 고도 차이
-				// 현재 숲길 데이터에만 존재
-				if (pLink->base.link_type == TYPE_LINK_DATA_TREKKING && pNodePrev->node_id != pNode->node_id) {
-					altDiff = pNode->trk.z_value - pNodePrev->trk.z_value;
-					if (altDiff != 0) {
-						altCost = get_road_slope(static_cast<int32_t>(pLink->length), altDiff);
-					}
-				}
+		// 무료 적용 옵션일 경우, 출도착이 무료고 유료 링크면 패스
+		if ((pRouteInfo->reqInfo.FreeOption == 1) && (isPayedArea == 0) && (isPayedLink == 1)) {
+			continue;
+			// costAdditional = 1000.; 또는 가중치 증가 
+		}
 
 
-				double distFactor = getDistanceFactor(pRouteInfo->StartLinkInfo.Coord.x, pRouteInfo->StartLinkInfo.Coord.y, pRouteInfo->EndLinkInfo.Coord.x, pRouteInfo->EndLinkInfo.Coord.y, pLinkPrev, pRouteInfo->reqInfo.RouteOption);
+		// 역방향은 순서 바뀌어야 할 듯, 2025-03-18
+		candidateId.parents_id = pLinkPrev->link_id.nid;
+		candidateId.current_id = pLink->link_id.nid;
+		//candidateId.parents_id = pLink->link_id.nid;
+		//candidateId.current_id = pLinkPrev->link_id.nid;
 
-#if defined(USE_TMS_API)
-				if (distFactor < 0) { // rdm에서 일정 거리 이상의 낮은 도로는 무시하자					
+		if (!IsVisitedLink(pRouteInfo, candidateId, true)) { // && !IsAddedLink(pLink->link_id)) {
+			if (pNodePrev->coord.x == pLinkPrev->getVertexX(0) && pNodePrev->coord.y == pLinkPrev->getVertexY(0)) { // 다음 링크의 snode 연결
+				if (pLinkPrev->link_id.dir == 1) { // 일방(정)에 종료점이 일치하면 불가
 					continue;
 				}
+				dirTarget = 2; // 역 - s로 나가는
+			} else { // 다음 링크의 enode 연결
+				if (pLinkPrev->link_id.dir == 2) { // 일방(역)에 시작점이 일치하면 불가
+					continue;
+				}
+				dirTarget = 1; // 정 - e로 나가는
+			}
+			angStart = getAngle(pLinkPrev, dirTarget);
+			angDiff = getEntryAngle(angStart, angEnd);
+
+#if defined(USE_P2P_DATA)
+			if (checkAvoidTurnLeft(&pRouteInfo->reqInfo, pCurInfo, pNodePrev, pLinkPrev, angDiff) == true) {
+				continue;
+			}
 #endif
 
-				// 이전 링크의 끝노드 위치를 기준으로 휴리스틱 계산하는게 맞을 듯, next와 다르게 방향성 맞는지 한번 확인 필요(2025-02-07)
-				int nextLinkIdx = 0;
-				if (dirTarget == 2) { // 역 - s로 들어오는
-					nextLinkIdx = pLinkPrev->getVertexCount() - 1; // 멀리있는 노드는 e
+			// 고도 차이
+			// 현재 숲길 데이터에만 존재
+			if (pLinkPrev->base.link_type == TYPE_LINK_DATA_TREKKING && pNodePrev->node_id != pNode->node_id) {
+				altDiff = pNode->trk.z_value - pNodePrev->trk.z_value;
+				if (altDiff != 0) {
+					altCost = get_road_slope(static_cast<int32_t>(pLinkPrev->length), altDiff);
 				}
+			}
 
-				heuristicCost = getHueristicCost(pRouteInfo->StartLinkInfo.Coord.x, pRouteInfo->StartLinkInfo.Coord.y, pRouteInfo->EndLinkInfo.Coord.x, pRouteInfo->EndLinkInfo.Coord.y, pLinkPrev->getVertexX(nextLinkIdx), pLinkPrev->getVertexY(nextLinkIdx), pLinkPrev->base.link_type, pRouteInfo->reqInfo.RouteOption, distFactor);
 
-				uint8_t curSpeed = SPEED_NOT_AVALABLE;
-				uint8_t curSpeedType = pRouteInfo->reqInfo.RequestTraffic;
+			double distFactor = getDistanceFactor(pRouteInfo->StartLinkInfo.Coord.x, pRouteInfo->StartLinkInfo.Coord.y, pRouteInfo->EndLinkInfo.Coord.x, pRouteInfo->EndLinkInfo.Coord.y, pLinkPrev, pRouteInfo->reqInfo.RouteOption);
+
+#if defined(USE_TMS_API)
+			if (distFactor < 0) { // rdm에서 일정 거리 이상의 낮은 도로는 무시하자					
+				continue;
+			}
+#endif
+
+			// 이전 링크의 끝노드 위치를 기준으로 휴리스틱 계산하는게 맞을 듯, next와 다르게 방향성 맞는지 한번 확인 필요(2025-02-07)
+			int nextLinkIdx = 0;
+			if (dirTarget == 2) { // 역 - s로 들어오는
+				nextLinkIdx = pLinkPrev->getVertexCount() - 1; // 멀리있는 노드는 e
+			}
+
+			heuristicCost = getHueristicCost(pRouteInfo->StartLinkInfo.Coord.x, pRouteInfo->StartLinkInfo.Coord.y, pRouteInfo->EndLinkInfo.Coord.x, pRouteInfo->EndLinkInfo.Coord.y, pLinkPrev->getVertexX(nextLinkIdx), pLinkPrev->getVertexY(nextLinkIdx), pLinkPrev->base.link_type, pRouteInfo->reqInfo.RouteOption, distFactor);
+
+			uint8_t curSpeed = SPEED_NOT_AVALABLE;
+			uint8_t curSpeedType = pRouteInfo->reqInfo.RequestTraffic;
 #if defined(USE_VEHICLE_DATA) // && defined(USE_TRAFFIC_DATA)
-				if (pLinkPrev->veh.level <= 6) {
+			if (pLinkPrev->veh.level <= 6) {
 #	if USE_TRAFFIC_LINK_ATTRIBUTE // use link speed
-					if (dirTarget == DIR_POSITIVE) {
-						curSpeed = pLinkPrev->veh_ext.spd_p;
-						curSpeedType = pLinkPrev->veh_ext.spd_type_p;
-					} else { // if (dirTarget == DIR_NAGATIVE) {
-						curSpeed = pLinkPrev->veh_ext.spd_n;
-						curSpeedType = pLinkPrev->veh_ext.spd_type_n;
-					}
-#	else // use traffic map speed
-					curSpeed = m_pDataMgr->GetTrafficSpeed(pLinkPrev->link_id, dirTarget, pRouteInfo->reqInfo.RequestTime, curSpeedType);
-#	endif // #if USE_TRAFFIC_LINK_ATTRIBUTE
+				if (dirTarget == DIR_POSITIVE) {
+					curSpeed = pLinkPrev->veh_ext.spd_p;
+					curSpeedType = pLinkPrev->veh_ext.spd_type_p;
+				} else { // if (dirTarget == DIR_NAGATIVE) {
+					curSpeed = pLinkPrev->veh_ext.spd_n;
+					curSpeedType = pLinkPrev->veh_ext.spd_type_n;
 				}
+#	else // use traffic map speed
+				curSpeed = m_pDataMgr->GetTrafficSpeed(pLinkPrev->link_id, dirTarget, pRouteInfo->reqInfo.RequestTime, curSpeedType);
+#	endif // #if USE_TRAFFIC_LINK_ATTRIBUTE
+			}
 #endif
-				// 주변 링크를 확인하고, 최대 속도를 주변 링크 속도 이하로 조정
-				//if ((curSpeed == SPEED_NOT_AVALABLE) && (pCurInfo->speed != SPEED_NOT_AVALABLE) && (pLinkPrev->veh.level >= pLink->veh.level)) {
-				//	if (GetLinkSpeed(pLinkPrev->link_id, pLinkPrev->veh.level, pRouteInfo->reqInfo.RouteOption) > pCurInfo->speed) {
-				//		curSpeed = pCurInfo->speed;
-				//	}
-				//}
+			// 주변 링크를 확인하고, 최대 속도를 주변 링크 속도 이하로 조정
+			//if ((curSpeed == SPEED_NOT_AVALABLE) && (pCurInfo->speed != SPEED_NOT_AVALABLE) && (pLinkPrev->veh.level >= pLink->veh.level)) {
+			//	if (GetLinkSpeed(pLinkPrev->link_id, pLinkPrev->veh.level, pRouteInfo->reqInfo.RouteOption) > pCurInfo->speed) {
+			//		curSpeed = pCurInfo->speed;
+			//	}
+			//}
 
-				// 트리 등록
-				costReal = GetCost(&pRouteInfo->reqInfo, pLinkPrev, dirTarget, 0, curSpeed);
-				//costTreavel = GetTravelCost(pLinkPrev, pLink, curSpeed, costReal, angDiff, pRouteInfo->RouteOption, pRouteInfo->AvoidOption, pRouteInfo->MobilityOption, isPayedArea); // 이전 링크/노드(단점 유턴) 속성에 의해 비용이 높아진 상태 반영
-				costTreavel = GetTravelCost(&pRouteInfo->reqInfo, pLinkPrev, pLink, &pRouteInfo->StartLinkInfo, curSpeed, costReal, angDiff);
+			// 트리 등록
+			costReal = GetCost(&pRouteInfo->reqInfo, pLinkPrev, dirTarget, 0, curSpeed);
+			//costTreavel = GetTravelCost(pLinkPrev, pLink, curSpeed, costReal, angDiff, pRouteInfo->RouteOption, pRouteInfo->AvoidOption, pRouteInfo->MobilityOption, isPayedArea); // 이전 링크/노드(단점 유턴) 속성에 의해 비용이 높아진 상태 반영
+			costTreavel = GetTravelCost(&pRouteInfo->reqInfo, pLinkPrev, pLink, &pRouteInfo->StartLinkInfo, curSpeed, costReal, angDiff);
 
 
 #if defined(USE_FOREST_DATA)
-				// 코스 데이터 가중치 부여, 코스탐색옵션 전용 && 최단 제외
-				if ((pRouteInfo->RouteOption != ROUTE_OPT_SHORTEST) && (pRouteInfo->RouteSubOpt.mnt.course_type == TYPE_TRE_CROSS)) {
-					costTreavel = GetCourseCost(pRouteInfo, pLinkPrev, costTreavel);
-				}
+			// 코스 데이터 가중치 부여, 코스탐색옵션 전용 && 최단 제외
+			if ((pRouteInfo->RouteOption != ROUTE_OPT_SHORTEST) && (pRouteInfo->RouteSubOpt.mnt.course_type == TYPE_TRE_CROSS)) {
+				costTreavel = GetCourseCost(pRouteInfo, pLinkPrev, costTreavel);
+			}
 #endif
 
-				// 역방향은 순서 바뀌어야 할 듯, 2025-03-18
-				prevCandidate.parents_id = pCurInfo->linkId.nid;
-				prevCandidate.current_id = pCurInfo->parentLinkId.nid;
-				//nextCandidate.parents_id = pCurInfo->parentLinkId.nid;
-				//nextCandidate.current_id = pCurInfo->linkId.nid;
+			// 역방향은 순서 바뀌어야 할 듯, 2025-03-18
+			prevCandidate.parents_id = pCurInfo->linkId.nid;
+			prevCandidate.current_id = pCurInfo->parentLinkId.nid;
+			//nextCandidate.parents_id = pCurInfo->parentLinkId.nid;
+			//nextCandidate.current_id = pCurInfo->linkId.nid;
 
-				pItem = new CandidateLink;
-				pItem->candidateId = candidateId;// prevCandidate; // 후보 ID
-				pItem->parentLinkId = pCurInfo->linkId;	// 자식 링크 ID
-				pItem->linkId = pLinkPrev->link_id; // 링크 ID
-				pItem->nodeId = pNodePrev->node_id;	// 노드 ID
-				pItem->dist = pLinkPrev->length;	// 실 거리
-				pItem->time = costReal; // 실 시간
-				pItem->cost = costTreavel + costAdditional; // 논리적 주행 시간
-				pItem->distTreavel = pCurInfo->distTreavel + pItem->dist;	// 누적 거리
-				pItem->timeTreavel = pCurInfo->timeTreavel + pItem->time; // 누적 시간
-				pItem->costTreavel = pCurInfo->costTreavel + pItem->cost;	// 계산 비용
-																			// pItem->costHeuristic = pCurInfo->costTreavel + heuristicCost;	// 가중치 계산 비용 // old
-				pItem->costHeuristic = pItem->costTreavel + heuristicCost;	// 가중치 계산 비용
-				pItem->linkDataType = pCurInfo->linkDataType;
-				pItem->depth = pCurInfo->depth + 1;	// 탐색 깊이
-				pItem->visited = false; // 방문 여부
-				pItem->dir = dirTarget; // 탐색방향
+			pItem = new CandidateLink;
+			pItem->candidateId = candidateId;// prevCandidate; // 후보 ID
+			pItem->parentLinkId = pCurInfo->linkId;	// 자식 링크 ID
+			pItem->linkId = pLinkPrev->link_id; // 링크 ID
+			pItem->nodeId = pNodePrev->node_id;	// 노드 ID
+			pItem->dist = pLinkPrev->length;	// 실 거리
+			pItem->time = costReal; // 실 시간
+			pItem->cost = costTreavel + costAdditional; // 논리적 주행 시간
+			pItem->distTreavel = pCurInfo->distTreavel + pItem->dist;	// 누적 거리
+			pItem->timeTreavel = pCurInfo->timeTreavel + pItem->time; // 누적 시간
+			pItem->costTreavel = pCurInfo->costTreavel + pItem->cost;	// 계산 비용
+																		// pItem->costHeuristic = pCurInfo->costTreavel + heuristicCost;	// 가중치 계산 비용 // old
+			pItem->costHeuristic = pItem->costTreavel + heuristicCost;	// 가중치 계산 비용
+			pItem->linkDataType = pCurInfo->linkDataType;
+			pItem->depth = pCurInfo->depth + 1;	// 탐색 깊이
+			pItem->visited = false; // 방문 여부
+			pItem->dir = dirTarget; // 탐색방향
+			pItem->angle = angDiff; // 진입각도
 #if defined(USE_VEHICLE_DATA)
-				pItem->speed = curSpeed;
-				pItem->speed_type = curSpeedType;
-				pItem->speed_level = pLinkPrev->veh.level;
+			pItem->speed = curSpeed;
+			pItem->speed_type = curSpeedType;
+			pItem->speed_level = pLinkPrev->veh.level;
 #endif
-				pItem->pPrevLink = const_cast<CandidateLink*>(pCurInfo);
+			pItem->pPrevLink = const_cast<CandidateLink*>(pCurInfo);
 
-				// 링크 방문 목록 등록
-				pRouteInfo->mRouteReversePass.emplace(candidateId.llid, pItem);
-				pRouteInfo->pqDijkstra.emplace(pItem);
+			// 링크 방문 목록 등록
+			pRouteInfo->mRouteReversePass.emplace(candidateId.llid, pItem);
+			pRouteInfo->pqDijkstra.emplace(pItem);
 
-				cntLinks++;
+			cntLinks++;
 
 #if defined(USE_SHOW_ROUTE_SATATUS)
-				//LOG_TRACE(LOG_DEBUG, "id:%lld(real cost:%f, heuristic cost:%f, lv:%d) ", newItem.linkId.llid, newItem.costReal, newItem.costHeuristic, newItem.depth);
+			//LOG_TRACE(LOG_DEBUG, "id:%lld(real cost:%f, heuristic cost:%f, lv:%d) ", newItem.linkId.llid, newItem.costReal, newItem.costHeuristic, newItem.depth);
 #endif
-			}
 		}
 	} // for
 
@@ -3654,7 +3798,7 @@ const int CRoutePlan::AddNextCourse(IN RouteInfo* pRouteInfo, IN const Candidate
 			return -1;
 		}
 	}
-	angStart = GetAngle(pLink, dirTarget);
+	angStart = getAngle(pLink, dirTarget);
 
 	pNodeNext = m_pDataMgr->GetNodeDataById(nextNodeId, pLink->base.link_type);
 
@@ -3709,44 +3853,18 @@ const int CRoutePlan::AddNextCourse(IN RouteInfo* pRouteInfo, IN const Candidate
 			}
 		}
 
-		//if (dir == 1) // 정방향
-		//{
 
-		//}
-		//else if (dir == 2) // 역방향
-		//{
-
-		//}
-		//else
-		{
-			pLinkNext = m_pDataMgr->GetLinkDataById(pNodeNext->connnodes[ii], pLink->base.link_type);
-			if (!pLinkNext) {
-				LOG_TRACE(LOG_ERROR, "Failed, can't find link, id:%d", pNodeNext->connnodes[ii].llid);
+		pLinkNext = m_pDataMgr->GetLinkDataById(pNodeNext->connnodes[ii], pLink->base.link_type);
+		if (!pLinkNext) {
+			LOG_TRACE(LOG_ERROR, "Failed, can't find link, id:%d", pNodeNext->connnodes[ii].llid);
+			continue;
+		}
+#if defined(USE_VEHICLE_DATA)
+		else if (pLinkNext->base.link_type == TYPE_LINK_DATA_VEHICLE) {
+			// 트럭 회피 옵션
+			if (m_pDataMgr->IsAvoidTruckLink(pRouteInfo->reqInfo.RouteTruckOption.option(), pLinkPrev)) {
 				continue;
 			}
-
-#if defined(USE_PEDESTRIAN_DATA)
-			if (pLinkNext->base.link_type == TYPE_LINK_DATA_PEDESTRIAN) {
-				isPayedLink = pLinkNext->ped.walk_charge;
-			}
-#elif defined(USE_VEHICLE_DATA)
-			if (pLinkNext->base.link_type == TYPE_LINK_DATA_VEHICLE) {
-				isPayedLink = pLinkNext->veh.charge;
-			}
-#endif
-
-			// 무료 적용 옵션일 경우, 출도착이 무료고 유료 링크면 패스
-			if ((pRouteInfo->reqInfo.FreeOption == 1) && (isPayedArea == 0) && (isPayedLink == 1)) {
-				continue;
-				// costAdditional = 1000.; 또는 가중치 증가 
-			}
-
-			// 낮은 레벨은 제외
-#if defined(USE_TMS_API)
-			//if (pLinkNext->veh.level > USE_ROUTE_TABLE_LEVEL) { // 일반도로 이상만 따져보자
-			//	continue;
-			//}
-#endif
 
 #if defined(USE_P2P_DATA)
 			if ((pLinkNext->veh.hd_flag != 1) && // HD 링크와 매칭 정보가 없으면 통행 불가
@@ -3759,7 +3877,20 @@ const int CRoutePlan::AddNextCourse(IN RouteInfo* pRouteInfo, IN const Candidate
 			} else if ((pLinkNext->veh.link_type == 8) && (pLinkNext->veh.level > 3)) { // 지방도 이하 레벨의 유턴 도로는 금지
 				continue;
 			}
-#elif defined(USE_FOREST_DATA)
+#endif
+
+			// 낮은 레벨은 제외
+#if defined(USE_TMS_API)
+			//if (pLinkNext->veh.level > USE_ROUTE_TABLE_LEVEL) { // 일반도로 이상만 따져보자
+			//	continue;
+			//}
+#endif
+
+			isPayedLink = pLinkNext->veh.charge;
+		}
+#endif
+#if defined(USE_FOREST_DATA)
+		else if (pLinkNext->base.link_type == TYPE_LINK_DATA_TREKKING) {
 			// 숲길은 등산로를 기본으로 하고, 둘레길, 자전거길, 종주길 등은 기본 경로 탐색 시 제외하자
 			bool isAvoid = isAvoidLink(m_pDataMgr, pLinkNext, pRouteInfo->AvoidOption, pRouteInfo->RouteSubOpt);
 			if (isAvoid) {
@@ -3770,114 +3901,128 @@ const int CRoutePlan::AddNextCourse(IN RouteInfo* pRouteInfo, IN const Candidate
 			if (psetCourseLinks->find(pLinkNext->link_id.llid) == psetCourseLinks->end()) {
 				continue;
 			}
+		}
+#endif
+#if defined(USE_PEDESTRIAN_DATA)
+		else if (pLinkNext->base.link_type == TYPE_LINK_DATA_PEDESTRIAN) {
+			if ((pRouteInfo->reqInfo.MobilityOption == TYPE_MOBILITY_BICYCLE) && (pLinkNext->ped.bicycle_control == 3)) {
+				continue; // 자전거 통행 금지
+			}
+
+			isPayedLink = pLinkNext->ped.walk_charge;
+		}
 #endif
 
-			candidateId.parents_id = pLink->link_id.nid;
-			candidateId.current_id = pLinkNext->link_id.nid;
+		// 무료 적용 옵션일 경우, 출도착이 무료고 유료 링크면 패스
+		if ((pRouteInfo->reqInfo.FreeOption == 1) && (isPayedArea == 0) && (isPayedLink == 1)) {
+			continue;
+			// costAdditional = 1000.; 또는 가중치 증가 
+		}
 
-			if (!IsVisitedLink(pRouteInfo, candidateId)) { // && !IsAddedLink(pLink->link_id)) {
-				if (pNodeNext->coord.x == pLinkNext->getVertexX(0) && pNodeNext->coord.y == pLinkNext->getVertexY(0)) { // 다음 링크의 snode 연결
-					if (pLinkNext->link_id.dir == 2) { // 일방(역)에 시작점이 일치하면 불가
-						continue;
-					}
-					dirTarget = 1; // 정 - s에서 나가는
-				} else { // 다음 링크의 enode 연결
-					if (pLinkNext->link_id.dir == 1) { // 일방(정)에 종료점이 일치하면 불가
-						continue;
-					}
-					dirTarget = 2; // 역 - e에서 나가는
+
+		candidateId.parents_id = pLink->link_id.nid;
+		candidateId.current_id = pLinkNext->link_id.nid;
+
+		if (!IsVisitedLink(pRouteInfo, candidateId)) { // && !IsAddedLink(pLink->link_id)) {
+			if (pNodeNext->coord.x == pLinkNext->getVertexX(0) && pNodeNext->coord.y == pLinkNext->getVertexY(0)) { // 다음 링크의 snode 연결
+				if (pLinkNext->link_id.dir == 2) { // 일방(역)에 시작점이 일치하면 불가
+					continue;
 				}
-				angEnd = GetAngle(pLinkNext, dirTarget, false);
-				angDiff = abs(180 - angStart + angEnd + 360) % 360;
+				dirTarget = 1; // 정 - s에서 나가는
+			} else { // 다음 링크의 enode 연결
+				if (pLinkNext->link_id.dir == 1) { // 일방(정)에 종료점이 일치하면 불가
+					continue;
+				}
+				dirTarget = 2; // 역 - e에서 나가는
+			}
+			angEnd = getAngle(pLinkNext, dirTarget, false);
+			angDiff = getEntryAngle(angStart, angEnd);
 
 #if defined(USE_P2P_DATA)
-				// 일반 경로(최초탐색, 정차 후 출발)일 경우(대안경로 등은 무시), 출발지 바로 다음의 좌회전이고 거리가 너무 짧으면 무시
-				// 최소 회전 반경을 차로당 50m로 // 4차선 이상 도로만 적용 // 3개 이상 연결로
-				if ((pRouteInfo->reqInfo.RequestMode == 0) && (pCurInfo->depth <= 0) &&
-					(pNodeNext->base.connnode_count >= 3) && (pLinkNext->veh.lane_cnt >= 4) && (200 <= angDiff && angDiff <= 300)) {
-					static const int minDist = 50; // 차로 변경 시 최소 50m 필요
-					int maxDist = (pLinkNext->veh.lane_cnt / 2 - 1) * minDist;
-					if (pLinkNext->veh.link_type == 2) { // 분리도로일 경우
-						maxDist = (pLinkNext->veh.lane_cnt - 1) * minDist;
-					}
-					if (maxDist > pCurInfo->dist) {
-						continue;
-					}
-				}
+			if (checkAvoidTurnLeft(&pRouteInfo->reqInfo, pCurInfo, pNodeNext, pLinkNext, angDiff) == true) {
+				continue;
+			}
 #endif
 
-				// 고도 차이
-				// 현재 숲길 데이터에만 존재
-				if (pLinkNext->base.link_type == TYPE_LINK_DATA_TREKKING && pNodeNext->node_id != pNode->node_id) {
-					altDiff = pNodeNext->trk.z_value - pNode->trk.z_value;
-					if (altDiff != 0) {
-						altCost = get_road_slope(static_cast<int32_t>(pLinkNext->length), altDiff);
-					}
+			// 고도 차이
+			// 현재 숲길 데이터에만 존재
+			if (pLinkNext->base.link_type == TYPE_LINK_DATA_TREKKING && pNodeNext->node_id != pNode->node_id) {
+				altDiff = pNodeNext->trk.z_value - pNode->trk.z_value;
+				if (altDiff != 0) {
+					altCost = get_road_slope(static_cast<int32_t>(pLinkNext->length), altDiff);
 				}
+			}
 
-				// 다음 링크의 끝노드 위치를 기준으로 휴리스틱 계산하는게 맞을 듯
-				int nextLinkIdx = 0;
-				if (dirTarget == 1) { // 정 - s에서 나가는
-					nextLinkIdx = pLinkNext->getVertexCount() - 1; // 멀리있는 노드는 e
-				}
-				heuristicCost = getHueristicCost(pRouteInfo->StartLinkInfo.Coord.x, pRouteInfo->StartLinkInfo.Coord.y, pRouteInfo->EndLinkInfo.Coord.x, pRouteInfo->EndLinkInfo.Coord.y, pLinkNext->getVertexX(nextLinkIdx), pLinkNext->getVertexY(nextLinkIdx), pLinkNext->base.link_type, pRouteInfo->reqInfo.RouteOption, 0);
+			// 다음 링크의 끝노드 위치를 기준으로 휴리스틱 계산하는게 맞을 듯
+			int nextLinkIdx = 0;
+			if (dirTarget == 1) { // 정 - s에서 나가는
+				nextLinkIdx = pLinkNext->getVertexCount() - 1; // 멀리있는 노드는 e
+			}
+			heuristicCost = getHueristicCost(pRouteInfo->StartLinkInfo.Coord.x, pRouteInfo->StartLinkInfo.Coord.y, pRouteInfo->EndLinkInfo.Coord.x, pRouteInfo->EndLinkInfo.Coord.y, pLinkNext->getVertexX(nextLinkIdx), pLinkNext->getVertexY(nextLinkIdx), pLinkNext->base.link_type, pRouteInfo->reqInfo.RouteOption, 0);
 
-				uint8_t curSpeed = SPEED_NOT_AVALABLE;
-				uint8_t curSpeedType = pRouteInfo->reqInfo.RequestTraffic;
+			uint8_t curSpeed = SPEED_NOT_AVALABLE;
+			uint8_t curSpeedType = pRouteInfo->reqInfo.RequestTraffic;
 #if defined(USE_VEHICLE_DATA) // && defined(USE_TRAFFIC_DATA)
-				if (pLinkNext->veh.level <= 6) {
+			if (pLinkNext->veh.level <= 6) {
 #	if USE_TRAFFIC_LINK_ATTRIBUTE // use link speed
-					if (dirTarget == DIR_POSITIVE) {
-						curSpeed = pLinkNext->veh_ext.spd_p;
-						curSpeedType = pLinkNext->veh_ext.spd_type_p;
-					} else { // if (dirTarget == DIR_NAGATIVE) {
-						curSpeed = pLinkNext->veh_ext.spd_n;
-						curSpeedType = pLinkNext->veh_ext.spd_type_n;
-					}
-#	else // use traffic map speed
-					curSpeed = m_pDataMgr->GetTrafficSpeed(pLinkNext->link_id, dirTarget, pRouteInfo->reqInfo.RequestTime, curSpeedType);
-#	endif // #if USE_TRAFFIC_LINK_ATTRIBUTE
+				if (dirTarget == DIR_POSITIVE) {
+					curSpeed = pLinkNext->veh_ext.spd_p;
+					curSpeedType = pLinkNext->veh_ext.spd_type_p;
+				} else { // if (dirTarget == DIR_NAGATIVE) {
+					curSpeed = pLinkNext->veh_ext.spd_n;
+					curSpeedType = pLinkNext->veh_ext.spd_type_n;
 				}
+#	else // use traffic map speed
+				curSpeed = m_pDataMgr->GetTrafficSpeed(pLinkNext->link_id, dirTarget, pRouteInfo->reqInfo.RequestTime, curSpeedType);
+#	endif // #if USE_TRAFFIC_LINK_ATTRIBUTE
+			}
 #endif
-				// 트리 등록
-				costReal = GetCost(&pRouteInfo->reqInfo, pLinkNext, dirTarget, 0, curSpeed);
-				//costTreavel = GetTravelCost(pLinkNext, pLink, curSpeed, costReal, angDiff, pRouteInfo->RouteOption, pRouteInfo->AvoidOption, pRouteInfo->MobilityOption, isPayedArea); // 이전 링크/노드(단점 유턴) 속성에 의해 비용이 높아진 상태 반영
-				costTreavel = GetTravelCost(&pRouteInfo->reqInfo, pLinkNext, pLink, &pRouteInfo->EndLinkInfo, curSpeed, costReal, angDiff);
+			// 주변 링크를 확인하고, 최대 속도를 주변 링크 속도 이하로 조정
+			//if ((curSpeed == SPEED_NOT_AVALABLE) && (pCurInfo->speed != SPEED_NOT_AVALABLE) && (pLinkNext->veh.level >= pLink->veh.level)) {
+			//	if (GetLinkSpeed(pLinkNext->link_id, pLinkNext->veh.level, pRouteInfo->reqInfo.RouteOption) > pCurInfo->speed) {
+			//		curSpeed = pCurInfo->speed;
+			//	}
+			//}
+
+			// 트리 등록
+			costReal = GetCost(&pRouteInfo->reqInfo, pLinkNext, dirTarget, 0, curSpeed);
+			//costTreavel = GetTravelCost(pLinkNext, pLink, curSpeed, costReal, angDiff, pRouteInfo->RouteOption, pRouteInfo->AvoidOption, pRouteInfo->MobilityOption, isPayedArea); // 이전 링크/노드(단점 유턴) 속성에 의해 비용이 높아진 상태 반영
+			costTreavel = GetTravelCost(&pRouteInfo->reqInfo, pLinkNext, pLink, &pRouteInfo->EndLinkInfo, curSpeed, costReal, angDiff);
 
 
-				nextCandidate.parents_id = pCurInfo->parentLinkId.nid;
-				nextCandidate.current_id = pCurInfo->linkId.nid;
+			nextCandidate.parents_id = pCurInfo->parentLinkId.nid;
+			nextCandidate.current_id = pCurInfo->linkId.nid;
 
-				pItem = new CandidateLink;
-				pItem->candidateId = nextCandidate; // 후보 ID
-				pItem->parentLinkId = pCurInfo->linkId;	// 부모 링크 ID
-				pItem->linkId = pLinkNext->link_id; // 링크 ID
-				pItem->nodeId = pNodeNext->node_id;	// 노드 ID
-				pItem->dist = pLinkNext->length;	// 실 거리
-				pItem->time = costReal; // 실 시간
-				pItem->cost = costTreavel + costAdditional; // 논리적 주행 시간
-				pItem->distTreavel = pCurInfo->distTreavel + pItem->dist;	// 누적 거리
-				pItem->timeTreavel = pCurInfo->timeTreavel + pItem->time; // 누적 시간
-				pItem->costTreavel = pCurInfo->costTreavel + pItem->cost;	// 계산 비용
-				// pItem->costHeuristic = pCurInfo->costTreavel + heuristicCost;	// 가중치 계산 비용 // old
-				pItem->costHeuristic = pItem->costTreavel + heuristicCost;	// 가중치 계산 비용
-				pItem->linkDataType = pCurInfo->linkDataType;
-				pItem->depth = pCurInfo->depth + 1;	// 탐색 깊이
-				pItem->visited = false; // 방문 여부
-				pItem->dir = dirTarget; // 탐색방향
+			pItem = new CandidateLink;
+			pItem->candidateId = nextCandidate; // 후보 ID
+			pItem->parentLinkId = pCurInfo->linkId;	// 부모 링크 ID
+			pItem->linkId = pLinkNext->link_id; // 링크 ID
+			pItem->nodeId = pNodeNext->node_id;	// 노드 ID
+			pItem->dist = pLinkNext->length;	// 실 거리
+			pItem->time = costReal; // 실 시간
+			pItem->cost = costTreavel + costAdditional; // 논리적 주행 시간
+			pItem->distTreavel = pCurInfo->distTreavel + pItem->dist;	// 누적 거리
+			pItem->timeTreavel = pCurInfo->timeTreavel + pItem->time; // 누적 시간
+			pItem->costTreavel = pCurInfo->costTreavel + pItem->cost;	// 계산 비용
+			// pItem->costHeuristic = pCurInfo->costTreavel + heuristicCost;	// 가중치 계산 비용 // old
+			pItem->costHeuristic = pItem->costTreavel + heuristicCost;	// 가중치 계산 비용
+			pItem->linkDataType = pCurInfo->linkDataType;
+			pItem->depth = pCurInfo->depth + 1;	// 탐색 깊이
+			pItem->visited = false; // 방문 여부
+			pItem->dir = dirTarget; // 탐색방향
+			pItem->angle = angDiff; // 진입각도
 
-				pItem->pPrevLink = const_cast<CandidateLink*>(pCurInfo);
+			pItem->pPrevLink = const_cast<CandidateLink*>(pCurInfo);
 
-				// 링크 방문 목록 등록
-				pRouteInfo->mRoutePass.emplace(candidateId.llid, pItem);
-				pRouteInfo->pqDijkstra.emplace(pItem);
+			// 링크 방문 목록 등록
+			pRouteInfo->mRoutePass.emplace(candidateId.llid, pItem);
+			pRouteInfo->pqDijkstra.emplace(pItem);
 
-				cntLinks++;
+			cntLinks++;
 
 #if defined(USE_SHOW_ROUTE_SATATUS)
-				//LOG_TRACE(LOG_DEBUG, "id:%lld(real cost:%f, heuristic cost:%f, lv:%d) ", newItem.linkId.llid, newItem.costReal, newItem.costHeuristic, newItem.depth);
+			//LOG_TRACE(LOG_DEBUG, "id:%lld(real cost:%f, heuristic cost:%f, lv:%d) ", newItem.linkId.llid, newItem.costReal, newItem.costHeuristic, newItem.depth);
 #endif
-			}
 		}
 	} // for
 
@@ -3957,7 +4102,7 @@ const int CRoutePlan::Propagation(IN TableBaseInfo* pRouteInfo, IN const Candida
 			return -1;
 		}
 	}
-	angStart = GetAngle(pLink, dirTarget);
+	angStart = getAngle(pLink, dirTarget);
 
 	pNodeNext = m_pDataMgr->GetNodeDataById(nextNodeId, pLink->base.link_type);
 
@@ -4033,211 +4178,188 @@ const int CRoutePlan::Propagation(IN TableBaseInfo* pRouteInfo, IN const Candida
 				continue;
 			}
 
-			// 트럭 회피 옵션
-			if (m_pDataMgr->IsAvoidTruckLink(pRouteInfo->reqInfo.RouteTruckOption.option(), pLinkNext)) {
-				continue;
-			}
-			
+	
 			pLinkNext = m_pDataMgr->GetLinkDataById(pNodeNext->connnodes[ii], pLink->base.link_type);
 			if (!pLinkNext) {
 				LOG_TRACE(LOG_ERROR, "Failed, can't find link, id:%d", pNodeNext->connnodes[ii].llid);
 				continue;
 			}
-
-#if defined(USE_PEDESTRIAN_DATA)
-			if (pLinkNext->base.link_type == TYPE_LINK_DATA_PEDESTRIAN) {
-				isPayedLink = pLinkNext->ped.walk_charge;
-			}
-#elif defined(USE_VEHICLE_DATA)
-			if (pLinkNext->base.link_type == TYPE_LINK_DATA_VEHICLE) {
+			else if (pLink->base.link_type == TYPE_LINK_DATA_VEHICLE) {
+				// 트럭 회피 옵션
+				if (m_pDataMgr->IsAvoidTruckLink(pRouteInfo->reqInfo.RouteTruckOption.option(), pLinkNext)) {
+					continue;
+				}
+				// 낮은 레벨은 제외
+#if defined(USE_TMS_API)
+			//if (pLinkNext->veh.level > USE_ROUTE_TABLE_LEVEL) { // 일반도로 이상만 따져보자
+			//	continue;
+			//}
+#elif defined(USE_P2P_DATA)
+				if (pLinkNext->veh.hd_flag != 1) { // HD 링크와 매칭 정보가 없으면 통행 불가
+					continue;
+				}
+#endif
 				isPayedLink = pLinkNext->veh.charge;
 			}
-#endif
 
 			// 무료 적용 옵션일 경우, 출도착이 무료고 유료 링크면 패스
 			if ((pRouteInfo->reqInfo.FreeOption == 1) && (isPayedArea == 0) && (isPayedLink == 1)) {
 				continue;
 				// costAdditional = 1000.; 또는 가중치 증가 
 			}
-
-			// 낮은 레벨은 제외
-#if defined(USE_TMS_API)
-			//if (pLinkNext->veh.level > USE_ROUTE_TABLE_LEVEL) { // 일반도로 이상만 따져보자
-			//	continue;
-			//}
-#endif
-
-#if defined(USE_P2P_DATA)
-			if (pLinkNext->veh.hd_flag != 1) { // HD 링크와 매칭 정보가 없으면 통행 불가
-				continue;
-			}
-#endif
 		}
 
 
-		//if (dir == 1) // 정방향
-		//{
+		candidateId.parents_id = pLink->link_id.nid;
+		candidateId.current_id = pLinkNext->link_id.nid;
 
-		//}
-		//else if (dir == 2) // 역방향
-		//{
-
-		//}
-		//else
-		{
-			candidateId.parents_id = pLink->link_id.nid;
-			candidateId.current_id = pLinkNext->link_id.nid;
-
-			// 다음 방문이 더 싼경우 싼녀석으로 갈아치우자. 2025-03-04
-			static bool useReplace = true;
-			static int typeCompare = 2; // 0:COST, 1:DIST, 2:TIME
-			unordered_map<uint64_t, CandidateLink*>::iterator rpIt = pRouteInfo->mRoutePass.find(candidateId.llid);
-			if (useReplace && (rpIt != pRouteInfo->mRoutePass.end()) && (pLinkNext->veh.link_type == 1 || pLinkNext->veh.link_type == 2)) { // 로터리 등은 제외하고, 일반 도로에서만 비교하자
-				CandidateLink* pOtherInfo = rpIt->second;
-				if (((typeCompare == 0) && (pCurInfo->costTreavel < pOtherInfo->costTreavel)) ||
-					((typeCompare == 1) && (pCurInfo->distTreavel < pOtherInfo->distTreavel)) ||
-					((typeCompare == 2) && (pCurInfo->timeTreavel < pOtherInfo->timeTreavel))) {
-				//if ((pLink->link_id.nid == 1514369) && pCurInfo->costTreavel < rpIt->second->costTreavel) {
-				//if (/*(pLink->link_id.nid == 1514369) && */pCurInfo->timeTreavel < pPrevInfo->timeTreavel) {
+		// 다음 방문이 더 싼경우 싼녀석으로 갈아치우자. 2025-03-04
+		static bool useReplace = true;
+		static int typeCompare = 2; // 0:COST, 1:DIST, 2:TIME
+		unordered_map<uint64_t, CandidateLink*>::iterator rpIt = pRouteInfo->mRoutePass.find(candidateId.llid);
+		if (useReplace && (rpIt != pRouteInfo->mRoutePass.end()) && (pLinkNext->veh.link_type == 1 || pLinkNext->veh.link_type == 2)) { // 로터리 등은 제외하고, 일반 도로에서만 비교하자
+			CandidateLink* pOtherInfo = rpIt->second;
+			if (((typeCompare == 0) && (pCurInfo->costTreavel < pOtherInfo->costTreavel)) ||
+				((typeCompare == 1) && (pCurInfo->distTreavel < pOtherInfo->distTreavel)) ||
+				((typeCompare == 2) && (pCurInfo->timeTreavel < pOtherInfo->timeTreavel))) {
+			//if ((pLink->link_id.nid == 1514369) && pCurInfo->costTreavel < rpIt->second->costTreavel) {
+			//if (/*(pLink->link_id.nid == 1514369) && */pCurInfo->timeTreavel < pPrevInfo->timeTreavel) {
 					
-					// 재귀 반복되지 않는지 확인 필요
-					// 키를 변경하기 위해 기존 값 삭제 후 다시 추가
-					pOtherInfo->isEnable = false;
-					pRouteInfo->mRoutePass.erase(candidateId.llid);
+				// 재귀 반복되지 않는지 확인 필요
+				// 키를 변경하기 위해 기존 값 삭제 후 다시 추가
+				pOtherInfo->isEnable = false;
+				pRouteInfo->mRoutePass.erase(candidateId.llid);
 #if defined(USE_TMS_API)
-					pRouteInfo->mRoutePass.emplace(pRouteInfo->cntReplaced++, pOtherInfo);
+				pRouteInfo->mRoutePass.emplace(pRouteInfo->cntReplaced++, pOtherInfo);
 #endif
-				}
 			}
+		}
 
-			// 첫 방문일 경우에만 추가
-			//if (!IsVisitedLink(pRouteInfo, candidateId)) { // && !IsAddedLink(pLink->link_id)) {
-			if (pRouteInfo->mRoutePass.find(candidateId.llid) == pRouteInfo->mRoutePass.end()) {
-				if (pNodeNext->coord.x == pLinkNext->getVertexX(0) && pNodeNext->coord.y == pLinkNext->getVertexY(0))
-				{ // 다음 링크의 snode 연결
-					if (pLinkNext->link_id.dir == DIR_NAGATIVE) { // 일방(역)에 시작점이 일치하면 불가
-						continue;
-					}
-					dirTarget = DIR_POSITIVE; // 정 - s에서 나가는
-				} else { // 다음 링크의 enode 연결
-					if (pLinkNext->link_id.dir == DIR_POSITIVE) { // 일방(정)에 종료점이 일치하면 불가
-						continue;
-					}
-					dirTarget = DIR_NAGATIVE; // 역 - e에서 나가는
+		// 첫 방문일 경우에만 추가
+		//if (!IsVisitedLink(pRouteInfo, candidateId)) { // && !IsAddedLink(pLink->link_id)) {
+		/*else */if (pRouteInfo->mRoutePass.find(candidateId.llid) == pRouteInfo->mRoutePass.end()) {
+			if (pNodeNext->coord.x == pLinkNext->getVertexX(0) && pNodeNext->coord.y == pLinkNext->getVertexY(0))
+			{ // 다음 링크의 snode 연결
+				if (pLinkNext->link_id.dir == DIR_NAGATIVE) { // 일방(역)에 시작점이 일치하면 불가
+					continue;
 				}
-				angEnd = GetAngle(pLinkNext, dirTarget, false);
-				angDiff = abs(180 - angStart + angEnd + 360) % 360;
+				dirTarget = DIR_POSITIVE; // 정 - s에서 나가는
+			} else { // 다음 링크의 enode 연결
+				if (pLinkNext->link_id.dir == DIR_POSITIVE) { // 일방(정)에 종료점이 일치하면 불가
+					continue;
+				}
+				dirTarget = DIR_NAGATIVE; // 역 - e에서 나가는
+			}
+			angEnd = getAngle(pLinkNext, dirTarget, false);
+			angDiff = getEntryAngle(angStart, angEnd);
 
 #if defined(USE_P2P_DATA)
-				// 일반 경로(최초탐색, 정차 후 출발)일 경우(대안경로 등은 무시), 출발지 바로 다음의 좌회전이고 거리가 너무 짧으면 무시
-				// 최소 회전 반경을 차로당 50m로 // 4차선 이상 도로만 적용 // 3개 이상 연결로
-				if ((pRouteInfo->reqInfo.RequestMode == 0) && (pCurInfo->depth <= 0) &&
-					(pNodeNext->base.connnode_count >= 3) && (pLinkNext->veh.lane_cnt >= 4) && (200 <= angDiff && angDiff <= 300)) {
-					static const int minDist = 50; // 차로 변경 시 최소 50m 필요
-					int maxDist = (pLinkNext->veh.lane_cnt / 2 - 1) * minDist;
-					if (pLinkNext->veh.link_type == 2) { // 분리도로일 경우
-						maxDist = (pLinkNext->veh.lane_cnt - 1) * minDist;
-					}
-					if (maxDist > pCurInfo->dist) {
-						continue;
-					}
-				}
+			if (checkAvoidTurnLeft(&pRouteInfo->reqInfo, pCurInfo, pNodeNext, pLinkNext, angDiff) == true) {
+				continue;
+			}
 #endif
 
-				// 고도 차이
-				// 현재 숲길 데이터에만 존재
-				if (pLink->base.link_type == TYPE_LINK_DATA_TREKKING && pNodeNext->node_id != pNode->node_id) {
-					altDiff = pNodeNext->trk.z_value - pNode->trk.z_value;
-					if (altDiff != 0) {
-						altCost = get_road_slope(static_cast<int32_t>(pLinkNext->length), altDiff);
-					}
+			// 고도 차이
+			// 현재 숲길 데이터에만 존재
+			if (pLinkNext->base.link_type == TYPE_LINK_DATA_TREKKING && pNodeNext->node_id != pNode->node_id) {
+				altDiff = pNodeNext->trk.z_value - pNode->trk.z_value;
+				if (altDiff != 0) {
+					altCost = get_road_slope(static_cast<int32_t>(pLinkNext->length), altDiff);
 				}
+			}
 
 
 #if 0
-				double distFactor = getDistanceFactor(pRouteInfo->routeLinkInfo.Coord.x, pRouteInfo->routeLinkInfo.Coord.y, vtOrigins[nextIdx].x, vtOrigins[nextIdx].y, pLinkNext, pRouteInfo->routeOption);
+			double distFactor = getDistanceFactor(pRouteInfo->routeLinkInfo.Coord.x, pRouteInfo->routeLinkInfo.Coord.y, vtOrigins[nextIdx].x, vtOrigins[nextIdx].y, pLinkNext, pRouteInfo->routeOption);
 #else
-				double distFactor = getPropagationDistanceFactor(vtOrigins, currIdx, nextIdx, pLinkNext, pRouteInfo->reqInfo.RouteOption);
+			double distFactor = getPropagationDistanceFactor(vtOrigins, currIdx, nextIdx, pLinkNext, pRouteInfo->reqInfo.RouteOption);
 #endif
 
 #if defined(USE_TMS_API)
-				if (distFactor < 0) { // rdm에서 일정 거리 이상의 낮은 도로는 무시하자
-					continue;
-				}
+			if (distFactor < 0) { // rdm에서 일정 거리 이상의 낮은 도로는 무시하자
+				continue;
+			}
 #endif
 
-				// 다음 링크의 끝노드 위치를 기준으로 휴리스틱 계산하는게 맞을 듯
-				int nextLinkIdx = 0;
-				if (dirTarget == 1) { // 정 - s에서 나가는
-					nextLinkIdx = pLinkNext->getVertexCount() - 1; // 멀리있는 노드는 e
-				}
-				heuristicCost = getHueristicCost(pRouteInfo->routeLinkInfo.Coord.x, pRouteInfo->routeLinkInfo.Coord.y, vtOrigins[nextIdx].x, vtOrigins[nextIdx].y, pLinkNext->getVertexX(nextLinkIdx), pLinkNext->getVertexY(nextLinkIdx), pLinkNext->base.link_type, -1, distFactor);
+			// 다음 링크의 끝노드 위치를 기준으로 휴리스틱 계산하는게 맞을 듯
+			int nextLinkIdx = 0;
+			if (dirTarget == 1) { // 정 - s에서 나가는
+				nextLinkIdx = pLinkNext->getVertexCount() - 1; // 멀리있는 노드는 e
+			}
+			heuristicCost = getHueristicCost(pRouteInfo->routeLinkInfo.Coord.x, pRouteInfo->routeLinkInfo.Coord.y, vtOrigins[nextIdx].x, vtOrigins[nextIdx].y, pLinkNext->getVertexX(nextLinkIdx), pLinkNext->getVertexY(nextLinkIdx), pLinkNext->base.link_type, -1, distFactor);
 
-				uint8_t curSpeed = SPEED_NOT_AVALABLE;
-				uint8_t curSpeedType = pRouteInfo->reqInfo.RequestTraffic;
+			uint8_t curSpeed = SPEED_NOT_AVALABLE;
+			uint8_t curSpeedType = pRouteInfo->reqInfo.RequestTraffic;
 #if defined(USE_VEHICLE_DATA) // && defined(USE_TRAFFIC_DATA)
-				if (pLinkNext->veh.level <= 6) {
+			if (pLinkNext->veh.level <= 6) {
 #	if USE_TRAFFIC_LINK_ATTRIBUTE // use link speed
-					if (dirTarget == DIR_POSITIVE) {
-						curSpeed = pLinkNext->veh_ext.spd_p;
-						curSpeedType = pLinkNext->veh_ext.spd_type_p;
-					} else { // if (dirTarget == DIR_NAGATIVE) {
-						curSpeed = pLinkNext->veh_ext.spd_n;
-						curSpeedType = pLinkNext->veh_ext.spd_type_n;
-					}
-#	else // use traffic map speed
-					curSpeed = m_pDataMgr->GetTrafficSpeed(pLinkNext->link_id, dirTarget, pRouteInfo->reqInfo.RequestTime, curSpeedType);
-#	endif // #if USE_TRAFFIC_LINK_ATTRIBUTE
+				if (dirTarget == DIR_POSITIVE) {
+					curSpeed = pLinkNext->veh_ext.spd_p;
+					curSpeedType = pLinkNext->veh_ext.spd_type_p;
+				} else { // if (dirTarget == DIR_NAGATIVE) {
+					curSpeed = pLinkNext->veh_ext.spd_n;
+					curSpeedType = pLinkNext->veh_ext.spd_type_n;
 				}
+#	else // use traffic map speed
+				curSpeed = m_pDataMgr->GetTrafficSpeed(pLinkNext->link_id, dirTarget, pRouteInfo->reqInfo.RequestTime, curSpeedType);
+#	endif // #if USE_TRAFFIC_LINK_ATTRIBUTE
+			}
 #endif
-				// 트리 등록
-				costReal = GetCost(&pRouteInfo->reqInfo, pLinkNext, dirTarget, 0, curSpeed);
-				//costTreavel = GetTravelCost(pLinkNext, pLink, curSpeed, costReal, angDiff, pRouteInfo->routeOption, pRouteInfo->avoidOption, pRouteInfo->mobilityOption, isPayedArea);
-				costTreavel = GetTravelCost(&pRouteInfo->reqInfo, pLinkNext, pLink, &pRouteInfo->routeLinkInfo, curSpeed, costReal, angDiff);
+			// 주변 링크를 확인하고, 최대 속도를 주변 링크 속도 이하로 조정
+			//if ((curSpeed == SPEED_NOT_AVALABLE) && (pCurInfo->speed != SPEED_NOT_AVALABLE) && (pLinkNext->veh.level >= pLink->veh.level)) {
+			//	if (GetLinkSpeed(pLinkNext->link_id, pLinkNext->veh.level, pRouteInfo->reqInfo.RouteOption) > pCurInfo->speed) {
+			//		curSpeed = pCurInfo->speed;
+			//	}
+			//}
+
+			// 트리 등록
+			costReal = GetCost(&pRouteInfo->reqInfo, pLinkNext, dirTarget, 0, curSpeed);
+			//costTreavel = GetTravelCost(pLinkNext, pLink, curSpeed, costReal, angDiff, pRouteInfo->routeOption, pRouteInfo->avoidOption, pRouteInfo->mobilityOption, isPayedArea);
+			costTreavel = GetTravelCost(&pRouteInfo->reqInfo, pLinkNext, pLink, &pRouteInfo->routeLinkInfo, curSpeed, costReal, angDiff);
 
 
 #if defined(USE_TMS_API)
-				if (distFactor > 0) { // rdm에서 일정 거리 이상의 낮은 도로는 무시하자
-					costTreavel += costReal * distFactor;
-				}
+			if (distFactor > 0) { // rdm에서 일정 거리 이상의 낮은 도로는 무시하자
+				costTreavel += costReal * distFactor;
+			}
 #endif
 
-				nextCandidate.parents_id = pCurInfo->parentLinkId.nid;
-				nextCandidate.current_id = pCurInfo->linkId.nid;
+			nextCandidate.parents_id = pCurInfo->parentLinkId.nid;
+			nextCandidate.current_id = pCurInfo->linkId.nid;
 
-				pItem = new CandidateLink;
-				pItem->candidateId = nextCandidate; // 후보 ID
-				pItem->parentLinkId = pCurInfo->linkId;	// 부모 링크 ID
-				pItem->linkId = pLinkNext->link_id; // 링크 ID
-				pItem->nodeId = pNodeNext->node_id;	// 노드 ID
-				pItem->dist = pLinkNext->length;	// 실 거리
-				pItem->time = costReal; // 실 시간
-				pItem->cost = costTreavel + costAdditional; // 논리적 주행 시간
-				pItem->distTreavel = pCurInfo->distTreavel + pItem->dist;	// 누적 거리
-				pItem->timeTreavel = pCurInfo->timeTreavel + pItem->time; // 누적 시간
-				pItem->costTreavel = pCurInfo->costTreavel + pItem->cost;	// 계산 비용
-				//pItem->costHeuristic = pCurInfo->costTreavel;// +heuristicCost;	// 가중치 계산 비용 // old
-				pItem->costHeuristic = pItem->costTreavel + heuristicCost;	// 가중치 계산 비용
-				pItem->linkDataType = pCurInfo->linkDataType;
-				pItem->depth = pCurInfo->depth + 1;	// 탐색 깊이
-				pItem->visited = false; // 방문 여부
-				pItem->dir = dirTarget; // 탐색방향
+			pItem = new CandidateLink;
+			pItem->candidateId = nextCandidate; // 후보 ID
+			pItem->parentLinkId = pCurInfo->linkId;	// 부모 링크 ID
+			pItem->linkId = pLinkNext->link_id; // 링크 ID
+			pItem->nodeId = pNodeNext->node_id;	// 노드 ID
+			pItem->dist = pLinkNext->length;	// 실 거리
+			pItem->time = costReal; // 실 시간
+			pItem->cost = costTreavel + costAdditional; // 논리적 주행 시간
+			pItem->distTreavel = pCurInfo->distTreavel + pItem->dist;	// 누적 거리
+			pItem->timeTreavel = pCurInfo->timeTreavel + pItem->time; // 누적 시간
+			pItem->costTreavel = pCurInfo->costTreavel + pItem->cost;	// 계산 비용
+			//pItem->costHeuristic = pCurInfo->costTreavel;// +heuristicCost;	// 가중치 계산 비용 // old
+			pItem->costHeuristic = pItem->costTreavel + heuristicCost;	// 가중치 계산 비용
+			pItem->linkDataType = pCurInfo->linkDataType;
+			pItem->depth = pCurInfo->depth + 1;	// 탐색 깊이
+			pItem->visited = false; // 방문 여부
+			pItem->dir = dirTarget; // 탐색방향
+			pItem->angle = angDiff; // 진입각도
 #if defined(USE_VEHICLE_DATA)
-				pItem->speed = curSpeed;
-				pItem->speed_type = curSpeedType;
-				pItem->speed_level = pLinkNext->veh.level;
+			pItem->speed = curSpeed;
+			pItem->speed_type = curSpeedType;
+			pItem->speed_level = pLinkNext->veh.level;
 #endif
 
-				pItem->pPrevLink = const_cast<CandidateLink*>(pCurInfo);
-				pRouteInfo->mRoutePass.emplace(candidateId.llid, pItem);
-				pRouteInfo->pqDijkstra.emplace(pItem);
+			pItem->pPrevLink = const_cast<CandidateLink*>(pCurInfo);
+			pRouteInfo->mRoutePass.emplace(candidateId.llid, pItem);
+			pRouteInfo->pqDijkstra.emplace(pItem);
 
-				cntLinks++;
+			cntLinks++;
 
 #if defined(USE_SHOW_ROUTE_SATATUS)
-				//LOG_TRACE(LOG_DEBUG, "id:%lld(real cost:%f, heuristic cost:%f, lv:%d) ", newItem.linkId.llid, newItem.costReal, newItem.costHeuristic, newItem.depth);
+			//LOG_TRACE(LOG_DEBUG, "id:%lld(real cost:%f, heuristic cost:%f, lv:%d) ", newItem.linkId.llid, newItem.costReal, newItem.costHeuristic, newItem.depth);
 #endif
-			}
 		}
 	} // for
 
@@ -4491,7 +4613,7 @@ const int CRoutePlan::LevelPropagation(IN TableBaseInfo* pRouteInfo, IN const Ca
 			return -1;
 		}
 	}
-	angStart = GetAngle(pLink, dirTarget);
+	angStart = getAngle(pLink, dirTarget);
 
 	pNodeNext = m_pDataMgr->GetNodeDataById(nextNodeId, pLink->base.link_type);
 
@@ -4579,22 +4701,6 @@ const int CRoutePlan::LevelPropagation(IN TableBaseInfo* pRouteInfo, IN const Ca
 				continue;
 			}
 
-#if defined(USE_PEDESTRIAN_DATA)
-			if (pLinkNext->base.link_type == TYPE_LINK_DATA_PEDESTRIAN) {
-				isPayedLink = pLinkNext->ped.walk_charge;
-			}
-#elif defined(USE_VEHICLE_DATA)
-			if (pLinkNext->base.link_type == TYPE_LINK_DATA_VEHICLE) {
-				isPayedLink = pLinkNext->veh.charge;
-			}
-#endif
-			
-			// 무료 적용 옵션일 경우, 출도착이 무료고 유료 링크면 패스
-			if ((pRouteInfo->reqInfo.FreeOption == 1) && (isPayedArea == 0) && (isPayedLink == 1)) {
-				continue;
-				// costAdditional = 1000.; 또는 가중치 증가 
-			}
-
 #if 1
 			if (enableStartLevelIgnore) {
 				static const double MARGIN_DIST = 500;// 1000; // 1km 넘어가면 낮은 레벨 버리자
@@ -4621,16 +4727,23 @@ const int CRoutePlan::LevelPropagation(IN TableBaseInfo* pRouteInfo, IN const Ca
 			}
 #endif
 
+			// 트럭 회피 옵션
+			if (m_pDataMgr->IsAvoidTruckLink(pRouteInfo->reqInfo.RouteTruckOption.option(), pLinkNext)) {
+				continue;
+			}
+
 #if defined(USE_P2P_DATA)
 			if (pLinkNext->veh.hd_flag != 1) { // HD 링크와 매칭 정보가 없으면 통행 불가
 				continue;
 			}
 #endif
+			isPayedLink = pLinkNext->veh.charge;
+		} 
 
-			// 트럭 회피 옵션
-			if (m_pDataMgr->IsAvoidTruckLink(pRouteInfo->reqInfo.RouteTruckOption.option(), pLinkNext)) {
-				continue;
-			}
+		// 무료 적용 옵션일 경우, 출도착이 무료고 유료 링크면 패스
+		if ((pRouteInfo->reqInfo.FreeOption == 1) && (isPayedArea == 0) && (isPayedLink == 1)) {
+			continue;
+			// costAdditional = 1000.; 또는 가중치 증가 
 		}
 
 		
@@ -4674,28 +4787,18 @@ const int CRoutePlan::LevelPropagation(IN TableBaseInfo* pRouteInfo, IN const Ca
 				}
 				dirTarget = DIR_NAGATIVE; // 역 - e에서 나가는
 			}
-			angEnd = GetAngle(pLinkNext, dirTarget, false);
-			angDiff = abs(180 - angStart + angEnd + 360) % 360;
+			angEnd = getAngle(pLinkNext, dirTarget, false);
+			angDiff = getEntryAngle(angStart, angEnd);
 
 #if defined(USE_P2P_DATA)
-			// 일반 경로(최초탐색, 정차 후 출발)일 경우(대안경로 등은 무시), 출발지 바로 다음의 좌회전이고 거리가 너무 짧으면 무시
-			// 최소 회전 반경을 차로당 50m로 // 4차선 이상 도로만 적용 // 3개 이상 연결로
-			if ((pRouteInfo->reqInfo.RequestMode == 0) && (pCurInfo->depth <= 0) &&
-				(pNodeNext->base.connnode_count >= 3) && (pLinkNext->veh.lane_cnt >= 4) && (200 <= angDiff && angDiff <= 300)) {
-				static const int minDist = 50; // 차로 변경 시 최소 50m 필요
-				int maxDist = (pLinkNext->veh.lane_cnt / 2 - 1) * minDist;
-				if (pLinkNext->veh.link_type == 2) { // 분리도로일 경우
-					maxDist = (pLinkNext->veh.lane_cnt - 1) * minDist;
-				}
-				if (maxDist > pCurInfo->dist) {
-					continue;
-				}
+			if (checkAvoidTurnLeft(&pRouteInfo->reqInfo, pCurInfo, pNodeNext, pLinkNext, angDiff) == true) {
+				continue;
 			}
 #endif
 
 			// 고도 차이
 			// 현재 숲길 데이터에만 존재
-			if (pLink->base.link_type == TYPE_LINK_DATA_TREKKING && pNodeNext->node_id != pNode->node_id) {
+			if (pLinkNext->base.link_type == TYPE_LINK_DATA_TREKKING && pNodeNext->node_id != pNode->node_id) {
 				altDiff = pNodeNext->trk.z_value - pNode->trk.z_value;
 				if (altDiff != 0) {
 					altCost = get_road_slope(static_cast<int32_t>(pLinkNext->length), altDiff);
@@ -4777,6 +4880,7 @@ const int CRoutePlan::LevelPropagation(IN TableBaseInfo* pRouteInfo, IN const Ca
 			pItem->depth = pCurInfo->depth + 1;	// 탐색 깊이
 			pItem->visited = false; // 방문 여부
 			pItem->dir = dirTarget; // 탐색방향
+			pItem->angle = angDiff; // 진입각도
 #if defined(USE_VEHICLE_DATA)
 			pItem->speed = curSpeed;
 			pItem->speed_type = curSpeedType;
@@ -6821,6 +6925,7 @@ const int CRoutePlan::MakeRoute(IN const int idx, IN RouteInfo* pRouteInfo, OUT 
 				pItem->depth = 0;	// 탐색 깊이
 				pItem->visited = false; // 방문 여부
 				pItem->dir = dir; // 탐색방향
+				pItem->angle = 0; // 진입각도
 
 				pItem->pPrevLink = nullptr;
 
@@ -7311,6 +7416,7 @@ const int CRoutePlan::MakeCourse(IN const int idx, IN RouteInfo* pRouteInfo, OUT
 				pItem->depth = 0;	// 탐색 깊이
 				pItem->visited = false; // 방문 여부
 				pItem->dir = dir; // 탐색방향
+				pItem->angle = 0; // 진입각도
 
 				pItem->pPrevLink = nullptr;
 
@@ -7693,6 +7799,7 @@ const uint32_t CRoutePlan::CheckStartDirectionMaching(IN const RequestRouteInfo*
 		pItem->depth = 0;	// 탐색 깊이
 		pItem->visited = false; // 방문 여부
 		pItem->dir = candidateId.parents_id; // 탐색방향
+		pItem->angle = 0; // 진입각도
 #if defined(USE_VEHICLE_DATA)
 		pItem->speed = curSpeed;
 		pItem->speed_type = curSpeedType;
@@ -7747,6 +7854,7 @@ const uint32_t CRoutePlan::CheckStartDirectionMaching(IN const RequestRouteInfo*
 		pItem->depth = 0;	// 탐색 깊이
 		pItem->visited = false; // 방문 여부
 		pItem->dir = candidateId.parents_id; // 탐색방향
+		pItem->angle = 0; // 진입각도
 #if defined(USE_VEHICLE_DATA)
 		pItem->speed = curSpeed;
 		pItem->speed_type = curSpeedType;
@@ -7866,7 +7974,8 @@ const uint32_t CRoutePlan::CheckEndDirectionMaching(IN const RequestRouteInfo* p
 			pItem->depth = 0;	// 탐색 깊이
 			pItem->visited = false; // 방문 여부
 			pItem->dir = candidateId.parents_id; // 탐색방향
-												 //pItem->dir = pRoutLinkInfo->LinkDir;
+			//pItem->dir = pRoutLinkInfo->LinkDir;
+			pItem->angle = 0; // 진입각도
 #if defined(USE_VEHICLE_DATA)
 			pItem->speed = curSpeed;
 			pItem->speed_type = curSpeedType;
@@ -7980,6 +8089,7 @@ const uint32_t CRoutePlan::CheckEndDirectionMaching(IN const RequestRouteInfo* p
 			pItem->visited = false; // 방문 여부
 			pItem->dir = candidateId.parents_id; // 탐색방향
 			//pItem->dir = pRoutLinkInfo->LinkDir;
+			pItem->angle = 0; // 진입각도
 #if defined(USE_VEHICLE_DATA)
 			pItem->speed = curSpeed;
 			pItem->speed_type = curSpeedType;
@@ -7994,81 +8104,6 @@ const uint32_t CRoutePlan::CheckEndDirectionMaching(IN const RequestRouteInfo* p
 	}
 
 	return ROUTE_RESULT_SUCCESS;
-}
-
-
-const int CRoutePlan::GetAngle(IN const stLinkInfo* pLink, IN const int dir, IN const bool useTail)
-{
-	int retAng = 0;	
-
-	if (pLink == nullptr) {
-		LOG_TRACE(LOG_WARNING, "warning, get link angle param null");
-		return retAng;
-	}
-
-#if defined(USE_FOREST_DATA) 
-	// 구조체의 자릿수 부족으로 필요 시점에 직접 계산
-	MMPoint<double> coord1;
-	MMPoint<double> coord2;
-
-	int cntLinkVtx = pLink->getVertexCount();
-
-	// ang
-	if (cntLinkVtx >= 2) {
-		if (dir == 1) { // 정, to enode
-			// enode ang
-			if (useTail == true) {
-				coord1 = { pLink->getVertexX(cntLinkVtx - 1), pLink->getVertexY(cntLinkVtx - 1) };
-				coord2 = { pLink->getVertexX(cntLinkVtx - 2), pLink->getVertexY(cntLinkVtx - 2) };
-			} else {
-				coord1 = { pLink->getVertexX(0), pLink->getVertexY(0) };
-				coord2 = { pLink->getVertexX(1), pLink->getVertexY(1) };
-			}
-		} else { // 역, to snode			
-			// snode ang
-			if (useTail == true) {
-				coord1 = { pLink->getVertexX(0), pLink->getVertexY(0) };
-				coord2 = { pLink->getVertexX(1), pLink->getVertexY(1) };
-			} else {
-				coord1 = { pLink->getVertexX(cntLinkVtx - 1), pLink->getVertexY(cntLinkVtx - 1) };
-				coord2 = { pLink->getVertexX(cntLinkVtx - 2), pLink->getVertexY(cntLinkVtx - 2) };
-			}
-		}
-		retAng = coord1.azimuth(coord2);
-	}
-#else // #if defined(USE_FOREST_DATA) 
-	if (dir == 1) { // 정
-#if defined(USE_P2P_DATA)
-		if (!useTail) {
-			retAng = pLink->veh_ext.snode_ang;
-		} else {
-			retAng = pLink->veh_ext.enode_ang;
-		}
-#else
-		if (!useTail) {
-			retAng = pLink->base.snode_ang;
-		} else {
-			retAng = pLink->base.enode_ang;
-		}
-#endif
-	} else { // 역
-#if defined(USE_P2P_DATA)
-		if (!useTail) {
-			retAng = pLink->veh_ext.enode_ang;
-		} else {
-			retAng = pLink->veh_ext.snode_ang;
-		}
-#else
-		if (!useTail) {
-			retAng = pLink->base.enode_ang;
-		} else {
-			retAng = pLink->base.snode_ang;
-		}		
-#endif
-	}
-#endif // #if defined(USE_FOREST_DATA) 
-
-	return retAng;
 }
 
 
@@ -9949,7 +9984,7 @@ const int CRoutePlan::MakeRouteResult(IN RouteInfo* pRouteInfo, OUT RouteResultI
 
 		// 주행 각도는 링크 시작값으로 주기에 최초 링크는 각도 무시.
 		currentLinkInfo.angle = 0;
-		angStart = GetAngle(pLink, targetDir);
+		angStart = getAngle(pLink, targetDir);
 
 		if (targetDir == 1) { // 정 to enode
 			currentLinkInfo.dir = 0;
@@ -10011,10 +10046,10 @@ const int CRoutePlan::MakeRouteResult(IN RouteInfo* pRouteInfo, OUT RouteResultI
 
 			// angle
 			targetDir = pCandidateLink->dir;
-			angEnd = GetAngle(pLink, targetDir, false);
+			angEnd = getAngle(pLink, targetDir, false);
 
-			currentLinkInfo.angle = abs(180 - angStart + angEnd + 360) % 360;
-			angStart = GetAngle(pLink, targetDir);
+			currentLinkInfo.angle = getEntryAngle(angStart, angEnd);
+			angStart = getAngle(pLink, targetDir);
 
 			if (targetDir == 1) { // 정, to enode
 				currentLinkInfo.dir = 0;
@@ -10120,10 +10155,10 @@ const int CRoutePlan::MakeRouteResult(IN RouteInfo* pRouteInfo, OUT RouteResultI
 
 		// angle
 		targetDir = pCandidateLink->dir;
-		angEnd = GetAngle(pLink, targetDir, false);
+		angEnd = getAngle(pLink, targetDir, false);
 
-		currentLinkInfo.angle = abs(180 - angStart + angEnd + 360) % 360;
-		angStart = GetAngle(pLink, targetDir);
+		currentLinkInfo.angle = getEntryAngle(angStart, angEnd);
+		angStart = getAngle(pLink, targetDir);
 
 		if (pCandidateLink->dir == 1) { // 정 to enode
 			currentLinkInfo.dir = 0;
@@ -10295,11 +10330,11 @@ const int CRoutePlan::MakeRouteResult(IN RouteInfo* pRouteInfo, OUT RouteResultI
 //		targetDir = pCandidateLink->dir;
 //
 //		if (pPrevLink != nullptr) {
-//			angStart = GetAngle(pPrevLink, pCandidateLink->pPrevLink->dir, false);
+//			angStart = getAngle(pPrevLink, pCandidateLink->pPrevLink->dir, false);
 //		} else {
 //			angStart = 0;
 //		}
-//		angEnd = GetAngle(pCurrLink, targetDir, false);
+//		angEnd = getAngle(pCurrLink, targetDir, false);
 //		currentLinkInfo.angle = abs(180 - angStart + angEnd + 360) % 360;
 //
 //		if (targetDir == 1) { // 정, to enode
@@ -10539,12 +10574,12 @@ const int CRoutePlan::MakeRouteResult(IN RouteInfo* pRouteInfo, OUT RouteResultI
 //		//currentLinkInfo.angle = abs(prevDir - tmpAng) % 360;
 //		//currentLinkInfo.angle = abs(prevDir - tmpAng - 180) % 360; 
 //		if (pPrevLink != nullptr) {
-//			prevAng = GetAngle(pPrevLink, pCandidateLink->pPrevLink->dir);
+//			prevAng = getAngle(pPrevLink, pCandidateLink->pPrevLink->dir);
 //		}
 //		else {
 //			prevAng = 0;
 //		}
-//		nextAng = GetAngle(pCurrLink, pCandidateLink->dir, false);
+//		nextAng = getAngle(pCurrLink, pCandidateLink->dir, false);
 //		currentLinkInfo.angle = abs(180 - prevAng + nextAng + 360) % 360;
 //
 //		if (pCandidateLink->dir == 1) { // 정, to enode
@@ -10838,25 +10873,25 @@ const int CRoutePlan::MakeRouteResultAttatchEx(IN const RouteInfo* pRouteInfo, I
 		targetDir = pCandidateLink->dir;
 
 		if (isReverse) {
-			angEnd = GetAngle(pCurrLink, targetDir, false);
+			angEnd = getAngle(pCurrLink, targetDir, false);
 		}
 		else {
 			//if (pPrevLink != nullptr) {
-			//	angStart = GetAngle(pPrevLink, pCandidateLink->pPrevLink->dir);
+			//	angStart = getAngle(pPrevLink, pCandidateLink->pPrevLink->dir);
 			//}
 			//else {
 			//	angStart = 0;
 			//}
-			angEnd = GetAngle(pCurrLink, targetDir, false);
+			angEnd = getAngle(pCurrLink, targetDir, false);
 		}
 
-		currentLinkInfo.angle = abs(180 - angStart + angEnd + 360) % 360;
+		currentLinkInfo.angle = getEntryAngle(angStart, angEnd);
 
 		if (isReverse) {
-			angStart = GetAngle(pCurrLink, targetDir);
+			angStart = getAngle(pCurrLink, targetDir);
 		}
 		else {
-			angStart = GetAngle(pCurrLink, targetDir);
+			angStart = getAngle(pCurrLink, targetDir);
 		}
 
 		if (targetDir == 1) { // 정, to enode
@@ -11902,53 +11937,6 @@ const int CRoutePlan::DoEntryPointRoute(IN RouteInfo* pRouteInfo, IN const bool 
 }
 
 
-const int CRoutePlan::GetPathAngle(IN const stLinkInfo* pPrevLink, IN const stLinkInfo* pNextLink)
-{
-	int ang = 0;
-	int dir = 0;
-
-	// 이전 링크 각도
-	if ((pPrevLink->enode_id.llid == pNextLink->enode_id.llid) || (pPrevLink->enode_id.llid == pNextLink->snode_id.llid)) { // 정, 이전 링크의 enode 연결
-		if (pPrevLink->link_id.dir != 2) { // 일방(역)에 시작점이 일치하면 불가
-			dir = 1; // 정 - e에서 나가는
-		}		
-	} else { // 다음 링크의 enode 연결
-		if (pPrevLink->link_id.dir != 1) { // 일방(정)에 종료점이 일치하면 불가
-			dir = 2; // 역 - s에서 나가는 
-		}		
-	}
-
-	if (dir == 0) {
-		return ang;
-	}
-		
-	int angStart = GetAngle(pPrevLink, dir);
-
-
-	// 다음 링크 각도
-	if ((pPrevLink->enode_id.llid == pNextLink->snode_id.llid) || (pPrevLink->snode_id.llid == pNextLink->snode_id.llid)) { // 정, 다음 링크의 snode 연결
-		if (pNextLink->link_id.dir != 2) { // 일방(역)에 시작점이 일치하면 불가
-			dir = 1; // 정 - s로 들어오는 나가는
-		}
-	} else { // 다음 링크의 enode 연결
-		if (pNextLink->link_id.dir != 1) { // 일방(정)에 종료점이 일치하면 불가
-			dir = 2; // 역 - e로 들어오는 
-		}
-	}
-
-	if (dir == 0) {
-		return ang;
-	}
-
-	int angEnd = GetAngle(pNextLink, dir, false);
-
-	// 각도
-	ang = abs(180 - angStart + angEnd + 360) % 360;
-
-	return ang;
-}
-
-
 const int CRoutePlan::GetMostProbableLink(IN const RouteResultInfo* pResult, OUT vector<RouteLinkInfo>& vtMPP)
 {
 	// 경로선 노드의 경로선 외 링크 정보
@@ -12053,7 +12041,7 @@ const int CRoutePlan::GetMostProbableLink(IN const RouteResultInfo* pResult, OUT
 					candidateLink.LinkDir = DIR_NAGATIVE;
 				}
 
-				int candidateAng360 = GetPathAngle(pLinkBefore, pJctLink);
+				int candidateAng360 = getPathAngle(pLinkBefore, pJctLink);
 				int candidateAng180 = 180 - abs(180 - candidateAng360); // +-10:직진, +-170: 유턴
 
 				// 직진 주행이 아닌 경우, 직진 주행에 대한 대안 경로 생성

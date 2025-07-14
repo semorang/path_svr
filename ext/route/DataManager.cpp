@@ -1637,6 +1637,7 @@ stLinkInfo * CDataManager::GetLinkDataByPointAround(IN const double lng, IN cons
 				if (!(pLink = GetWLinkDataById(pMesh->wlinks[ii])) ||
 					((nLinkDataType != TYPE_LINK_DATA_NONE) && (nLinkDataType != pLink->base.link_type)) ||
 					((nMatchType == TYPE_LINK_MATCH_FOR_BICYCLE) && (
+						(pLink->ped.bicycle_control == 3) ||
 						(pLink->ped.gate_type == TYPE_GATE_STAIRS) ||
 						(pLink->ped.gate_type == TYPE_GATE_ESCALATOR) ||
 						(pLink->ped.gate_type == TYPE_GATE_STAIRS_ESCALATOR) ||

@@ -29,7 +29,7 @@ exports.getElapsedTime = function(created) {
 // for p2p path result virtual dummy time
 exports.getPathWorkTime = function(time, link_length) {
     let ret = time;
-    const TARGET_TIME_FOR_10KM = 0.7;
+    const TARGET_TIME_FOR_10KM = 0.3;
 
     let targetTime = (link_length / 10000.0) * TARGET_TIME_FOR_10KM;
     let additionalSleep = targetTime - ret;

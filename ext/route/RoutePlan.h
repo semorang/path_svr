@@ -64,6 +64,7 @@ typedef struct _tagCandidateLink {
 	uint32_t depth : 29; // 탐색 깊이
 	uint32_t visited : 1; // 방문 여부
 	uint32_t dir : 2; // 탐색 방향, 0:미정의, 1:정방향(S->E), 2:역방향(E->S)
+	uint8_t angle; // 이전 링크에서 진입각도
 #if defined(USE_VEHICLE_DATA)
 	uint8_t speed; // 속도
 	uint8_t speed_type : 4; // 속도 타입, 0:미정의, 1:ttl, 2:ks, 3:static
@@ -910,8 +911,6 @@ private:
 	//const uint32_t CheckEndDirectionMaching(IN const stLinkInfo* pLink, IN const RouteLinkInfo* pRoutLinkInfo, IN const int32_t routeOpt, IN const int32_t mobilityOpt, IN const uint32_t timestampOpt, OUT vector<CandidateLink*>& vtCandidateInfo);	const uint32_t CheckStartDirectionMaching(IN const stLinkInfo* pLink, IN const RouteLinkInfo* pRoutLinkInfo, IN const int32_t routeOpt, IN const int32_t mobilityOpt, IN const uint32_t timestampOpt, OUT vector<CandidateLink*>& vtCandidateInfo);
 	const uint32_t CheckStartDirectionMaching(IN const RequestRouteInfo* pReqInfo, IN const stLinkInfo* pLink, IN const RouteLinkInfo* pRoutLinkInfo, OUT vector<CandidateLink*>& vtCandidateInfo);
 	const uint32_t CheckEndDirectionMaching(IN const RequestRouteInfo* pReqInfo, IN const stLinkInfo* pLink, IN const RouteLinkInfo* pRoutLinkInfo, OUT vector<CandidateLink*>& vtCandidateInfo);
-	const int GetAngle(IN const stLinkInfo* pLink, IN const int dir, IN const bool useTail = true); // dir, 1:정, 2:역, useTail, 종료 링크 사용 여부
-	const int GetPathAngle(IN const stLinkInfo* pPrevLink, IN const stLinkInfo* pNextLink);
 	const stNodeInfo* GetNextNode(IN const CandidateLink* pCurInfo); // 다음 노드 정보 가져오기
 	const stNodeInfo* GetPrevNode(IN const CandidateLink* pCurInfo); // 이전 노드 정보 가져오기
 
