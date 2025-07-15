@@ -603,6 +603,35 @@ void SetRouteSubOption(const FunctionCallbackInfo<Value>& args) {
 }
 
 
+void SetCandidateOption(const FunctionCallbackInfo<Value>& args) {
+#if defined(USE_P2P_DATA)	
+   Isolate* isolate = args.GetIsolate();
+   Local<Context> context = isolate->GetCurrentContext();
+
+   Local<Object> obj = Object::New(isolate);
+   v8::MaybeLocal<v8::String> msg;
+
+   LOG_TRACE(LOG_DEBUG, "Set candidate option");
+
+   if (args.Length() < 1) {
+      LOG_TRACE(LOG_DEBUG, "function call argument too short : %s", args);
+
+      msg = String::NewFromUtf8(isolate, "function call argument too short : " + args.Length());
+   }
+   else {
+      int cnt = args.Length();
+      // LOG_TRACE(LOG_DEBUG, "arg length : %d", cnt);
+
+      uint32_t candidate = 0;
+      candidate = args[0].As<Number>()->Value();
+
+      LOG_TRACE(LOG_DEBUG, "Route candidate option : %d", candidate);
+      m_pRouteMgr.SetCandidateOption(candidate);
+   }
+#endif
+}
+
+
 void DoRoute(const FunctionCallbackInfo<Value>& args) {
    Isolate* isolate = args.GetIsolate();
    Local<Context> context = isolate->GetCurrentContext();
@@ -1325,6 +1354,7 @@ void init(Local<Object> exports) {
    NODE_SET_METHOD(exports, "setrouteoption", SetRouteOption);
    NODE_SET_METHOD(exports, "addrouteoption", AddRouteOption);
    NODE_SET_METHOD(exports, "setroutesuboption", SetRouteSubOption);
+   NODE_SET_METHOD(exports, "setcandidateoption", SetCandidateOption); // for p2p
    NODE_SET_METHOD(exports, "doroute", DoRoute);
    NODE_SET_METHOD(exports, "domultiroute", DoMultiRoute);
    NODE_SET_METHOD(exports, "releaseroute", ReleaseRoute);

@@ -674,6 +674,13 @@ exports.domultiroute = function(key, req, expend) {
         });
     }
 
+    if (target === 'p2p') {
+        const candidate = (req.candidate === undefined) ? 0 : parseInt(req.candidate);
+        if (candidate !== 0) {
+            addon.setcandidateoption(candidate);
+        }
+    }
+
     let result = addon.domultiroute(route_cnt);
 
     if (result.result == 0) {

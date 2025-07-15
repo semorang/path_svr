@@ -70,6 +70,12 @@ double get_road_slope(int32_t dist, int32_t height)
 }
 
 
+double getRealWorldDistance(IN const SPoint ptStart, IN const SPoint ptEnd)
+{
+	return getRealWorldDistance(ptStart.x, ptStart.y, ptEnd.x, ptEnd.y);
+}
+
+
 double getRealWorldDistance(IN const double slng, IN const double slat, IN const double elng, IN const double elat)
 {
 	double dDistance;

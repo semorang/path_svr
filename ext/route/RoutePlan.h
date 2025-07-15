@@ -879,7 +879,7 @@ private:
 	const bool SetVisitedLink(IN RouteInfo* pRouteInfo, IN const KeyID linkId, IN const bool isReverse = false);
 	const bool IsVisitedLink(IN RouteInfo* pRouteInfo, IN const KeyID linkId, IN const bool isReverse = false);
 	const bool IsAddedLink(IN RouteInfo* pRouteInfo, IN const KeyID linkId, IN const bool isReverse = false);
-	const int AddNextLinks(IN RouteInfo* pRouteInfo, IN const CandidateLink* pCurInfo);
+	const int AddNextLinks(IN RouteInfo* pRouteInfo, IN const CandidateLink* pCurInfo, IN const SBox* pBoxExpandedArea = nullptr);
 	const int AddPrevLinks(IN RouteInfo* pRouteInfo, IN const CandidateLink* pCurInfo);
 	const int AddPrevLinksEx(IN RouteInfo* pRouteInfo, IN const CandidateLink* pCurInfo);
 	const int AddNextCourse(IN RouteInfo* pRouteInfo, IN const CandidateLink* pCurInfo, IN const set<uint64_t>* psetCourseLinks);

@@ -40,10 +40,19 @@
         <span id="btnRoute" class="btn" onclick="doRoute()" style="width:50px">탐색</span>
         </div>
 
+
         <!-- 경로탐색 JSON 결과 div 입니다 -->
         <div class="custom_typecontrol radius_border" style="position:absolute;top:10px;left:330px;overflow:hidden;width:70;height:30px;margin:0;z-index:1;border:0">
             <span id="btnGoToJsonResult" class="btn" onclick="gotoJSON()" style="width:65px">JSON보기</span>
         </div>
+
+                
+        <!-- 대안경로 체크 div -->
+        <div style="position:absolute;left:10px;top:45px;width:250px;padding:5px;background:rgba(255, 255, 255, 0.8);z-index: 1;font-size:13px;border-radius: 5px;">
+            <span class="btn">대안경로</span>
+            <input type="checkbox" id="candidate" onclick="setCandidate(this)"/>
+        </div>
+
 
         <!-- 검색 div -->
         <div style="position:absolute;left:10px;top:80px;width:250px;padding:5px;background:rgba(255, 255, 255, 0.8);z-index: 1;font-size:13px;border-radius: 5px;">
@@ -97,6 +106,7 @@
         var screenHeight = window.innerHeight - 18;
         document.getElementById("map").style.height = screenHeight + "px";
 
+        let candidate = 0;
 
         function initMap() {
 
@@ -161,7 +171,7 @@
                 }
 
                 // 경로 정보를 커스텀 오버레이로 생성하고 지도에 표시합니다
-                drawRouteInfo(result_obj.route.data, route_offset, route_color);
+                drawNavRouteInfo(result_obj.route, route_offset, route_color);
             }
         } // initMap
         
@@ -184,6 +194,12 @@
                     if (waypoint_pos[ii] != null && waypoint_pos[ii].lng > 120 && waypoint_pos[ii].lat > 30) {
                         params.append('vias', waypoint_pos[ii].lng.toString() + ',' + waypoint_pos[ii].lat.toString());
                     }
+                }
+
+                // for candidate check
+                params.delete('candidate');
+                if (candidate > 0) {
+                    params.append('candidate', candidate);
                 }
 
                 getiNaviRoutes(pathname, params);
@@ -212,6 +228,13 @@
                         params.set('vias', waypoint_pos[ii].lng.toString() + ',' + waypoint_pos[ii].lat.toString());
                     }
                 }
+
+                // for candidate check
+                params.delete('candidate');
+                if (candidate > 0) {
+                    params.append('candidate', candidate);
+                }
+
                 // params.set('opt', 8);
                 // params.set('target', 'inavi');
                 var route2url = pathname + '?' + params.toString();
@@ -242,6 +265,15 @@
         }
 
 
+        function setCandidate(checkbox) {
+            if (checkbox.checked) {
+                candidate = 1;
+            } else {
+                candidate = 0;
+            }
+
+            typeRouteStep = 9999; // 변경사항이므로
+        }
     </script>
     <script type="text/javascript"
         src="https://dev-maps.inavi.com/maps/v3.0/appkeys/<%=javascriptkey%>/maps?callback=initMap"></script>

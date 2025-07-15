@@ -32,6 +32,9 @@ public:
 	void AddRouteOption(IN const uint32_t option, IN const uint32_t avoid = 0, IN const uint32_t mobility = 0);
 	void SetRouteSubOption(IN const uint64_t sub);
 	void SetRouteFreeOption(IN const uint32_t free);
+#if defined(USE_P2P_DATA)	
+	void SetCandidateOption(IN const uint32_t candidate);
+#endif
 	void SetRouteTruckOption(IN const TruckOption* pOption);
 	void SetRouteDirOption(IN const uint32_t departuretDir, IN const uint32_t waypointDir, IN const uint32_t destinationDir);
 	void SetRouteCost(IN const uint32_t type, IN const DataCost* pCost, IN const uint32_t cntCost = 0);
@@ -106,6 +109,9 @@ private:
 	uint32_t m_nTimestampOpt;
 	uint32_t m_nFreeOpt; // 무료 적용, 0:미사용, 1:무료
 	uint32_t m_nTrafficOpt; // 교통 정보, 0:미사용, 1:실시간(REAL), 2:통계(STATIC), 3:실시간-통계(REAL-STATIC)
+#if defined(USE_P2P_DATA)	
+	uint32_t m_nCandiateOpt; // 대안경로 사용 옵션, 대안경로 최대 요청 수(1 ~ 5 ?)
+#endif
 
 	// 경탐 세부옵션, 임시방법이고, 좀더 깔끔한 다른 방식을 고민해 보자, 2023.11.07
 	stRouteSubOption m_routeSubOpt;

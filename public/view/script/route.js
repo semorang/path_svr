@@ -761,6 +761,23 @@ function drawRouteInfo(routes) {
     });
 }
 
+function drawNavRouteInfo(route) {                                
+    distanceOverlay = new inavi.maps.CustomInfoWindow({
+        map: map, // 커스텀오버레이를 표시할 지도입니다
+        content: getResultHtmlContent(route.data[0].distance, route.data[0].spend_time),  // 커스텀오버레이에 표시할 내용입니다
+        position: markers[1].getPosition(), // 커스텀오버레이를 표시할 위치입니다.
+        // xAnchor: 0,
+        // yAnchor: 0,
+        anchor: 'top-right',
+        zIndex: 3,
+        opacity: 0.8,
+        closeButton: true
+    });
+
+    document.querySelector(".popup-close-button").addEventListener("click", function() {
+        distanceOverlay.setMap();
+    });
+}
 
 function redrawRoute(map) {
     if (links != undefined && links.length) {
@@ -855,9 +872,9 @@ function getiNaviRoutes(path, params)
 
             drawiNaviRoutes(result.route.data, map, route_offset, route_color);
 
-            drawRouteInfo(result.routes);
+            drawNavRouteInfo(result.route);
 
-            displayRoutesList(result.routes);
+            // displayRoutesList(result.routes);
         } else {
             alert('err code: ' + header.resultCode + '\nerr msg: ' + header.resultMessage)
         }

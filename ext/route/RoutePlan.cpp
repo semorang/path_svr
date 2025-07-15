@@ -59,7 +59,7 @@ void routeProcessPrint(const int nProcess)
 
 static const int32_t MAX_FOREST_POPULAR = 10;//3072; // 숲길 인기도 최대치
 static const int32_t MAX_FOREST_POPULAR_NONE = 100;//4095; // 숲길 인기도 최대치
-static const int32_t MAX_LANE_COUNT = 8; // 최대 차선 수
+static const int32_t MAX_LANE_COUNT = 4; // 8 -> 4, 2025-07-14 // 최대 차선 수
 
 CRoutePlan::CRoutePlan()
 {
@@ -1489,11 +1489,26 @@ const double CRoutePlan::GetTravelCost(IN const RequestRouteInfo* pReqInfo, IN c
 			// 지점 주변에선는 지점 링크 속성과 동일한 링크는 가중치를 마구 높이지 않도록 하자
 			// 그러나 양방향 탐색을 적용하면 자연스레 해소될 내용임...
 			bool isNearLink = false;
-			static const int maxNearDist = 100;
-			static const int limitNearDist = 500;
 			if ((pLinkInfo != nullptr)) {
-				const int MAX_NEAR_DIST = min(limitNearDist, (maxNearDist > max(pLinkInfo->LinkDistToE + 5, pLinkInfo->LinkDistToE + 5)) ? maxNearDist : (pLinkInfo->LinkDistToE + pLinkInfo->LinkDistToE));
-				// 목적지 부근 100m ~ 500m (또는 링크길이 + 5m 이내)일 때만 동일 속성인지 확인하자
+				int MAX_NEAR_DIST = 0;
+				
+				// 단지 매칭이면 좀더 거리를 늘려주자
+				if (pLinkInfo->LinkSubInfo.ped.facility_type == TYPE_OBJECT_COMPLEXAPT) { // 주거단지
+					MAX_NEAR_DIST = 500; // 500 m
+				} else if (pLinkInfo->LinkSubInfo.ped.facility_type == TYPE_OBJECT_COMPLEXETC) { // 기타단지
+					MAX_NEAR_DIST = 1000; // 1km
+				} else if (pLinkInfo->LinkSubInfo.ped.facility_type == TYPE_OBJECT_COMPLEXTOUR) { // 관광지
+					MAX_NEAR_DIST = 3000; // 3km
+				} else if (pLinkInfo->LinkSubInfo.ped.facility_type == TYPE_OBJECT_COMPLEXPARK) { // 공원
+					MAX_NEAR_DIST = 5000; // 5km
+				} else {
+					static int maxNearDist = 100;
+					static int limitNearDist = 500;
+
+					MAX_NEAR_DIST = min(limitNearDist, (maxNearDist > max(pLinkInfo->LinkDistToE + 5, pLinkInfo->LinkDistToE + 5)) ? maxNearDist : (pLinkInfo->LinkDistToE + pLinkInfo->LinkDistToE));
+				}
+
+				// 목적지 부근 (또는 링크길이 + 5m 이내)일 때만 동일 속성인지 확인하자
 				if (getRealWorldDistance(pLinkInfo->MatchCoord.x, pLinkInfo->MatchCoord.y, pLink->getVertexX(0), pLink->getVertexY(0)) <= MAX_NEAR_DIST) {
 					isNearLink = true;
 				}
@@ -1503,20 +1518,22 @@ const double CRoutePlan::GetTravelCost(IN const RequestRouteInfo* pReqInfo, IN c
 			if (mobility == TYPE_MOBILITY_BICYCLE) {
 				// 자전거도로 타입, 1:자전거전용, 2:보행자/차량겸용 자전거도로, 3:보행도로
 				if (pLink->ped.bicycle_type == TYPE_BYC_ONLY) {
-					secCost += pLink->length * m_rpCost.pedestrian.cost_bike_only[opt];
+					secCost += /*pLink->length*/cost * m_rpCost.pedestrian.cost_bike_only[opt];
 				} else if (pLink->ped.bicycle_type == TYPE_BYC_WITH_CAR) {
-					secCost += pLink->length * m_rpCost.pedestrian.cost_bike_with[opt];
-				} else { // if (pLink->ped.bicycle_type == TYPE_BYC_WITH_WALK) {
-					//secCost += pLink->length * m_rpCost.pedestrian.cost_bike_walk[opt] * (double)min(1, (MAX_LANE_COUNT - pLink->ped.lane_count * 2));
-					secCost += pLink->length * ((double)max(1, MAX_LANE_COUNT - static_cast<int32_t>(pLink->ped.lane_count)) * m_rpCost.pedestrian.cost_bike_walk[opt]);
-					if ((pLink->ped.gate_type != TYPE_GATE_CROSSWALK) && (pLink->ped.walk_type == TYPE_WALK_ONLY)) { // 보행 전용(횡단보도제외)은 가중치를 더 준다.
-						secCost *= 2.f;
+					secCost += /*pLink->length*/cost * m_rpCost.pedestrian.cost_bike_with[opt];
+				} else {
+					if (pLink->ped.gate_type == TYPE_GATE_CROSSWALK) { // 횡단보도는 보행/차량 겸용 처리
+						secCost += /*pLink->length*/cost * m_rpCost.pedestrian.cost_bike_with[opt];
+					} else if (pLink->ped.walk_type == TYPE_WALK_ONLY) { // 보행 전용(횡단보도제외)은 가중치를 더 준다.
+						secCost += /*pLink->length*/cost * ((double)max(1, MAX_LANE_COUNT - static_cast<int32_t>(pLink->ped.lane_count)) * m_rpCost.pedestrian.cost_bike_walk[opt]) * 1.5f;
+					} else {
+						secCost += /*pLink->length*/cost * ((double)max(1, MAX_LANE_COUNT - static_cast<int32_t>(pLink->ped.lane_count)) * m_rpCost.pedestrian.cost_bike_walk[opt]);
 					}
-				}				
+				}
 
 				// 차선 가중치, 자전거 전용 도로는 좀더 빠르게
 				if (pLink->ped.lane_count > 1) {
-					secCost += pLink->length * ((double)max(0, MAX_LANE_COUNT - static_cast<int32_t>(pLink->ped.lane_count)) * m_rpCost.pedestrian.cost_lane_bike[opt]);
+					secCost += /*pLink->length*/cost * ((double)max(0, MAX_LANE_COUNT - static_cast<int32_t>(pLink->ped.lane_count)) * m_rpCost.pedestrian.cost_lane_bike[opt]);
 				}
 
 
@@ -1537,16 +1554,16 @@ const double CRoutePlan::GetTravelCost(IN const RequestRouteInfo* pReqInfo, IN c
 					}
 					case TYPE_OBJECT_UNDERPASS:
 					{//strcat(szInfo, "지하보도");
-						if ((opt == ROUTE_OPT_SHORTEST) && (pLink->ped.gate_type == TYPE_GATE_CONNECTION)) {// 6 : 단순연결로))
+						if ((opt == ROUTE_OPT_SHORTEST) || (pLink->ped.gate_type == TYPE_GATE_CONNECTION)) {// 6 : 단순연결로))
 							;
 						} else {
-							secCost += pLink->length * 100.f; // 자전거는 진입 어렵게
+							secCost += /*pLink->length*/cost * 100.f; // 자전거는 진입 어렵게
 						}
 						break;
 					}
 					case TYPE_OBJECT_FOOTBRIDGE:
 					{//strcat(szInfo, "육교");
-						secCost += pLink->length * 100.f; // 자전거는 진입 어렵게
+						secCost += /*pLink->length*/cost * 100.f; // 자전거는 진입 어렵게
 						break;
 					}
 					case TYPE_OBJECT_OVERPASS:
@@ -1559,40 +1576,46 @@ const double CRoutePlan::GetTravelCost(IN const RequestRouteInfo* pReqInfo, IN c
 					}
 					case TYPE_OBJECT_SUBWAY:
 					{//strcat(szInfo, "지하철역");
-						secCost += pLink->length * 100.f; // 자전거는 진입 어렵게
+						secCost += /*pLink->length*/cost * 100.f; // 자전거는 진입 어렵게
 						break;
 					}
 					case TYPE_OBJECT_RAILROAD:
 					{//strcat(szInfo, "철도");
-						secCost += pLink->length * 100.f; // 자전거는 진입 어렵게
+						secCost += /*pLink->length*/cost * 100.f; // 자전거는 진입 어렵게
 						break;
 					}
 					case TYPE_OBJECT_BUSSTATION:
 					{//strcat(szInfo, "중앙버스정류장");
-						secCost += pLink->length * 100.f; // 자전거는 진입 어렵게
+						secCost += /*pLink->length*/cost * 100.f; // 자전거는 진입 어렵게
 						break;
 					}
 					case TYPE_OBJECT_UNDERGROUNDMALL:
 					{//strcat(szInfo, "지하상가");
-						secCost += pLink->length * 100.f; // 자전거는 진입 어렵게
+						secCost += /*pLink->length*/cost * 100.f; // 자전거는 진입 어렵게
 						break;
 					}
 					case TYPE_OBJECT_THROUGHBUILDING:
 					{//strcat(szInfo, "건물관통도로");
-						secCost += pLink->length * 100.f; // 자전거는 진입 어렵게
+						secCost += /*pLink->length*/cost * 100.f; // 자전거는 진입 어렵게
 						break;
 					}
 					case TYPE_OBJECT_COMPLEXPARK:
 					{//strcat(szInfo, "단지도로_공원");
 						if (opt != ROUTE_OPT_SHORTEST) {
-							secCost *= 2.f; // 자전거는 진입 어렵게
+							if ((opt == ROUTE_OPT_SHORTEST) || (pLinkInfo->LinkSubInfo.ped.facility_type == pLink->ped.facility_type)) {
+								secCost += cost * 0.2f; // 자전거는 진입 어렵게
+							} else {
+								secCost += cost * 1.f; // 자전거는 진입 어렵게
+							}							
 						}
 						break;
 					}
 					case TYPE_OBJECT_COMPLEXAPT:
-					{//strcat(szInfo, "단지도로_주거시설");
-						if (opt != ROUTE_OPT_SHORTEST) {
-							secCost *= 10.f; // 자전거는 진입 어렵게
+					{//strcat(szInfo, "단지도로_주거시설"); // 목적지가 단지도로_주거시설인데 현도로가 단지도로_주거시설가 아니면 가중치
+						if ((opt == ROUTE_OPT_SHORTEST) || (pLinkInfo->LinkSubInfo.ped.facility_type == pLink->ped.facility_type)) {
+							secCost += /*pLink->length*/cost * 0.2f; // 자전거는 진입 어렵게
+						} else {
+							secCost += /*pLink->length*/cost * 10.f; // 자전거는 진입 어렵게
 						}
 						break;
 					}
@@ -1600,18 +1623,20 @@ const double CRoutePlan::GetTravelCost(IN const RequestRouteInfo* pReqInfo, IN c
 					{
 						//strcat(szInfo, "단지도로_관광지");
 						if (opt != ROUTE_OPT_SHORTEST) {
-#if defined(USE_FOREST_DATA)
-							secCost += pLink->length * 10.f; // 자전거는 진입 어렵게
-#else
-							secCost += pLink->length * 100.f; // 자전거는 진입 어렵게
-#endif
+							if ((opt == ROUTE_OPT_SHORTEST) || (pLinkInfo->LinkSubInfo.ped.facility_type == pLink->ped.facility_type)) {
+								secCost += cost * 0.2f; // 자전거는 진입 어렵게
+							} else {
+								secCost += cost * 10.f; // 자전거는 진입 어렵게
+							}
 						}
 						break;
 					}
 					case TYPE_OBJECT_COMPLEXETC:
-					{//strcat(szInfo, "단지도로_기타");
-						if (opt != ROUTE_OPT_SHORTEST) {
-							secCost *= 2.f; // 자전거는 진입 어렵게
+					{//strcat(szInfo, "단지도로_기타"); // 목적지가 단지도로_기타인데 현도로가 단지도로_기타가 아니면 가중치
+						if ((opt == ROUTE_OPT_SHORTEST) || (pLinkInfo->LinkSubInfo.ped.facility_type == pLink->ped.facility_type)) {
+							secCost += /*pLink->length*/cost * 0.2f; // 자전거는 진입 어렵게
+						} else {
+							secCost += /*pLink->length*/cost * 2.f; // 자전거는 진입 어렵게
 						}
 						break;
 					}
@@ -1631,19 +1656,19 @@ const double CRoutePlan::GetTravelCost(IN const RequestRouteInfo* pReqInfo, IN c
 						break;
 					}
 					case TYPE_GATE_STAIRS: {// 2 : 계단
-						secCost += pLink->length * 100.f; // 자전거는 진입 어렵게
+						secCost += /*pLink->length*/cost * 100.f; // 자전거는 진입 어렵게
 						break;
 					}
 					case TYPE_GATE_ESCALATOR: {// 3 : 에스컬레이터
-						secCost += pLink->length * 100.f; // 자전거는 진입 어렵게
+						secCost += /*pLink->length*/cost * 100.f; // 자전거는 진입 어렵게
 						break;
 					}
 					case TYPE_GATE_STAIRS_ESCALATOR: {// 4 : 계단 / 에스컬레이터
-						secCost += pLink->length * 100.f; // 자전거는 진입 어렵게
+						secCost += /*pLink->length*/cost * 100.f; // 자전거는 진입 어렵게
 						break;
 					}
 					case TYPE_GATE_ELEVATOR: {// 5 : 엘리베이터
-						secCost += pLink->length * 100.f; // 자전거는 진입 어렵게
+						secCost += /*pLink->length*/cost * 100.f; // 자전거는 진입 어렵게
 						break;
 					}
 					case TYPE_GATE_CONNECTION: {// 6 : 단순연결로
@@ -1651,15 +1676,15 @@ const double CRoutePlan::GetTravelCost(IN const RequestRouteInfo* pReqInfo, IN c
 					}
 					case TYPE_GATE_CROSSWALK: {// 7 : 횡단보도
 						//waitCost = 30; // 횡단보도는 기다리는 시간이 주어 자주 건너지 않도록...
-						waitCost += pLink->length * m_rpCost.pedestrian.cost_cross_bike[opt];
+						waitCost += /*pLink->length*/cost * m_rpCost.pedestrian.cost_cross_bike[opt];
 						break;
 					}
 					case TYPE_GATE_MOVINGWALK: {// 8 : 무빙워크
-						secCost += pLink->length * 100.f; // 자전거는 진입 어렵게
+						secCost += /*pLink->length*/cost * 100.f; // 자전거는 진입 어렵게
 						break;
 					}
 					case TYPE_GATE_STEPPINGSTONES: {// 9 : 징검다리
-						secCost += pLink->length * 100.f; // 자전거는 진입 어렵게
+						secCost += /*pLink->length*/cost * 100.f; // 자전거는 진입 어렵게
 						break;
 					}
 					case TYPE_GATE_VIRTUAL: {// 10 : 의사횡단
@@ -1678,15 +1703,15 @@ const double CRoutePlan::GetTravelCost(IN const RequestRouteInfo* pReqInfo, IN c
 
 				//보행자도로 타입, 
 				if (pLink->ped.walk_type == TYPE_WALK_SIDE) { // 1:복선도로
-					secCost += pLink->length * m_rpCost.pedestrian.cost_walk_side[opt];
+					secCost += /*pLink->length*/cost * m_rpCost.pedestrian.cost_walk_side[opt];
 				} else if (pLink->ped.walk_type == TYPE_WALK_WITH_CAR) { // 2:차량겸용도로
-					secCost += pLink->length * m_rpCost.pedestrian.cost_walk_with[opt];
+					secCost += /*pLink->length*/cost * m_rpCost.pedestrian.cost_walk_with[opt];
 				} else if (pLink->ped.walk_type == TYPE_WALK_WITH_BYC) { // 3:자전거전용도로
-					secCost += pLink->length * m_rpCost.pedestrian.cost_walk_bike[opt];
+					secCost += /*pLink->length*/cost * m_rpCost.pedestrian.cost_walk_bike[opt];
 				} else if (pLink->ped.walk_type == TYPE_WALK_ONLY) { // 4:보행전용도로
-					secCost += pLink->length * m_rpCost.pedestrian.cost_walk_only[opt];
+					secCost += /*pLink->length*/cost * m_rpCost.pedestrian.cost_walk_only[opt];
 				} else if (pLink->ped.walk_type == TYPE_WALK_THROUGH) { // 5:가상보행도로
-					secCost += pLink->length * m_rpCost.pedestrian.cost_walk_line[opt];
+					secCost += /*pLink->length*/cost * m_rpCost.pedestrian.cost_walk_line[opt];
 				} else { //
 					;
 				}
@@ -1755,14 +1780,14 @@ const double CRoutePlan::GetTravelCost(IN const RequestRouteInfo* pReqInfo, IN c
 					case TYPE_OBJECT_UNDERPASS:
 					{//strcat(szInfo, "지하보도");
 						if (opt != ROUTE_OPT_SHORTEST) {
-							secCost += pLink->length * 2.f; // 진입 어렵게
+							secCost += /*pLink->length*/cost * 2.f; // 진입 어렵게
 						}
 						break;
 					}
 					case TYPE_OBJECT_FOOTBRIDGE:
 					{//strcat(szInfo, "육교");
 						if (opt != ROUTE_OPT_SHORTEST) {
-							secCost += pLink->length * 1.2f; // 진입 어렵게
+							secCost += /*pLink->length*/cost * 1.2f; // 진입 어렵게
 						}
 						break;
 					}
@@ -1776,70 +1801,70 @@ const double CRoutePlan::GetTravelCost(IN const RequestRouteInfo* pReqInfo, IN c
 					}
 					case TYPE_OBJECT_SUBWAY:
 					{//strcat(szInfo, "지하철역");
-						secCost += pLink->length * 10.f; // 진입 어렵게
+						secCost += /*pLink->length*/cost * 10.f; // 진입 어렵게
 						break;
 					}
 					case TYPE_OBJECT_RAILROAD:
 					{//strcat(szInfo, "철도");
-						secCost += pLink->length * 10.f; // 진입 어렵게
+						secCost += /*pLink->length*/cost * 10.f; // 진입 어렵게
 						break;
 					}
 					case TYPE_OBJECT_BUSSTATION:
 					{//strcat(szInfo, "중앙버스정류장");
-						secCost += pLink->length * 10.f; // 진입 어렵게
+						secCost += /*pLink->length*/cost * 10.f; // 진입 어렵게
 						break;
 					}
 					case TYPE_OBJECT_UNDERGROUNDMALL:
 					{//strcat(szInfo, "지하상가");
 						if (opt == ROUTE_OPT_SHORTEST) {
-							secCost += pLink->length * 2.0f; // 진입 어렵게
+							secCost += /*pLink->length*/cost * 2.0f; // 진입 어렵게
 						} else {
-							secCost += pLink->length * 10.f; // 진입 어렵게
+							secCost += /*pLink->length*/cost * 10.f; // 진입 어렵게
 						}
 						break;
 					}
 					case TYPE_OBJECT_THROUGHBUILDING:
 					{//strcat(szInfo, "건물관통도로");
 						if (opt == ROUTE_OPT_SHORTEST) {
-							secCost += pLink->length * 2.0f; // 진입 어렵게
+							secCost += /*pLink->length*/cost * 2.0f; // 진입 어렵게
 						} else {
-							secCost += pLink->length * 10.f; // 진입 어렵게
-						}					
+							secCost += /*pLink->length*/cost * 10.f; // 진입 어렵게
+						}
 						break;
 					}
 					case TYPE_OBJECT_COMPLEXPARK:
 					{//strcat(szInfo, "단지도로_공원");
-						if (opt == ROUTE_OPT_SHORTEST) {
-							secCost += pLink->length * .2f; // 진입 어렵게
+						if ((opt == ROUTE_OPT_SHORTEST) || (pLinkInfo->LinkSubInfo.ped.facility_type == pLink->ped.facility_type)) {
+							secCost += /*pLink->length*/cost * .2f; // 진입 어렵게
 						} else {
-							secCost += pLink->length * 1.2f; // 진입 어렵게
+							secCost += /*pLink->length*/cost * 1.2f; // 진입 어렵게
 						}
 						break;
 					}
 					case TYPE_OBJECT_COMPLEXAPT:
-					{//strcat(szInfo, "단지도로_주거시설");
-						if (opt == ROUTE_OPT_SHORTEST) {
-							secCost += pLink->length * .2f; // 진입 어렵게
+					{//strcat(szInfo, "단지도로_주거시설"); // 목적지가 단지도로_주거시설인데 현도로가 단지도로_주거시설가 아니면 가중치
+						if ((opt == ROUTE_OPT_SHORTEST) || (pLinkInfo->LinkSubInfo.ped.facility_type == pLink->ped.facility_type)) {
+							secCost += cost * .2f; // 진입 어렵게
 						} else {
-							secCost += pLink->length * 1.2f; // 진입 어렵게
+							secCost += cost * 1.2f; // 진입 어렵게
 						}
 						break;
 					}
 					case TYPE_OBJECT_COMPLEXTOUR:
 					{//strcat(szInfo, "단지도로_관광지");
 						if (opt == ROUTE_OPT_SHORTEST) {
-							secCost += pLink->length * .2f; // 진입 어렵게
+							secCost += /*pLink->length*/cost * .2f; // 진입 어렵게
 						} else {
-							secCost += pLink->length * 1.2f; // 진입 어렵게
+							secCost += /*pLink->length*/cost * 1.2f; // 진입 어렵게
 						}
 						break;
 					}
 					case TYPE_OBJECT_COMPLEXETC:
-					{//strcat(szInfo, "단지도로_기타");
-						if (opt == ROUTE_OPT_SHORTEST) {
-							secCost += pLink->length * 1.2f; // 진입 어렵게
+					{//strcat(szInfo, "단지도로_기타"); // 목적지가 단지도로_기타인데 현도로가 단지도로_기타가 아니면 가중치
+						if ((opt == ROUTE_OPT_SHORTEST) || (pLinkInfo->LinkSubInfo.ped.facility_type == pLink->ped.facility_type)) {
+							secCost += /*pLink->length*/cost * .2f; // 진입 어렵게
 						} else {
-							secCost += pLink->length * 1.2f; // 진입 어렵게
+							secCost += /*pLink->length*/cost * 1.2f; // 진입 어렵게
 						}
 						break;
 					}
@@ -1860,19 +1885,19 @@ const double CRoutePlan::GetTravelCost(IN const RequestRouteInfo* pReqInfo, IN c
 						break;
 					}
 					case TYPE_GATE_STAIRS: {// 2 : 계단
-						secCost += pLink->length * 2.f; // 진입 어렵게
+						secCost += /*pLink->length*/cost * 2.f; // 진입 어렵게
 						break;
 					}
 					case TYPE_GATE_ESCALATOR: {// 3 : 에스컬레이터
-						secCost += pLink->length * 2.f; // 진입 어렵게
+						secCost += /*pLink->length*/cost * 2.f; // 진입 어렵게
 						break;
 					}
 					case TYPE_GATE_STAIRS_ESCALATOR: {// 4 : 계단 / 에스컬레이터
-						secCost += pLink->length * 2.f; // 진입 어렵게
+						secCost += /*pLink->length*/cost * 2.f; // 진입 어렵게
 						break;
 					}
 					case TYPE_GATE_ELEVATOR: {// 5 : 엘리베이터
-						secCost += pLink->length * 2.f; // 진입 어렵게
+						secCost += /*pLink->length*/cost * 2.f; // 진입 어렵게
 						break;
 					}
 					case TYPE_GATE_CONNECTION: {// 6 : 단순연결로
@@ -1882,16 +1907,16 @@ const double CRoutePlan::GetTravelCost(IN const RequestRouteInfo* pReqInfo, IN c
 						//waitCost = 30; // 횡단보도는 1min정도 기다리는 시간이 주어진다.
 						// 횡단 보도를 너무 자주 건너지 않도록 가중치 적용
 						if ((pLink->ped.lane_count > 1) && (m_rpCost.pedestrian.cost_cross_walk[opt] > 0)) {
-							waitCost += pLink->length * m_rpCost.pedestrian.cost_cross_walk[opt];
+							waitCost += /*pLink->length*/cost * m_rpCost.pedestrian.cost_cross_walk[opt];
 						}
 						break;
 					}
 					case TYPE_GATE_MOVINGWALK: {// 8 : 무빙워크
-						secCost += pLink->length * 100.f; // 탐색 지양
+						secCost += /*pLink->length*/cost * 100.f; // 탐색 지양
 						break;
 					}
 					case TYPE_GATE_STEPPINGSTONES: {// 9 : 징검다리
-						secCost += pLink->length * 100.f; // 탐색 지양
+						secCost += /*pLink->length*/cost * 100.f; // 탐색 지양
 						break;
 					}
 					case TYPE_GATE_VIRTUAL: {// 10 : 의사횡단
@@ -2708,7 +2733,7 @@ const int getPathAngle(IN const stLinkInfo* pPrevLink, IN const stLinkInfo* pNex
 }
 
 
-const int CRoutePlan::AddNextLinks(IN RouteInfo* pRouteInfo, IN const CandidateLink* pCurInfo)
+const int CRoutePlan::AddNextLinks(IN RouteInfo* pRouteInfo, IN const CandidateLink* pCurInfo, IN const SBox* pBoxExpandedArea)
 {
 	KeyID candidateId;
 	int cntLinks = 0;
@@ -2853,7 +2878,7 @@ const int CRoutePlan::AddNextLinks(IN RouteInfo* pRouteInfo, IN const CandidateL
 			continue;
 		}
 #if defined(USE_VEHICLE_DATA)
-		else if (pLink->base.link_type == TYPE_LINK_DATA_VEHICLE) {
+		else if (pLinkNext->base.link_type == TYPE_LINK_DATA_VEHICLE) {
 			// 트럭 회피 옵션
 			if (m_pDataMgr->IsAvoidTruckLink(pRouteInfo->reqInfo.RouteTruckOption.option(), pLinkNext)) {
 				continue;
@@ -3024,6 +3049,14 @@ const int CRoutePlan::AddNextLinks(IN RouteInfo* pRouteInfo, IN const CandidateL
 			pItem->speed_level = pLinkNext->veh.level;
 #endif
 			pItem->pPrevLink = const_cast<CandidateLink*>(pCurInfo);
+
+#if defined(USE_PEDESTRIAN_DATA)
+			if (pBoxExpandedArea && pLinkNext->base.link_type == TYPE_LINK_DATA_PEDESTRIAN) {
+				if (!isInBox(pNodeNext->coord.x, pNodeNext->coord.y, *pBoxExpandedArea, 0)) {
+					pItem->costHeuristic += heuristicCost * 2;
+				}
+			}
+#endif
 
 			// 링크 방문 목록 등록
 			pRouteInfo->mRoutePass.emplace(candidateId.llid, pItem);
@@ -3526,9 +3559,9 @@ const int CRoutePlan::AddPrevLinksEx(IN RouteInfo* pRouteInfo, IN const Candidat
 				}
 			} else
 #endif			
-				if ((pLink->link_id.llid == pNodePrev->connnodes[ii].llid) && (retPassCode != PASS_CODE_UTURN)) { // (유턴이 아닌) 자기 자신은 제외
-					continue;
-				}
+			if ((pLink->link_id.llid == pNodePrev->connnodes[ii].llid) && (retPassCode != PASS_CODE_UTURN)) { // (유턴이 아닌) 자기 자신은 제외
+				continue;
+			}
 		}
 
 
@@ -3862,7 +3895,7 @@ const int CRoutePlan::AddNextCourse(IN RouteInfo* pRouteInfo, IN const Candidate
 #if defined(USE_VEHICLE_DATA)
 		else if (pLinkNext->base.link_type == TYPE_LINK_DATA_VEHICLE) {
 			// 트럭 회피 옵션
-			if (m_pDataMgr->IsAvoidTruckLink(pRouteInfo->reqInfo.RouteTruckOption.option(), pLinkPrev)) {
+			if (m_pDataMgr->IsAvoidTruckLink(pRouteInfo->reqInfo.RouteTruckOption.option(), pLinkNext)) {
 				continue;
 			}
 
@@ -4184,7 +4217,7 @@ const int CRoutePlan::Propagation(IN TableBaseInfo* pRouteInfo, IN const Candida
 				LOG_TRACE(LOG_ERROR, "Failed, can't find link, id:%d", pNodeNext->connnodes[ii].llid);
 				continue;
 			}
-			else if (pLink->base.link_type == TYPE_LINK_DATA_VEHICLE) {
+			else if (pLinkNext->base.link_type == TYPE_LINK_DATA_VEHICLE) {
 				// 트럭 회피 옵션
 				if (m_pDataMgr->IsAvoidTruckLink(pRouteInfo->reqInfo.RouteTruckOption.option(), pLinkNext)) {
 					continue;
@@ -7025,6 +7058,21 @@ const int CRoutePlan::MakeRoute(IN const int idx, IN RouteInfo* pRouteInfo, OUT 
 	// LOG_TRACE(LOG_DEBUG, "Start tree : link:%d", pLink->link_id.nid);
 
 
+	// 특정 범위 넘어가면 확장을 더디게 하자, 우선 보행자 먼저
+#if defined(USE_PEDESTRIAN_DATA)
+	static const double distMargin = 5000.f / 100000.f; // 5km // 확장 범위 마진 추가
+	SBox boxExpandedArea;
+	boxExpandedArea.Xmin = boxExpandedArea.Ymin = DBL_MAX;
+	boxExpandedArea.Xmax = boxExpandedArea.Ymax = DBL_MIN;
+
+	extendDataBox(boxExpandedArea, pRouteInfo->StartLinkInfo.MatchCoord.x, pRouteInfo->StartLinkInfo.MatchCoord.y);
+	extendDataBox(boxExpandedArea, pRouteInfo->EndLinkInfo.MatchCoord.x, pRouteInfo->EndLinkInfo.MatchCoord.y);
+
+	extendDataBox(boxExpandedArea, boxExpandedArea.Xmin - distMargin, boxExpandedArea.Ymin - distMargin);
+	extendDataBox(boxExpandedArea, boxExpandedArea.Xmax + distMargin, boxExpandedArea.Ymax + distMargin);
+#endif
+
+
 	CandidateLink* pCurInfo;
 	static const uint32_t cntMaxExtraSearch = 100; // 목적지 추가 도달 검사 최대 허용치
 	uint32_t cntExtraSearch = 0; // 목적지 도달 후 추가 도달 검사 카운트
@@ -7212,7 +7260,11 @@ const int CRoutePlan::MakeRoute(IN const int idx, IN RouteInfo* pRouteInfo, OUT 
 			break;
 		}
 
+#if defined(USE_PEDESTRIAN_DATA)
+		cntAddedLink = AddNextLinks(pRouteInfo, pCurInfo, &boxExpandedArea);
+#else
 		cntAddedLink = AddNextLinks(pRouteInfo, pCurInfo);
+#endif
 
 		// 연결 노드의 링크 셋
 #if defined(USE_SHOW_ROUTE_SATATUS)

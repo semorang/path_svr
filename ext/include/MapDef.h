@@ -116,9 +116,10 @@ typedef struct tagRECT
 // 0.0.7 merge to request route options to struct data <-- 미리 추가함 2025-02-25
 // 0.0.8 change u-turn status behave action
 // 0.0.9 Turn-left allows a minimum distance applied as 50m to the intersection from start point
+// 0.0.10 add candidate request option
 #define ENGINE_VERSION_MAJOR	0
 #define ENGINE_VERSION_MINOR	0
-#define ENGINE_VERSION_PATCH	9
+#define ENGINE_VERSION_PATCH	10
 #define ENGINE_VERSION_BUILD	0
 #elif defined(USE_OPTIMAL_POINT_API)
 #define ENGINE_VERSION_MAJOR	1
@@ -164,9 +165,10 @@ typedef struct tagRECT
 // 0.0.12 add guide_type for start-via and start-end case
 // 0.0.13 add bicycle type link match for avoid link
 // 0.0.14 allow bicycle only stairs attribute when use bicycle mobility
+// 0.0.15 cross walk cost decrease when using bicycle
 #define ENGINE_VERSION_MAJOR	0
 #define ENGINE_VERSION_MINOR	0
-#define ENGINE_VERSION_PATCH	14
+#define ENGINE_VERSION_PATCH	15
 #define ENGINE_VERSION_BUILD	0
 #	else // defined(USE_VEHICLE_DATA)
 #		if defined(USE_TMS_API)

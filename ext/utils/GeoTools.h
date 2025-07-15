@@ -15,6 +15,7 @@ bool isLeftSide(IN const SPoint* P1, IN const SPoint* P2, IN const SPoint* P3); 
 double get_road_slope(long x1, long y1, long z1, long x2, long y2, long z2);
 double get_road_slope(int32_t dist, int32_t height);
 
+double getRealWorldDistance(IN const SPoint ptStart, IN const SPoint ptEnd);
 double getRealWorldDistance(IN const double slng, IN const double slat, IN const double elng, IN const double elat);
 bool getPointByDistance(IN const double slng, IN const double slat, IN OUT double& elng, IN OUT double& elat, const double lDistance);
 bool getPointByDistanceFromCenter(IN const double slng, IN const double slat, IN const double& elng, IN const double& elat, IN const double lDistance, IN const bool isRight, OUT double& x, OUT double& y);

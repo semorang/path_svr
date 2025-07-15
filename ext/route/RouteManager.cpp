@@ -36,6 +36,9 @@ CRouteManager::CRouteManager()
 	m_nTrafficOpt = 0;
 	m_nMobilityOpt = 0;
 	m_nFreeOpt = 0;
+#if defined(USE_P2P_DATA)	
+	m_nCandiateOpt = 0;
+#endif
 	m_routeSubOpt.option = 0;
 
 	m_nDepartureDirIgnore = 0;
@@ -74,6 +77,9 @@ bool CRouteManager::Initialize(void)
 	m_nTrafficOpt = 0;
 	m_nMobilityOpt = 0;
 	m_nFreeOpt = 0;
+#if defined(USE_P2P_DATA)	
+	m_nCandiateOpt = 0;
+#endif
 	m_routeSubOpt.option = 0;
 
 	m_nDepartureDirIgnore = 0;
@@ -285,6 +291,14 @@ void CRouteManager::SetRouteFreeOption(IN const uint32_t free)
 {
 	m_nFreeOpt = free;
 }
+
+
+#if defined(USE_P2P_DATA)	
+void CRouteManager::SetCandidateOption(IN const uint32_t candidate)
+{
+	m_nCandiateOpt = candidate;
+}
+#endif
 
 
 void CRouteManager::SetRouteTruckOption(IN const TruckOption* pOption)
@@ -654,7 +668,7 @@ int CRouteManager::SingleRoute()
 #endif
 
 #if defined(USE_P2P_DATA)
-	if (ret == ROUTE_RESULT_SUCCESS) {
+	if ((ret == ROUTE_RESULT_SUCCESS) && (m_nCandiateOpt))
 		GetCandidateRoute();
 	}
 #endif
