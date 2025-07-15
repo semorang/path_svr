@@ -668,7 +668,7 @@ int CRouteManager::SingleRoute()
 #endif
 
 #if defined(USE_P2P_DATA)
-	if ((ret == ROUTE_RESULT_SUCCESS) && (m_nCandiateOpt))
+	if ((ret == ROUTE_RESULT_SUCCESS) && (m_nCandiateOpt)) {
 		GetCandidateRoute();
 	}
 #endif

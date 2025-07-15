@@ -113,13 +113,13 @@ typedef struct tagRECT
 // 0.0.4 add ttl_id & change data file names
 // 0.0.5 add to coordinate for inavi air navigation
 // 0.0.6 add candidate route
-// 0.0.7 merge to request route options to struct data <-- 미리 추가함 2025-02-25
-// 0.0.8 change u-turn status behave action
-// 0.0.9 Turn-left allows a minimum distance applied as 50m to the intersection from start point
-// 0.0.10 add candidate request option
+// 0.0.6 merge to request route options to struct data <-- 미리 추가함 2025-02-25
+// 0.0.6 change u-turn status behave action
+// 0.0.6 Turn-left allows a minimum distance applied as 50m to the intersection from start point
+// 0.0.6 add candidate request option
 #define ENGINE_VERSION_MAJOR	0
 #define ENGINE_VERSION_MINOR	0
-#define ENGINE_VERSION_PATCH	10
+#define ENGINE_VERSION_PATCH	6
 #define ENGINE_VERSION_BUILD	0
 #elif defined(USE_OPTIMAL_POINT_API)
 #define ENGINE_VERSION_MAJOR	1
