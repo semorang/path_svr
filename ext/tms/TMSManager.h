@@ -177,6 +177,7 @@ protected:
 
 private:
 	uint64_t currentTimestamp;
+	int32_t m_nMaxLimitCount;
 
 protected:
 	
@@ -189,12 +190,14 @@ public:
 	void Release(void);
 
 	void SetDataMgr(IN CDataManager* pDataMgr);
+	void SetLimitPointCount(IN const int32_t count = 0) { m_nMaxLimitCount = count; }
+	int32_t GetLimitPointCount(void) const { return m_nMaxLimitCount; }
 
 	int32_t GetBestway(IN const TspOption* pTspOpt, IN const vector<vector<stDistMatrix>>& vtDistMatrix, IN const vector<stWaypoints>& vtOrigin, OUT vector<int32_t>& vtBestWaypoints, OUT double& dist, OUT int32_t& time);
-	int32_t GetCluster(IN const ClusteringOption* pClustOpt, IN const vector<vector<stDistMatrix>>& vtDistMatrix, IN const vector<Origins>& vtOrigin, OUT vector<stDistrict>& vtDistrict, OUT vector<SPoint>& vtPositionLock);
+	int32_t GetCluster(IN const ClusteringOption* pClustOpt, IN const vector<vector<stDistMatrix>>& vtDistMatrix, IN const vector<Origins>& vtOrigin, OUT vector<stDistrict>& vtDistrict, OUT vector<SPoint>& vtEndPoint);
 	int32_t GetBoundary(IN vector<SPoint>& vtPois, OUT vector<SPoint>& vtBoundary, OUT SPoint& center);
 
-	uint32_t ParsingRequestWeightMatrix(IN const char* szRequest, OUT BaseOption& baseOpt, OUT vector<Origins>& vtOrigin, OUT vector<vector<stDistMatrix>>& vtDistanceMatrix, OUT int32_t& typeDistMatrix);
+	uint32_t ParsingRequestWeightMatrix(IN const char* szRequest, OUT BaseOption& baseOpt, OUT vector<Origins>& vtOrigin, OUT vector<Origins>& vtDestination, OUT vector<vector<stDistMatrix>>& vtDistanceMatrix, OUT int32_t& typeDistMatrix);
 	uint32_t ParsingRequestWeightMatrixRouteLine(IN const char* szRequest, OUT string& strFilePath, OUT size_t& sizeFile, OUT vector<vector<FileIndex>>& vtPathMatrixIndex);
 	uint32_t ParsingRequestBestway(IN const char* szRequest, OUT TspOption& tspOpt, OUT vector<Origins>& vtOrigin);
 	uint32_t ParsingRequestCluster(IN const char* szRequest, OUT ClusteringOption& clustOpt, OUT vector<Origins>& vtOrigin);
@@ -204,7 +207,7 @@ public:
 	uint32_t SaveWeightMatrixRouteLine(IN const char* szFileName, IN const vector<vector<stPathMatrix>>& vtPathMatrix);
 
 private:
-	uint32_t Clustering(IN const ClusteringOption* pClustOpt, IN const vector<vector<stDistMatrix>>& vtDistMatrix, IN const vector<stWaypoints>& vtWaypoints, IN const vector<int32_t>& vtBestway, IN const int32_t nBonusValue,  OUT vector<stDistrict>& vtClusters);
+	int32_t Clustering(IN const ClusteringOption* pClustOpt, IN const vector<vector<stDistMatrix>>& vtDistMatrix, IN const vector<stWaypoints>& vtWaypoints, IN const vector<int32_t>& vtBestway, IN const int32_t nBonusValue,  OUT vector<stDistrict>& vtClusters);
 
 	int32_t DevideClusterUsingTsp(IN const ClusteringOption* pClustOpt, IN const vector<vector<stDistMatrix>>& vtDistMatrix, IN const vector<stWaypoints>& vtWaypoints, IN const vector<int32_t>& vtBestways, IN const int32_t firstIdx, IN const int32_t lastIdx, IN OUT int32_t& bonusValue, OUT stDistrict& cluster, OUT vector<int32_t>& vtRemains);
 

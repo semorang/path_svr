@@ -142,12 +142,8 @@ bool CFileBuilding::ParseData(IN const char* fname)
 			continue;
 		}
 
-
-		// 테스트 메쉬가 있으면 정의된 메쉬만 확인하자
-		if (g_isUseTestMesh && !g_arrTestMesh.empty()) {
-			if (g_arrTestMesh.find(building.keyBld.tile_id) == g_arrTestMesh.end()) {
-				continue;
-			}
+		if (!checkTestMesh(building.keyBld.tile_id)) {
+			continue;
 		}
 
 
@@ -228,6 +224,10 @@ bool CFileBuilding::GenServiceData()
 		}
 	}
 
+#if defined(TEST_SPATIALINDEX)
+	// 검색 트리 구성 필요
+	m_pDataMgr->CreateSpatialindex(TYPE_DATA_BUILDING);
+#endif
 
 	// Entrance에서 사용하니까 릴리즈시점 조절 필요
 	//Release();
@@ -268,6 +268,7 @@ size_t CFileBuilding::WriteBody(FILE* fp, IN const uint32_t fileOff)
 	FileBody fileBody;
 	FilePolygon fileBld = { 0, };
 
+	int32_t cnt = 0;
 	size_t offFile = fileOff;
 	size_t retWrite = 0;
 	size_t retRead = 0;
@@ -307,12 +308,16 @@ size_t CFileBuilding::WriteBody(FILE* fp, IN const uint32_t fileOff)
 
 		// write building
 # if defined(USE_OPTIMAL_POINT_API)
-		for (jj = 0; jj < pMesh->buildings.size(); jj++)
+#ifdef TEST_SPATIALINDEX
+		for (const auto key : pMesh->setBldDuplicateCheck)
+#else
+		for (const auto key : pMesh->buildings)
+#endif
 		{
-			pBld = m_pDataMgr->GetBuildingDataById(pMesh->buildings[jj]);
+			pBld = m_pDataMgr->GetBuildingDataById(key);
 			if (!pBld)
 			{
-				LOG_TRACE(LOG_ERROR, "Failed, can't access building, idx:%d, tile_id:%d, id:%d", ii, pMesh->buildings[ii].tile_id, pMesh->buildings[ii].nid);
+				LOG_TRACE(LOG_ERROR, "Failed, can't access building, idx:%d, tile_id:%d, id:%d", ii, key.tile_id, key.nid);
 				return 0;
 			}
 
@@ -371,10 +376,12 @@ size_t CFileBuilding::WriteBody(FILE* fp, IN const uint32_t fileOff)
 				}
 				offItem += retWrite;
 			}
+			
+			cnt++;
 
 		} // write link
 
-		LOG_TRACE(LOG_DEBUG, "Save data, building, cnt:%lld", jj);
+		//LOG_TRACE(LOG_DEBUG, "Save data, building, cnt:%lld", cnt);
 #endif // # if defined(USE_OPTIMAL_POINT_API)
 
 
@@ -440,6 +447,10 @@ size_t CFileBuilding::ReadBody(FILE* fp)
 
 	for (int idx = 0; idx < m_vtIndex.size(); idx++)
 	{
+		if (!checkTestMesh(m_vtIndex[idx].idTile)) {
+			continue;
+		}
+
 		// read body
 		if (m_vtIndex[idx].szBody <= 0) {
 			continue;
@@ -546,14 +557,18 @@ size_t CFileBuilding::ReadBody(FILE* fp)
 			}
 
 			AddPolygonData(pBld);
-		}
+		} // for
 
 		offFile += m_vtIndex[idx].szBody;
+
+#ifdef TEST_SPATIALINDEX
+		m_pDataMgr->CreateSpatialindex(pMesh, TYPE_DATA_BUILDING);
+#endif
 
 #if defined(_DEBUG)
 		LOG_TRACE(LOG_DEBUG, "Data loading, building data loaded, mesh:%d, cnt:%lld", pMesh->mesh_id.tile_id, fileBody.area.cntPolygon);
 #endif
-	}
+	} // for
 
 	return offFile;
 }
@@ -576,8 +591,8 @@ bool CFileBuilding::LoadDataByIdx(IN const uint32_t idx)
 	FileBody fileBody = { 0, };
 	FilePolygon fileBld = { 0, };
 
-	stMeshInfo* pMesh;
-	stPolygonInfo* pBld;
+	stMeshInfo* pMesh = nullptr;
+	stPolygonInfo* pBld = nullptr;
 
 	size_t offItem = 0;
 	size_t offFile = 0;
@@ -585,16 +600,11 @@ bool CFileBuilding::LoadDataByIdx(IN const uint32_t idx)
 	size_t sizeFileBody = sizeof(FileBody);
 
 	// read index
-	pMesh = new stMeshInfo;
-	//memset(pMesh, 0x00, sizeof(stMeshInfo));
-
-
-
 
 	// read body
 	if (m_vtIndex[idx].offBody <= 0 || m_vtIndex[idx].szBody <= 0)
 	{
-		LOG_TRACE(LOG_ERROR, "Failed, index body info invalid, off:%d, size:%d", m_vtIndex[idx].offBody, m_vtIndex[idx].szBody);
+		//LOG_TRACE(LOG_ERROR, "Failed, index body info invalid, off:%d, size:%d", m_vtIndex[idx].offBody, m_vtIndex[idx].szBody);
 		fclose(fp);
 		return false;
 	}
@@ -616,16 +626,21 @@ bool CFileBuilding::LoadDataByIdx(IN const uint32_t idx)
 
 
 	// mesh
-	pMesh->mesh_id.tile_id = m_vtIndex[idx].idTile;
-	memcpy(&pMesh->mesh_box, &m_vtIndex[idx].rtTile, sizeof(pMesh->mesh_box));
-	memcpy(&pMesh->data_box, &m_vtIndex[idx].rtData, sizeof(pMesh->data_box));
-	for (int ii = 0; ii < 8; ii++) {
-		if (m_vtIndex[idx].idNeighborTile[ii] <= 0) {
-			continue;
+	pMesh = GetMeshDataById(m_vtIndex[idx].idTile, false);
+	if (!pMesh) {
+		pMesh = new stMeshInfo;
+
+		pMesh->mesh_id.tile_id = m_vtIndex[idx].idTile;
+		memcpy(&pMesh->mesh_box, &m_vtIndex[idx].rtTile, sizeof(pMesh->mesh_box));
+		memcpy(&pMesh->data_box, &m_vtIndex[idx].rtData, sizeof(pMesh->data_box));
+		for (int ii = 0; ii < 8; ii++) {
+			if (m_vtIndex[idx].idNeighborTile[ii] <= 0) {
+				continue;
+			}
+			pMesh->neighbors.emplace(m_vtIndex[idx].idNeighborTile[ii]);
 		}
-		pMesh->neighbors.emplace(m_vtIndex[idx].idNeighborTile[ii]);
+		AddMeshData(pMesh);
 	}
-	AddMeshData(pMesh);
 
 
 	// building
@@ -686,9 +701,13 @@ bool CFileBuilding::LoadDataByIdx(IN const uint32_t idx)
 		}
 
 		AddPolygonData(pBld);
-	}
+	} // for
 
 	fclose(fp);
+
+#ifdef TEST_SPATIALINDEX
+	m_pDataMgr->CreateSpatialindex(pMesh, TYPE_DATA_BUILDING);
+#endif
 
 	return true;
 }

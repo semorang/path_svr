@@ -20,3 +20,4 @@ char* strlower(char* str);
 const char* getDistanceString(const int dist);
 const char* getDurationString(const int time, const bool contraction = false);
 const char* getCostString(const double cost);
+const char* getSizeString(const unsigned long size);

@@ -36,7 +36,7 @@ TIndi& TIndi::operator = ( const TIndi& src ){
 }
 
 bool TIndi::operator == ( const TIndi& src ){
-	int curr, next, pre, flag_identify;
+	int curr, next, pre;//, flag_identify;
 
 	if( fN != src.fN ) return false;
 	if( fEvaluationValue != src.fEvaluationValue ) return false;

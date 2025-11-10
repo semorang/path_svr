@@ -12,6 +12,10 @@
 #include "../route/MMPoint.hpp"
 #include "../route/DataManager.h"
 
+#if defined(USE_CJSON)
+#include "../libjson/cjson/cJSON.h"
+#endif
+
 #if defined(_WIN32) && defined(_DEBUG)
 #define new DEBUG_NEW
 #undef THIS_FILE
@@ -25,6 +29,24 @@ static int32_t smallestMeshId = INT_MAX;
 bool g_isUseTestMesh = false;
 
 unordered_set<int32_t> g_arrTestMesh = {
+#if defined(USE_FOREST_DATA)
+	// 청계산 - 수리산 - 20
+	//186307, 186306, 186305, 186208, 186302, 186301, 186300, 185203, 185317, 185316,
+	//185315, 185218, 185312, 185311, 185310, 185213, 185307, 185306, 185305, 185208
+	g_forestMeshId, // global rigion
+	186307, 186306, 186305, 186208, 186302, 186301, 186300, 186203, 185317, 185316,
+	185315, 185218, 185312, 185311, 185310, 185213, 185307, 185306, 185305, 185208
+
+	// 설악산 - 78
+	//232612, 232613, 232710, 232711, 232712, 232713, 232810, 232811, 232812, 232813, 242110,
+	//232617, 232618, 232715, 232716, 232717, 232718, 232815, 232816, 232817, 232818,
+	//242115, 233602, 233603, 233700, 233701, 233702, 233703, 233800, 233801, 233802,
+	//233803, 243100, 233607, 233608, 233750, 233705, 233706, 233707, 233708, 233805,
+	//233806, 233807, 233808, 243105, 233612, 233613, 233710, 233711, 233712, 233713,
+	//233810, 233811, 233812, 233813, 243110, 233617, 233618, 233715, 233716, 233717,
+	//233718, 233815, 233816, 233817, 233818, 243115, 234602, 234603, 234700, 234701,
+	//234702, 234703, 234800, 234801, 234802, 234803, 244100,
+#else
 	185402, 185407, 185412, 185417, 186402, 186407, 186412, 186417,
 	185401, 185406, 185411, 185416, 186401, 186406, 186411, 186416,
 	185400, 185405, 185410, 185415, 186400, 186405, 186410, 186415, // 서울
@@ -39,21 +61,24 @@ unordered_set<int32_t> g_arrTestMesh = {
 
 	//223115, 223116, 223117, 223118, 224103 // 대구 p2p 실증지역 for KS 
 
-#if defined(USE_FOREST_DATA)
-	// 설악산 - 78
-	//232612, 232613, 232710, 232711, 232712, 232713, 232810, 232811, 232812, 232813, 242110,
-	//232617, 232618, 232715, 232716, 232717, 232718, 232815, 232816, 232817, 232818,
-	//242115, 233602, 233603, 233700, 233701, 233702, 233703, 233800, 233801, 233802,
-	//233803, 243100, 233607, 233608, 233750, 233705, 233706, 233707, 233708, 233805,
-	//233806, 233807, 233808, 243105, 233612, 233613, 233710, 233711, 233712, 233713,
-	//233810, 233811, 233812, 233813, 243110, 233617, 233618, 233715, 233716, 233717,
-	//233718, 233815, 233816, 233817, 233818, 243115, 234602, 234603, 234700, 234701,
-	//234702, 234703, 234800, 234801, 234802, 234803, 244100,
-#endif
-
 	// 홍도,흑산도 (섬)
 	116310, 116315, 116316, 117213, 117218, 117310, 117315, 117316
+#endif
 };
+
+bool checkTestMesh(const int32_t tile_id)
+{
+	bool ret = true;
+
+	// 테스트 메쉬가 있으면 정의된 메쉬만 확인하자
+	if (g_isUseTestMesh && !g_arrTestMesh.empty() && tile_id >= 0) {
+		if ((g_arrTestMesh.find(tile_id) == g_arrTestMesh.end())) {
+			ret = false;
+		}
+	}
+
+	return ret;
+}
 
 
 CFileMesh::CFileMesh()
@@ -177,11 +202,8 @@ bool CFileMesh::ParseData(IN const char* fname)
 		} // for
 
 
-		// 테스트 메쉬가 있으면 정의된 메쉬만 확인하자
-		if (g_isUseTestMesh && !g_arrTestMesh.empty()) {
-			if (g_arrTestMesh.find(mesh.MeshID) == g_arrTestMesh.end()) {
-				continue;
-			}
+		if (!checkTestMesh(mesh.MeshID)) {
+			continue;
 		}
 
 
@@ -272,6 +294,63 @@ void CFileMesh::Release()
 	CFileBase::Release();
 }
 
+void CFileMesh::SetDataManager(IN CDataManager* pDataMgr)
+{
+	CFileBase::SetDataManager(pDataMgr);
+
+	// check test mesh
+	if (m_pDataMgr) {
+#if defined(USE_CJSON)
+		string strFilePath = m_pDataMgr->GetDataPath();
+		strFilePath.append("/usr/");
+		strFilePath.append("test_mesh.json");
+
+		string strBuff;
+		size_t readlen = 0;
+		FILE* fp = fopen(strFilePath.c_str(), "rt");
+		if (fp) {
+			const size_t nBuff = 1024;
+			char szBuff[nBuff + 1] = { 0, };
+#if defined(_WIN32)
+			while (fread_s(szBuff, nBuff, nBuff, 1, fp) != 0) {
+#else
+			while (fread(szBuff, nBuff, 1, fp) != 0) {
+#endif
+				strBuff.append(szBuff);
+				memset(szBuff, 0x00, nBuff);
+			}
+			strBuff.append(szBuff);
+			fclose(fp);
+		}
+
+		cJSON* root = cJSON_Parse(strBuff.c_str());
+		if (root != NULL) {
+			cJSON* test = cJSON_GetObjectItem(root, "test");
+			if (test && cJSON_IsTrue(test)) {
+				cJSON* meshs = cJSON_GetObjectItem(root, "meshs");
+				if (meshs && cJSON_IsArray(meshs)) {
+					g_arrTestMesh.clear(); unordered_set<int32_t>().swap(g_arrTestMesh);
+					int cnt = cJSON_GetArraySize(meshs);
+					for (int ii = 0; ii < cnt; ii++) {
+						cJSON* mesh = cJSON_GetArrayItem(meshs, ii);
+						if (mesh && cJSON_IsNumber(mesh)) {
+							int mesh_id = cJSON_GetNumberValue(mesh);
+							g_arrTestMesh.emplace(mesh_id);
+						}
+					} // for
+					if (!g_arrTestMesh.empty()) {
+						g_isUseTestMesh = true;
+					}					
+				}
+			} else if (test) {
+				g_isUseTestMesh = false;
+			}
+
+			cJSON_Delete(root);
+		} // root
+#endif // #if defined(USE_CJSON)
+	}
+}
 
 #if defined(USE_DATA_CACHE)
 bool CFileMesh::AddIndexData(IN const FileIndex& pData)
@@ -357,7 +436,7 @@ size_t CFileMesh::WriteBody(FILE* fp, IN const uint32_t fileOff)
 
 	FileBody fileBody;
 
-	uint32_t ii, jj;
+	uint32_t ii;
 	const size_t sizeFileBody = sizeof(fileBody);
 
 	// write body - mesh
@@ -374,7 +453,6 @@ size_t CFileMesh::WriteBody(FILE* fp, IN const uint32_t fileOff)
 		// write body
 		memset(&fileBody, 0x00, sizeFileBody);
 
-		jj = 0;
 		fileBody.idTile = pMesh->mesh_id.tile_id;
 		if (pMesh->neighbors.size() > 8) {
 			LOG_TRACE(LOG_ERROR, "Error, --------------- Mesh neighbor count overflow, id:%d, %d", pMesh->mesh_id.tile_id, pMesh->neighbors.size());
@@ -390,7 +468,7 @@ size_t CFileMesh::WriteBody(FILE* fp, IN const uint32_t fileOff)
 		offItem = sizeFileBody;
 
 #if defined(_DEBUG)
-		LOG_TRACE(LOG_DEBUG, "Save data, mesh:%d, cnt:%lld", pMesh->mesh_id.tile_id, jj);
+		LOG_TRACE(LOG_DEBUG, "Save data, mesh:%d", pMesh->mesh_id.tile_id);
 #endif
 
 
@@ -419,7 +497,7 @@ size_t CFileMesh::WriteBody(FILE* fp, IN const uint32_t fileOff)
 	} // for
 
 
-	  // re-write index for body size and offset
+	// re-write index for body size and offset
 	fseek(fp, m_fileHeader.offIndex, SEEK_SET);
 	for (uint32_t idx = 0; idx < m_fileHeader.cntIndex; idx++)
 	{
@@ -490,8 +568,11 @@ size_t CFileMesh::ReadBody(FILE* fp)
 	stMeshInfo* pMesh = nullptr;
 
 	for (vector<FileIndex>::const_iterator it = m_vtIndex.begin(); it != m_vtIndex.end(); it++)
-		//for (uint32_t idxTile = 0; idxTile < fileHeader.cntIndex; idxTile++)
 	{
+		if (!checkTestMesh(it->idTile)) {
+			continue;
+		}
+
 		// read body
 		if (it->szBody <= 0) {
 			continue;

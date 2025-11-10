@@ -204,6 +204,9 @@ bool CFileEntrance::ParseData(IN const char* fname)
 			// 입구점 좌표 - 공통
 		}
 		
+		if (!checkTestMesh(ent_data.MatchId.tile_id)) {
+			continue;
+		}		
 
 		// XPOS // 입구점 X좌표
 		pTok = strsep(&pLine, token);
@@ -229,8 +232,8 @@ bool CFileEntrance::ParseData(IN const char* fname)
 			// ENT_FLAG // 자동/수동
 			pTok = strsep(&pLine, token);
 			lenTok = strlen(pTok);
-			// 수동이 아닐경우 데이터 제외
-			if ((lenTok <= 0) || (atoi(pTok) != 1)) {
+			// 수동이 아닐경우 데이터 제외 // 수동,자동 포함 2025-11-04
+			if ((lenTok <= 0) || ((atoi(pTok) != 0) && (atoi(pTok) != 1))) {
 				continue;
 			}
 		}
@@ -253,7 +256,7 @@ bool CFileEntrance::GenServiceData()
 	static const int32_t nMaxEntDist = 3000; // 건물/단지와 최대 1000m 이상 차이가 나면 오류
 
 	int32_t cntProc = 0;
-	int32_t cntMissNearLink = 0;
+	int32_t cntNearLinkMissing = 0;
 	const int sizeEnt = m_vtEntrance.size();
 
 	size_t tick_total = 0;
@@ -291,10 +294,12 @@ bool CFileEntrance::GenServiceData()
 #if defined(USE_MULTIPROCESS)
 #pragma omp atomic
 #endif
-				cntMissNearLink++;
+				cntNearLinkMissing++;
 
 				entInfo.angle = 0x1FF;
-				LOG_TRACE(LOG_WARNING, "entrance point dosen't have near link, type:%d, id:%d, x:%.5f, y:%.5f", m_vtEntrance[ii].MatchType, m_vtEntrance[ii].Id, entInfo.x, entInfo.y);
+#if 1 // 너무 많아서 우선은 출력 안하기로
+				LOG_TRACE(LOG_WARNING, "entrance point dosen't have near link, missing:%d, type:%d, id:%d, x:%.5f, y:%.5f", cntNearLinkMissing, m_vtEntrance[ii].MatchType, m_vtEntrance[ii].Id, entInfo.x, entInfo.y);
+#endif
 			}
 
 			if (m_vtEntrance[ii].MatchType == TYPE_ENT_BUILDING) { // 건물
@@ -346,7 +351,7 @@ bool CFileEntrance::GenServiceData()
 		if (cntProc % 100000 == 0)
 #endif
 		{
-			LOG_TRACE(LOG_DEBUG, "LOG, processing, link angle: %d/%d, missing: %d, avg_time:%d ms", cntProc, sizeEnt, cntMissNearLink, tick_total / cntProc);
+			LOG_TRACE(LOG_DEBUG, "LOG, processing, link angle: %d/%d, missing: %d, avg_time:%d ms", cntProc, sizeEnt, cntNearLinkMissing, tick_total / cntProc);
 		}
 	} // for
 
@@ -397,6 +402,10 @@ size_t CFileEntrance::ReadBody(FILE* fp)
 
 	for (int32_t idx = 0; idx < m_vtIndex.size(); idx++)
 	{
+		if (!checkTestMesh(m_vtIndex[idx].idTile)) {
+			continue;
+		}
+
 		// read body
 		if (m_vtIndex[idx].szBody <= 0) {
 			continue;
@@ -542,8 +551,8 @@ bool CFileEntrance::LoadDataByIdx(IN const uint32_t idx)
 	FileBody fileBody = { 0, };
 	FileEntrance fileEnt = { 0, };
 
-	stMeshInfo* pMesh;
-	stPolygonInfo* pPoly;
+	stMeshInfo* pMesh = nullptr;
+	stPolygonInfo* pPoly = nullptr;
 
 	const size_t sizeBody = sizeof(FileBody);
 
@@ -554,7 +563,7 @@ bool CFileEntrance::LoadDataByIdx(IN const uint32_t idx)
 	// read body
 	if (m_vtIndex[idx].offBody <= 0 || m_vtIndex[idx].szBody <= 0)
 	{
-		LOG_TRACE(LOG_ERROR, "Failed, index body info invalid, off:%d, size:%d", m_vtIndex[idx].offBody, m_vtIndex[idx].szBody);
+		//LOG_TRACE(LOG_ERROR, "Failed, index body info invalid, off:%d, size:%d", m_vtIndex[idx].offBody, m_vtIndex[idx].szBody);
 		fclose(fp);
 		return false;
 	}
@@ -576,7 +585,7 @@ bool CFileEntrance::LoadDataByIdx(IN const uint32_t idx)
 
 
 	// mesh
-	pMesh = GetMeshDataById(m_vtIndex[idx].idTile);
+	pMesh = GetMeshDataById(m_vtIndex[idx].idTile, false);
 	if (!pMesh) {
 		pMesh = new stMeshInfo;
 
@@ -736,7 +745,8 @@ size_t CFileEntrance::WriteBody(FILE* fp, IN const uint32_t fileOff)
 	long offItem = 0;
 	const size_t sizeFileBody = sizeof(fileBody);
 
-	uint32_t ii, jj;
+	uint32_t ii;
+	uint32_t cnt = 0;
 
 	// write body - entrance
 	for (ii = 0; ii < GetMeshCount(); ii++)
@@ -752,7 +762,6 @@ size_t CFileEntrance::WriteBody(FILE* fp, IN const uint32_t fileOff)
 		// write body
 		memset(&fileBody, 0x00, sizeof(fileBody));
 
-		jj = 0;
 		fileBody.idTile = pMesh->mesh_id.tile_id;
 		if (pMesh->neighbors.size() > 8) {
 			LOG_TRACE(LOG_ERROR, "Error, --------------- Mesh neighbor count overflow, id:%d, %d", pMesh->mesh_id.tile_id, pMesh->neighbors.size());
@@ -768,12 +777,17 @@ size_t CFileEntrance::WriteBody(FILE* fp, IN const uint32_t fileOff)
 
 		// write complex entrance
 # if defined(USE_OPTIMAL_POINT_API)
-		for (jj = 0; jj < pMesh->complexs.size(); jj++)
-		{
-			pPoly = m_pDataMgr->GetComplexDataById(pMesh->complexs[jj]);
+#ifdef TEST_SPATIALINDEX
+		for (const auto key : pMesh->setCpxDuplicateCheck) {
+#else
+		for (const auto key : pMesh->complexs) {
+#endif
+			cnt++;
+
+			pPoly = m_pDataMgr->GetComplexDataById(key);
 			if (!pPoly)
 			{
-				LOG_TRACE(LOG_ERROR, "Failed, can't access complex, idx:%d, tile_id:%d, id:%d", ii, pMesh->complexs[ii].tile_id, pMesh->complexs[ii].nid);
+				LOG_TRACE(LOG_ERROR, "Failed, can't access complex, idx:%d, tile_id:%d, id:%d", cnt, key.tile_id, key.nid);
 				return 0;
 			}
 
@@ -785,7 +799,7 @@ size_t CFileEntrance::WriteBody(FILE* fp, IN const uint32_t fileOff)
 
 			if ((retWrite = fwrite(&fileEnt, sizeof(fileEnt), 1, fp)) != 1)
 			{
-				LOG_TRACE(LOG_ERROR, "Failed, can't write complex entrance, idx:%d, tile_id:%d, id:%d", jj, pPoly->poly_id.tile_id, pPoly->poly_id.nid);
+				LOG_TRACE(LOG_ERROR, "Failed, can't write complex entrance, idx:%d, tile_id:%d, id:%d", cnt, pPoly->poly_id.tile_id, pPoly->poly_id.nid);
 				return 0;
 			}
 
@@ -805,24 +819,31 @@ size_t CFileEntrance::WriteBody(FILE* fp, IN const uint32_t fileOff)
 			if (fileEnt.cntEntrance > 0)
 			{
 				if (!(retWrite = pPoly->writeAttribute(TYPE_POLYGON_DATA_ATTR_ENT, fp))) {
-					LOG_TRACE(LOG_ERROR, "Failed, can't write complex[%d], entrance", jj);
+					LOG_TRACE(LOG_ERROR, "Failed, can't write complex[%d], entrance, idx:%d, tile_id:%d, id:%d", cnt, pPoly->poly_id.tile_id, pPoly->poly_id.nid);
 					return 0;
 				}
 				offItem += retWrite;
 			}
 		} // write complex entrance
+	
+		//if (cnt > 0) {
+		//	LOG_TRACE(LOG_DEBUG, "Save data, complex entrance, cnt:%lld", cnt);
+		//}
 
-		if (jj > 0) {
-			LOG_TRACE(LOG_DEBUG, "Save data, complex entrance, cnt:%lld", jj);
-		}
+		cnt = 0;
 
 		// write building entrance
-		for (jj = 0; jj < pMesh->buildings.size(); jj++)
-		{
-			pPoly = m_pDataMgr->GetBuildingDataById(pMesh->buildings[jj]);
+#ifdef TEST_SPATIALINDEX
+		for (const auto key : pMesh->setBldDuplicateCheck) {
+#else
+		for (const auto key : pMesh->buildings) {
+#endif
+			cnt++;
+
+			pPoly = m_pDataMgr->GetBuildingDataById(key);
 			if (!pPoly)
 			{
-				LOG_TRACE(LOG_ERROR, "Failed, can't access building, idx:%d, tile_id:%d, id:%d", ii, pMesh->buildings[ii].tile_id, pMesh->buildings[ii].nid);
+				LOG_TRACE(LOG_ERROR, "Failed, can't access building, idx:%d, tile_id:%d, id:%d", cnt, key.tile_id, key.nid);
 				return 0;
 			}
 
@@ -834,7 +855,7 @@ size_t CFileEntrance::WriteBody(FILE* fp, IN const uint32_t fileOff)
 
 			if ((retWrite = fwrite(&fileEnt, sizeof(fileEnt), 1, fp)) != 1)
 			{
-				LOG_TRACE(LOG_ERROR, "Failed, can't write building entrance, idx:%d, tile_id:%d, id:%d", jj, pPoly->poly_id.tile_id, pPoly->poly_id.nid);
+				LOG_TRACE(LOG_ERROR, "Failed, can't write building entrance, idx:%d, tile_id:%d, id:%d", cnt, pPoly->poly_id.tile_id, pPoly->poly_id.nid);
 				return 0;
 			}
 
@@ -854,16 +875,16 @@ size_t CFileEntrance::WriteBody(FILE* fp, IN const uint32_t fileOff)
 			if (fileEnt.cntEntrance > 0)
 			{
 				if (!(retWrite = pPoly->writeAttribute(TYPE_POLYGON_DATA_ATTR_ENT, fp))) {
-					LOG_TRACE(LOG_ERROR, "Failed, can't write building[%d], entrance", jj);
+					LOG_TRACE(LOG_ERROR, "Failed, can't write building[%d], entrance, idx:%d, tile_id : %d, id : %d", ii, pPoly->poly_id.tile_id, pPoly->poly_id.nid);
 					return 0;
 				}
 				offItem += retWrite;
 			}
 		} // write complex entrance
 
-		if (jj > 0) {
-			LOG_TRACE(LOG_DEBUG, "Save data, building entrance, cnt:%lld", jj);
-		}
+		//if (cnt > 0) {
+		//	LOG_TRACE(LOG_DEBUG, "Save data, building entrance, cnt:%lld", cnt);
+		//}
 #endif // # if defined(USE_OPTIMAL_POINT_API)
 
 

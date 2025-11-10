@@ -11,17 +11,21 @@
 #include "../shp/shpio.h"
 #include "../utils/UserLog.h"
 #include "../utils/GeoTools.h"
+#include "../utils/Strings.h"
 #include "../utils/DataConvertor.h"
 #include "MMPoint.hpp"
 #if defined(USE_CJSON)
 #include "../libjson/cjson/cJSON.h"
 #endif
 
+
+
 #if defined(_WIN32) && defined(_DEBUG)
 #define new DEBUG_NEW
 #undef THIS_FILE
 static char THIS_FILE[] = __FILE__;
 #endif
+
 
 
 CDataManager::CDataManager()
@@ -32,8 +36,8 @@ CDataManager::CDataManager()
 
 	m_pMapName = nullptr;
 	m_pMapMesh = nullptr;
-	m_pMapNode = nullptr;
-	m_pMapLink = nullptr;
+	m_pMapFNode = nullptr;
+	m_pMapFLink = nullptr;
 	m_pMapFExtend = nullptr;
 	m_pMapWNode = nullptr;
 	m_pMapWLink = nullptr;
@@ -52,8 +56,8 @@ CDataManager::CDataManager()
 	m_pMapName = new MapName();
 	m_pMapMesh = new MapMesh();
 #if defined(USE_FOREST_DATA)
-	m_pMapNode = new MapNode();
-	m_pMapLink = new MapLink();
+	m_pMapFNode = new MapNode();
+	m_pMapFLink = new MapLink();
 	m_pMapFExtend = new MapExtend();
 	m_pMapCourse = new MapCourse();
 #endif
@@ -94,11 +98,11 @@ CDataManager::~CDataManager()
 	if (m_pMapMesh) {
 		SAFE_DELETE(m_pMapMesh);
 	}
-	if (m_pMapNode) {
-		SAFE_DELETE(m_pMapNode);
+	if (m_pMapFNode) {
+		SAFE_DELETE(m_pMapFNode);
 	}
-	if (m_pMapLink) {
-		SAFE_DELETE(m_pMapLink);
+	if (m_pMapFLink) {
+		SAFE_DELETE(m_pMapFLink);
 	}
 	if (m_pMapFExtend) {
 		SAFE_DELETE(m_pMapFExtend);
@@ -155,11 +159,11 @@ bool CDataManager::Initialize(void)
 	if (m_pMapMesh) {
 		m_pMapMesh->Initialize();
 	}
-	if (m_pMapNode) {
-		m_pMapNode->Initialize();
+	if (m_pMapFNode) {
+		m_pMapFNode->Initialize();
 	}
-	if (m_pMapLink) {
-		m_pMapLink->Initialize();
+	if (m_pMapFLink) {
+		m_pMapFLink->Initialize();
 	}
 	if (m_pMapFExtend) {
 		m_pMapFExtend->Initialize();
@@ -234,11 +238,11 @@ void CDataManager::Release(void)
 	if (m_pMapMesh) {
 		m_pMapMesh->Release();
 	}
-	if (m_pMapNode) {
-		m_pMapNode->Release();
+	if (m_pMapFNode) {
+		m_pMapFNode->Release();
 	}
-	if (m_pMapLink) {
-		m_pMapLink->Release();
+	if (m_pMapFLink) {
+		m_pMapFLink->Release();
 	}
 	if (m_pMapFExtend) {
 		m_pMapFExtend->Release();
@@ -296,10 +300,10 @@ void CDataManager::SetMeshBox(IN const SBox* pBox)
 }
 
 
-void CDataManager::SetNeighborMesh(void)
-{
-	m_pMapMesh->CheckNeighborMesh();
-}
+//void CDataManager::SetNeighborMesh(void)
+//{
+//	m_pMapMesh->CheckNeighborMesh();
+//}
 
 
 void CDataManager::ArrangementMesh(void)
@@ -361,6 +365,31 @@ bool CDataManager::DeleteData(IN const uint64_t id)
 
 	if (m_pMapMesh != nullptr && ((pMesh = m_pMapMesh->GetMeshById(id)) != nullptr)) {
 #if defined(USE_FOREST_DATA)
+#ifdef TEST_SPATIALINDEX
+		// delete wnodes
+		if (!pMesh->setFNodeDuplicateCheck.empty()) {
+			for (const auto& key : pMesh->setFNodeDuplicateCheck) {
+				m_pMapFNode->DeleteData(key);
+			}
+
+			pMesh->setFNodeDuplicateCheck.clear();
+			set<KeyID>().swap(pMesh->setFNodeDuplicateCheck);
+		}
+
+		// delete wlinks
+		if (!pMesh->setFLinkDuplicateCheck.empty()) {
+			for (const auto& key : pMesh->setFLinkDuplicateCheck) {
+				m_pMapFLink->DeleteData(key);
+			}
+
+			pMesh->setFLinkDuplicateCheck.clear();
+			set<KeyID>().swap(pMesh->setFLinkDuplicateCheck);
+		}
+
+		// reset
+		m_pMapMesh->DeleteSpatialindex(pMesh);
+		//m_pMapMesh->CreateSpatialindex(pMesh);
+#else
 		// delete nodes
 		if (!pMesh->nodes.empty()) {
 			for (vector<KeyID>::const_iterator it = pMesh->nodes.begin(); it != pMesh->nodes.end(); it++) {
@@ -384,9 +413,35 @@ bool CDataManager::DeleteData(IN const uint64_t id)
 			pMesh->setLinkDuplicateCheck.clear();
 			set<KeyID>().swap(pMesh->setLinkDuplicateCheck);
 		}
+#endif
 #endif // #if defined(USE_FOREST_DATA)
 
 #if defined(USE_PEDESTRIAN_DATA)
+#ifdef TEST_SPATIALINDEX
+		// delete wnodes
+		if (!pMesh->setWNodeDuplicateCheck.empty()) {
+			for (const auto& key : pMesh->setWNodeDuplicateCheck) {
+				m_pMapWNode->DeleteData(key);
+			}
+
+			pMesh->setWNodeDuplicateCheck.clear();
+			set<KeyID>().swap(pMesh->setWNodeDuplicateCheck);
+		}
+
+		// delete wlinks
+		if (!pMesh->setWLinkDuplicateCheck.empty()) {
+			for (const auto& key : pMesh->setWLinkDuplicateCheck) {
+				m_pMapWLink->DeleteData(key);
+			}
+
+			pMesh->setWLinkDuplicateCheck.clear();
+			set<KeyID>().swap(pMesh->setWLinkDuplicateCheck);
+		}
+
+		// reset
+		m_pMapMesh->DeleteSpatialindex(pMesh);
+		//m_pMapMesh->CreateSpatialindex(pMesh);
+#else
 		// delete wnodes
 		if (!pMesh->wnodes.empty()) {
 			for (vector<KeyID>::const_iterator it = pMesh->wnodes.begin(); it != pMesh->wnodes.end(); it++) {
@@ -411,8 +466,34 @@ bool CDataManager::DeleteData(IN const uint64_t id)
 			set<KeyID>().swap(pMesh->setWLinkDuplicateCheck);
 		}
 #endif
+#endif
 #if defined(USE_VEHICLE_DATA)
-		// delete vnodes
+#ifdef TEST_SPATIALINDEX
+		// delete wnodes
+		if (!pMesh->setVNodeDuplicateCheck.empty()) {
+			for (const auto& key : pMesh->setVNodeDuplicateCheck) {
+				m_pMapVNode->DeleteData(key);
+			}
+
+			pMesh->setVNodeDuplicateCheck.clear();
+			set<KeyID>().swap(pMesh->setVNodeDuplicateCheck);
+		}
+
+		// delete wlinks
+		if (!pMesh->setVLinkDuplicateCheck.empty()) {
+			for (const auto& key : pMesh->setVLinkDuplicateCheck) {
+				m_pMapVLink->DeleteData(key);
+			}
+
+			pMesh->setVLinkDuplicateCheck.clear();
+			set<KeyID>().swap(pMesh->setVLinkDuplicateCheck);
+		}
+
+		// reset
+		m_pMapMesh->DeleteSpatialindex(pMesh);
+		//m_pMapMesh->CreateSpatialindex(pMesh);
+#else
+		// delete wnodes
 		if (!pMesh->vnodes.empty()) {
 			for (vector<KeyID>::const_iterator it = pMesh->vnodes.begin(); it != pMesh->vnodes.end(); it++) {
 				m_pMapVNode->DeleteData(*it);
@@ -436,7 +517,33 @@ bool CDataManager::DeleteData(IN const uint64_t id)
 			set<KeyID>().swap(pMesh->setVLinkDuplicateCheck);
 		}
 #endif
+#endif
 #if defined(USE_OPTIMAL_POINT_API) || defined(USE_MOUNTAIN_DATA)
+#ifdef TEST_SPATIALINDEX
+		// delete complex
+		if (!pMesh->setCpxDuplicateCheck.empty()) {
+			for (const auto& key : pMesh->setCpxDuplicateCheck) {
+				m_pMapComplex->DeleteData(key);
+			}
+
+			pMesh->setCpxDuplicateCheck.clear();
+			set<KeyID>().swap(pMesh->setCpxDuplicateCheck);
+		}
+
+		// delete building
+		if (!pMesh->setBldDuplicateCheck.empty()) {
+			for (const auto& key : pMesh->setBldDuplicateCheck) {
+				m_pMapBuilding->DeleteData(key);
+			}
+
+			pMesh->setBldDuplicateCheck.clear();
+			set<KeyID>().swap(pMesh->setBldDuplicateCheck);
+		}
+
+		// reset
+		m_pMapMesh->DeleteSpatialindex(pMesh);
+		//m_pMapMesh->CreateSpatialindex(pMesh);
+#else
 		// delete complex
 		if (!pMesh->complexs.empty()) {
 			for (vector<KeyID>::const_iterator it = pMesh->complexs.begin(); it != pMesh->complexs.end(); it++) {
@@ -460,6 +567,7 @@ bool CDataManager::DeleteData(IN const uint64_t id)
 			pMesh->setBldDuplicateCheck.clear();
 			set<KeyID>().swap(pMesh->setBldDuplicateCheck);
 		}
+#endif
 #endif
 
 		// delete mesh
@@ -570,7 +678,7 @@ bool CDataManager::AddLinkExData(IN const KeyID keyId, IN const int8_t type, IN 
 bool CDataManager::AddFNodeData(IN const stNodeInfo * pData)
 {
 #if defined(USE_FOREST_DATA)
-	if (m_pMapNode->AddData(pData)) {
+	if (m_pMapFNode->AddData(pData)) {
 		return m_pMapMesh->InsertFNode(pData->node_id);
 	}
 #endif
@@ -580,7 +688,7 @@ bool CDataManager::AddFNodeData(IN const stNodeInfo * pData)
 bool CDataManager::AddFLinkData(IN const stLinkInfo * pData)
 {
 #if defined(USE_FOREST_DATA)
-	if (m_pMapLink->AddData(pData))
+	if (m_pMapFLink->AddData(pData))
 	{
 		return m_pMapMesh->InsertFLink(pData);
 	}
@@ -604,7 +712,7 @@ bool CDataManager::AddWNodeData(IN const stNodeInfo * pData)
 bool CDataManager::AddWLinkData(IN const stLinkInfo * pData)
 {
 #if defined(USE_PEDESTRIAN_DATA)
-	if (m_pMapWLink->AddData(pData))
+	if (m_pMapWLink->AddData(pData)) 
 	{
 		return m_pMapMesh->InsertWLink(pData);
 	}
@@ -949,10 +1057,10 @@ stNodeInfo * CDataManager::GetFNodeDataById(IN const KeyID keyId, IN const bool 
 {
 	stNodeInfo* pData = nullptr;
 
-	if (m_pMapNode && !(pData = m_pMapNode->GetNodeById(keyId)) && force)
+	if (m_pMapFNode && !(pData = m_pMapFNode->GetNodeById(keyId)) && force)
 	{
 		if (GetNewData(keyId.tile_id)) {
-			pData = m_pMapNode->GetNodeById(keyId);
+			pData = m_pMapFNode->GetNodeById(keyId);
 		}
 	}
 
@@ -964,10 +1072,10 @@ stLinkInfo * CDataManager::GetFLinkDataById(IN const KeyID keyId, IN const bool 
 {
 	stLinkInfo* pData = nullptr;
 
-	if (m_pMapLink && !(pData = m_pMapLink->GetLinkById(keyId)) && force)
+	if (m_pMapFLink && !(pData = m_pMapFLink->GetLinkById(keyId)) && force)
 	{
 		if (GetNewData(keyId.tile_id)) {
-			pData = m_pMapLink->GetLinkById(keyId);
+			pData = m_pMapFLink->GetLinkById(keyId);
 		}
 	}
 
@@ -1354,8 +1462,8 @@ void CDataManager::SetVersion(IN const uint32_t nDataType, IN const uint32_t nMa
 	}
 	break;
 	case 	TYPE_DATA_TREKKING: // 숲길
-	if (m_pMapLink != nullptr) {
-		pBase = m_pMapLink;
+	if (m_pMapFLink != nullptr) {
+		pBase = m_pMapFLink;
 	}
 	break;
 	case 	TYPE_DATA_PEDESTRIAN: // 보행자/자전거
@@ -1407,8 +1515,8 @@ const char* CDataManager::GetVersionString(IN const uint32_t nDataType)
 	}
 	break;
 	case 	TYPE_DATA_TREKKING: // 숲길
-	if (m_pMapLink != nullptr) {
-		pBase = m_pMapLink;
+	if (m_pMapFLink != nullptr) {
+		pBase = m_pMapFLink;
 	}
 	break;
 	case 	TYPE_DATA_PEDESTRIAN: // 보행자/자전거
@@ -1479,18 +1587,26 @@ stLinkInfo * CDataManager::GetLinkDataByPointAround(IN const double lng, IN cons
 	stMeshInfo* s_ppMesh[s_maxMesh];
 	uint32_t nMaxMesh = 0;
 
+
 #if defined(USE_DATA_CACHE)
+#	if defined(USE_FOREST_DATA)
+	nMaxMesh = GetMeshDataByPoint(lng, lat, s_maxMesh, s_ppMesh);
+#	else
 	if (!m_mapFileIndex.empty() && (pMesh = GetMeshDataByPoint(lng, lat)) != nullptr) {
 		s_ppMesh[nMaxMesh++] = pMesh;
-	}
+	} else if (m_mapFileIndex.empty() && GetMeshCount() > 0) {
+		nMaxMesh = GetMeshDataByPoint(lng, lat, s_maxMesh, s_ppMesh);
+	} 
+#	endif
 #else
 	if (m_mapFileIndex.empty() && GetMeshCount() > 0) {
 		// 파일 캐쉬가 아닌 데이터 버퍼 로딩 상태일 경우
 		nMaxMesh = GetMeshDataByPoint(lng, lat, s_maxMesh, s_ppMesh);
 	}
+#endif
 
 	// 주변 메쉬를 추가
-#	if defined(USE_FOREST_DATA)
+#if defined(USE_FOREST_DATA)
 	int cntNewMesh = nMaxMesh;
 	for (int32_t ii = 0; ii < nMaxMesh; ii++) { // 숲길 네트워크는 숲길, 보행자길 두가지의 메쉬가 함께 로딩된다.
 		// 숲길 단일 메쉬의 검색 속도 향상을 위해 다중  메쉬 사용, 단일 메쉬는 검색에서 제외, 2024-05-29
@@ -1506,7 +1622,7 @@ stLinkInfo * CDataManager::GetLinkDataByPointAround(IN const double lng, IN cons
 		} // for
 	} // for
 	nMaxMesh = cntNewMesh; // 최대 검색 메쉬 수 변경
-#	else
+#else
 	if (nMaxMesh == 1 && !s_ppMesh[0]->neighbors.empty()) {
 		for (unordered_set<uint32_t>::const_iterator it = s_ppMesh[0]->neighbors.begin(); it != s_ppMesh[0]->neighbors.end(); it++) {
 			// 주변 메쉬의 중심 거리가 최대 요청 거리 이하일 경우만 추가
@@ -1536,8 +1652,7 @@ stLinkInfo * CDataManager::GetLinkDataByPointAround(IN const double lng, IN cons
 			}
 		} // for
 	}
-#	endif // #	if defined(USE_FOREST_DATA)
-#endif
+#endif // #	if defined(USE_FOREST_DATA)
 
 #if defined(USE_MULTIPROCESS)
 	volatile bool flag = false;
@@ -1577,12 +1692,25 @@ stLinkInfo * CDataManager::GetLinkDataByPointAround(IN const double lng, IN cons
 			continue;
 		}
 
+#ifdef TEST_SPATIALINDEX
+		if ((pMesh->flinkTree != nullptr) && ((nLinkDataType == TYPE_LINK_DATA_NONE) || (nLinkDataType == TYPE_LINK_DATA_TREKKING))) {
+			vector<KeyID> vtLinkId;
+#if defined(USE_MULTIPROCESS)
+#pragma omp critical
+#endif
+			m_pMapMesh->GetNearLinksfromSpatialindex(pMesh, lng, lat, nMaxDist, vtLinkId);
+			for (int ii = 0; ii < vtLinkId.size(); ii++) {
+				if (!(pLink = GetFLinkDataById(vtLinkId[ii])) ||
+#else // #ifdef TEST_SPATIALINDEX
 		if (!pMesh->links.empty() && ((nLinkDataType == TYPE_LINK_DATA_NONE) || (nLinkDataType == TYPE_LINK_DATA_TREKKING)))
 		{
+#if defined(USE_MULTIPROCESS)
 #pragma omp parallel firstprivate(pLink, minLng, minLat, minDist, minVtxIdx, minIr)
 #pragma omp for
+#endif
 			for (int ii = 0; ii < pMesh->links.size(); ii++) {
 				if (!(pLink = GetLinkDataById(pMesh->links[ii], nLinkDataType)) ||
+#endif
 					((nLinkDataType != TYPE_LINK_DATA_NONE) && (nLinkDataType != pLink->base.link_type)) ||
 					((minVtxIdx = linkProjection(pLink, lng, lat, nMaxDist, minLng, minLat, minDist, minIr)) < 0)) {
 					continue;
@@ -1601,7 +1729,7 @@ stLinkInfo * CDataManager::GetLinkDataByPointAround(IN const double lng, IN cons
 						if (psetCourse != nullptr && !psetCourse->empty()) {
 							stCourseInfo courseInfo;
 							for (const auto& course : *psetCourse) {
-								courseInfo.course_id = course;
+								courseInfo.course_value = course;
 								// 중용코스가 매칭 타입에 속하면 통과
 								if (nMatchType == courseInfo.course_type) {
 									isMatch = true;
@@ -1615,8 +1743,9 @@ stLinkInfo * CDataManager::GetLinkDataByPointAround(IN const double lng, IN cons
 						}
 					}
 				}
-
+#if defined(USE_MULTIPROCESS)
 #pragma omp critical
+#endif
 				if (minDist < minDistTrekking) {
 					minLinkTrekking = pLink;
 					minCoordTrekking.x = minLng;
@@ -1629,12 +1758,24 @@ stLinkInfo * CDataManager::GetLinkDataByPointAround(IN const double lng, IN cons
 #endif
 
 #if defined(USE_PEDESTRIAN_DATA)
-		if (!pMesh->wlinks.empty() && ((nLinkDataType == TYPE_LINK_DATA_NONE) || (nLinkDataType == TYPE_LINK_DATA_PEDESTRIAN)))
-		{
+#ifdef TEST_SPATIALINDEX
+		if ((pMesh->wlinkTree != nullptr) && ((nLinkDataType == TYPE_LINK_DATA_NONE) || (nLinkDataType == TYPE_LINK_DATA_PEDESTRIAN))) {
+			vector<KeyID> vtLinkId;
+#if defined(USE_MULTIPROCESS)
+#pragma omp critical
+#endif
+			m_pMapMesh->GetNearLinksfromSpatialindex(pMesh, lng, lat, nMaxDist, vtLinkId);
+			for (int ii = 0; ii < vtLinkId.size(); ii++) {
+				if (!(pLink = GetWLinkDataById(vtLinkId[ii])) ||
+#else // #ifdef TEST_SPATIALINDEX
+		if (!pMesh->wlinks.empty() && ((nLinkDataType == TYPE_LINK_DATA_NONE) || (nLinkDataType == TYPE_LINK_DATA_PEDESTRIAN))) {
+#if defined(USE_MULTIPROCESS)
 #pragma omp parallel firstprivate(pLink, minLng, minLat, minDist, minVtxIdx, minIr)
 #pragma omp for
+#endif
 			for (int ii = 0; ii < pMesh->wlinks.size(); ii++) {
 				if (!(pLink = GetWLinkDataById(pMesh->wlinks[ii])) ||
+#endif // #ifdef TEST_SPATIALINDEX
 					((nLinkDataType != TYPE_LINK_DATA_NONE) && (nLinkDataType != pLink->base.link_type)) ||
 					((nMatchType == TYPE_LINK_MATCH_FOR_BICYCLE) && (
 						(pLink->ped.bicycle_control == 3) ||
@@ -1660,8 +1801,9 @@ stLinkInfo * CDataManager::GetLinkDataByPointAround(IN const double lng, IN cons
 					((minVtxIdx = linkProjection(pLink, lng, lat, nMaxDist, minLng, minLat, minDist, minIr)) < 0)) {
 					continue;
 				}
-
+#if defined(USE_MULTIPROCESS)
 #pragma omp critical
+#endif
 				if (minDist < minDistPedestrian) {
 					minLinkPedestrian = pLink;
 					minCoordPedestrian.x = minLng;
@@ -1683,13 +1825,25 @@ stLinkInfo * CDataManager::GetLinkDataByPointAround(IN const double lng, IN cons
 			break;
 #endif
 		}
+#ifdef TEST_SPATIALINDEX
+		if ((pMesh->vlinkTree != nullptr) && ((nLinkDataType == TYPE_LINK_DATA_NONE) || (nLinkDataType == TYPE_LINK_DATA_VEHICLE))) {
+			vector<KeyID> vtLinkId;
+#if defined(USE_MULTIPROCESS)
+#pragma omp critical
+#endif
+			m_pMapMesh->GetNearLinksfromSpatialindex(pMesh, lng, lat, nMaxDist, vtLinkId);
+			for (int ii = 0; ii < vtLinkId.size(); ii++) {
+				if (!(pLink = GetVLinkDataById(vtLinkId[ii])) ||
+#else // #ifdef TEST_SPATIALINDEX
 		else if (/*retLink == nullptr && */!pMesh->vlinks.empty())
 		{
+#if defined(USE_MULTIPROCESS)
 #pragma omp parallel firstprivate(pLink, minLng, minLat, minDist, minVtxIdx, minIr)
 #pragma omp for
+#endif
 			for (int ii = 0; ii < pMesh->vlinks.size(); ii++) {
-				pLink = GetVLinkDataById(pMesh->vlinks[ii]);
-				if (!pLink ||
+				if (!(pLink = GetVLinkDataById(pMesh->vlinks[ii])) ||
+#endif // #ifdef TEST_SPATIALINDEX
 					(
 					// link_dtype : 2; // 링크세부종별(dk3), 0:미정의, 1:고가도로,지하차도 옆길, 2:비포장도로, 3:단지내도로
 					// level : 4; // 경로레벨, 0:고속도로, 1:도시고속도로, 자동차전용 국도/지방도, 2:국도, 3:지방도/일반도로8차선이상, 4:일반도로6차선이상, 5:일반도로4차선이상, 6:일반도로2차선이상, 7:일반도로1차선이상, 8:SS도로, 9:GSS도로/단지내도로/통행금지도로/비포장도로
@@ -1766,7 +1920,9 @@ stLinkInfo * CDataManager::GetLinkDataByPointAround(IN const double lng, IN cons
 				}
 #endif
 
+#if defined(USE_MULTIPROCESS)
 #pragma omp critical
+#endif
 				if (minDist < retDist) {
 					retLink = pLink;
 					retLng = minLng;
@@ -1824,6 +1980,7 @@ stLinkInfo * CDataManager::GetLinkDataByPointAround(IN const double lng, IN cons
 		}
 	}
 
+#if defined(USE_PEDESTRIAN_DATA)
 	if ((minLinkPedestrian != nullptr) && ((minLinkTrekking == nullptr) || (minDistPedestrian < minDistTrekking - minDistGap))) {
 		retLink = minLinkPedestrian;
 		retLng = minCoordPedestrian.x;
@@ -1833,7 +1990,10 @@ stLinkInfo * CDataManager::GetLinkDataByPointAround(IN const double lng, IN cons
 			*pMatchVtxIdx = minMatchVtxIndexPedestrian;
 		}
 	}
-#elif defined(USE_PEDESTRIAN_DATA)
+#endif
+#endif
+
+#if defined(USE_PEDESTRIAN_DATA)
 	if (minLinkPedestrian != nullptr) {
 		retLink = minLinkPedestrian;
 		retLng = minCoordPedestrian.x;
@@ -1891,7 +2051,10 @@ stPolygonInfo* CDataManager::GetPolygonDataByPoint(IN const double lng, IN const
 	if (pMesh != nullptr) {
 		vector<stMeshInfo*> vtMeshes = { pMesh };
 
-#if defined(USE_FOREST_DATA)
+#if 0//defined(_DEBUG) && defined(USE_BUILDING_DATA)
+		// 디버그 공간검색은 로딩 시간이 많이 걸려 주변 메쉬 로딩은 일단 하지 말자 // 2025-08-14
+#else
+#if defined(USE_FOREST_DATA) && !defined(USE_PEDESTRIAN_DATA)
 		if ((useNeighborMesh) && (pMesh->mesh_id.tile_id != g_forestMeshId))
 #else
 		if (useNeighborMesh) 
@@ -1907,18 +2070,37 @@ stPolygonInfo* CDataManager::GetPolygonDataByPoint(IN const double lng, IN const
 				}
 			} // for
 		}
+#endif
 
 		stPolygonInfo* pPoly = nullptr;
 
 #if defined(USE_BUILDING_DATA)
 		// find in building
-		if (m_pMapBuilding && nType != TYPE_ENT_COMPLEX) {
+		if (m_pMapBuilding && (nType != TYPE_ENT_COMPLEX)) {
 			for (const auto& mesh : vtMeshes) {
+#ifdef TEST_SPATIALINDEX
+				vector<KeyID> vtPolygonId;
+				m_pMapMesh->GetPitinPolygonfromSpatialindex(mesh, lng, lat, TYPE_DATA_BUILDING, vtPolygonId);
+				for (const auto& key : vtPolygonId) {
+					if ((pPoly = m_pMapBuilding->GetPitInPolygon(key, lng, lat, m_dataCost.optimal.cost_bld)) != nullptr) {
+						if (nType == TYPE_ENT_NONE && pPoly->getAttributeCount(TYPE_POLYGON_DATA_ATTR_ENT) <= 0) {
+							// 입구점이 없으면
+							pPoly = nullptr;
+							continue;
+						}
+						pRetPoly = pPoly;
+					}
+				}
+#else // #ifdef TEST_SPATIALINDEX
 				bool loopAbort = false;
+#if defined(USE_MULTIPROCESS)
 #pragma omp parallel firstprivate(pPoly)
 #pragma omp for
-				for (int ii = 0; ii < mesh->buildings.size(); ii++)	{
+#endif
+				for (int ii = 0; ii < mesh->buildings.size(); ii++) {
+#if defined(USE_MULTIPROCESS)
 #pragma omp flush(loopAbort)
+#endif
 					if (!loopAbort) {
 						if ((pPoly = m_pMapBuilding->GetPitInPolygon(mesh->buildings[ii], lng, lat, m_dataCost.optimal.cost_bld)) != nullptr) {
 							if (nType == TYPE_ENT_NONE && pPoly->getAttributeCount(TYPE_POLYGON_DATA_ATTR_ENT) <= 0) {
@@ -1926,14 +2108,18 @@ stPolygonInfo* CDataManager::GetPolygonDataByPoint(IN const double lng, IN const
 								pPoly = nullptr;
 								continue;
 							}
-
+#if defined(USE_MULTIPROCESS)
 #pragma omp critical
+#endif
 							pRetPoly = pPoly;
 							loopAbort = true;
+#if defined(USE_MULTIPROCESS)
 #pragma omp flush(loopAbort)
+#endif
 						}
 					}
 				} // for building
+#endif // #ifdef TEST_SPATIALINDEX
 
 				if (pRetPoly != nullptr) {
 					break;
@@ -1943,13 +2129,34 @@ stPolygonInfo* CDataManager::GetPolygonDataByPoint(IN const double lng, IN const
 #endif
 #if defined(USE_COMPLEX_DATA) || defined(USE_MOUNTAIN_DATA)
 		// find in complex
-		if (pRetPoly == nullptr && m_pMapComplex && nType != TYPE_ENT_BUILDING) {
+		if ((pRetPoly == nullptr) && m_pMapComplex && (nType != TYPE_ENT_BUILDING)) {
 			for (const auto& mesh : vtMeshes) {
+#ifdef TEST_SPATIALINDEX
+				vector<KeyID> vtPolygonId;
+				m_pMapMesh->GetPitinPolygonfromSpatialindex(mesh, lng, lat, TYPE_DATA_COMPLEX, vtPolygonId);
+				for (const auto& key : vtPolygonId) {
+					if ((pPoly = m_pMapComplex->GetPitInPolygon(key, lng, lat, m_dataCost.optimal.cost_cpx)) != nullptr) {
+						if (nType == TYPE_ENT_NONE && pPoly->getAttributeCount(TYPE_POLYGON_DATA_ATTR_ENT) <= 0 && pPoly->getAttributeCount(TYPE_POLYGON_DATA_ATTR_LINK) <= 0) {
+							// 입구점, 단지도로 모두 없으면
+							pPoly = nullptr;
+							continue;
+						} else if (nType != TYPE_ENT_NONE && pPoly->poly_id.poly.type == 0) {
+							pPoly = nullptr;
+							continue;
+						}
+						pRetPoly = pPoly;
+					}
+				} // for
+#else // #ifdef TEST_SPATIALINDEX
 				bool loopAbort = false;
+#if defined(USE_MULTIPROCESS)
 #pragma omp parallel firstprivate(pPoly)
 #pragma omp for
+#endif
 				for (int ii = 0; ii < mesh->complexs.size(); ii++) {
+#if defined(USE_MULTIPROCESS)
 #pragma omp flush(loopAbort)
+#endif
 					if (!loopAbort) {
 						if ((pPoly = m_pMapComplex->GetPitInPolygon(mesh->complexs[ii], lng, lat, m_dataCost.optimal.cost_cpx)) != nullptr) {
 							if (nType == TYPE_ENT_NONE && pPoly->getAttributeCount(TYPE_POLYGON_DATA_ATTR_ENT) <= 0 && pPoly->getAttributeCount(TYPE_POLYGON_DATA_ATTR_LINK) <= 0) {
@@ -1960,15 +2167,19 @@ stPolygonInfo* CDataManager::GetPolygonDataByPoint(IN const double lng, IN const
 								pPoly = nullptr;
 								continue;
 							}
-
+#if defined(USE_MULTIPROCESS)
 #pragma omp critical
+#endif
 							pRetPoly = pPoly;
 							loopAbort = true;
+#if defined(USE_MULTIPROCESS)
 #pragma omp flush(loopAbort)
+#endif
 						}
 					}
 				} // for complex
-				
+#endif // #ifdef TEST_SPATIALINDEX
+
 				if (pRetPoly != nullptr) {
 					break;
 				}
@@ -2173,15 +2384,34 @@ stLinkInfo * CDataManager::GetNearRoadByPoint(IN const double lng, IN const doub
 
 		if (pNewLink != nullptr && pNewLink != pLink) {
 			// 이격 거리 주변 도로보다 가까운 거리로 재설정 하자
+			static const double minLimitDist = 1.0;
 			const double dwMinDist = abs(dwLaneDist - retDist) * .3f; // 주변 가까운 도로보다 70% 더 가깝게 위치시키자.
-			if (getPointByDistance(retPos.x, retPos.y, nearRetPos.x, nearRetPos.y, dwMinDist) == true) {
-				entInfo.dwDist = abs(dwDist - dwMinDist);
+			// 최소한 0.7m는 유지시키자, 너무 작아지면 실제 사용자 매칭시 도로 반대편에 적용될 수 있음.
+			if (dwMinDist < minLimitDist) {
+				if (getPointByDistance(retPos.x, retPos.y, newRetPos.x, newRetPos.y, minLimitDist) == true) {
+					entInfo.dwDist = abs(dwDist - minLimitDist);
+				} else {
+					entInfo.dwDist = dwDist;
+				}
+
+				entInfo.x = newRetPos.x;
+				entInfo.y = newRetPos.y;
 			} else {
-				entInfo.dwDist = dwDist;
+				if (getPointByDistance(retPos.x, retPos.y, nearRetPos.x, nearRetPos.y, dwMinDist) == true) {
+					entInfo.dwDist = abs(dwDist - dwMinDist);
+				} else {
+					entInfo.dwDist = dwDist;
+				}
+
+				entInfo.x = nearRetPos.x;
+				entInfo.y = nearRetPos.y;
 			}
 
-			entInfo.x = nearRetPos.x;
-			entInfo.y = nearRetPos.y;
+			//if (getPointByDistance(retPos.x, retPos.y, nearRetPos.x, nearRetPos.y, dwMinDist) == true) {
+			//	entInfo.dwDist = abs(dwDist - dwMinDist);
+			//} else {
+			//	entInfo.dwDist = dwDist;
+			//}
 		} 
 		else {
 			entInfo.x = newRetPos.x;
@@ -2211,11 +2441,13 @@ int32_t CDataManager::GetOptimalPointDataByPoint(IN const double lng, IN const d
 
 		stPolygonInfo* pPoly = nullptr;
 		
+		pOptInfo->id = NULL_VALUE;
+		pOptInfo->nType = TYPE_ENT_NONE;
 		pOptInfo->x = lng;
 		pOptInfo->y = lat;
 
 		if ( reqOpt.typeAll != 99 ) { // 폴리곤무시
-			pPoly = GetPolygonDataByPoint(lng, lat, reqOpt.typeAll);
+			pPoly = GetPolygonDataByPoint(lng, lat/*, reqOpt.typeAll*/);
 		}
 
 
@@ -2226,8 +2458,8 @@ int32_t CDataManager::GetOptimalPointDataByPoint(IN const double lng, IN const d
 			const stEntranceInfo* pEnt = pPoly->getAttributeEntrance();
 			const KeyID* pLinkKey = pPoly->getAttributeLink();
 
-			const int cntEnt = pPoly->getAttributeCount(TYPE_POLYGON_DATA_ATTR_ENT);
-			const int cntLinkKey = pPoly->getAttributeCount(TYPE_POLYGON_DATA_ATTR_LINK);
+			int cntEnt = pPoly->getAttributeCount(TYPE_POLYGON_DATA_ATTR_ENT);
+			int cntLinkKey = pPoly->getAttributeCount(TYPE_POLYGON_DATA_ATTR_LINK);
 
 			pOptInfo->id = pPoly->poly_id.llid;
 
@@ -2252,19 +2484,19 @@ int32_t CDataManager::GetOptimalPointDataByPoint(IN const double lng, IN const d
 					// nEntType, 입구점 타입 // 0:알아서, 1: 차량 입구점, 2: 택시 승하차 지점(건물), 3: 택시 승하차 지점(건물군), 4: 택배 차량 하차 거점, 5: 보행자 입구점, 	6: 배달 하차점(차량, 오토바이), 7: 배달 하차점(자전거, 도보)
 					// 1st
 					if (reqOpt.type1st != 0) {
-						cntRet = checkEntType(lng, lat, pEnt, cntEnt, nMaxDist, reqOpt.type1st, 1, vtEntInfo);
+						cntRet += checkEntType(lng, lat, pEnt, cntEnt, nMaxDist, reqOpt.type1st, 1, vtEntInfo);
 					}
 					// 2nd
 					if (cntRet <= 0 && reqOpt.type2nd != 0) {
-						cntRet = checkEntType(lng, lat, pEnt, cntEnt, nMaxDist, reqOpt.type2nd, 1, vtEntInfo);
+						cntRet += checkEntType(lng, lat, pEnt, cntEnt, nMaxDist, reqOpt.type2nd, 1, vtEntInfo);
 					}
 					// 3rd
 					if (cntRet <= 0 && reqOpt.type3rd != 0) {
-						cntRet = checkEntType(lng, lat, pEnt, cntEnt, nMaxDist, reqOpt.type3rd, 1, vtEntInfo);
+						cntRet += checkEntType(lng, lat, pEnt, cntEnt, nMaxDist, reqOpt.type3rd, 1, vtEntInfo);
 					}
 					// 4th
 					if (cntRet <= 0 && reqOpt.type4th != 0) {
-						cntRet = checkEntType(lng, lat, pEnt, cntEnt, nMaxDist, reqOpt.type4th, 1, vtEntInfo);
+						cntRet += checkEntType(lng, lat, pEnt, cntEnt, nMaxDist, reqOpt.type4th, 1, vtEntInfo);
 					}
 				}
 
@@ -2298,9 +2530,26 @@ int32_t CDataManager::GetOptimalPointDataByPoint(IN const double lng, IN const d
 				// 	}
 				} else if (cntRet > 1) {
 					pOptInfo->nType = TYPE_ENT_BUILDING;
+				} else {
+					// 빌딩에서 아무것도 얻지 못하면, 단지에서 얻어보자(단, 단지 타입을 요청했을 경우)
+					if ((reqOpt.typeAll == 0) || (reqOpt.type1st == 3) || (reqOpt.type2nd == 3) || (reqOpt.type3rd == 3) || (reqOpt.type4th == 3)) {
+						if ((pPoly = GetPolygonDataByPoint(lng, lat, TYPE_ENT_COMPLEX)) != nullptr) {
+							// 폴리곤 정보 복사
+							pPolygon = pPoly->getAttributeVertex();
+							pEnt = pPoly->getAttributeEntrance();
+							pLinkKey = pPoly->getAttributeLink();
+
+							cntEnt = pPoly->getAttributeCount(TYPE_POLYGON_DATA_ATTR_ENT);
+							cntLinkKey = pPoly->getAttributeCount(TYPE_POLYGON_DATA_ATTR_LINK);
+
+							pOptInfo->id = pPoly->poly_id.llid;
+							pOptInfo->vtPolygon.assign(&pPolygon[0], &pPolygon[pPoly->getAttributeCount(TYPE_POLYGON_DATA_ATTR_VTX)]);
+						}
+					}
 				}
 			}
-			else { // 단지 TYPE_POLYGON_COMPLEX
+			
+			if (pPoly && (pPoly->poly_id.poly.type == TYPE_POLYGON_COMPLEX) && (cntRet <= 0)) { // 단지 
 				int32_t nMaxDist = 100000; // 최대 100km, 산바운더리는 꽤 넓음
 
 				if (pPoly->poly_id.poly.type == TYPE_POLYGON_COMPLEX) {
@@ -2329,19 +2578,19 @@ int32_t CDataManager::GetOptimalPointDataByPoint(IN const double lng, IN const d
 
 					// 1st
 					if (reqOpt.type1st != 0) {
-						cntRet = checkEntType(lng, lat, pEnt, cntEnt, nMaxDist, reqOpt.type1st, 1, vtEntInfo);
+						cntRet += checkEntType(lng, lat, pEnt, cntEnt, nMaxDist, reqOpt.type1st, 1, vtEntInfo);
 					}					
 					// 2nd
 					if (cntRet <= 0 && reqOpt.type2nd != 0) {
-						cntRet = checkEntType(lng, lat, pEnt, cntEnt, nMaxDist, reqOpt.type2nd, 1, vtEntInfo);
+						cntRet += checkEntType(lng, lat, pEnt, cntEnt, nMaxDist, reqOpt.type2nd, 1, vtEntInfo);
 					}
 					// 3rd
 					if (cntRet <= 0 && reqOpt.type3rd != 0) {
-						cntRet = checkEntType(lng, lat, pEnt, cntEnt, nMaxDist, reqOpt.type3rd, 1, vtEntInfo);
+						cntRet += checkEntType(lng, lat, pEnt, cntEnt, nMaxDist, reqOpt.type3rd, 1, vtEntInfo);
 					}
 					// 4th
 					if (cntRet <= 0 && reqOpt.type4th != 0) {
-						cntRet = checkEntType(lng, lat, pEnt, cntEnt, nMaxDist, reqOpt.type4th, 1, vtEntInfo);
+						cntRet += checkEntType(lng, lat, pEnt, cntEnt, nMaxDist, reqOpt.type4th, 1, vtEntInfo);
 					}
 				}
 
@@ -2407,8 +2656,67 @@ int32_t CDataManager::GetOptimalPointDataByPoint(IN const double lng, IN const d
 			}
 		}
 		
-		// 숲길입구점 요청시에는 도로를 찾지 말자
-		if (reqOpt.typeAll != TYPE_OPTIMAL_ENTRANCE_MOUNTAIN) {
+		// 지하철입구점, 
+		if (reqOpt.typeAll != TYPE_OPTIMAL_ENTRANCE_SUBWAY) {
+			stEntryPointInfo entInfo = { 0, };
+			stLinkInfo * pNearRoad = nullptr;
+			SPoint retPos = { 0.f, };
+			double retDist = 0.f;
+
+			// 도로 사이드에 위치시킬 최적 지점 이격 거리
+			for (int ii = 0; ii < 5; ii++) {
+				if ((pNearRoad = GetLinkDataByPointAround(lng, lat, m_dataCost.optimal.cost_lv[ii], retPos.x, retPos.y, retDist, nMatchType, nLinkDataType)) != nullptr) {
+
+					if (pNearRoad->ped.facility_type == TYPE_OBJECT_SUBWAY) {
+
+					}
+					break;
+				}
+			}
+
+			// 입구점 정보에 각도 정보 추가
+			for (auto& ent : vtEntInfo) {
+				// 최적지점에 각도가 없으면 검색 후 서치
+				if (ent.nAngle == 0x1FF) {
+					pNearRoad = nullptr;
+
+					
+
+					if (pNearRoad != nullptr && entInfo.dwDist < INT_MAX) {
+						ent.nAngle = entInfo.nAngle;
+					}
+
+					LOG_TRACE(LOG_INFO, "additional search as no angle, reqX:%.6f, reqY:%.6f, polyId:%d, entY:%.6f, entY:%.6f", pOptInfo->x, pOptInfo->y, pOptInfo->id, ent.x, ent.y);
+				}
+			}
+
+
+			// 입구점 정보가 없으면 주변 가까운 도로 검출
+			if (vtEntInfo.empty() || nSubOption == 1) {
+				pNearRoad = nullptr;
+
+				// 도로 사이드에 위치시킬 최적 지점 이격 거리
+				for (int ii = 0; ii < 5; ii++) {
+#if defined(USE_FOREST_DATA)
+					if ((pNearRoad = GetNearRoadByPoint(reqCoord.x, reqCoord.y, m_dataCost.optimal.cost_lv[ii], TYPE_LINK_MATCH_NONE, nLinkDataType, -1, entInfo)) != nullptr)
+#else
+					if ((pNearRoad = GetNearRoadByPoint(reqCoord.x, reqCoord.y, m_dataCost.optimal.cost_lv[ii], TYPE_LINK_MATCH_CARSTOP, nLinkDataType, -1, entInfo)) != nullptr)
+#endif
+					{
+						break;
+					}
+				}
+
+				if (pNearRoad != nullptr && entInfo.dwDist < INT_MAX) {
+					if (pOptInfo->nType == TYPE_ENT_NONE) {
+						// 결과 타입을 주변 도로로 적용
+						pOptInfo->nType = TYPE_ENT_NEAR_ROAD;
+						pOptInfo->id = pNearRoad->link_id.llid;
+					}
+					vtExpInfo.emplace_back(entInfo);
+				}
+			}
+		} else if (reqOpt.typeAll != TYPE_OPTIMAL_ENTRANCE_MOUNTAIN) { // 숲길입구점이 아니면 요청시에는 도로를 찾자
 			stEntryPointInfo entInfo = { 0, };
 			stLinkInfo * pNearRoad = nullptr;
 
@@ -2630,6 +2938,110 @@ stLinkInfo * CDataManager::GetNearLinkDataByCourseId(IN const int32_t nCourseId,
 }
 
 
+int32_t CDataManager::GetSubwayDataByPoint(IN const double lng, IN const double lat, IN const int32_t maxDist, OUT stEntryPointInfo& entInfo)
+{
+	int32_t retCnt = 0;
+
+
+	stMeshInfo* pMesh = nullptr;
+	stLinkInfo* retLink = nullptr;
+
+
+#if defined(USE_PEDESTRIAN_DATA)
+	stLinkInfo* minLinkPedestrian = nullptr;
+	double minDistPedestrian = INT_MAX;
+	int32_t minMatchVtxIndexPedestrian = -1;
+	SPoint minCoordPedestrian = { 0, };
+#endif
+
+	static const uint32_t s_maxMesh = 9;
+
+	stMeshInfo* s_ppMesh[s_maxMesh];
+	uint32_t nMaxMesh = 0;
+
+
+#if defined(USE_DATA_CACHE)
+	if (!m_mapFileIndex.empty() && (pMesh = GetMeshDataByPoint(lng, lat)) != nullptr) {
+		s_ppMesh[nMaxMesh++] = pMesh;
+	}
+#else
+	if (m_mapFileIndex.empty() && GetMeshCount() > 0) {
+		// 파일 캐쉬가 아닌 데이터 버퍼 로딩 상태일 경우
+		nMaxMesh = GetMeshDataByPoint(lng, lat, s_maxMesh, s_ppMesh);
+	}
+
+	// 주변 메쉬를 추가
+	if (nMaxMesh == 1 && !s_ppMesh[0]->neighbors.empty()) {
+		for (unordered_set<uint32_t>::const_iterator it = s_ppMesh[0]->neighbors.begin(); it != s_ppMesh[0]->neighbors.end(); it++) {
+			// 주변 메쉬의 중심 거리가 최대 요청 거리 이하일 경우만 추가
+			if ((pMesh = GetMeshDataById(*it)) != nullptr && isInBox(lng, lat, pMesh->data_box, maxDist)) {
+				s_ppMesh[nMaxMesh++] = pMesh;
+			}
+		} // for
+	}
+#endif
+
+#if defined(USE_MULTIPROCESS)
+	volatile bool flag = false;
+#endif
+
+	//#pragma omp parallel for
+	for (int32_t ii = 0; ii < nMaxMesh; ii++) {
+#if defined(USE_MULTIPROCESS)
+		if (flag) continue;
+#endif
+
+		stMeshInfo* pMesh = s_ppMesh[ii];
+		if (pMesh == nullptr) {
+			continue;
+		}
+
+		stLinkInfo* pLink = nullptr;
+		double minLng = 0.f;
+		double minLat = 0.f;
+		double minDist = maxDist;
+		double minIr = 0.f;
+		int minVtxIdx = -1;
+
+#if defined(USE_PEDESTRIAN_DATA)
+#ifdef TEST_SPATIALINDEX
+		if (pMesh->wlinkTree != nullptr) {
+			vector<KeyID> vtLinkId;
+			m_pMapMesh->GetNearLinksfromSpatialindex(pMesh, lng, lat, maxDist, vtLinkId);
+			for (int ii = 0; ii < vtLinkId.size(); ii++) {
+				if (!(pLink = GetWLinkDataById(vtLinkId[ii]))) {
+#else // #ifdef TEST_SPATIALINDEX
+		if (!pMesh->wlinks.empty()) {
+#if defined(USE_MULTIPROCESS)
+#pragma omp parallel firstprivate(pLink, minLng, minLat, minDist, minVtxIdx, minIr)
+#pragma omp for
+#endif
+			for (int ii = 0; ii < pMesh->wlinks.size(); ii++) {
+				if (!(pLink = GetWLinkDataById(pMesh->wlinks[ii]))) {
+#endif // #ifdef TEST_SPATIALINDEX
+
+					if (pLink->ped.facility_type == TYPE_OBJECT_SUBWAY) {
+						continue;
+					}
+				}
+#if defined(USE_MULTIPROCESS)
+#pragma omp critical
+#endif
+				if (minDist < minDistPedestrian) {
+					minLinkPedestrian = pLink;
+					minCoordPedestrian.x = minLng;
+					minCoordPedestrian.y = minLat;
+					minDistPedestrian = minDist;
+					minMatchVtxIndexPedestrian = minVtxIdx;
+				}
+			} // for
+		}
+#endif
+	} // for mesh
+
+	return retCnt;
+}
+
 //const char* CDataManager::GetErrorMessage(void)
 //{
 //	return m_strMsg.c_str();
@@ -2661,9 +3073,8 @@ bool CDataManager::IsAvoidTruckLink(IN const TruckOption* pTruckOption, IN const
 
 bool CDataManager::GetNewData(IN const uint32_t idTile)
 {
-	unordered_map<uint32_t, FileIndex> mapNeedMatch;
-
 	// id 매칭, 로딩되야 할 메쉬
+	unordered_map<uint32_t, FileIndex> mapNeedMatch;
 	unordered_map<uint32_t, FileIndex>::const_iterator it;
 	if ((it = m_mapFileIndex.find(idTile)) != m_mapFileIndex.end()) {
 		mapNeedMatch.emplace(idTile, it->second);
@@ -2920,35 +3331,6 @@ int getRequestCost(IN const char* szRequest, IN const char* szType, OUT DataCost
 					}
 				}
 
-				// cross cost
-				pItem = cJSON_GetObjectItem(pData, "cross");
-				if (pItem != NULL) {
-					// 걷기					
-					pArray = cJSON_GetObjectItem(pItem, "walk");
-					if (pArray && cJSON_IsArray(pArray)) { // new
-						int nSize = cJSON_GetArraySize(pArray);
-						for (int ii = 0; ii < min(nSize, nMaxSize); ii++) {
-							pCost = cJSON_GetArrayItem(pArray, ii);
-							if (pCost != nullptr) {
-								pDataCost->pedestrian.cost_cross_walk[ii] = cJSON_GetNumberValue(pCost);
-								cntValue++;
-							}
-						}
-					}
-
-					// 자전거					
-					pArray = cJSON_GetObjectItem(pItem, "bike");
-					if (pArray && cJSON_IsArray(pArray)) { // new
-						int nSize = cJSON_GetArraySize(pArray);
-						for (int ii = 0; ii < min(nSize, nMaxSize); ii++) {
-							pCost = cJSON_GetArrayItem(pArray, ii);
-							if (pCost != nullptr) {
-								pDataCost->pedestrian.cost_cross_bike[ii] = cJSON_GetNumberValue(pCost);
-								cntValue++;
-							}
-						}
-					}
-				}
 
 				// angle cost
 				pItem = cJSON_GetObjectItem(pData, "angle");
@@ -3091,10 +3473,107 @@ int getRequestCost(IN const char* szRequest, IN const char* szType, OUT DataCost
 						}
 					}
 				}
+
+
+				// facility type cost
+				pItem = cJSON_GetObjectItem(pData, "facility");
+				if (pItem != NULL) {
+					// facility
+					static const char facility_walk_key[TYPE_OBJECT_COUNT][128] = {
+						"facility_none", "walk_cave", "walk_underpass", "walk_footbridge", "walk_overpass", 
+						"walk_bridge", "walk_subway", "walk_railorad", "walk_busstation", "walk_undergroundmall",
+						"walk_throughbuilding", "walk_complexpark", "walk_complexapt", "walk_complextour", "walk_complexetc",
+					};
+
+					static const char facility_bike_key[TYPE_OBJECT_COUNT][128] = {
+						"facility_none", "bike_cave", "bike_underpass", "bike_footbridge", "bike_overpass", 
+						"bike_bridge", "bike_subway", "bike_railorad", "bike_busstation", "bike_undergroundmall", 
+						"bike_throughbuilding", "bike_complexpark", "bike_complexapt", "bike_complextour", "bike_complexetc",	
+					};
+
+					// walk
+					for (int ii = 0; ii < TYPE_OBJECT_COUNT; ii++) {
+						pArray = cJSON_GetObjectItem(pItem, facility_walk_key[ii]);
+						if (pArray && cJSON_IsArray(pArray)) { // new
+							int nSize = cJSON_GetArraySize(pArray);
+							for (int jj = 0; jj < min(nSize, nMaxSize); jj++) {
+								pCost = cJSON_GetArrayItem(pArray, jj);
+								if (pCost != nullptr) {
+									pDataCost->pedestrian.cost_facility_walk[ii][jj] = cJSON_GetNumberValue(pCost);
+									cntValue++;
+								}
+							} // for jj
+						}
+					} // for ii
+
+					// bike
+					for (int ii = 0; ii < TYPE_OBJECT_COUNT; ii++) {
+						pArray = cJSON_GetObjectItem(pItem, facility_bike_key[ii]);
+						if (pArray && cJSON_IsArray(pArray)) { // new
+							int nSize = cJSON_GetArraySize(pArray);
+							for (int jj = 0; jj < min(nSize, nMaxSize); jj++) {
+								pCost = cJSON_GetArrayItem(pArray, jj);
+								if (pCost != nullptr) {
+									pDataCost->pedestrian.cost_facility_bike[ii][jj] = cJSON_GetNumberValue(pCost);
+									cntValue++;
+								}
+							} // for jj
+						}
+					} // for ii
+				}
+
+
+				// gate type cost
+				pItem = cJSON_GetObjectItem(pData, "gate");
+				if (pItem != NULL) {
+					// gate
+					static const char gate_walk_key[TYPE_GATE_COUNT][128] = {
+						"gate_none", "walk_slop", "walk_stairs", "walk_elcalator", "walk_stairescalator", 
+						"walk_elevator", "walk_connection", "walk_crosswalk", "walk_movingwalk", "walk_steppingstones", 
+						"walk_line",
+					};
+
+					static const char gate_bike_key[TYPE_GATE_COUNT][128] = {
+						"gate_none", "bike_slop", "bike_stairs", "bike_elcalator", "bike_stairescalator",
+						"bike_elevator", "bike_connection", "bike_crosswalk", "bike_movingwalk", "bike_steppingstones"
+						, "bike_line",
+					};
+
+					// walk
+					for (int ii = 0; ii < TYPE_GATE_COUNT; ii++) {
+						pArray = cJSON_GetObjectItem(pItem, gate_walk_key[ii]);
+						if (pArray && cJSON_IsArray(pArray)) { // new
+							int nSize = cJSON_GetArraySize(pArray);
+							for (int jj = 0; jj < min(nSize, nMaxSize); jj++) {
+								pCost = cJSON_GetArrayItem(pArray, jj);
+								if (pCost != nullptr) {
+									pDataCost->pedestrian.cost_gate_walk[ii][jj] = cJSON_GetNumberValue(pCost);
+									cntValue++;
+								}
+							} // for jj
+						}
+					} // for ii
+
+					// bike
+					for (int ii = 0; ii < TYPE_GATE_COUNT; ii++) {
+						pArray = cJSON_GetObjectItem(pItem, gate_bike_key[ii]);
+						if (pArray && cJSON_IsArray(pArray)) { // new
+							int nSize = cJSON_GetArraySize(pArray);
+							for (int jj = 0; jj < min(nSize, nMaxSize); jj++) {
+								pCost = cJSON_GetArrayItem(pArray, jj);
+								if (pCost != nullptr) {
+									pDataCost->pedestrian.cost_gate_bike[ii][jj] = cJSON_GetNumberValue(pCost);
+									cntValue++;
+								}
+							} // for jj
+						}
+					} // for ii
+				}
+
 			}
 		} // pedestrian
-		else if ((strcmp(szType, strType.c_str()) == 0) &&
-			((strcmp(szType, "vehicle") == 0) || (strcmp(szType, "tms") == 0))) {
+		else if ((strcmp(szType, strType.c_str()) == 0)) {
+			//&& ((strcmp(szType, "vehicle") == 0) || (strcmp(szType, "tms") == 0))) {
 			cJSON* pData = cJSON_GetObjectItem(root, "cost");
 			cJSON* pArray = nullptr;
 			cJSON* pItem = nullptr;
@@ -3361,7 +3840,11 @@ int CDataManager::GetDataCost(IN const uint32_t type, OUT DataCost& dataCost)
 		sprintf(szTarget, "forest");
 	} else {
 #if defined(USE_TMS_API)
+#	if defined(DEMO_FOR_HANJIN)
+		sprintf(szTarget, "hanjin");
+#	else
 		sprintf(szTarget, "tms");
+#	endif
 #else
 		sprintf(szTarget, "vehicle");
 #endif
@@ -3619,8 +4102,16 @@ int CDataManager::CalculateCache(unordered_map<uint32_t, FileIndex>& mapNeedMatc
 			break;
 		}
 
-		if (!m_pFileMgr->GetData(itNeed->second.idxTile))
-		{
+#if 1//defined(_DEBUG)
+		size_t sizeMem = checkMemorySize();
+		time_t tickMesh = LOG_TRACE(LOG_TEST, "");// , "Before, Cache memory usages : %u", sizeMem);
+#endif
+
+		if (!checkTestMesh(itNeed->first)) {
+			continue;
+		}
+
+		if (!m_pFileMgr->GetData(itNeed->second.idxTile)) {
 			LOG_TRACE(LOG_ERROR, "Failed, can't load mesh, id:%d", itNeed);
 			continue;
 		}
@@ -3633,7 +4124,192 @@ int CDataManager::CalculateCache(unordered_map<uint32_t, FileIndex>& mapNeedMatc
 		m_mapCache.emplace(itNeed->second.idTile, newCache);
 		cntCached++;
 		cntRemaindCache--;
+
+#if 1//defined(_DEBUG)
+		double sizeGap = checkMemorySize() - sizeMem;
+		if (sizeGap != 0) {
+			LOG_TRACE(LOG_DEBUG, tickMesh, "Cache memory usages : %s", getSizeString(sizeGap));
+		}
+#endif
 	} // for
 
 	return cntCached;
 }
+
+
+// for spatial index
+#ifdef TEST_SPATIALINDEX
+int32_t CDataManager::CreateSpatialindex(IN const int32_t nDataType)
+{
+	int ret = 0;
+
+	vector<SpatialIndex::Region> regions;
+	vector<id_type> ids;
+	int cnt = 0;
+
+	int cntMesh = GetMeshCount();
+	for (int ii = 0; ii < cntMesh; ii++) {
+		stMeshInfo* pMesh = GetMeshData(ii);
+		if (pMesh) {
+			CreateSpatialindex(pMesh, nDataType);
+		}
+	}
+
+	return ret;
+}
+
+
+int32_t CDataManager::CreateSpatialindex(IN stMeshInfo* pMesh, IN const int32_t nDataType)
+{
+	int ret = 0;
+
+#if defined(USE_SPATIALINDEX_BULK)
+	vector<SpatialIndex::Region> regions;
+	vector<id_type> ids;
+	int cnt = 0;
+	stLinkInfo* pLink = nullptr;
+
+	if (nDataType == TYPE_DATA_TREKKING) { 	// for forest
+#if defined(USE_FOREST_DATA)
+		cnt = pMesh->setFLinkDuplicateCheck.size();
+		if (cnt > 0) {
+			regions.reserve(cnt); ids.reserve(cnt);
+			for (const auto& key : pMesh->setFLinkDuplicateCheck) {
+				pLink = GetFLinkDataById(key);
+				if (pLink) {
+					SBox boxArea;
+					boxArea.Xmin = boxArea.Ymin = DBL_MAX;
+					boxArea.Xmax = boxArea.Ymax = DBL_MIN;
+					extendDataBox(boxArea, pLink->getVertex(), pLink->getVertexCount());
+
+					double low[2] = { boxArea.Xmin, boxArea.Ymin };
+					double high[2] = { boxArea.Xmax, boxArea.Ymax };
+					Region region(low, high, 2);
+
+					regions.emplace_back(region);
+					ids.emplace_back(pLink->link_id.llid);
+				}
+			}
+
+			if (regions.size() < 50) {
+				m_pMapMesh->CreateSpatialindex(TYPE_DATA_TREKKING, pMesh, regions, ids);
+			} else {
+				m_pMapMesh->CreateSpatialindexByStream(TYPE_DATA_TREKKING, pMesh, regions, ids);
+			}
+		}
+#endif
+	} else if (nDataType == TYPE_DATA_PEDESTRIAN) { // for pedestrian
+#if defined(USE_PEDESTRIAN_DATA)
+		cnt = pMesh->setWLinkDuplicateCheck.size();
+		if (cnt > 0) {
+			regions.reserve(cnt); ids.reserve(cnt);
+			for (const auto& key : pMesh->setWLinkDuplicateCheck) {
+				pLink = GetWLinkDataById(key);
+				if (pLink) {
+					SBox boxArea;
+					boxArea.Xmin = boxArea.Ymin = DBL_MAX;
+					boxArea.Xmax = boxArea.Ymax = DBL_MIN;
+					extendDataBox(boxArea, pLink->getVertex(), pLink->getVertexCount());
+
+					double low[2] = { boxArea.Xmin, boxArea.Ymin };
+					double high[2] = { boxArea.Xmax, boxArea.Ymax };
+					Region region(low, high, 2);
+
+					regions.emplace_back(region);
+					ids.emplace_back(pLink->link_id.llid);
+				}
+			}
+
+			if (_regions.size() < 50) {
+				m_pMapMesh->CreateSpatialindex(TYPE_DATA_PEDESTRIAN, pMesh, regions, ids);
+			} else {
+				m_pMapMesh->CreateSpatialindexByStream(TYPE_DATA_PEDESTRIAN, pMesh, regions, ids);
+			}
+		}
+#endif
+	} else if (nDataType == TYPE_DATA_VEHICLE) {  // for vlink
+#if defined(USE_VEHICLE_DATA)
+		cnt = pMesh->setVLinkDuplicateCheck.size();
+		if (cnt > 0) {
+			regions.reserve(cnt); ids.reserve(cnt);
+			for (const auto& key : pMesh->setVLinkDuplicateCheck) {
+				pLink = GetVLinkDataById(key);
+				if (pLink) {
+					SBox boxArea;
+					boxArea.Xmin = boxArea.Ymin = DBL_MAX;
+					boxArea.Xmax = boxArea.Ymax = DBL_MIN;
+					extendDataBox(boxArea, pLink->getVertex(), pLink->getVertexCount());
+
+					double low[2] = { boxArea.Xmin, boxArea.Ymin };
+					double high[2] = { boxArea.Xmax, boxArea.Ymax };
+					Region region(low, high, 2);
+
+					regions.emplace_back(region);
+					ids.emplace_back(pLink->link_id.llid);
+				}
+			}
+
+			if (regions.size() < 50) {
+				m_pMapMesh->CreateSpatialindex(TYPE_DATA_VEHICLE, pMesh, regions, ids);
+			} else {
+				m_pMapMesh->CreateSpatialindexByStream(TYPE_DATA_VEHICLE, pMesh, regions, ids);
+			}
+		}
+#endif
+	}
+#if defined(USE_OPTIMAL_POINT_API) || defined(USE_MOUNTAIN_DATA) 	
+	else if (nDataType == TYPE_DATA_COMPLEX) { // for cpx
+		cnt = pMesh->setCpxDuplicateCheck.size();
+		if (cnt > 0) {
+			stPolygonInfo* pPoly;
+			regions.clear(); ids.clear();
+			regions.reserve(cnt); ids.reserve(cnt);
+			for (const auto& key : pMesh->setCpxDuplicateCheck) {
+				pPoly = GetComplexDataById(key);
+				if (pPoly) {
+					double low[2] = { pPoly->data_box.Xmin, pPoly->data_box.Ymin };
+					double high[2] = { pPoly->data_box.Xmax, pPoly->data_box.Ymax };
+					Region region(low, high, 2);
+
+					regions.emplace_back(region);
+					ids.emplace_back(pPoly->poly_id.llid);
+				}
+			}
+			m_pMapMesh->CreateSpatialindexByStream(TYPE_DATA_COMPLEX, pMesh, regions, ids);
+		}
+	} else if (nDataType == TYPE_DATA_BUILDING) { // for bld
+		cnt = pMesh->setBldDuplicateCheck.size();
+		if (cnt > 0) {
+			stPolygonInfo* pPoly;
+			regions.clear(); ids.clear();
+			regions.reserve(cnt); ids.reserve(cnt);
+			for (const auto& key : pMesh->setBldDuplicateCheck) {
+				pPoly = GetBuildingDataById(key);
+				if (pPoly) {
+					double low[2] = { pPoly->data_box.Xmin, pPoly->data_box.Ymin };
+					double high[2] = { pPoly->data_box.Xmax, pPoly->data_box.Ymax };
+					Region region(low, high, 2);
+
+					regions.emplace_back(region);
+					ids.emplace_back(pPoly->poly_id.llid);
+				}
+			}
+			m_pMapMesh->CreateSpatialindexByStream(TYPE_DATA_BUILDING, pMesh, regions, ids);
+		}
+	}
+#endif
+#	else // USE_SPATIALINDEX_BULK
+	CreateSpatialindex(pMesh);
+#	endif // USE_SPATIALINDEX_BULK
+
+	return ret;
+}
+
+
+int32_t CDataManager::InsertSpatialindex(IN stMeshInfo* pMesh, IN const int32_t nDataType)
+{
+	int32_t ret = 0;
+
+	return ret;
+}
+#endif // #ifdef TEST_SPATIALINDEX

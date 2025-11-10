@@ -256,22 +256,21 @@ bool MapTraffic::AddKSData(IN const uint32_t ks_id, IN const uint32_t tile_nid, 
 		unordered_map<uint32_t, stKSLinkLink>::iterator itLink = pMesh->mapLinkToKS.find(link_nid);
 		if (itLink != pMesh->mapLinkToKS.end()) {
 			if (dir == DIR_POSITIVE) {
-				if (itLink->second.ksIdPositive != 0) {
-					// 이미 있으면....
-					LOG_TRACE(LOG_KEY_TRAFFIC, LOG_WARNING, "link to ks matching duplicated, tile_id:%d, link_nid:%ld, ks_id:%d, dir:%ld", tile_nid, link_nid, ks_id, DIR_POSITIVE);
+				if (itLink->second.ksIdPositive != 0) { // 이미 있으면....					
+					LOG_TRACE(LOG_KEY_TRAFFIC, LOG_WARNING, "link-ks matching P duplicated, tile_id:%d, link_nid:%u, ks_id(p):%u, dir:%d", tile_nid, link_nid, ks_id, DIR_POSITIVE);
 				}
 				itLink->second.ksIdPositive = ks_id;
-			} else { //if (keyTraffic.ttl.dir == DIR_NAGATIVE) {
-				if (itLink->second.ksIdNagative != 0) {
-					// 이미 있으면....
-					LOG_TRACE(LOG_KEY_TRAFFIC, LOG_WARNING, "link to ks matching duplicated, tile_id:%d, link_nid:%ld, ks_id:%d, dir:%ld", tile_nid, link_nid, ks_id, DIR_NAGATIVE);
+			} else if (dir == DIR_NAGATIVE) {
+				if (itLink->second.ksIdNagative != 0) { // 이미 있으면....
+					LOG_TRACE(LOG_KEY_TRAFFIC, LOG_WARNING, "link-ks matching N duplicated, tile_id:%d, link_nid:%u, ks_id(n):%u, dir:%d", tile_nid, link_nid, ks_id, DIR_NAGATIVE);
 				}
 				itLink->second.ksIdNagative = ks_id;
+			} else {
+				LOG_TRACE(LOG_KEY_TRAFFIC, LOG_WARNING, "link-ks matching dir error, tile_id:%d, link_nid:%u, ks_id:%u, dir:%d", tile_nid, link_nid, ks_id, dir);
 			}
 
-			if (itLink->second.ksIdPositive == itLink->second.ksIdNagative) {
-				// 정/역이 같으면....
-				LOG_TRACE(LOG_KEY_TRAFFIC, LOG_WARNING, "link to ks matching duplicated, tile_id:%d, link_nid:%ld, ks_id_p:%d, ks_id_n:%d", tile_nid, link_nid, itLink->second.ksIdPositive, itLink->second.ksIdNagative);
+			if (itLink->second.ksIdPositive == itLink->second.ksIdNagative) { // 정/역이 같으면....
+				LOG_TRACE(LOG_KEY_TRAFFIC, LOG_WARNING, "link-ks matching P-N same, tile_id:%d, link_nid:%u, ks_id:%u", tile_nid, link_nid, itLink->second.ksIdPositive);
 			}
 		} else {
 			// create
@@ -368,9 +367,8 @@ bool MapTraffic::AddTTLData(IN const uint32_t ttl_nid, IN const uint8_t ttl_dir,
 	if (pMesh) {
 		// traffic key의 map 확인 
 		unordered_map<uint32_t, stTrafficInfoTTL*>::const_iterator it = pMesh->mapTrafficTTL.find(ttl_nid);
-		if (it != pMesh->mapTrafficTTL.end()) {
-			// 이미 있으면....
-			LOG_TRACE(LOG_KEY_TRAFFIC, LOG_WARNING, "already exist ttl traffic info in mesh, mesh_id:%d, ttl_id:%d", tile_nid, ttl_nid);
+		if (it != pMesh->mapTrafficTTL.end()) { // 이미 있으면....			
+			//LOG_TRACE(LOG_KEY_TRAFFIC, LOG_WARNING, "already exist ttl traffic info in mesh, mesh_id:%d, ttl_id:%u", tile_nid, ttl_nid);
 		} else {
 			// create
 			stTrafficInfoTTL* pTraffic = nullptr;
@@ -389,22 +387,21 @@ bool MapTraffic::AddTTLData(IN const uint32_t ttl_nid, IN const uint8_t ttl_dir,
 		unordered_map<uint32_t, stTTLinLink>::iterator itLink = pMesh->mapLinkToTTL.find(link_nid);
 		if (itLink != pMesh->mapLinkToTTL.end()) {
 			if (ttl_dir == DIR_POSITIVE) {
-				if (itLink->second.ttlIdPositive != 0) {
-					// 이미 있으면....
-					LOG_TRACE(LOG_KEY_TRAFFIC, LOG_WARNING, "link to ttl matching duplicated, tile_id:%d, link_nid:%ld, ttl_id:%d, dir:%ld", ttl_nid, link_nid, ttl_nid, DIR_POSITIVE);
+				if (itLink->second.ttlIdPositive != 0) { // 이미 있으면....					
+					LOG_TRACE(LOG_KEY_TRAFFIC, LOG_WARNING, "link-ttl matching P duplicated, tile_id:%d, link_nid:%u, ttl_id:%u, dir:%d", ttl_nid, link_nid, ttl_nid, DIR_POSITIVE);
 				}
 				itLink->second.ttlIdPositive = ttl_nid;
-			} else { //if (keyTraffic.ttl.dir == DIR_NAGATIVE) {
-				if (itLink->second.ttlIdNagative != 0) {
-					// 이미 있으면....
-					LOG_TRACE(LOG_KEY_TRAFFIC, LOG_WARNING, "link to ttl matching duplicated, tile_id:%d, link_nid:%ld, ttl_id:%d, dir:%ld", ttl_nid, link_nid, ttl_nid, DIR_NAGATIVE);
+			} else if (ttl_dir == DIR_NAGATIVE) {
+				if (itLink->second.ttlIdNagative != 0) { // 이미 있으면....					
+					LOG_TRACE(LOG_KEY_TRAFFIC, LOG_WARNING, "link-ttl matching N duplicated, tile_id:%d, link_nid:%u, ttl_id:%u, dir:%d", ttl_nid, link_nid, ttl_nid, DIR_NAGATIVE);
 				}
 				itLink->second.ttlIdNagative = ttl_nid;
+			} else {
+				LOG_TRACE(LOG_KEY_TRAFFIC, LOG_WARNING, "link-ttl matching dir error, tile_id:%u, link_nid:%u, ttl_id:%u, dir:%d", tile_nid, link_nid, ttl_nid, ttl_dir);
 			}
 
-			if (itLink->second.ttlIdPositive == itLink->second.ttlIdNagative) {
-				// 정/역이 같으면....
-				LOG_TRACE(LOG_KEY_TRAFFIC, LOG_WARNING, "link to ttl matching duplicated, tile_id:%d, link_nid:%ld, ttl_id_p:%d, ttl_id_n:%d", ttl_nid, link_nid, itLink->second.ttlIdPositive, itLink->second.ttlIdNagative);
+			if (itLink->second.ttlIdPositive == itLink->second.ttlIdNagative) { // 정/역이 같으면....				
+				LOG_TRACE(LOG_KEY_TRAFFIC, LOG_WARNING, "link-ttl matching P-N same, tile_id:%d, link_nid:%u, ttl_id:%u", ttl_nid, link_nid, itLink->second.ttlIdPositive);
 			}
 		} else {
 			// create

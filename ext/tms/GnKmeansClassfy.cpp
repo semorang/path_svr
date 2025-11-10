@@ -65,11 +65,11 @@ int CGnKmeansClassfy::nearest(TFPoint* pt, TFPoint* cent, int n_cluster, double 
 
 void CGnKmeansClassfy::kpp(TFPoint* pts, int len, TFPoint* cent, int n_cent)
 {
-	int i, j;
+	int j;
 	int n_cluster;
 	double sum, *d = (double*)malloc(sizeof(double) * len);
 
-	TFPoint* p, c;
+	TFPoint* p;
 
 	srand(1000 + 49 * 2); // 매회 동일 인풋에 대한 동일 결과 출력 
 

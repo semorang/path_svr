@@ -168,9 +168,9 @@ bool CFileTrekking::ParseData(IN const char* fname)
 
 		// 테스트 메쉬가 있으면 정의된 메쉬만 확인하자
 		if (g_isUseTestMesh && !g_arrTestMesh.empty()) {
-			if ((nShpType == 1) && (g_arrTestMesh.find(node.MeshID) == g_arrTestMesh.end())) {
+			if ((nShpType == 1) && checkTestMesh(node.MeshID)) {
 				continue;
-			} else if ((nShpType == 2) && (g_arrTestMesh.find(link.MeshID) == g_arrTestMesh.end())) {
+			} else if ((nShpType == 2) && checkTestMesh(link.MeshID)) {
 				continue;
 			}
 		}

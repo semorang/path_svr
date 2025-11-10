@@ -30,6 +30,7 @@ static char THIS_FILE[] = __FILE__;
 CTMSManager::CTMSManager()
 {
 	currentTimestamp = 0;
+	m_nMaxLimitCount = 0;
 
 	m_pDataMgr = nullptr;
 }
@@ -121,16 +122,16 @@ int32_t getDistrictResult(IN const ClusteringOption* pClustOpt, IN const vector<
 		// 시작
 		if (ii == 0) {
 			// 출발지 고정일 경우
-			if (pClustOpt->positionLock == TYPE_TSP_LOCK_START ||
-				pClustOpt->positionLock == TYPE_TSP_LOCK_START_END ||
-				pClustOpt->positionLock == TYPE_TSP_RECURSIVE) {
+			if (pClustOpt->endpointType == TYPE_TSP_ENDPOINT_START ||
+				pClustOpt->endpointType == TYPE_TSP_ENDPOINT_START_END ||
+				pClustOpt->endpointType == TYPE_TSP_ENDPOINT_RECURSIVE) {
 				cluster.vtTimes.emplace_back(vtDistMatrix[firstIdx][currId].nTotalTime);
 				cluster.vtDistances.emplace_back(vtDistMatrix[firstIdx][currId].nTotalDist);
 				totTime += vtDistMatrix[firstIdx][currId].nTotalTime;
 				totDist += vtDistMatrix[firstIdx][currId].nTotalDist;
 			} else if ((vtWaypoints.size() == 1) && // 1개 결과일 때 
-				(pClustOpt->positionLock == TYPE_TSP_LOCK_END ||
-					pClustOpt->positionLock == TYPE_TSP_LOCK_START_END)) {
+				(pClustOpt->endpointType == TYPE_TSP_ENDPOINT_END ||
+					pClustOpt->endpointType == TYPE_TSP_ENDPOINT_START_END)) {
 				cluster.vtTimes.emplace_back(vtDistMatrix[currId][lastIdx].nTotalTime);
 				cluster.vtDistances.emplace_back(vtDistMatrix[currId][lastIdx].nTotalDist);
 				totTime += vtDistMatrix[currId][lastIdx].nTotalTime;
@@ -145,7 +146,7 @@ int32_t getDistrictResult(IN const ClusteringOption* pClustOpt, IN const vector<
 			totDist += vtDistMatrix[prevId][currId].nTotalDist;
 
 			// 도착지 고정일 경우
-			if (pClustOpt->positionLock == TYPE_TSP_LOCK_END || pClustOpt->positionLock == TYPE_TSP_LOCK_START_END) {
+			if (pClustOpt->endpointType == TYPE_TSP_ENDPOINT_END || pClustOpt->endpointType == TYPE_TSP_ENDPOINT_START_END) {
 				cluster.vtTimes.emplace_back(vtDistMatrix[currId][lastIdx].nTotalTime);
 				cluster.vtDistances.emplace_back(vtDistMatrix[currId][lastIdx].nTotalDist);
 				totTime += vtDistMatrix[currId][lastIdx].nTotalTime;
@@ -171,7 +172,7 @@ int32_t getDistrictResult(IN const ClusteringOption* pClustOpt, IN const vector<
 
 
 //#define USE_GN_KMEANS_ALGORITHMS // k-means 알고리즘 사용
-int32_t CTMSManager::GetCluster(IN const ClusteringOption* pClustOpt, IN const vector<vector<stDistMatrix>>& vtDistMatrix, IN const vector<Origins>& vtOrigin, OUT vector<stDistrict>& vtDistrict, OUT vector<SPoint>& vtPositionLock)
+int32_t CTMSManager::GetCluster(IN const ClusteringOption* pClustOpt, IN const vector<vector<stDistMatrix>>& vtDistMatrix, IN const vector<Origins>& vtOrigin, OUT vector<stDistrict>& vtDistrict, OUT vector<SPoint>& vtendpointType)
 {
 	int32_t ret = RESULT_OK;
 
@@ -431,7 +432,7 @@ int32_t CTMSManager::GetCluster(IN const ClusteringOption* pClustOpt, IN const v
 		// 클러스터 제한 또는 클러스터당 POI 제한 오류
 		ret = TMS_RESULT_FAILED_INPUT_OPTION;
 	} else if (clustOpt.limitCluster > 0) { // 균등 분배
-		if ((maxSize < clustOpt.limitCluster) || ((clustOpt.positionLock != 0) && (maxSize - 1 < clustOpt.limitCluster))) {
+		if ((maxSize < clustOpt.limitCluster) || ((clustOpt.endpointType != 0) && (maxSize - 1 < clustOpt.limitCluster))) {
 			// 전체 수량에 대해 지정 구역수와 구역별 지정 배정수가 한계치를 초과함.
 			ret = TMS_RESULT_FAILED_LIMIT_COUNT_OVER;
 		}
@@ -440,11 +441,17 @@ int32_t CTMSManager::GetCluster(IN const ClusteringOption* pClustOpt, IN const v
 			// 최적 분배의 경우 제한값이 필요함
 			ret = TMS_RESULT_FAILED_LIMIT_VALUE_NULL;
 		} else if (clustOpt.divisionType == TYPE_CLUSTER_DEVIDE_BY_COUNT) {
-
+			if (clustOpt.limitValue <= 1) { // 너무 작은 분배, 1이하는 의미 없는 값
+				ret = TMS_RESULT_FAILED_LIMIT_VALUE_TOO_SMALL;
+			}
 		} else if (clustOpt.divisionType == TYPE_CLUSTER_DEVIDE_BY_DIST) {
-
+			if (clustOpt.limitValue <= 1000) { // 너무 작은 분배, 1km 이하는 의미 없는 값
+				ret = TMS_RESULT_FAILED_LIMIT_VALUE_TOO_SMALL;
+			}
 		} else if (clustOpt.divisionType == TYPE_CLUSTER_DEVIDE_BY_TIME) {
-
+			if (clustOpt.limitValue <= 3600) { // 너무 작은 분배, 1시간 이하는 의미 없는 값
+				ret = TMS_RESULT_FAILED_LIMIT_VALUE_TOO_SMALL;
+			}
 		}
 	}
 
@@ -474,11 +481,11 @@ int32_t CTMSManager::GetCluster(IN const ClusteringOption* pClustOpt, IN const v
 	tspOpt.algorithm = clustOpt.algorithm;
 	tspOpt.seed = clustOpt.seed;
 	tspOpt.compareType = clustOpt.compareType;
-	tspOpt.positionLock = clustOpt.positionLock;
+	tspOpt.endpointType = clustOpt.endpointType;
 	tspOpt.geneSize = vtWaypoints.size();
 	
 	// 기본 TSP 알고리즘은 회귀모델이기에 출/도착지 고정을 구현 못함, TSP-GA로 변경 필요
-	if ((tspOpt.positionLock == TYPE_TSP_LOCK_START_END) && (tspOpt.algorithm == TYPE_TSP_ALGORITHM_TSP)) {
+	if ((tspOpt.endpointType == TYPE_TSP_ENDPOINT_START_END) && (tspOpt.algorithm == TYPE_TSP_ALGORITHM_TSP)) {
 		tspOpt.algorithm = TYPE_TSP_ALGORITHM_TSP_GA;
 	}
 
@@ -529,9 +536,9 @@ int32_t CTMSManager::GetCluster(IN const ClusteringOption* pClustOpt, IN const v
 		// 클러스터 개수가 결정되어 있으면, 평균 및 보너스를 미리 계산
 		if (clustOpt.limitCluster > 0 /*&& clustOpt.limitValue <= 0*/) {
 			int nValue = maxSize;
-			if (clustOpt.positionLock == TYPE_TSP_LOCK_START || pClustOpt->positionLock == TYPE_TSP_LOCK_END || pClustOpt->positionLock == TYPE_TSP_RECURSIVE) {
+			if (clustOpt.endpointType == TYPE_TSP_ENDPOINT_START || pClustOpt->endpointType == TYPE_TSP_ENDPOINT_END || pClustOpt->endpointType == TYPE_TSP_ENDPOINT_RECURSIVE) {
 				nValue -= 1;
-			} else if (pClustOpt->positionLock == TYPE_TSP_LOCK_START_END) {
+			} else if (pClustOpt->endpointType == TYPE_TSP_ENDPOINT_START_END) {
 				nValue -= 2;
 			}
 			clustOpt.limitValue = nValue / clustOpt.limitCluster;
@@ -544,6 +551,7 @@ int32_t CTMSManager::GetCluster(IN const ClusteringOption* pClustOpt, IN const v
 	LOG_TRACE(LOG_DEBUG, "clustering limit value : %d, deviation: %d, deviation offset: %.2f", clustOpt.limitValue, clustOpt.limitDeviation, offsetValue);
 
 	double currValueGap = 0;
+	int maxLimitValueOrigin = pClustOpt->limitValue;
 	int maxLimitValue = 0;
 	int minLimitValue = 0;
 	int maxLimitDistrict = INT_MAX; // 한계 배정 수량
@@ -715,12 +723,12 @@ int32_t CTMSManager::GetCluster(IN const ClusteringOption* pClustOpt, IN const v
 				// 우선은 개수 균등에 적용
 				int remainedValue = 0;
 
-				if (pClustOpt->positionLock == TYPE_TSP_LOCK_START || pClustOpt->positionLock == TYPE_TSP_LOCK_END || pClustOpt->positionLock == TYPE_TSP_RECURSIVE) {
+				if (pClustOpt->endpointType == TYPE_TSP_ENDPOINT_START || pClustOpt->endpointType == TYPE_TSP_ENDPOINT_END || pClustOpt->endpointType == TYPE_TSP_ENDPOINT_RECURSIVE) {
 					if (clustOpt.limitValue - ((maxSize - 1) % clustOpt.limitValue) > deviation) {
 						remainedValue = (maxSize - 1) % clustOpt.limitValue;
 						// 지점 고정은 클러스터링 개수에서 제외
 					}
-				} else if (pClustOpt->positionLock == TYPE_TSP_LOCK_START_END) {
+				} else if (pClustOpt->endpointType == TYPE_TSP_ENDPOINT_START_END) {
 					if (clustOpt.limitValue - ((maxSize - 2) % clustOpt.limitValue) > deviation) {
 						// 지점 고정은 클러스터링 개수에서 제외
 						remainedValue = (maxSize - 2) % clustOpt.limitValue;
@@ -739,13 +747,13 @@ int32_t CTMSManager::GetCluster(IN const ClusteringOption* pClustOpt, IN const v
 					bonusValue = minValue;
 				}
 			}
-		} else if ((maxValue <= maxLimitValue) && ((clustOpt.limitCluster <= 0) || (clustOpt.limitCluster > 0 && cntCluster == clustOpt.limitCluster))) {
+		} else if ((maxValue <= maxLimitValueOrigin/*maxLimitValue*/) && ((clustOpt.limitCluster <= 0) || (clustOpt.limitCluster > 0 && cntCluster == clustOpt.limitCluster) || (currValueGap <= deviation))) {
 			isComplete = true;
 		}
 
 
 		if (isComplete) {
-			if ((minPois <= 1) && (pClustOpt->positionLock == TYPE_TSP_LOCK_NONE)) {
+			if ((((clustOpt.divisionType != TYPE_CLUSTER_DEVIDE_BY_COUNT) || (pClustOpt->limitValue != 1)) && (minPois <= 1)) && (pClustOpt->endpointType == TYPE_TSP_ENDPOINT_NONE)) {
 				ret = TMS_RESULT_FAILED_MATCHING_DEVIATION;
 			} else {
 				ret = RESULT_OK;
@@ -760,14 +768,15 @@ int32_t CTMSManager::GetCluster(IN const ClusteringOption* pClustOpt, IN const v
 				prevLimitValue = tmpLimitValue;
 			} else if (prevValueGap < currValueGap) { // 이전보다 오차가 커짐
 				clustOpt.limitValue = prevLimitValue;
-				cntRematch++;
+				//cntRematch++;
 			} else { // 이전과 오차가 같음
 				if (cntRematch >= 5) {
 					ret = RESULT_OK; // 우선은 성공으로 보자
 					break;
 				}
-				cntRematch++;
+				//cntRematch++;
 			}
+			cntRematch++;
 		}
 
 		// loop check
@@ -791,7 +800,7 @@ int32_t CTMSManager::GetCluster(IN const ClusteringOption* pClustOpt, IN const v
 	if (ret == RESULT_OK) {
 		// 클러스트링된 그룹의 TSP 수행
 		tspOpt = clustOpt.tspOption;
-		tspOpt.positionLock = clustOpt.positionLock;
+		tspOpt.endpointType = clustOpt.endpointType;
 		tspOpt.geneSize = vtWaypoints.size();
 
 		for (auto& cluster : vtDistrict) {
@@ -810,14 +819,14 @@ int32_t CTMSManager::GetCluster(IN const ClusteringOption* pClustOpt, IN const v
 			} // for
 
 #if 0
-			if (tspOpt.positionLock == TYPE_TSP_LOCK_START || tspOpt.positionLock == TYPE_TSP_LOCK_START_END || tspOpt.positionLock == TYPE_TSP_RECURSICVE) {
+			if (tspOpt.endpointType == TYPE_TSP_ENDPOINT_START || tspOpt.endpointType == TYPE_TSP_ENDPOINT_START_END || tspOpt.endpointType == TYPE_TSP_RECURSICVE) {
 				waypoint.nId = 0;
 				waypoint.x = vtOrigin[0].position.x;
 				waypoint.y = vtOrigin[0].position.y;
 				waypoint.nLayoverTime = vtOrigin[waypoint.nId].time;
 				vtClustWaypoints.insert(vtClustWaypoints.begin(), waypoint);
 			}
-			if (tspOpt.positionLock == TYPE_TSP_LOCK_END || tspOpt.positionLock == TYPE_TSP_LOCK_START_END) {
+			if (tspOpt.endpointType == TYPE_TSP_ENDPOINT_END || tspOpt.endpointType == TYPE_TSP_ENDPOINT_START_END) {
 				waypoint.nId = maxSize - 1;
 				waypoint.x = vtOrigin[waypoint.nId].position.x;
 				waypoint.y = vtOrigin[waypoint.nId].position.y;
@@ -850,7 +859,7 @@ int32_t CTMSManager::GetCluster(IN const ClusteringOption* pClustOpt, IN const v
 				vtNewWaypoints.push_back(vtClustWaypoints[way]);
 			}
 #else
-			if (pClustOpt->positionLock == TYPE_TSP_LOCK_NONE) {
+			if (pClustOpt->endpointType == TYPE_TSP_ENDPOINT_NONE) {
 #	if 0
 				vtNewWaypoints.assign(vtClustWaypoints.begin(), vtClustWaypoints.end());
 				ret = RESULT_OK;
@@ -875,11 +884,11 @@ int32_t CTMSManager::GetCluster(IN const ClusteringOption* pClustOpt, IN const v
 				vector<stWaypoints> vtNewClustWaypoints;
 				for (const auto& way : vtBestway) {
 					// 출발지 고정일 경우
-					if ((nFirst == vtClustWaypoints[way].nId) && (pClustOpt->positionLock == TYPE_TSP_LOCK_START || pClustOpt->positionLock == TYPE_TSP_LOCK_START_END || pClustOpt->positionLock == TYPE_TSP_RECURSICVE)) {
+					if ((nFirst == vtClustWaypoints[way].nId) && (pClustOpt->endpointType == TYPE_TSP_ENDPOINT_START || pClustOpt->endpointType == TYPE_TSP_ENDPOINT_START_END || pClustOpt->endpointType == TYPE_TSP_RECURSICVE)) {
 						continue;
 					}
 					// 도착지 고정일 경우
-					if ((nLast == vtClustWaypoints[way].nId) && (pClustOpt->positionLock == TYPE_TSP_LOCK_END || pClustOpt->positionLock == TYPE_TSP_LOCK_START_END)) {
+					if ((nLast == vtClustWaypoints[way].nId) && (pClustOpt->endpointType == TYPE_TSP_ENDPOINT_END || pClustOpt->endpointType == TYPE_TSP_ENDPOINT_START_END)) {
 						continue;
 					}
 
@@ -932,15 +941,15 @@ int32_t CTMSManager::GetCluster(IN const ClusteringOption* pClustOpt, IN const v
 			vtBorder.assign(cluster.vtCoord.begin(), cluster.vtCoord.end());
 
 			// 출발지 고정 제외
-			if (pClustOpt->positionLock == TYPE_TSP_LOCK_START || 
-				pClustOpt->positionLock == TYPE_TSP_LOCK_START_END || 
-				pClustOpt->positionLock == TYPE_TSP_RECURSIVE) {
+			if (pClustOpt->endpointType == TYPE_TSP_ENDPOINT_START || 
+				pClustOpt->endpointType == TYPE_TSP_ENDPOINT_START_END || 
+				pClustOpt->endpointType == TYPE_TSP_ENDPOINT_RECURSIVE) {
 				vtBorder.erase(vtBorder.begin());
 			}
 
 			// 도착지 고정 제외
-			if (pClustOpt->positionLock == TYPE_TSP_LOCK_END || 
-				pClustOpt->positionLock == TYPE_TSP_LOCK_START_END) {
+			if (pClustOpt->endpointType == TYPE_TSP_ENDPOINT_END || 
+				pClustOpt->endpointType == TYPE_TSP_ENDPOINT_START_END) {
 				vtBorder.erase(vtBorder.end() - 1);
 			}
 
@@ -949,19 +958,19 @@ int32_t CTMSManager::GetCluster(IN const ClusteringOption* pClustOpt, IN const v
 		}
 
 		// 출/도착지 고정
-		if (pClustOpt->positionLock != TYPE_TSP_LOCK_NONE) {
-			if (pClustOpt->positionLock == TYPE_TSP_LOCK_START || pClustOpt->positionLock == TYPE_TSP_LOCK_START_END || pClustOpt->positionLock == TYPE_TSP_RECURSIVE) {
+		if (pClustOpt->endpointType != TYPE_TSP_ENDPOINT_NONE) {
+			if (pClustOpt->endpointType == TYPE_TSP_ENDPOINT_START || pClustOpt->endpointType == TYPE_TSP_ENDPOINT_START_END || pClustOpt->endpointType == TYPE_TSP_ENDPOINT_RECURSIVE) {
 				SPoint coord = { vtOrigin[0].position.x, vtOrigin[0].position.y };
-				vtPositionLock.emplace_back(coord);
+				vtendpointType.emplace_back(coord);
 			} else {
-				vtPositionLock.emplace_back(SPoint{ 0, 0 });
+				vtendpointType.emplace_back(SPoint{ 0, 0 });
 			}
 
-			if (pClustOpt->positionLock == TYPE_TSP_LOCK_END || pClustOpt->positionLock == TYPE_TSP_LOCK_START_END) {
+			if (pClustOpt->endpointType == TYPE_TSP_ENDPOINT_END || pClustOpt->endpointType == TYPE_TSP_ENDPOINT_START_END) {
 				SPoint coord = { vtOrigin[waypoint.nId].position.x, vtOrigin[waypoint.nId].position.y };
-				vtPositionLock.emplace_back(coord);
+				vtendpointType.emplace_back(coord);
 			} else {
-				vtPositionLock.emplace_back(SPoint{ 0, 0 });
+				vtendpointType.emplace_back(SPoint{ 0, 0 });
 			}
 		}
 	}
@@ -975,6 +984,8 @@ int32_t CTMSManager::GetRecommendedDeviation(IN ClusteringOption* pClustOpt, IN 
 {
 	LOG_TRACE(LOG_DEBUG, "calculate auto deviation value");
 
+	int32_t ret = RESULT_OK;
+
 	// get bestway
 	//TspOptions tspOpt;
 	//vector<uint32_t> vtBestway;
@@ -985,7 +996,6 @@ int32_t CTMSManager::GetRecommendedDeviation(IN ClusteringOption* pClustOpt, IN 
 	const int MAX_CNT_LOOP = 10000; // 무한 반복 제한
 	int cntLoop = 0;
 	int bonusValue = 0;
-	bool ret = false;
 	bool isRematch = false;
 	bool isComplete = false;
 	double deviationValue = 0; // clustOpt.limitDeviation;
@@ -1094,12 +1104,12 @@ int32_t CTMSManager::GetRecommendedDeviation(IN ClusteringOption* pClustOpt, IN 
 				// 우선은 개수 균등에 적용
 				int remainedValue = 0;
 
-				if (pClustOpt->positionLock == TYPE_TSP_LOCK_START || pClustOpt->positionLock == TYPE_TSP_LOCK_END || pClustOpt->positionLock == TYPE_TSP_RECURSIVE) {
+				if (pClustOpt->endpointType == TYPE_TSP_ENDPOINT_START || pClustOpt->endpointType == TYPE_TSP_ENDPOINT_END || pClustOpt->endpointType == TYPE_TSP_ENDPOINT_RECURSIVE) {
 					if (clustOpt.limitValue - ((maxSize - 1) % clustOpt.limitValue) > deviationValue) {
 						remainedValue = (maxSize - 1) % clustOpt.limitValue;
 						// 지점 고정은 클러스터링 개수에서 제외
 					}
-				} else if (pClustOpt->positionLock == TYPE_TSP_LOCK_START_END) {
+				} else if (pClustOpt->endpointType == TYPE_TSP_ENDPOINT_START_END) {
 					if (clustOpt.limitValue - ((maxSize - 2) % clustOpt.limitValue) > deviationValue) {
 						// 지점 고정은 클러스터링 개수에서 제외
 						remainedValue = (maxSize - 2) % clustOpt.limitValue;
@@ -1148,7 +1158,7 @@ int32_t CTMSManager::GetRecommendedDeviation(IN ClusteringOption* pClustOpt, IN 
 		LOG_TRACE(LOG_DEBUG, "calulated deviation value : %d", deviationValue);
 	} // for
 
-	return deviationValue;
+	return ret;
 }
 
 
@@ -1235,25 +1245,32 @@ int32_t CTMSManager::GetBestway(IN const TspOption* pTspOpt, IN const vector<vec
 	//		//		"data" : "result_rdm_u24090948_t20250626174127.rln"
 	//		//}
 
-	vector<int32_t>vtTestWayResult = { 396, 400, 401, 403, 402, 395, 407, 409, 408, 394, 406, 410, 390, 393, 404, 405, 411, 373, 371, 372, 388, 389, 412, 458, 421, 422, 384, 385, 386, 382, 431, 430, 426, 427, 428, 429, 425, 424, 383, 423, 418, 419, 420, 416, 417, 413, 414, 415, 387, 380, 381, 379, 378, 376, 377, 375, 374, 199, 198, 196, 197, 195, 194, 202, 203, 201, 200, 204, 161, 189, 162, 205, 163, 164, 168, 167, 165, 166, 183, 186, 187, 188, 190, 192, 193, 191, 461, 253, 254, 255, 257, 256, 178, 179, 180, 181, 173, 174, 175, 248, 249, 250, 177, 247, 241, 246, 243, 244, 242, 245, 251, 252, 238, 258, 182, 184, 185, 170, 456, 169, 171, 172, 459, 176, 259, 260, 261, 262, 214, 215, 239, 240, 211, 213, 212, 208, 206, 277, 207, 209, 276, 210, 275, 273, 274, 272, 268, 269, 270, 271, 281, 282, 284, 283, 286, 285, 265, 266, 267, 304, 301, 302, 303, 309, 311, 310, 312, 313, 314, 316, 264, 317, 315, 363, 355, 356, 358, 359, 361, 362, 367, 360, 364, 365, 369, 370, 368, 357, 366, 321, 322, 323, 320, 325, 324, 354, 353, 352, 351, 326, 327, 328, 349, 350, 347, 348, 346, 329, 330, 331, 333, 334, 332, 336, 335, 337, 339, 338, 340, 341, 342, 344, 345, 263, 343, 318, 319, 444, 442, 445, 441, 443, 305, 308, 306, 307, 287, 289, 288, 290, 293, 280, 291, 292, 295, 296, 298, 297, 294, 299, 151, 150, 152, 153, 159, 154, 155, 158, 157, 160, 156, 439, 440, 450, 451, 452, 438, 437, 453, 455, 454, 436, 435, 434, 433, 432, 399, 397, 398, 391, 392, 457, 447, 448, 300, 449, 446, 278, 279, 236, 234, 233, 224, 223, 226, 225, 230, 227, 231, 229, 228, 232, 222, 220, 221, 219, 218, 216, 217, 237, 460, 235, 72, 73, 76, 74, 69, 77, 75, 106, 107, 78, 79, 82, 80, 99, 83, 98, 100, 105, 103, 81, 104, 108, 109, 110, 71, 94, 113, 114, 117, 118, 119, 120, 111, 112, 121, 123, 122, 102, 101, 124, 126, 70, 64, 56, 59, 60, 66, 65, 55, 68, 67, 54, 127, 97, 115, 96, 116, 86, 84, 85, 87, 93, 88, 49, 48, 92, 89, 95, 50, 51, 47, 46, 52, 53, 62, 63, 61, 24, 23, 25, 14, 12, 13, 8, 7, 11, 26, 20, 27, 28, 17, 19, 0, 29, 30, 33, 34, 37, 38, 35, 36, 32, 31, 39, 41, 40, 42, 44, 45, 43, 91, 90, 128, 16, 15, 2, 6, 5, 4, 3, 9, 10, 21, 1, 22, 18, 129, 125, 57, 58, 462, 138, 136, 139, 140, 145, 146, 149, 148, 147, 130, 132, 131, 135, 134, 133, 137, 143, 142, 141, 144 };
+	vector<int32_t>vtlkh3_hanjin47 = { 
+		1,5,10,9,8,11,6,2,3,4,
+		7,36,12,21,20,14,39,41,42,22,
+		40,16,15,18,17,37,23,28,31,47,
+		45,46,43,44,24,25,13,26,30,19,
+		29,27,38,32,35,34,33, };
 
-	if (vtOrigin.size() == vtTestWayResult.size()) {
-		LOG_TRACE(LOG_DEBUG, "using test tsp result, count:%d", vtTestWayResult.size());
+	if (vtOrigin.size() == vtlkh3_hanjin47.size()) {
+		LOG_TRACE(LOG_DEBUG, "using test tsp result, count:%d", vtlkh3_hanjin47.size());
+		for (auto& item : vtlkh3_hanjin47) {
+			item -= 1;
+		}
 
-		vtWayResult.assign(vtTestWayResult.begin(), vtTestWayResult.end());
+		vtWayResult.assign(vtlkh3_hanjin47.begin(), vtlkh3_hanjin47.end());
 	} else
 #endif
-
 	{
 		vtWayResult.reserve(vtOrigin.size());
 
 		if (vtOrigin.size() <= 2) {
 			vtWayResult.push_back(0);
 			vtWayResult.push_back(1);
-		} else if (((pTspOpt->positionLock == TYPE_TSP_LOCK_START) || (pTspOpt->positionLock == TYPE_TSP_LOCK_START)) && vtOrigin.size() == 2) {
+		} else if (((pTspOpt->endpointType == TYPE_TSP_ENDPOINT_START) || (pTspOpt->endpointType == TYPE_TSP_ENDPOINT_START)) && vtOrigin.size() == 2) {
 			vtWayResult.push_back(0);
 			vtWayResult.push_back(1);
-		} else if (((pTspOpt->positionLock == TYPE_TSP_LOCK_START_END) || (pTspOpt->positionLock == TYPE_TSP_RECURSIVE)) && vtOrigin.size() == 3) {
+		} else if (((pTspOpt->endpointType == TYPE_TSP_ENDPOINT_START_END) || (pTspOpt->endpointType == TYPE_TSP_ENDPOINT_RECURSIVE)) && vtOrigin.size() == 3) {
 			vtWayResult.push_back(0);
 			vtWayResult.push_back(1);
 			vtWayResult.push_back(2);
@@ -1287,7 +1304,7 @@ int32_t CTMSManager::GetBestway(IN const TspOption* pTspOpt, IN const vector<vec
 
 
 			// 회귀모델이므로 출/도착지 순서대로 재정비 필요
-			if (pTspOpt->positionLock == TYPE_TSP_LOCK_END /*|| pTspOpt->positionLock == TYPE_TSP_LOCK_START_END*/) { // 목적지면 반대로 뒤집어 TSP 수행 후 다시 뒤집자
+			if (pTspOpt->endpointType == TYPE_TSP_ENDPOINT_END /*|| pTspOpt->endpointType == TYPE_TSP_ENDPOINT_START_END*/) { // 목적지면 반대로 뒤집어 TSP 수행 후 다시 뒤집자
 	#if 1
 				int nLastId = vtWayResult.size() - 1;
 				int nLastIdx = 0;
@@ -1361,7 +1378,11 @@ int32_t CTMSManager::GetBestway(IN const TspOption* pTspOpt, IN const vector<vec
 			// 신세계
 			newWorld.Genesis(maxGene, maxPopulation);
 
+#if defined(DEMO_FOR_HANJIN)
+			const uint32_t MAX_SAME_RESULT = min(500, maxGene * 10);
+#else
 			const uint32_t MAX_SAME_RESULT = min(100, maxGene * 2); // maxGene * 10; // 500;// maxGeneration; // 같은 값으로 100회 이상 진행되면 최적값에 수렴하는것으로 판단하고 종료
+#endif
 			uint32_t repeatGeneration = 0;
 			double topCost = DBL_MAX;
 			double bestCost = DBL_MAX;
@@ -1378,7 +1399,16 @@ int32_t CTMSManager::GetBestway(IN const TspOption* pTspOpt, IN const vector<vec
 				} else if (topCost == bestCost) {
 					repeatGeneration++;
 					if (MAX_SAME_RESULT < repeatGeneration) {
-						LOG_TRACE(LOG_DEBUG, "best result fitness value:%.3f, repeating count:%d", newWorld.GetBestDist(), repeatGeneration);
+						double bestValue = 0.f;
+						if (pTspOpt->compareType == TYPE_TSP_VALUE_DIST) {
+							bestValue = newWorld.GetBestDist();
+						} else if (pTspOpt->compareType == TYPE_TSP_VALUE_TIME) {
+							bestValue = newWorld.GetBestTime();
+						} else {
+							bestValue = newWorld.GetBestCost();
+						}
+
+						LOG_TRACE(LOG_DEBUG, "best type(%d) result fitness value:%.3f, repeat:%d", pTspOpt->compareType, bestValue, repeatGeneration);
 						break;
 					}
 				}
@@ -1417,7 +1447,6 @@ int32_t CTMSManager::GetBestway(IN const TspOption* pTspOpt, IN const vector<vec
 	LOG_TRACE(LOG_DEBUG_LINE, "result :");
 	for (const auto& item : vtWayResult) {
 		LOG_TRACE(LOG_DEBUG_CONTINUE, "%3d>", item); //→
-
 		if (idx >= 1) {
 			totalDist += vtDistMatrix[idxPrev][item].nTotalDist;
 			totalTime += vtDistMatrix[idxPrev][item].nTotalTime;
@@ -1431,7 +1460,7 @@ int32_t CTMSManager::GetBestway(IN const TspOption* pTspOpt, IN const vector<vec
 	}
 
 	// 원점 회귀 확인
-	if (pTspOpt->positionLock == TYPE_TSP_RECURSIVE) {
+	if (pTspOpt->endpointType == TYPE_TSP_ENDPOINT_RECURSIVE) {
 		totalDist += vtDistMatrix[idxPrev][idxFirst].nTotalDist;
 		totalTime += vtDistMatrix[idxPrev][idxFirst].nTotalTime;
 		totalTime += vtOrigin[idxPrev].nLayoverTime; // 지점 소요 시간 추가
@@ -1571,9 +1600,9 @@ int32_t devideCluster(IN const ClusteringOption* pClustOpt, IN const vector<vect
 
 #if 0 // 출/도착지 고정도 poi로 사용
 			// 출발지 원점이 있을 경우 원점으로 부터 시작지점까지의 값을 계산
-			if (((pClustOpt->positionLock == TYPE_TSP_RECURSICVE) || // 출발지 회귀
-				(pClustOpt->positionLock == TYPE_TSP_LOCK_START_END) || // 출.도착지 고정
-				(pClustOpt->positionLock == TYPE_TSP_LOCK_START))) // 출발지 고정
+			if (((pClustOpt->endpointType == TYPE_TSP_RECURSICVE) || // 출발지 회귀
+				(pClustOpt->endpointType == TYPE_TSP_ENDPOINT_START_END) || // 출.도착지 고정
+				(pClustOpt->endpointType == TYPE_TSP_ENDPOINT_START))) // 출발지 고정
 			{
 				if (prev != firstIdx) { // 출발지와 시작이 다른 경우,  출발지까지 거리 합산
 					distToNext += vtDistMatrix[firstIdx][prev].nTotalDist;
@@ -1600,8 +1629,8 @@ int32_t devideCluster(IN const ClusteringOption* pClustOpt, IN const vector<vect
 		if (ii == maxSize - 1) {
 #if 0 // 출/도착지 고정도 poi로 사용
 			// 도착지 원점이 있을 경우 원점으로 부터 도착지점까지의 값을 계산
-			if ((pClustOpt->positionLock == TYPE_TSP_LOCK_START_END) || // 출.도착지 고정
-				(pClustOpt->positionLock == TYPE_TSP_LOCK_END)) // 도착지 고정
+			if ((pClustOpt->endpointType == TYPE_TSP_ENDPOINT_START_END) || // 출.도착지 고정
+				(pClustOpt->endpointType == TYPE_TSP_ENDPOINT_END)) // 도착지 고정
 			{
 				if (next != lastIdx) {
 					distToNext += vtDistMatrix[ii][lastIdx].nTotalDist;
@@ -1626,8 +1655,8 @@ int32_t devideCluster(IN const ClusteringOption* pClustOpt, IN const vector<vect
 
 #if 0 // 출/도착지 고정도 poi로 사용
 		// 도착지 원점이 있을 경우 원점으로 부터 도착지점까지의 값을 계산
-		if ((pClustOpt->positionLock == TYPE_TSP_LOCK_START_END) || // 출.도착지 고정
-			(pClustOpt->positionLock == TYPE_TSP_LOCK_END)) // 도착지 고정
+		if ((pClustOpt->endpointType == TYPE_TSP_ENDPOINT_START_END) || // 출.도착지 고정
+			(pClustOpt->endpointType == TYPE_TSP_ENDPOINT_END)) // 도착지 고정
 		{
 			if (next != lastIdx) {
 				distToDest = vtDistMatrix[next][lastIdx].nTotalDist;
@@ -1666,8 +1695,8 @@ int32_t devideCluster(IN const ClusteringOption* pClustOpt, IN const vector<vect
 #if 0 // 출/도착지 고정도 poi로 사용
 			// 도착지 원점이 있을 경우
 			if ((next == lastIdx) &&
-				((pClustOpt->positionLock == TYPE_TSP_LOCK_START_END) || // 출.도착지 고정
-					(pClustOpt->positionLock == TYPE_TSP_LOCK_END))) // 도착지 고정
+				((pClustOpt->endpointType == TYPE_TSP_ENDPOINT_START_END) || // 출.도착지 고정
+					(pClustOpt->endpointType == TYPE_TSP_ENDPOINT_END))) // 도착지 고정
 			{
 				// 공동 사용 지점은 추가 하지 않음.
 			} else {
@@ -1754,8 +1783,8 @@ int32_t CTMSManager::DevideClusterUsingTsp(IN const ClusteringOption* pClustOpt,
 	else { //if (pClustOpt->cntCluster > 0) {
 		maxValue = pClustOpt->limitValue; // 최대 물량
 
-		if (bonusValue > 0) {
-			int nBonus = min(bonusValue, static_cast<int>(bonusValue / (maxSize / maxValue)));
+		if ((bonusValue > 0) && (maxSize >= maxValue)) {
+			int nBonus = min(bonusValue, static_cast<int>(bonusValue / static_cast<int>(maxSize / maxValue)));
 			if (nBonus > 0) {
 				maxValue += nBonus;
 				bonusValue -= nBonus;
@@ -1776,13 +1805,13 @@ int32_t CTMSManager::DevideClusterUsingTsp(IN const ClusteringOption* pClustOpt,
 	for (int ii = 0; ii < maxSize; ii++) {
 		prev = vtBestways[ii];
 		
-		vtNewBestWays.emplace_back(prev);
-		vtNewBestWaypoints.emplace_back(vtWaypoints[prev]);
+		//vtNewBestWays.emplace_back(prev);
+		//vtNewBestWaypoints.emplace_back(vtWaypoints[prev]);
 
 		// 출발지 원점이 있을 경우 원점으로 부터 시작지점까지의 값을 계산
-		if ((ii == 0) && (((pClustOpt->positionLock == TYPE_TSP_RECURSIVE) || // 출발지 회귀
-			(pClustOpt->positionLock == TYPE_TSP_LOCK_START_END) || // 출.도착지 고정
-			(pClustOpt->positionLock == TYPE_TSP_LOCK_START)))) // 출발지 고정
+		if ((ii == 0) && (((pClustOpt->endpointType == TYPE_TSP_ENDPOINT_RECURSIVE) || // 출발지 회귀
+			(pClustOpt->endpointType == TYPE_TSP_ENDPOINT_START_END) || // 출.도착지 고정
+			(pClustOpt->endpointType == TYPE_TSP_ENDPOINT_START)))) // 출발지 고정
 		{
 			firstValue.addValue(CLUST_VALUE_TYPE_SPOT, 1);
 			firstValue.addValue(CLUST_VALUE_TYPE_DIST, vtDistMatrix[firstIdx][prev].nTotalDist);
@@ -1791,21 +1820,29 @@ int32_t CTMSManager::DevideClusterUsingTsp(IN const ClusteringOption* pClustOpt,
 		}
 
 		if (ii == maxSize - 1) {
-			if (pClustOpt->positionLock == TYPE_TSP_LOCK_NONE) {
-				// 고정값이 없이 마지막 아이템이면 무조건 추가 (고정값 없이 단독으로 존재하는건 의미가 없음)
-				break;
-			} else if ((pClustOpt->positionLock == TYPE_TSP_LOCK_START_END) || // 출.도착지 고정
-				(pClustOpt->positionLock == TYPE_TSP_LOCK_END)) // 도착지 고정
-			{ // 도착지 원점이 있을 경우 원점으로 부터 도착지점까지의 값을 계산			
-				totalValue.addValue(CLUST_VALUE_TYPE_SPOT, 1);
-				totalValue.addValue(CLUST_VALUE_TYPE_DIST, vtDistMatrix[ii][lastIdx].nTotalDist);
-				totalValue.addValue(CLUST_VALUE_TYPE_TIME, vtDistMatrix[ii][lastIdx].nTotalTime + vtWaypoints[ii].nLayoverTime);
-				totalValue.addValue(CLUST_VALUE_TYPE_CARGO, vtWaypoints[ii].nCargoVolume);
+			//if (pClustOpt->endpointType == TYPE_TSP_ENDPOINT_NONE) {
+			//	// 고정값이 없이 마지막 아이템이면 무조건 추가 (고정값 없이 단독으로 존재하는건 의미가 없음)
+			//	//break;
+			//} else if ((pClustOpt->endpointType == TYPE_TSP_ENDPOINT_START_END) || // 출.도착지 고정
+			//	(pClustOpt->endpointType == TYPE_TSP_ENDPOINT_START)) {// 출발지 고정
+			//} else if ((pClustOpt->endpointType == TYPE_TSP_ENDPOINT_START_END) || // 출.도착지 고정
+			//	(pClustOpt->endpointType == TYPE_TSP_ENDPOINT_END)) { // 도착지 고정 // 도착지 원점이 있을 경우 원점으로 부터 도착지점까지의 값을 계산
+			//	// ****** 삭제 예정 -- 마지막인데 굳이 이렇게 계산할 필요가 있을까? // 2025-08-25
+			//	totalValue.addValue(CLUST_VALUE_TYPE_SPOT, 1);
+			//	totalValue.addValue(CLUST_VALUE_TYPE_DIST, vtDistMatrix[ii][lastIdx].nTotalDist);
+			//	totalValue.addValue(CLUST_VALUE_TYPE_TIME, vtDistMatrix[ii][lastIdx].nTotalTime + vtWaypoints[ii].nLayoverTime);
+			//	totalValue.addValue(CLUST_VALUE_TYPE_CARGO, vtWaypoints[ii].nCargoVolume);
 
-				next = lastIdx;
-			} else {
-				break;
-			}
+			//	next = lastIdx;
+			//} else {
+			//	//break;
+			//}
+
+			//vtNewBestWays.emplace_back(prev);
+			//vtNewBestWaypoints.emplace_back(vtWaypoints[prev]);
+
+			//break;
+			next = lastIdx;
 		} else {
 			next = vtBestways[ii + 1];
 		}
@@ -1821,8 +1858,8 @@ int32_t CTMSManager::DevideClusterUsingTsp(IN const ClusteringOption* pClustOpt,
 		// 도착지 원점이 있을 경우
 		stClustValue lastValue(typeDivision);
 
-		if ((pClustOpt->positionLock == TYPE_TSP_LOCK_START_END) || // 출.도착지 고정
-			(pClustOpt->positionLock == TYPE_TSP_LOCK_END)) {// 도착지 고정
+		if ((pClustOpt->endpointType == TYPE_TSP_ENDPOINT_START_END) || // 출.도착지 고정
+			(pClustOpt->endpointType == TYPE_TSP_ENDPOINT_END)) {// 도착지 고정
 			lastValue.addValue(CLUST_VALUE_TYPE_SPOT, 1);
 			lastValue.addValue(CLUST_VALUE_TYPE_DIST, vtDistMatrix[next][lastIdx].nTotalDist);
 			lastValue.addValue(CLUST_VALUE_TYPE_TIME, vtDistMatrix[next][lastIdx].nTotalTime + vtWaypoints[lastIdx].nLayoverTime);
@@ -1831,10 +1868,18 @@ int32_t CTMSManager::DevideClusterUsingTsp(IN const ClusteringOption* pClustOpt,
 		
 		if (totalValue.getCurrentValue() + firstValue.getCurrentValue() + lastValue.getCurrentValue() + nextValue.getCurrentValue() > maxValue) {
 			totalValue = totalValue + firstValue + lastValue;
+
+			if (ii == 0 || vtNewBestWays.empty()) {
+				vtNewBestWays.emplace_back(prev);
+				vtNewBestWaypoints.emplace_back(vtWaypoints[prev]);
+			}
 			break;
 		} else {
 			totalValue = totalValue + nextValue;
 		}
+
+		vtNewBestWays.emplace_back(prev);
+		vtNewBestWaypoints.emplace_back(vtWaypoints[prev]);
 
 		prev = next;
 	} // for
@@ -1847,7 +1892,7 @@ int32_t CTMSManager::DevideClusterUsingTsp(IN const ClusteringOption* pClustOpt,
 	// 2차) 1차 분배된 값을 TSP 적용 후 상세하게 조정
 	// TSP
 	TspOption tspOpt = pClustOpt->tspOption;
-	tspOpt.positionLock = pClustOpt->positionLock;
+	tspOpt.endpointType = pClustOpt->endpointType;
 
 	// 최초 분배의 TSP를 확인하자
 	stClustValue prevTotalValue(typeDivision);
@@ -1863,7 +1908,7 @@ int32_t CTMSManager::DevideClusterUsingTsp(IN const ClusteringOption* pClustOpt,
 
 	// 출도착지점 임시로 추가하여 TSP 계산
 	// 출발지 고정일 경우, 출발지 추가
-	if (pClustOpt->positionLock == TYPE_TSP_LOCK_START || pClustOpt->positionLock == TYPE_TSP_LOCK_START_END || pClustOpt->positionLock == TYPE_TSP_RECURSIVE) {
+	if (pClustOpt->endpointType == TYPE_TSP_ENDPOINT_START || pClustOpt->endpointType == TYPE_TSP_ENDPOINT_START_END || pClustOpt->endpointType == TYPE_TSP_ENDPOINT_RECURSIVE) {
 		vtNextBestways.insert(vtNextBestways.begin(), firstIdx);
 		stWaypoints waypoint;
 		waypoint.nId = vtWaypoints[firstIdx].nId;
@@ -1874,7 +1919,7 @@ int32_t CTMSManager::DevideClusterUsingTsp(IN const ClusteringOption* pClustOpt,
 		vtNextWaypoints.insert(vtNextWaypoints.begin(), waypoint);
 	}
 	// 도착지 고정일 경우, 도착지 추가
-	if (pClustOpt->positionLock == TYPE_TSP_LOCK_END || pClustOpt->positionLock == TYPE_TSP_LOCK_START_END) {
+	if (pClustOpt->endpointType == TYPE_TSP_ENDPOINT_END || pClustOpt->endpointType == TYPE_TSP_ENDPOINT_START_END) {
 		vtNextBestways.emplace_back(lastIdx);
 		stWaypoints waypoint;
 		waypoint.nId = vtWaypoints[lastIdx].nId;
@@ -1949,8 +1994,8 @@ int32_t CTMSManager::DevideClusterUsingTsp(IN const ClusteringOption* pClustOpt,
 		// 출발지/도착지/출도착지 고정 또는 회귀면서 1개
 		// 그 외 남은게 2개 면
 		// 종료
-		//if ( ((pClustOpt->positionLock == TYPE_TSP_LOCK_START || pClustOpt->positionLock == TYPE_TSP_LOCK_END || pClustOpt->positionLock == TYPE_TSP_RECURSICVE || pClustOpt->positionLock == TYPE_TSP_LOCK_START_END) && (vtRemains.size() == 1)) ||
-		//	((pClustOpt->positionLock == TYPE_TSP_LOCK_NONE && vtRemains.size() == 2)) ) { // ()
+		//if ( ((pClustOpt->endpointType == TYPE_TSP_ENDPOINT_START || pClustOpt->endpointType == TYPE_TSP_ENDPOINT_END || pClustOpt->endpointType == TYPE_TSP_RECURSICVE || pClustOpt->endpointType == TYPE_TSP_ENDPOINT_START_END) && (vtRemains.size() == 1)) ||
+		//	((pClustOpt->endpointType == TYPE_TSP_ENDPOINT_NONE && vtRemains.size() == 2)) ) { // ()
 		//	break;
 		//}
 
@@ -1976,7 +2021,7 @@ int32_t CTMSManager::DevideClusterUsingTsp(IN const ClusteringOption* pClustOpt,
 			} else if ((nUpDownState == DIRECTION_INCREASE) && (vtRemains.empty())) {
 				isStop = true;
 				idxDecrease++;
-			} else if ((nUpDownState == DIRECTION_DECREASE) && (nextTotalValue.getValue(CLUST_VALUE_TYPE_SPOT) <= 3) && ((pClustOpt->positionLock == TYPE_TSP_LOCK_START_END) || (pClustOpt->positionLock == TYPE_TSP_RECURSIVE))) {
+			} else if ((nUpDownState == DIRECTION_DECREASE) && (nextTotalValue.getValue(CLUST_VALUE_TYPE_SPOT) <= 3) && ((pClustOpt->endpointType == TYPE_TSP_ENDPOINT_START_END) || (pClustOpt->endpointType == TYPE_TSP_ENDPOINT_RECURSIVE))) {
 				isStop = true;
 				idxDecrease++;
 			} else if ((nUpDownState == DIRECTION_DECREASE) && (nextTotalValue.getValue(CLUST_VALUE_TYPE_SPOT) <= 2)) {
@@ -1992,17 +2037,19 @@ int32_t CTMSManager::DevideClusterUsingTsp(IN const ClusteringOption* pClustOpt,
 		//	break;
 		//} else if (isStop) {
 		if (isStop) {
-			// 오버된 값이 보너스값 한계치 이내라면 보너스 값으로 보완
-			if ((0 < bonusValue) && (dwNextValue < maxValue + bonusValue)) {
-				bonusValue -= (dwNextValue - maxValue);
-			} else if (idxDecrease) { // 감소중 중지된 경우, 이전값 사용하지 않음.
-				break; 
-			} else if (vtPrevBestways.size()) { // 이전 값이 있으면, 이전 값 복원
-				// 이전 값 사용
-				vtNextBestways.assign(vtPrevBestways.begin(), vtPrevBestways.end());
-				vtNextWaypoints.assign(vtPrevWaypoints.begin(), vtPrevWaypoints.end());
+			if (typeDivision != TYPE_CLUSTER_DEVIDE_BY_COUNT) {
+				// 오버된 값이 보너스값 한계치 이내라면 보너스 값으로 보완
+				if ((0 < bonusValue) && (dwNextValue < maxValue + bonusValue)) {
+					bonusValue -= (dwNextValue - maxValue);
+				} else if (idxDecrease) { // 감소중 중지된 경우, 이전값 사용하지 않음.
+					break;
+				} else if (vtPrevBestways.size()) { // 이전 값이 있으면, 이전 값 복원
+					// 이전 값 사용
+					vtNextBestways.assign(vtPrevBestways.begin(), vtPrevBestways.end());
+					vtNextWaypoints.assign(vtPrevWaypoints.begin(), vtPrevWaypoints.end());
 
-				nextTotalValue = prevTotalValue;
+					nextTotalValue = prevTotalValue;
+				}
 			}
 
 			if ((typeDivision == TYPE_CLUSTER_DEVIDE_BY_COUNT) &&
@@ -2028,7 +2075,7 @@ int32_t CTMSManager::DevideClusterUsingTsp(IN const ClusteringOption* pClustOpt,
 					vtNewBestWaypoints.push_back(vtNextWaypoints[way]);
 				}
 #else 
-				if (pClustOpt->positionLock == TYPE_TSP_LOCK_NONE) {
+				if (pClustOpt->endpointType == TYPE_TSP_ENDPOINT_NONE) {
 #	if 0
 					vtNewBestWaypoints.assign(vtNextWaypoints.begin(), vtNextWaypoints.end());
 					ret = RESULT_OK;
@@ -2064,12 +2111,12 @@ int32_t CTMSManager::DevideClusterUsingTsp(IN const ClusteringOption* pClustOpt,
 			waypoint.nCargoVolume = vtWaypoints[idx].nCargoVolume;
 
 			// 출발지 고정일 경우, 고정값 빼고 추가
-			if (pClustOpt->positionLock == TYPE_TSP_LOCK_START || pClustOpt->positionLock == TYPE_TSP_RECURSIVE) {
+			if (pClustOpt->endpointType == TYPE_TSP_ENDPOINT_START || pClustOpt->endpointType == TYPE_TSP_ENDPOINT_RECURSIVE) {
 				vtNextBestways.emplace_back(idx);  // 2025.06.04
 				vtNextWaypoints.emplace_back(waypoint);
 			}
 			// 도착지 고정일 경우, 고정값 빼고 추가
-			else if (pClustOpt->positionLock == TYPE_TSP_LOCK_END || pClustOpt->positionLock == TYPE_TSP_LOCK_START_END) {
+			else if (pClustOpt->endpointType == TYPE_TSP_ENDPOINT_END || pClustOpt->endpointType == TYPE_TSP_ENDPOINT_START_END) {
 				vtNextBestways.insert(vtNextBestways.end() - 1, idx); // 2025.06.04
 				vtNextWaypoints.insert(vtNextWaypoints.end() - 1, waypoint);
 			} else {
@@ -2084,7 +2131,7 @@ int32_t CTMSManager::DevideClusterUsingTsp(IN const ClusteringOption* pClustOpt,
 			idxDecrease++;
 
 			// 출발지 고정일 경우, 고정값 빼고 제거
-			if (pClustOpt->positionLock == TYPE_TSP_LOCK_START || pClustOpt->positionLock == TYPE_TSP_RECURSIVE) {
+			if (pClustOpt->endpointType == TYPE_TSP_ENDPOINT_START || pClustOpt->endpointType == TYPE_TSP_ENDPOINT_RECURSIVE) {
 				if (vtNextWaypoints.size() <= 2) { // 1 -> 2 2025-06-11
 					break; // 더이상 뺄 수 없음
 				} else {
@@ -2093,7 +2140,7 @@ int32_t CTMSManager::DevideClusterUsingTsp(IN const ClusteringOption* pClustOpt,
 				}
 			} 
 			// 도착지 고정일 경우, 고정값 빼고 제거
-			else if (pClustOpt->positionLock == TYPE_TSP_LOCK_END) {
+			else if (pClustOpt->endpointType == TYPE_TSP_ENDPOINT_END) {
 				if (vtNextWaypoints.size() <= 2) { // 1 -> 2 2025-06-11
 					break; // 더이상 뺄 수 없음
 				} else {
@@ -2102,7 +2149,7 @@ int32_t CTMSManager::DevideClusterUsingTsp(IN const ClusteringOption* pClustOpt,
 				}
 			} 
 			// 출-도착지 고정일 경우, 고정값 빼고 제거
-			else if (pClustOpt->positionLock == TYPE_TSP_LOCK_START_END) {
+			else if (pClustOpt->endpointType == TYPE_TSP_ENDPOINT_START_END) {
 				if (vtNextWaypoints.size() <= 3) { // 2 -> 3 2025-06-11
 					break; // 더이상 뺄 수 없음
 				} else {
@@ -2128,12 +2175,12 @@ int32_t CTMSManager::DevideClusterUsingTsp(IN const ClusteringOption* pClustOpt,
 
 	// 임시로 추가된 출도착지점 제거
 	// 출발지 고정일 경우, 출발지 빼기
-	if (pClustOpt->positionLock == TYPE_TSP_LOCK_START || pClustOpt->positionLock == TYPE_TSP_LOCK_START_END || pClustOpt->positionLock == TYPE_TSP_RECURSIVE) {
+	if (pClustOpt->endpointType == TYPE_TSP_ENDPOINT_START || pClustOpt->endpointType == TYPE_TSP_ENDPOINT_START_END || pClustOpt->endpointType == TYPE_TSP_ENDPOINT_RECURSIVE) {
 		vtNextBestways.erase(vtNextBestways.begin());
 		vtNextWaypoints.erase(vtNextWaypoints.begin());
 	}
 	// 도착지 고정일 경우, 도착지 빼기
-	if (pClustOpt->positionLock == TYPE_TSP_LOCK_END || pClustOpt->positionLock == TYPE_TSP_LOCK_START_END) {
+	if (pClustOpt->endpointType == TYPE_TSP_ENDPOINT_END || pClustOpt->endpointType == TYPE_TSP_ENDPOINT_START_END) {
 		vtNextBestways.pop_back();
 		vtNextWaypoints.pop_back();
 	} else {
@@ -2157,15 +2204,15 @@ int32_t CTMSManager::DevideClusterUsingTsp(IN const ClusteringOption* pClustOpt,
 	vtNewClust.assign(vtNewBestWaypoints.begin(), vtNewBestWaypoints.end());
 
 	//// 출발지 고정
-	//if (pClustOpt->positionLock == TYPE_TSP_LOCK_START ||
-	//	pClustOpt->positionLock == TYPE_TSP_LOCK_START_END ||
-	//	pClustOpt->positionLock == TYPE_TSP_RECURSICVE) {
+	//if (pClustOpt->endpointType == TYPE_TSP_ENDPOINT_START ||
+	//	pClustOpt->endpointType == TYPE_TSP_ENDPOINT_START_END ||
+	//	pClustOpt->endpointType == TYPE_TSP_RECURSICVE) {
 	//	vtNewClust.insert(vtNewClust.begin(), vtWaypoints[firstIdx]);
 	//}
 
 	//// 도착지 고정일 경우
-	//if (pClustOpt->positionLock == TYPE_TSP_LOCK_END ||
-	//	pClustOpt->positionLock == TYPE_TSP_LOCK_START_END) {
+	//if (pClustOpt->endpointType == TYPE_TSP_ENDPOINT_END ||
+	//	pClustOpt->endpointType == TYPE_TSP_ENDPOINT_START_END) {
 	//	vtNewClust.emplace_back(vtWaypoints[lastIdx]);
 	//}
 
@@ -2176,9 +2223,9 @@ int32_t CTMSManager::DevideClusterUsingTsp(IN const ClusteringOption* pClustOpt,
 }
 
 
-uint32_t CTMSManager::Clustering(IN const ClusteringOption* pClustOpt, IN const vector<vector<stDistMatrix>>& vtDistMatrix, IN const vector<stWaypoints>& vtWaypoints, IN const vector<int32_t>& vtBestway, IN const int32_t bonusValue, OUT vector<stDistrict>& vtClusters)
+int32_t CTMSManager::Clustering(IN const ClusteringOption* pClustOpt, IN const vector<vector<stDistMatrix>>& vtDistMatrix, IN const vector<stWaypoints>& vtWaypoints, IN const vector<int32_t>& vtBestway, IN const int32_t bonusValue, OUT vector<stDistrict>& vtClusters)
 {
-	bool ret = RESULT_FAILED;
+	int32_t ret = RESULT_FAILED;
 
 	vector<int32_t> vtBestwayWork;
 	int32_t nRemainedBonusValue = bonusValue;
@@ -2187,12 +2234,12 @@ uint32_t CTMSManager::Clustering(IN const ClusteringOption* pClustOpt, IN const 
 	bool isEmpty = false;
 
 	// 고정값이 있을 경우 고정값을 빼고 구성 <-- 고정값 따로 빼지 않고 수행해도 큰 수정없이 코드는 더 간단해 지지 않으려나? 시간나면 검토해라 // 2025-06-12
-	if (pClustOpt->positionLock == TYPE_TSP_LOCK_START_END) { // 출.도착지 고정
+	if (pClustOpt->endpointType == TYPE_TSP_ENDPOINT_START_END) { // 출.도착지 고정
 		vtBestwayWork.assign(vtBestway.begin() + 1, vtBestway.end() - 1);
-	} else if ((pClustOpt->positionLock == TYPE_TSP_RECURSIVE) || // 출발지 회귀
-		(pClustOpt->positionLock == TYPE_TSP_LOCK_START)) { // 출발지 고정
+	} else if ((pClustOpt->endpointType == TYPE_TSP_ENDPOINT_RECURSIVE) || // 출발지 회귀
+		(pClustOpt->endpointType == TYPE_TSP_ENDPOINT_START)) { // 출발지 고정
 		vtBestwayWork.assign(vtBestway.begin() + 1, vtBestway.end());
-	} else if (pClustOpt->positionLock == TYPE_TSP_LOCK_END) { // 목적지 고정
+	} else if (pClustOpt->endpointType == TYPE_TSP_ENDPOINT_END) { // 목적지 고정
 		vtBestwayWork.assign(vtBestway.begin(), vtBestway.end() - 1);
 	} else {
 		vtBestwayWork.assign(vtBestway.begin(), vtBestway.end());
@@ -2628,7 +2675,7 @@ uint32_t getRequestBase(IN const cJSON* pJson, IN const uint32_t nCrc, OUT BaseO
 }
 
 
-uint32_t getRequestOrigin(IN const cJSON* pJson, IN const uint32_t nCrc, OUT vector<Origins>& vtOrigin)
+uint32_t getRequestOrigin(IN const cJSON* pJson, IN const uint32_t nCrc, OUT vector<Origins>& vtOrigin, OUT vector<Origins>& vtDestination)
 {
 	uint32_t crc = nCrc;
 
@@ -2660,6 +2707,38 @@ uint32_t getRequestOrigin(IN const cJSON* pJson, IN const uint32_t nCrc, OUT vec
 
 					crc = crc32(crc, reinterpret_cast<Bytef*>(&origin.position.x), sizeof(origin.position.x));
 					crc = crc32(crc, reinterpret_cast<Bytef*>(&origin.position.y), sizeof(origin.position.y));
+				}
+			} // for
+		}
+	}
+
+	// destinations
+	cJSON* pDestinations = cJSON_GetObjectItem(pJson, "destinations");
+	if (pDestinations != NULL) {
+		int nDestinations = cJSON_GetArraySize(pDestinations);
+		if (nDestinations > 0) {
+			cJSON* pCoord;
+			string strCoord;
+			Origins destination;
+			for (int ii = 0; ii < nDestinations; ii++) {
+				pCoord = cJSON_GetArrayItem(pDestinations, ii);
+				if (pCoord != NULL) {
+					if (cJSON_IsArray(pCoord) && cJSON_GetArraySize(pCoord) == 2) {
+						pValue = cJSON_GetArrayItem(pCoord, 0);
+						destination.position.x = cJSON_GetNumberValue(pValue);
+						pValue = cJSON_GetArrayItem(pCoord, 1);
+						destination.position.y = cJSON_GetNumberValue(pValue);
+					} else if (cJSON_IsString(pCoord)) { // string
+						strCoord = cJSON_GetStringValue(pCoord);
+						destination.position = getCoordFromText(strCoord.c_str());
+					} else {
+						LOG_TRACE(LOG_ERROR, "input destination data issue, idx:%d", ii);
+						continue;
+					}
+					vtDestination.emplace_back(destination);
+
+					crc = crc32(crc, reinterpret_cast<Bytef*>(&destination.position.x), sizeof(destination.position.x));
+					crc = crc32(crc, reinterpret_cast<Bytef*>(&destination.position.y), sizeof(destination.position.y));
 				}
 			} // for
 		}
@@ -3021,13 +3100,22 @@ uint32_t getRequestTsp(const cJSON* pJson, const uint32_t nCrc, OUT TspOption& t
 		tspOpt.algorithm = TYPE_TSP_ALGORITHM_TSP_GA;
 	}
 
+
+	// option
 	cJSON* pOption = cJSON_GetObjectItem(pJson, "option");
 	if (pOption != NULL) {
-		pValue = cJSON_GetObjectItem(pOption, "position_lock"); // 지점 고정
+		pValue = cJSON_GetObjectItem(pOption, "endpoint_type"); // 지점 고정
 		if ((pValue != NULL) && cJSON_IsNumber(pValue)) {
-			tspOpt.positionLock = cJSON_GetNumberValue(pValue);
+			tspOpt.endpointType = cJSON_GetNumberValue(pValue);
 		} else if ((pValue != NULL) && cJSON_IsString(pValue)) {
-			tspOpt.positionLock = atoi(cJSON_GetStringValue(pValue));
+			tspOpt.endpointType = atoi(cJSON_GetStringValue(pValue));
+		} else {
+			pValue = cJSON_GetObjectItem(pOption, "position_lock"); // endpoint_type변경, 기존 버전 안정화 후 삭제 예정
+			if ((pValue != NULL) && cJSON_IsNumber(pValue)) {
+				tspOpt.endpointType = cJSON_GetNumberValue(pValue);
+			} else if ((pValue != NULL) && cJSON_IsString(pValue)) {
+				tspOpt.endpointType = atoi(cJSON_GetStringValue(pValue));
+			}
 		}
 	}
 
@@ -3150,11 +3238,18 @@ uint32_t getRequestCluster(const cJSON* pJson, const uint32_t nCrc, OUT Clusteri
 			clustOpt.reservationType = atoi(cJSON_GetStringValue(pValue));
 		}
 
-		pValue = cJSON_GetObjectItem(pOption, "position_lock"); // 지점 고정
+		pValue = cJSON_GetObjectItem(pOption, "endpoint_type"); // 지점 고정
 		if ((pValue != NULL) && cJSON_IsNumber(pValue)) {
-			clustOpt.positionLock = clustOpt.positionLock = cJSON_GetNumberValue(pValue);
+			clustOpt.endpointType = cJSON_GetNumberValue(pValue);
 		} else if ((pValue != NULL) && cJSON_IsString(pValue)) {
-			clustOpt.positionLock = clustOpt.positionLock = atoi(cJSON_GetStringValue(pValue));
+			clustOpt.endpointType = atoi(cJSON_GetStringValue(pValue));
+		} else {
+			pValue = cJSON_GetObjectItem(pOption, "position_lock"); // endpoint_type변경, 기존 버전 안정화 후 삭제 예정
+			if ((pValue != NULL) && cJSON_IsNumber(pValue)) {
+				clustOpt.endpointType = clustOpt.endpointType = cJSON_GetNumberValue(pValue);
+			} else if ((pValue != NULL) && cJSON_IsString(pValue)) {
+				clustOpt.endpointType = clustOpt.endpointType = atoi(cJSON_GetStringValue(pValue));
+			}
 		}
 
 		pValue = cJSON_GetObjectItem(pOption, "additional_type"); // 추가 지점 속성
@@ -3176,12 +3271,11 @@ uint32_t getRequestCluster(const cJSON* pJson, const uint32_t nCrc, OUT Clusteri
 }
 
 
-uint32_t CTMSManager::ParsingRequestWeightMatrix(IN const char* szRequest, OUT BaseOption& option, OUT vector<Origins>& vtOrigin, OUT vector<vector<stDistMatrix>>& vtDistanceMatrix, OUT int32_t& typeDistMatrix)
+uint32_t CTMSManager::ParsingRequestWeightMatrix(IN const char* szRequest, OUT BaseOption& option, OUT vector<Origins>& vtOrigin, OUT vector<Origins>& vtDestination, OUT vector<vector<stDistMatrix>>& vtDistanceMatrix, OUT int32_t& typeDistMatrix)
 {
 	uint32_t crc = 0;
 
 #if defined(USE_CJSON)
-	cJSON* pValue;
 	cJSON* root = cJSON_Parse(szRequest);
 	if (root != NULL) {
 		// check rdm field
@@ -3190,7 +3284,7 @@ uint32_t CTMSManager::ParsingRequestWeightMatrix(IN const char* szRequest, OUT B
 			crc = getRequestBase(root, crc, option);
 
 			// origin
-			crc = getRequestOrigin(root, crc, vtOrigin);
+			crc = getRequestOrigin(root, crc, vtOrigin, vtDestination);
 		}
 			
 		cJSON_Delete(root);
@@ -3206,7 +3300,6 @@ uint32_t CTMSManager::ParsingRequestWeightMatrixRouteLine(IN const char* szReque
 	uint32_t ret = RESULT_OK;
 
 #if defined(USE_CJSON)
-	cJSON* pValue;
 	cJSON* root = cJSON_Parse(szRequest);
 	if (root != NULL) {
 		// check rdm field
@@ -3233,7 +3326,6 @@ uint32_t CTMSManager::ParsingRequestBestway(IN const char* szRequest, OUT TspOpt
 	uint32_t crc = 0;
 
 #if defined(USE_CJSON)
-	cJSON* pValue;
 	cJSON* root = cJSON_Parse(szRequest);
 	if (root != NULL) {
 		if (vtOrigin.empty()) {
@@ -3241,7 +3333,8 @@ uint32_t CTMSManager::ParsingRequestBestway(IN const char* szRequest, OUT TspOpt
 			crc = getRequestBase(root, crc, tspOpt.baseOption);
 
 			// origins
-			crc = getRequestOrigin(root, crc, vtOrigin);
+			vector<Origins> vtDestination;
+			crc = getRequestOrigin(root, crc, vtOrigin, vtDestination);
 		}
 		// tsp
 		tspOpt.geneSize = vtOrigin.size();
@@ -3267,7 +3360,8 @@ uint32_t CTMSManager::ParsingRequestCluster(IN const char* szRequest, OUT Cluste
 			crc = getRequestBase(root, crc, clustOpt.tspOption.baseOption);
 
 			// origins
-			crc = getRequestOrigin(root, crc, vtOrigin);
+			vector<Origins> vtDestination;
+			crc = getRequestOrigin(root, crc, vtOrigin, vtDestination);
 		}
 
 		// tsp
@@ -3517,8 +3611,8 @@ int32_t GetMatrixPathVertex(IN const stPathMatrix* pMatrix, IN CDataManager* pDa
 		vtLines.clear();
 		vtLines.reserve(pMatrix->vtRoutePath.size() * 3); // 예상 사이즈
 
-		// 최초 시작 정보로 도착 지점 사용
-		vtLines.push_back(pMatrix->endLinkInfo.MatchCoord);
+		// 최초 정보로 도착 지점 사용
+		//vtLines.push_back(pMatrix->endLinkInfo.MatchCoord);
 
 		for (int idx = 0; idx < pMatrix->vtRoutePath.size(); idx++) {
 			const stRoutePath* pPath = &pMatrix->vtRoutePath[idx];
@@ -3527,23 +3621,31 @@ int32_t GetMatrixPathVertex(IN const stPathMatrix* pMatrix, IN CDataManager* pDa
 
 			if (pMatrix->vtRoutePath.size() == 1) { // 동일 링크 결과일 경우
 				// 도착지
-				vtLines.emplace_back(pMatrix->endLinkInfo.LinkVtxToE[pMatrix->endLinkInfo.LinkVtxToE.size() - 1]);
+				if (pPath->dir == 1) { // 정
+					vtLines.emplace_back(pMatrix->endLinkInfo.LinkVtxToS[0]);
+				} else {
+					vtLines.emplace_back(pMatrix->endLinkInfo.LinkVtxToE[0]);
+				}
 
 				// 중간
 				if (pMatrix->startLinkInfo.LinkSplitIdx != pMatrix->endLinkInfo.LinkSplitIdx) {
 					if (pMatrix->startLinkInfo.LinkSplitIdx < pMatrix->endLinkInfo.LinkSplitIdx) { // 정
-						for (int vtx = pMatrix->endLinkInfo.LinkSplitIdx; vtx > pMatrix->startLinkInfo.LinkSplitIdx; vtx--) {
-							vtLines.emplace_back(pMatrix->startLinkInfo.LinkVtxToE[vtx]);
+						for (int vtx = pMatrix->endLinkInfo.LinkSplitIdx; vtx >= pMatrix->startLinkInfo.LinkSplitIdx + 1; vtx--) {
+							vtLines.emplace_back(pLink->getVertex()[vtx]);
 						}
 					} else { // 역
 						for (int vtx = pMatrix->endLinkInfo.LinkSplitIdx + 1; vtx <= pMatrix->startLinkInfo.LinkSplitIdx; vtx++) {
-							vtLines.emplace_back(pMatrix->startLinkInfo.LinkVtxToS[vtx]);
+							vtLines.emplace_back(pLink->getVertex()[vtx]);
 						}
 					}
 				}
 
 				// 출발지
-				vtLines.emplace_back(pMatrix->startLinkInfo.LinkVtxToE[pMatrix->startLinkInfo.LinkVtxToE.size() - 1]);
+				if (pPath->dir == 1) { // 정
+					vtLines.emplace_back(pMatrix->startLinkInfo.LinkVtxToE[0]);
+				} else {
+					vtLines.emplace_back(pMatrix->startLinkInfo.LinkVtxToS[0]);					
+				}				
 			} else {
 				// 출도착지 링크는 매칭된 vtx만 사용
 				if ((idx == pMatrix->vtRoutePath.size() - 1) && (pPath->linkId == pMatrix->startLinkInfo.LinkId.llid)) {// 출발지

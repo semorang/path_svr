@@ -15,6 +15,7 @@ function dpTimeToString(seconds) {
     return strTime;
 }
 
+
 // 거리 스트링
 function dpDistanceToString(meter) {
     var strDist = "";

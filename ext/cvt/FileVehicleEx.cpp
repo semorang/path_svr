@@ -305,6 +305,10 @@ size_t CFileVehicleEx::ReadBody(FILE* fp)
 
 	for (int32_t idx = 0; idx < m_vtIndex.size(); idx++)
 	{
+		if (!checkTestMesh(m_vtIndex[idx].idTile)) {
+			continue;
+		}
+
 		// read body
 		if (m_vtIndex[idx].szBody <= 0) {
 			continue;
@@ -392,7 +396,6 @@ bool CFileVehicleEx::LoadDataByIdx(IN const uint32_t idx)
 	size_t offItem = 0;
 	size_t retRead = 0;
 
-	// read body
 	// read body
 	if (m_vtIndex[idx].szBody <= 0) {
 		fclose(fp);

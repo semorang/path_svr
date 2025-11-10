@@ -1885,6 +1885,20 @@ int CRouteManager::DoMultiComplexRouting(IN const int32_t routeCount/*, IN const
 }
 
 
+void CRouteManager::SetLimitPointCount(IN const int32_t nCount)
+{
+	if (m_pTmsMgr) {
+		return m_pTmsMgr->SetLimitPointCount(nCount);
+	}
+}
+const int32_t CRouteManager::GetLimitPointCount(void) const
+{
+	if (m_pTmsMgr) {
+		return m_pTmsMgr->GetLimitPointCount();
+	}
+}
+
+
 int CRouteManager::GetWeightMatrix(IN const char* szRequest, OUT RouteDistMatrix& RDM, OUT BaseOption& option)
 {
 	int ret = RESULT_FAILED;
@@ -1897,8 +1911,30 @@ int CRouteManager::GetWeightMatrix(IN const char* szRequest, OUT RouteDistMatrix
 	time_t timeStart = LOG_TRACE(LOG_DEBUG, "GetWeightMatrix request: %s", szRequest);
 
 
-	uint32_t crc = m_pTmsMgr->ParsingRequestWeightMatrix(szRequest, option, RDM.vtOrigins, RDM.vtDistMatrix, RDM.typeCreate);
-	const int cntOrigins = RDM.vtOrigins.size();
+	uint32_t crc = m_pTmsMgr->ParsingRequestWeightMatrix(szRequest, option, RDM.vtOrigin, RDM.vtDestination, RDM.vtDistMatrix, RDM.typeCreate);
+	const int cntOrigins = RDM.vtOrigin.size();
+	const int cntDestinations = RDM.vtDestination.size();
+
+
+	// 서버 사양에 따른 개수 제한 필요 (메모리 피크 등)
+	static const int32_t MAX_TMS_LIMIT_POINT_COUNT = 1000; // 현재(2025-10-21) 기준 최대 1000개 이하만 처리하자 
+	const int32_t nMaxExceedCount = GetLimitPointCount();
+
+	if ((cntOrigins > MAX_TMS_LIMIT_POINT_COUNT) || (cntDestinations > MAX_TMS_LIMIT_POINT_COUNT)) {
+		ret = TMS_RESULT_FAILED_EXCEEDS_COUNT;
+		return ret;
+	} else 	if (nMaxExceedCount > 0) {
+		if (cntDestinations <= 0) { // N x N 테이블 요청일 경우
+			if (cntOrigins > nMaxExceedCount) {
+				ret = TMS_RESULT_FAILED_EXCEEDS_COUNT;
+				return ret;
+			}
+		} else if ((cntOrigins * cntDestinations) > (nMaxExceedCount * 2)) { // N x M 테이블 요청일 경우
+			ret = TMS_RESULT_FAILED_EXCEEDS_COUNT;
+			return ret;
+		}
+	}
+
 
 	// get table
 	const int MAX_RDM_BUFF = 1024;
@@ -1936,13 +1972,16 @@ int CRouteManager::GetWeightMatrix(IN const char* szRequest, OUT RouteDistMatrix
 	else if (option.distance_type == 0) {
 		// 직선거리 테이블 생성
 		ret = DoDistanceTabulate(RDM);
+	} else if (cntDestinations != 0) {
+		// 출/도착지 정보가 각기 존재하면 NxN이 아닌 NxM으로 처리하고, 캐시 정보를 사용하지 않는다.
+		ret = DoTabulate(RDM, reqInfo);
 	} else {
 		sprintf(szFileName, "result_rdm_u%s_t%04d%02d%02d%02d%02d%02d", RDM.strUser.c_str(), timeNow.year, timeNow.month, timeNow.day, timeNow.hour, timeNow.minute, timeNow.second);
 		sprintf(szFilePath, "%s/usr/rdm/%s.rdm", m_pDataMgr->GetDataPath(), szFileName);
 
 		if (RDM.vtDistMatrix.empty() && (option.fileCache == 1 || option.fileCache == 3)) { // read, read-write
 			BaseOption optionFile;
-			ret = m_pTmsMgr->LoadWeightMatrix(szFilePath, cntOrigins, sizeItem, crc, optionFile, RDM.vtOrigins, RDM.vtDistMatrix);
+			ret = m_pTmsMgr->LoadWeightMatrix(szFilePath, cntOrigins, sizeItem, crc, optionFile, RDM.vtOrigin, RDM.vtDistMatrix);
 			if (ret == RESULT_OK) {
 				isRead = true;
 				memcpy(&option, &optionFile, sizeof(BaseOption)); // 저장된 rdm 옵션으로 변경
@@ -1956,7 +1995,7 @@ int CRouteManager::GetWeightMatrix(IN const char* szRequest, OUT RouteDistMatrix
 			ret = DoTabulate(RDM, reqInfo);
 			// 테이블 데이터 미리 읽어 저장하면서 사용하자
 			if ((ret == RESULT_OK) && (option.fileCache == 2 || option.fileCache == 3 || option.binary == 1 || option.binary == 3)) { // write, read-write)) {
-				ret = m_pTmsMgr->SaveWeightMatrix(szFilePath, &option, cntOrigins, sizeItem, crc, RDM.vtOrigins, RDM.vtDistMatrix);				
+				ret = m_pTmsMgr->SaveWeightMatrix(szFilePath, &option, cntOrigins, sizeItem, crc, RDM.vtOrigin, RDM.vtDistMatrix);				
 				if (ret == RESULT_OK) {
 					isWritten = true;
 				}
@@ -1990,7 +2029,8 @@ int CRouteManager::GetWeightMatrixRouteLine(IN const char* szRequest, OUT RouteD
 		return ret;
 	}
 
-	time_t timeStart = LOG_TRACE(LOG_DEBUG, "GetWeightMatrixRouteLine request: %s", szRequest);
+	//time_t timeStart = LOG_TRACE(LOG_DEBUG, "GetWeightMatrixRouteLine request: %s", szRequest);
+	time_t timeStart = LOG_TRACE(LOG_DEBUG, "GetWeightMatrixRouteLine request, lenth: %d", strlen(szRequest));
 
 	ret = m_pTmsMgr->ParsingRequestWeightMatrixRouteLine(szRequest, RDMLN.strFileName, RDMLN.sizeFile, RDMLN.vtPathFileIndex);
 
@@ -2087,8 +2127,8 @@ int CRouteManager::GetCluster(IN const char* szRequest, IN RouteDistMatrix& RDM,
 	// get table
 	ret = GetWeightMatrix(szRequest, RDM, CLUST.option.tspOption.baseOption);
 
-	uint32_t crc = m_pTmsMgr->ParsingRequestCluster(szRequest, CLUST.option, RDM.vtOrigins);
-	const int cntOrigins = RDM.vtOrigins.size();
+	uint32_t crc = m_pTmsMgr->ParsingRequestCluster(szRequest, CLUST.option, RDM.vtOrigin);
+	const int cntOrigins = RDM.vtOrigin.size();
 
 	if (cntOrigins <= 0) {
 		return ROUTE_RESULT_FAILED_WRONG_PARAM;
@@ -2324,7 +2364,7 @@ int CRouteManager::GetCluster(IN const char* szRequest, IN RouteDistMatrix& RDM,
 		SAFE_DELETE_ARR(ppWeightMatrix);
 
 #else // #define USE_KMEANS_ALORITHM // k-means 알고리즘 사용
-	ret = m_pTmsMgr->GetCluster(&CLUST.option, RDM.vtDistMatrix, RDM.vtOrigins, CLUST.vtDistrict, CLUST.vtPositionLock);
+	ret = m_pTmsMgr->GetCluster(&CLUST.option, RDM.vtDistMatrix, RDM.vtOrigin, CLUST.vtDistrict, CLUST.vtEndPoint);
 #endif // #define USE_KMEANS_ALORITHM // k-means 알고리즘 사용
 
 
@@ -2353,9 +2393,9 @@ int CRouteManager::GetBestway(IN const char* szRequest, IN RouteDistMatrix& RDM,
 	// get table	
 	ret = GetWeightMatrix(szRequest, RDM, TSP.option.baseOption);
 	
-	uint32_t crc = m_pTmsMgr->ParsingRequestBestway(szRequest, TSP.option, RDM.vtOrigins);
+	uint32_t crc = m_pTmsMgr->ParsingRequestBestway(szRequest, TSP.option, RDM.vtOrigin);
 	
-	const int cntOrigins = RDM.vtOrigins.size();	
+	const int cntOrigins = RDM.vtOrigin.size();	
 	if (cntOrigins <= 0) {
 		return ROUTE_RESULT_FAILED_WRONG_PARAM;
 	}
@@ -2364,7 +2404,7 @@ int CRouteManager::GetBestway(IN const char* szRequest, IN RouteDistMatrix& RDM,
 
 		stWaypoints waypoint;
 		int idx = 0;
-		for (const auto& pt : RDM.vtOrigins) {
+		for (const auto& pt : RDM.vtOrigin) {
 			waypoint.nId = idx++;
 			waypoint.x = pt.position.x;
 			waypoint.y = pt.position.y;
@@ -2572,71 +2612,145 @@ int CRouteManager::DoTabulate(IN OUT RouteDistMatrix& RDM, OUT RequestRouteInfo&
 {
 	int ret = -1;
 
-	const vector<Origins>* pvtOrigins = &RDM.vtOrigins;
-	if (pvtOrigins == nullptr) {
+	// 좌표 설정
+	KeyID sID, eID;//, wID;
+
+	const vector<Origins>* pvtOrigin = &RDM.vtOrigin;
+	if (pvtOrigin == nullptr) {
 		return ret;
 	}
 
-	stOptimalPointInfo optStartInfo, optEndInfo;
+	const vector<Origins>* pvtDestination = &RDM.vtDestination;
 
-	// 좌표 설정
-	KeyID sID, eID, wID;
+	int cntOrigin = pvtOrigin->size();
+	int cntDestination = pvtDestination->size();
 
-	int cntOrigin = pvtOrigins->size();
+	time_t timeStart = LOG_TRACE(LOG_DEBUG, "DoDistanceTabulate, requst origins: %d, destinations: %d", cntOrigin, cntDestination);
 
-	time_t timeStart = LOG_TRACE(LOG_DEBUG, "DoTabulate, requst cnt: %d", cntOrigin);
+	// 목적지 정보가 없으면 출발지 정보를 목적지 정보로 사용한다.
+	if (pvtDestination->empty()) {
+		pvtDestination = pvtOrigin;
+		cntDestination = cntOrigin;
+	}
+
+#if defined(DEMO_FOR_IPO)
+	int matchLinkType = TYPE_LINK_MATCH_CARSTOP;
+#else
 	int matchLinkType = TYPE_LINK_MATCH_FOR_TABLE;
+#endif
 
 	Initialize();
 
+//	// start link info
+//	for (int ii = 0; ii < cntOrigin; ii++) {
+//		SPoint coord = { pvtOrigins->at(ii).position.x, pvtOrigins->at(ii).position.y };
+//		if (ii == 0) { // start
+//			// get optimal start point
+//#if defined(USE_OPTIMAL_POINT_API)
+//			if (m_pDataMgr->GetOptimalPointDataByPoint(coord.x, coord.y, &optStartInfo, 0, 0, TYPE_LINK_MATCH_FOR_TABLE) > 0) {
+//				sID = SetDeparture(optStartInfo.vtEntryPoint[0].x, optStartInfo.vtEntryPoint[0].y, matchLinkType);
+//			} else
+//#endif
+//			{
+//				sID = SetDeparture(coord.x, coord.y, matchLinkType);
+//			}
+//
+//			if (sID.llid == NULL_VALUE) {
+//				LOG_TRACE(LOG_DEBUG, "failed, set start projection, %.6f, %.6f", coord.x, coord.y);
+//			}
+//
+//			// get optimal via point
+//			// alreay applyed when set way point 
+//		} else if (ii == cntOrigin - 1) { // end
+//			// get optimal end point
+//#if defined(USE_OPTIMAL_POINT_API)
+//			if (m_pDataMgr->GetOptimalPointDataByPoint(coord.x, coord.y, &optEndInfo, 0, 0, matchLinkType) > 0) {
+//				eID = SetDestination(optEndInfo.vtEntryPoint[0].x, optEndInfo.vtEntryPoint[0].y, matchLinkType);
+//			} else
+//#endif
+//			{
+//				eID = SetDestination(coord.x, coord.y, matchLinkType);
+//			}
+//
+//			if (eID.llid == NULL_VALUE) {
+//				LOG_TRACE(LOG_DEBUG, "failed, set end projection, %.6f, %.6f", pvtOrigins->at(cntOrigin - 1).position.x, pvtOrigins->at(cntOrigin - 1).position.y);
+//			}
+//		} else { // via
+//#if defined(USE_OPTIMAL_POINT_API)
+//			if (m_pDataMgr->GetOptimalPointDataByPoint(coord.x, coord.y, &optEndInfo, 0, 0, matchLinkType) > 0) {
+//				wID = SetWaypoint(optEndInfo.vtEntryPoint[0].x, optEndInfo.vtEntryPoint[0].y, matchLinkType);
+//			} else
+//#endif
+//			{
+//				wID = SetWaypoint(coord.x, coord.y, matchLinkType);
+//			}
+//
+//			if (wID.llid == NULL_VALUE) {
+//				LOG_TRACE(LOG_DEBUG, "failed, set waypoint projection, %.6f, %.6f", coord.x, coord.y);
+//			}
+//		}
+//	} // for
+
+	RouteLinkInfo routeLinkInfo;
+	SPoint coord;
+
+	// origin link info
+	vector<RouteLinkInfo> vtOriginLinkInfos;
+	vtOriginLinkInfos.reserve(cntOrigin);
+
 	for (int ii = 0; ii < cntOrigin; ii++) {
-		SPoint coord = { pvtOrigins->at(ii).position.x, pvtOrigins->at(ii).position.y };
-		if (ii == 0) { // start
-			// get optimal start point
+		routeLinkInfo.init();
+
+		coord.x = pvtOrigin->at(ii).position.x;
+		coord.y = pvtOrigin->at(ii).position.y;
+
+		// get optimal end point
 #if defined(USE_OPTIMAL_POINT_API)
-			if (m_pDataMgr->GetOptimalPointDataByPoint(coord.x, coord.y, &optStartInfo, 0, 0, TYPE_LINK_MATCH_FOR_TABLE) > 0) {
-				sID = SetDeparture(optStartInfo.vtEntryPoint[0].x, optStartInfo.vtEntryPoint[0].y, matchLinkType);
-			} else
+		stOptimalPointInfo optInfo;
+		if (m_pDataMgr->GetOptimalPointDataByPoint(coord.x, coord.y, &optInfo, 0, 0, matchLinkType) > 0) {
+			sID = SetPosition(optInfo.vtEntryPoint[0].x, optInfo.vtEntryPoint[0].y, matchLinkType, routeLinkInfo);
+		} else
 #endif
-			{
-				sID = SetDeparture(coord.x, coord.y, matchLinkType);
-			}
-
-			if (sID.llid == NULL_VALUE) {
-				LOG_TRACE(LOG_DEBUG, "failed, set start projection, %.6f, %.6f", coord.x, coord.y);
-			}
-
-			// get optimal via point
-			// alreay applyed when set way point 
-		} else if (ii == cntOrigin - 1) { // end
-			// get optimal end point
-#if defined(USE_OPTIMAL_POINT_API)
-			if (m_pDataMgr->GetOptimalPointDataByPoint(coord.x, coord.y, &optEndInfo, 0, 0, matchLinkType) > 0) {
-				eID = SetDestination(optEndInfo.vtEntryPoint[0].x, optEndInfo.vtEntryPoint[0].y, matchLinkType);
-			} else
-#endif
-			{
-				eID = SetDestination(coord.x, coord.y, matchLinkType);
-			}
-
-			if (eID.llid == NULL_VALUE) {
-				LOG_TRACE(LOG_DEBUG, "failed, set end projection, %.6f, %.6f", pvtOrigins->at(cntOrigin - 1).position.x, pvtOrigins->at(cntOrigin - 1).position.y);
-			}
-		} else { // via
-#if defined(USE_OPTIMAL_POINT_API)
-			if (m_pDataMgr->GetOptimalPointDataByPoint(coord.x, coord.y, &optEndInfo, 0, 0, matchLinkType) > 0) {
-				wID = SetWaypoint(optEndInfo.vtEntryPoint[0].x, optEndInfo.vtEntryPoint[0].y, matchLinkType);
-			} else
-#endif
-			{
-				wID = SetWaypoint(coord.x, coord.y, matchLinkType);
-			}
-
-			if (wID.llid == NULL_VALUE) {
-				LOG_TRACE(LOG_DEBUG, "failed, set waypoint projection, %.6f, %.6f", coord.x, coord.y);
-			}
+		{
+			sID = SetPosition(coord.x, coord.y, matchLinkType, routeLinkInfo);
 		}
+
+		if (sID.llid == NULL_VALUE) {
+			LOG_TRACE(LOG_DEBUG, "failed, set start projection, %.6f, %.6f", coord.x, coord.y);
+		}
+
+		vtOriginLinkInfos.emplace_back(routeLinkInfo);
 	} // for
+
+
+	// destination link info
+	vector<RouteLinkInfo> vtDestLinkInfos;
+	vtDestLinkInfos.reserve(cntDestination);
+	
+	for (int ii = 0; ii < cntDestination; ii++) {		
+		routeLinkInfo.init();
+
+		coord.x = pvtDestination->at(ii).position.x;
+		coord.y = pvtDestination->at(ii).position.y;
+
+		// get optimal end point
+#if defined(USE_OPTIMAL_POINT_API)
+		stOptimalPointInfo optInfo;
+		if (m_pDataMgr->GetOptimalPointDataByPoint(coord.x, coord.y, &optInfo, 0, 0, matchLinkType) > 0) {
+			eID = SetPosition(optInfo.vtEntryPoint[0].x, optInfo.vtEntryPoint[0].y, matchLinkType, routeLinkInfo);
+		} else
+#endif
+		{
+			eID = SetPosition(coord.x, coord.y, matchLinkType, routeLinkInfo);
+		}
+
+		if (eID.llid == NULL_VALUE) {
+			LOG_TRACE(LOG_DEBUG, "failed, set end projection, %.6f, %.6f", coord.x, coord.y);
+		}
+
+		vtDestLinkInfos.emplace_back(routeLinkInfo);
+	} // for
+
 
 	if (reqInfo.RequestId.empty()){
 		reqInfo.RequestId = "13578642";
@@ -2645,7 +2759,12 @@ int CRouteManager::DoTabulate(IN OUT RouteDistMatrix& RDM, OUT RequestRouteInfo&
 		reqInfo.RequestTime = time(NULL);
 	}
 
-	vector<uint32_t>vtRouteOpt = { ROUTE_OPT_COMFORTABLE, ROUTE_OPT_RECOMMENDED, ROUTE_OPT_SHORTEST, ROUTE_OPT_MAINROAD };
+#if defined(DEMO_FOR_IPO)
+	vector<uint32_t>vtRouteOpt = { ROUTE_OPT_RECOMMENDED, ROUTE_OPT_COMFORTABLE, ROUTE_OPT_SHORTEST, ROUTE_OPT_MAINROAD };
+#else
+	vector<uint32_t>vtRouteOpt = { ROUTE_OPT_RECOMMENDED, ROUTE_OPT_COMFORTABLE, ROUTE_OPT_SHORTEST, ROUTE_OPT_MAINROAD };
+#endif
+	//vector<uint32_t>vtRouteOpt = { ROUTE_OPT_RECOMMENDED, ROUTE_OPT_COMFORTABLE, ROUTE_OPT_SHORTEST, ROUTE_OPT_MAINROAD };
 	vector<uint32_t>vtAvoidOpt = { ROUTE_AVOID_NONE, ROUTE_AVOID_NONE, ROUTE_AVOID_NONE, ROUTE_AVOID_NONE };
 
 	SetRouteOption(vtRouteOpt, vtAvoidOpt, reqInfo.RequestTime, reqInfo.RequestTraffic, reqInfo.MobilityOption);
@@ -2664,29 +2783,29 @@ int CRouteManager::DoTabulate(IN OUT RouteDistMatrix& RDM, OUT RequestRouteInfo&
 	reqInfo.WayDirIgnore = m_nWaypointDirIgnore;
 	reqInfo.EndDirIgnore = m_nDestinationDirIgnore;
 
-	// start 
-	reqInfo.vtPoints.emplace_back(m_linkDeparture.Coord);
-	reqInfo.vtKeyId.emplace_back(m_linkDeparture.LinkId);
-	reqInfo.vtKeyType.emplace_back(m_linkDeparture.KeyType);
-	reqInfo.vtLinkDataType.emplace_back(m_linkDeparture.LinkDataType);
+	//// start 
+	//reqInfo.vtPoints.emplace_back(m_linkDeparture.Coord);
+	//reqInfo.vtKeyId.emplace_back(m_linkDeparture.LinkId);
+	//reqInfo.vtKeyType.emplace_back(m_linkDeparture.KeyType);
+	//reqInfo.vtLinkDataType.emplace_back(m_linkDeparture.LinkDataType);
 
-	// waypoint
-	if (!m_linkWaypoints.empty()) {
-		for (int ii = 0; ii < m_linkWaypoints.size(); ii++) {
-			reqInfo.vtPoints.emplace_back(m_linkWaypoints[ii].Coord);
-			reqInfo.vtKeyId.emplace_back(m_linkWaypoints[ii].LinkId);
-			reqInfo.vtKeyType.emplace_back(m_linkWaypoints[ii].KeyType);
-			reqInfo.vtLinkDataType.emplace_back(m_linkWaypoints[ii].LinkDataType);
-		}
-	}
+	//// waypoint
+	//if (!m_linkWaypoints.empty()) {
+	//	for (int ii = 0; ii < m_linkWaypoints.size(); ii++) {
+	//		reqInfo.vtPoints.emplace_back(m_linkWaypoints[ii].Coord);
+	//		reqInfo.vtKeyId.emplace_back(m_linkWaypoints[ii].LinkId);
+	//		reqInfo.vtKeyType.emplace_back(m_linkWaypoints[ii].KeyType);
+	//		reqInfo.vtLinkDataType.emplace_back(m_linkWaypoints[ii].LinkDataType);
+	//	}
+	//}
 
-	// end
-	reqInfo.vtPoints.emplace_back(m_linkDestination.Coord);
-	reqInfo.vtKeyId.emplace_back(m_linkDestination.LinkId);
-	reqInfo.vtKeyType.emplace_back(m_linkDestination.KeyType);
-	reqInfo.vtLinkDataType.emplace_back(m_linkDestination.LinkDataType);
+	//// end
+	//reqInfo.vtPoints.emplace_back(m_linkDestination.Coord);
+	//reqInfo.vtKeyId.emplace_back(m_linkDestination.LinkId);
+	//reqInfo.vtKeyType.emplace_back(m_linkDestination.KeyType);
+	//reqInfo.vtLinkDataType.emplace_back(m_linkDestination.LinkDataType);
 
-	ret = m_pRoutePlan->DoTabulate(&reqInfo, RDM);
+	ret = m_pRoutePlan->DoTabulate(&reqInfo, vtOriginLinkInfos, vtDestLinkInfos, RDM);
 	if (ret != ROUTE_RESULT_SUCCESS) {
 		LOG_TRACE(LOG_WARNING, "failed, get weight matrix");
 	}
@@ -2705,14 +2824,23 @@ int CRouteManager::DoDistanceTabulate(IN OUT RouteDistMatrix& RDM)
 {
 	int ret = ROUTE_RESULT_SUCCESS;
 
-	const vector<Origins>* pvtOrigins = &RDM.vtOrigins;
+	const vector<Origins>* pvtOrigins = &RDM.vtOrigin;
 	if (pvtOrigins == nullptr) {
 		return ret;
 	}
 
-	int cntOrigin = pvtOrigins->size();
+	const vector<Origins>* pvtDestination = &RDM.vtDestination;
 
-	time_t timeStart = LOG_TRACE(LOG_DEBUG, "DoDistanceTabulate, requst cnt: %d", cntOrigin);
+	int cntOrigin = pvtOrigins->size();
+	int cntDestination = pvtDestination->size();
+
+	time_t timeStart = LOG_TRACE(LOG_DEBUG, "DoDistanceTabulate, requst origins: %d, destinations: %d", cntOrigin, cntDestination);
+
+	// 목적지 정보가 없으면 출발지 정보를 목적지 정보로 사용한다.
+	if (pvtDestination->empty()) {
+		pvtDestination = pvtOrigins;
+		cntDestination = cntOrigin;
+	}
 
 	int matchLinkType = TYPE_LINK_MATCH_FOR_TABLE;
 	KeyID matchID;
@@ -2740,10 +2868,10 @@ int CRouteManager::DoDistanceTabulate(IN OUT RouteDistMatrix& RDM)
 
 		vector<stDistMatrix> vtRowsMatrix;
 
-		for (int jj = 0; jj < cntOrigin; jj++) {
+		for (int jj = 0; jj < cntDestination; jj++) {
 			stDistMatrix distMatrix;
 			if (ii != jj) {
-				distMatrix.nTotalDist = getRealWorldDistance(coord.x, coord.y, pvtOrigins->at(jj).position.x, pvtOrigins->at(jj).position.y);
+				distMatrix.nTotalDist = getRealWorldDistance(coord.x, coord.y, pvtDestination->at(jj).position.x, pvtDestination->at(jj).position.y);
 				distMatrix.dbTotalCost = distMatrix.nTotalTime = distMatrix.nTotalDist; // 다른 속성은 거리 정보를 사용
 			}
 			vtRowsMatrix.emplace_back(distMatrix);
@@ -2839,6 +2967,7 @@ KeyID CRouteManager::SetPosition(IN const double lng, IN const double lat, IN co
 }
 
 
+#if 0
 KeyID CRouteManager::Projection(IN const double lng, IN const double lat)
 {
 	KeyID idxLink = { 0, };
@@ -2907,6 +3036,7 @@ KeyID CRouteManager::Projection(IN const double lng, IN const double lat)
 
 	return idxLink;
 }
+#endif // #if 0
 
 //int CRouteManager::setNode(/*FLAG, Packet*/)
 //{

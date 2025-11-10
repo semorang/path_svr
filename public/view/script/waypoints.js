@@ -7,8 +7,8 @@ function displayWaypointList(user, summarys, routes) {
     let cntVias = 0;
 
     document.getElementById('menu_title').innerHTML = "방문지 목록";
-    document.getElementById('clicked_type').innerHTML = "방문지 갯수: " + summarys.length;
-    document.getElementById('clicked_name').innerHTML = "운행거리: " + displayDistanceToString(routes.summary.distance)  + ", 운행시간: " + displayTimeToString(routes.summary.time);
+    document.getElementById('searched_type').innerHTML = "방문지 갯수: " + summarys.length;
+    document.getElementById('searched_count').innerHTML = "운행거리: " + displayDistanceToString(routes.summary.distance)  + ", 운행시간: " + displayTimeToString(routes.summary.time);
     var listEl = document.getElementById('placesList'),
     menuEl = document.getElementById('menu_wrap'),
     fragment = document.createDocumentFragment(),

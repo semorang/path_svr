@@ -15,12 +15,12 @@
 #define MAX_SEARCH_DIST_FOR_FOREST 50000 // 직선 최대 50km
 #define MAX_SEARCH_DIST_FOR_VEHICLE 500000 // 직선 최대 500km
 #define MAX_SEARCH_RANGE 5
-#if defined(USE_PEDESTRIAN_DATA)
+#if defined(USE_FOREST_DATA)
 const int searchRange[MAX_SEARCH_RANGE] = { 30, 100, 500, 1000, 5000 }; // 일반
 const int hikingRange[MAX_SEARCH_RANGE] = { 100, 300, 500, 1000, 3000 }; // 등산(숲길)
 const int trailRange[MAX_SEARCH_RANGE] = { 300, 500, 800, 1000, 3000 }; // 코스(둘레,테마,종주)
 const int courseRange[MAX_SEARCH_RANGE] = { 50, 100, 300, 500, 1000 }; // 코스ID
-#elif defined(USE_FOREST_DATA)
+#elif defined(USE_PEDESTRIAN_DATA)
 const int searchRange[MAX_SEARCH_RANGE] = {100, 500, 1000, 2000, 3000}; // 
 #else
 //const int searchRange[MAX_SEARCH_RANGE] = {100, 500, 1000, 2000, 5000}; // 
@@ -64,7 +64,7 @@ typedef struct _tagCandidateLink {
 	uint32_t depth : 29; // 탐색 깊이
 	uint32_t visited : 1; // 방문 여부
 	uint32_t dir : 2; // 탐색 방향, 0:미정의, 1:정방향(S->E), 2:역방향(E->S)
-	uint8_t angle; // 이전 링크에서 진입각도
+	uint32_t angle; // 이전 링크에서 진입각도
 #if defined(USE_VEHICLE_DATA)
 	uint8_t speed; // 속도
 	uint8_t speed_type : 4; // 속도 타입, 0:미정의, 1:ttl, 2:ks, 3:static
@@ -147,17 +147,28 @@ typedef struct _tagMultimodalPointInfo
 }MultimodalPointInfo;
 
 
+#if 0
 static auto CompareCanidate = [](const CandidateLink* lhs, const CandidateLink* rhs) {
-	if (lhs->costHeuristic > rhs->costHeuristic) {
-		return true;
-	}
-	else if (lhs->costHeuristic == rhs->costHeuristic) {
+	// 작은 값 우선
+	if (lhs->costHeuristic != rhs->costHeuristic) {
+		return lhs->costHeuristic > rhs->costHeuristic;
+	} else {
 		return lhs->depth > rhs->depth;
 	}
-	else {
-		return false;
+};
+#else
+struct CompareCanidate {
+	bool operator()(const CandidateLink* lhs, const CandidateLink* rhs) const {
+		// 작은 값 우선
+		if (lhs->costHeuristic != rhs->costHeuristic) {
+			return lhs->costHeuristic > rhs->costHeuristic;
+		} else {
+			return lhs->depth > rhs->depth;
+		}
 	}
 };
+#endif
+
 
 struct distanceCandidate {
 	distanceCandidate(const int32_t _id, const int32_t _dist) : id(_id), dist(_dist) {};
@@ -434,7 +445,7 @@ typedef struct _tagRouteInfo {
 	unordered_set<uint32_t> CandidateCourse;
 #endif
 
-	priority_queue<CandidateLink*, vector<CandidateLink*>, decltype(CompareCanidate)> pqDijkstra{ CompareCanidate };
+	priority_queue< CandidateLink*, vector<CandidateLink*>, CompareCanidate > pqDijkstra;
 
 	_tagRouteInfo() {
 #ifdef USE_REQUEST_ROUTEINFO		
@@ -689,7 +700,7 @@ typedef struct _tagTableBaseInfo {
 #endif
 
 
-	priority_queue<CandidateLink*, vector<CandidateLink*>, decltype(CompareCanidate)> pqDijkstra{ CompareCanidate };
+	priority_queue< CandidateLink*, vector<CandidateLink*>, CompareCanidate > pqDijkstra;
 
 
 	_tagTableBaseInfo() {
@@ -770,7 +781,8 @@ typedef struct _tagRouteDistMatrix
 	int32_t typeCreate; // 생성 타입, 0:엔진생성 데이터, 1:서버 파일 데이터, 2:사용자 데이터
 	string strUser;
 	time_t tmCreate;
-	vector<Origins> vtOrigins;
+	vector<Origins> vtOrigin;
+	vector<Origins> vtDestination;
 	vector<vector<stDistMatrix>> vtDistMatrix;
 	vector<vector<stPathMatrix>> vtPathMatrix;
 
@@ -825,7 +837,7 @@ typedef struct _tagCluster
 	ClusteringOption option;
 	vector<Origins> vtOrigins;
 	vector<stDistrict> vtDistrict;
-	vector<SPoint> vtPositionLock;
+	vector<SPoint> vtEndPoint;
 
 	_tagCluster() 
 	{
@@ -858,7 +870,7 @@ public:
 	const int DoComplexRoutesEx(IN const RequestRouteInfo* pReqInfo/*, IN OUT vector<ComplexPointInfo>& vtCpxRouteInfo*/, OUT vector<RouteInfo>* pRouteInfos, OUT vector<RouteResultInfo>* pRouteResults);
 	const int DoCourse(IN const RequestRouteInfo* pReqInfo, OUT vector<RouteInfo>* pRouteInfos, OUT vector<RouteResultInfo>* pRouteResults);
 #if defined(USE_TSP_MODULE)
-	const int DoTabulate(IN const RequestRouteInfo* pReqInfo, OUT RouteDistMatrix& RDM);
+	const int DoTabulate(IN const RequestRouteInfo* pReqInfo, IN vector<RouteLinkInfo>vtOriginLinkInfos, IN vector<RouteLinkInfo>vtDestinationLinkInfos, OUT RouteDistMatrix& RDM);
 #endif
 	// 미확인된 필요 노드 정보 획득 위해, 탐색 가능한 만큼 확장 후 필요한 노드 정보 확인 (입구점 등)
 	const int DoEdgeRoute(IN const RequestRouteInfo* pReqInfo, OUT vector<RouteInfo>& vtRouteInfos/*, OUT vector<ComplexPointInfo>& vtComplexPointInfo*/);
@@ -884,15 +896,16 @@ private:
 	const int AddPrevLinksEx(IN RouteInfo* pRouteInfo, IN const CandidateLink* pCurInfo);
 	const int AddNextCourse(IN RouteInfo* pRouteInfo, IN const CandidateLink* pCurInfo, IN const set<uint64_t>* psetCourseLinks);
 
-	const int Propagation(IN TableBaseInfo* pRouteInfo, IN const CandidateLink* pCurInfo, IN const int dir, IN const SBox& boxExpandArea, IN const vector<SPoint>& vtOrigins, IN const int32_t currIdx, IN const int32_t nextIdx, IN const uint32_t timestamp); // 단순 확장
+	const int Propagation(IN RouteInfo* pRouteInfo, IN const CandidateLink* pCurInfo, IN const int dir, IN const SBox& boxExpandArea, IN const vector<SPoint>& vtOrigins, IN const int32_t currIdx, IN const int32_t nextIdx, IN const uint32_t timestamp); // 단순 확장
 	const int EdgePropagation(IN const int32_t idx, IN const bool isReverse, IN const vector<stOptimalPointInfo>& vtOptInfo, IN OUT RouteInfo* pRouteInfo, IN const vector<CandidateLink*> vtCandidateInfo/*, OUT vector<ComplexPointInfo>&vtComplexPointInfo*/); // 입구점 확장
 	const int LevelPropagation(IN TableBaseInfo* pRouteInfo, IN const CandidateLink* pCurInfo, IN const int dir, IN const SBox& boxExpandArea, IN const int32_t nLimtLevel, IN OUT int32_t& enableStartLevelIgnore); // 모든 레벨 확장, // enableStartLevelIgnore: 시작 링크가 제한 링크보다 낮은 링크일때 제한 링크까지 허용할 지 여부
+	const int ExitPropagation(IN RouteInfo* pRouteInfo, IN const RouteLinkInfo* pLinkInfo, IN const SBox& boxExpandArea); // 특정 구역 탈출 확장
 
 	const int MakeRoute(IN const int idx, IN RouteInfo* pRouteInfo, OUT RouteResultInfo* pRouteResult);
 	const int MakeCourse(IN const int idx, IN RouteInfo* pRouteInfo, OUT RouteResultInfo* pRouteResult);
 #if defined(USE_TSP_MODULE)
-	const int MakeTabulate(IN const RequestRouteInfo* pReqInfo, IN const vector<RouteLinkInfo>& LinkInfos, OUT RouteDistMatrix& RDM);
-	const int MakeTabulateEx(IN const RequestRouteInfo* pReqInfo, IN const vector<RouteLinkInfo>& LinkInfos, OUT RouteDistMatrix& RDM); // reverse expand route from destination
+	const int MakeTabulate(IN const RequestRouteInfo* pReqInfo, IN const vector<RouteLinkInfo>& vtOriginLinkInfos, IN const vector<RouteLinkInfo>vtDestinationLinkInfos, OUT RouteDistMatrix& RDM);
+	const int MakeTabulateEx(IN const RequestRouteInfo* pReqInfo, IN const vector<RouteLinkInfo>& vtOriginLinkInfos, IN const vector<RouteLinkInfo>vtDestinationLinkInfos, OUT RouteDistMatrix& RDM); // reverse expand route from destination
 #endif
 	const int MakeRouteResult(IN RouteInfo* pRouteInfo, OUT RouteResultInfo* pRouteResult);
 	//const int MakeRouteResultEx(IN const RouteInfo* pRouteInfo/*, IN const vector<ComplexPointInfo>* vtComplexPointInfo*/, IN const int32_t idx, IN const int32_t bestIdx, OUT RouteResultInfo* pRouteResult);

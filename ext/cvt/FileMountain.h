@@ -4,6 +4,8 @@
 
 //class CFileManager;
 
+// 숲길 네트워크 구분을 위한 산 폴리곤 및 입구점 데이터 관리
+
 struct stMntBoundary
 {
 	uint32_t ID; // ID

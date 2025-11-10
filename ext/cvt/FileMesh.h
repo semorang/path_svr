@@ -25,6 +25,8 @@ public:
 	virtual bool Initialize();
 	virtual void Release();
 
+	void SetDataManager(IN CDataManager* pDataMgr);
+
 	virtual bool ParseData(IN const char* fname);
 	virtual bool GenServiceData();
 	virtual void AddDataFeild(IN const int idx, IN const int type, IN const char* colData);
@@ -43,4 +45,5 @@ public:
 //#if !defined(USE_P2P_DATA) && !defined(USE_SAMSUNG_HEAVY)// && 1 // defined(_DEBUG)
 extern bool g_isUseTestMesh;
 extern unordered_set<int32_t> g_arrTestMesh;
+bool checkTestMesh(const int32_t tile_id); // 테스트 메쉬가 있으면 정의된 메쉬만 확인하자
 //#endif

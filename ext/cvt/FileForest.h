@@ -115,6 +115,8 @@ public:
 	virtual size_t ReadCourseBody(FILE* fp);
 
 private:
+	char m_szCourseDataPath[MAX_PATH];
+
 	FileHeader m_fileCourseHeader;
 	std::vector<FileIndex> m_vtCourseIndex;
 

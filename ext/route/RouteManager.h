@@ -48,6 +48,8 @@ public:
 
 	int Route(const int opt = 0/*packet*/);
 
+	void SetLimitPointCount(IN const int32_t nCount);
+	const int32_t GetLimitPointCount(void) const;
 	int GetWeightMatrix(IN const char* szRequest, OUT RouteDistMatrix& RDM, OUT BaseOption& option);
 	int GetWeightMatrixRouteLine(IN const char* szRequest, OUT RouteDistMatrixLine& RDMLN);
 	int GetBestway(IN const char* szRequest, IN RouteDistMatrix& RDM, OUT BestWaypoints& TSP);
@@ -95,7 +97,9 @@ private:
 	SBox m_rtRouteBox;
 
 	//void GetClosestPoint(double x1, double y1, double x2, double y2, double ox, double oy, double *a, double *b, int *ir);
+#if 0
 	KeyID Projection(IN const double lng, IN const double lat);
+#endif
 
 	// int SearchOneDirection();
 

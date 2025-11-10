@@ -103,11 +103,11 @@ function getResultHtmlContent(distance, time) {
     content += '        <button class="popup-close-button" type="button" aria-label="Close popup" style="float:right;width:25px;height:20px;color:#aaa;text-align:center">×</button>';
     content += '    <hr style="border-width:1px 0 0 0;border-style:solid; border-color:#aaa;"></div>';
     content += '    <li>';
-    content += '        <span class="label">총거리</span>' + dspDist;
-    content += '    </li>';
-    content += '    <li>';
     content += '        <span class="label">예상시간</span>' + dspHour + ' ' + dspMin;
     content += '    </li>';
+    content += '    <li>';
+    content += '        <span class="label">총거리</span>' + dspDist;
+    content += '    </li>';    
     content += '    <hr style="border-width:1px 0 0 0;border-style:solid; border-color:#aaa;">';
     content += '    <li>';
     content += '        <span class="label">도보<font size="0.4">3.3km/h</font></span>' + pedestrianHour + pedestrianMin;

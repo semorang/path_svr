@@ -124,20 +124,11 @@ typedef struct _tagDataCost {
 			// 차선가중치(걷기/자전거): 최단거리, 추천, 편한, 최소, 큰길
 			float cost_lane_walk[ROUTE_OPT_COUNT];
 			float cost_lane_bike[ROUTE_OPT_COUNT];
-			//float cost_lane_walk0; float cost_lane_walk1; float cost_lane_walk2; float cost_lane_walk3; float cost_lane_walk4;
-			//float cost_lane_bike0; float cost_lane_bike1; float cost_lane_bike2; float cost_lane_bike3; float cost_lane_bike4;
 
-			// 횡단보도(걷기/자전거): 최단거리, 추천, 편한, 최소, 큰길
-			float cost_cross_walk[ROUTE_OPT_COUNT];
-			float cost_cross_bike[ROUTE_OPT_COUNT];
-			//float cost_cross_walk0; float cost_cross_walk1; float cost_cross_walk2; float cost_cross_walk3; float cost_cross_walk4;
-			//float cost_cross_bike0; float cost_cross_bike1; float cost_cross_bike2; float cost_cross_bike3; float cost_cross_bike4;
 
 			// 회전(걷기/자전거): 최단거리, 추천, 편한, 최소, 큰길
 			float cost_angle_walk[ROUTE_OPT_COUNT];
 			float cost_angle_bike[ROUTE_OPT_COUNT];
-			//float cost_angle_walk0; float cost_angle_walk1; float cost_angle_walk2; float cost_angle_walk3; float cost_angle_walk4;
-			//float cost_angle_bike0; float cost_angle_bike1; float cost_angle_bike2; float cost_angle_bike3; float cost_angle_bike4;
 
 			// 보행도로(복선/차량겸용/자전거전용/보행전용/가상보행): 최단거리, 추천, 편한, 최소, 큰길
 			float cost_walk_side[ROUTE_OPT_COUNT];
@@ -145,37 +136,34 @@ typedef struct _tagDataCost {
 			float cost_walk_bike[ROUTE_OPT_COUNT];
 			float cost_walk_only[ROUTE_OPT_COUNT];
 			float cost_walk_line[ROUTE_OPT_COUNT];
-			//float cost_walk_side0; float cost_walk_side1; float cost_walk_side2; float cost_walk_side3; float cost_walk_side4;
-			//float cost_walk_with0; float cost_walk_with1; float cost_walk_with2; float cost_walk_with3; float cost_walk_with4;
-			//float cost_walk_bike0; float cost_walk_bike1; float cost_walk_bike2; float cost_walk_bike3; float cost_walk_bike4;
-			//float cost_walk_only0; float cost_walk_only1; float cost_walk_only2; float cost_walk_only3; float cost_walk_only4;
-			//float cost_walk_line0; float cost_walk_line1; float cost_walk_line2; float cost_walk_line3; float cost_walk_line4;
 
 			// 자전거도로(전용/겸용/보행): 최단거리, 추천, 편한, 최소, 큰길
-
 			float cost_bike_only[ROUTE_OPT_COUNT];
 			float cost_bike_with[ROUTE_OPT_COUNT];
 			float cost_bike_walk[ROUTE_OPT_COUNT];
-			//float cost_bike_bike0; float cost_bike_bike1; float cost_bike_bike2; float cost_bike_bike3; float cost_bike_bike4;
-			//float cost_bike_with0; float cost_bike_with1; float cost_bike_with2; float cost_bike_with3; float cost_bike_with4;
-			//float cost_bike_walk0; float cost_bike_walk1; float cost_bike_walk2; float cost_bike_walk3; float cost_bike_walk4;
+
+			// 시설물 타입
+			// "시설물 타입, 0:미정의, 1:토끼굴, 2:지하보도, 3:육교, 4:고가도로, 5:교량, 6:지하철역, 7:철도, 8:중앙버스정류장, 9:지하상가, 10:건물관통도로, 11:단지도로_공원, 12:단지도로_주거시설, 13:단지도로_관광지, 14:단지도로_기타",
+			float cost_facility_walk[TYPE_OBJECT_COUNT][ROUTE_OPT_COUNT];
+			float cost_facility_bike[TYPE_OBJECT_COUNT][ROUTE_OPT_COUNT];					
+
+			// 진입로 타입
+			// "진입로 타입, 0:미정의, 1:경사로, 2:계단, 3:에스컬레이터, 4:계단/에스컬레이터, 5:엘리베이터, 6:단순연결로, 7:횡단보도, 8:무빙워크, 9:징검다리, 10:의사횡단",
+			float cost_gate_walk[TYPE_GATE_COUNT][ROUTE_OPT_COUNT];
+			float cost_gate_bike[TYPE_GATE_COUNT][ROUTE_OPT_COUNT];
 
 
 			// 숲길(기본): 최단거리, 추천, 편한, 최소, 큰길
 			float cost_forest_base[ROUTE_OPT_COUNT];
-			//float cost_forest_base0; float cost_forest_base1; float cost_forest_base2; float cost_forest_base3; float cost_forest_base4;
 
 			// 숲길(인기도): 최단거리, 추천, 편한, 최소, 큰길
 			float cost_forest_popular[ROUTE_OPT_COUNT];
-			//float cost_forest_popular0; float cost_forest_popular1; float cost_forest_popular2; float cost_forest_popular3; float cost_forest_popular4;
 
 			// 숲길(코스): 최단거리, 추천, 편한, 최소, 큰길
 			float cost_forest_course[ROUTE_OPT_COUNT];
-			//float cost_forest_course0; float cost_forest_course1; float cost_forest_course2; float cost_forest_course3; float cost_forest_course4;
 
 			// 숲길(경사도): 최단거리, 추천, 편한, 최소, 큰길
 			float cost_forest_slop[ROUTE_OPT_COUNT];
-			//float cost_forest_slop0; float cost_forest_slop1; float cost_forest_slop2; float cost_forest_slop3; float cost_forest_slop4;
 
 			// cnt : 90
 		}pedestrian;
@@ -242,8 +230,8 @@ protected:
 
 	MapName* m_pMapName;
 	MapMesh* m_pMapMesh;
-	MapNode* m_pMapNode;
-	MapLink* m_pMapLink;
+	MapNode* m_pMapFNode;
+	MapLink* m_pMapFLink;
 	MapExtend* m_pMapFExtend;
 	MapNode* m_pMapWNode;
 	MapLink* m_pMapWLink;
@@ -288,7 +276,7 @@ public:
 	uint32_t SetCacheCount(IN const uint32_t cntCache);
 
 	void SetMeshBox(IN const SBox* pBox);
-	void SetNeighborMesh(void);
+	//void SetNeighborMesh(void);
 	void ArrangementMesh(void);
 	bool AddMeshData(IN const stMeshInfo * pData);
 	//bool AddMeshDataByNode(IN const stMeshInfo * pInfo, IN const stNodeInfo * pData);
@@ -400,7 +388,14 @@ public:
 	///////////////////////////////////////////////////////////////////////////
 	
 	//const char* GetErrorMessage(void);
+	int32_t GetSubwayDataByPoint(IN const double lng, IN const double lat, IN const int32_t maxDist, OUT stEntryPointInfo& entInfo);
 
 	bool IsAvoidTruckLink(IN const TruckOption* pTruckOption, IN const stLinkInfo* pLink);
+
+#ifdef TEST_SPATIALINDEX
+	int32_t CreateSpatialindex(IN const int32_t nDataType);
+	int32_t CreateSpatialindex(IN stMeshInfo* pMesh, IN const int32_t nDataType);
+	int32_t InsertSpatialindex(IN stMeshInfo* pMesh, IN const int32_t nDataType);
+#endif
 };
 

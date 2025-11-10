@@ -23,6 +23,7 @@ private:
 
 	char m_szPath[FILENAME_MAX];
 	size_t m_size;
+	bool m_isInitialized;
 
 private:
 	// "[#TTL] load_ttl success" -> Ž�� ���� �⵿�� �Ʒ� �Լ� �����ϸ� ������ �α�

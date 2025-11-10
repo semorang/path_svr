@@ -9,6 +9,7 @@
 #include "../shp/shpio.h"
 #include "../utils/UserLog.h"
 #include "../utils/GeoTools.h"
+#include "../utils/Strings.h"
 #include "../route/MMPoint.hpp"
 
 #include <queue>
@@ -39,7 +40,6 @@ CFileManager::~CFileManager()
 
 bool CFileManager::Initialize(void)
 {
-
 	return true;
 }
 
@@ -270,6 +270,9 @@ bool CFileManager::SaveData(IN const char* pszFilePath)
 
 bool CFileManager::LoadData(void)
 {
+	size_t sizeMem = checkMemorySize();
+	time_t tickMesh = LOG_TRACE(LOG_TEST, "");// , "Before, memory usages : %u", sizeMem);
+
 	m_fileName.LoadData(m_szFilePath);
 
 	m_fileMesh.LoadData(m_szFilePath);
@@ -277,7 +280,7 @@ bool CFileManager::LoadData(void)
 #if defined(USE_FOREST_DATA)
 #	if defined(USE_FOREST_DATA)
 	if (m_fileForest.LoadData(m_szFilePath) == true) {
-		memcpy(&m_rtBox, m_fileTrekking.GetMeshRegion(), sizeof(m_rtBox));
+		memcpy(&m_rtBox, m_fileForest.GetMeshRegion(), sizeof(m_rtBox));
 	}
 #	else
 	if (m_fileTrekking.LoadData(m_szFilm_szFilePathePath) == true) {
@@ -301,11 +304,17 @@ bool CFileManager::LoadData(void)
 		memcpy(&m_rtBox, m_fileVehicle.GetMeshRegion(), sizeof(m_rtBox));
 	}
 	m_fileVehicleEx.LoadData(m_szFilePath);
-#if defined(USE_ROUTING_POINT_API)
-#if !defined(_WIN32) || !defined(_DEBUG)
+#	if defined(USE_ROUTING_POINT_API)
+#	if !defined(_WIN32) || !defined(_DEBUG)
 	m_fileTraffic.LoadData(m_szFilePath);
-#endif
-#endif
+#	else
+#	if defined(USE_P2P_DATA)
+	m_fileTraffic.LoadData(m_szFilePath);
+#	else
+	//m_fileTraffic.LoadData(m_szFilePath);
+#	endif
+#	endif
+#	endif
 #endif
 
 #if defined(USE_COMPLEX_DATA)
@@ -314,9 +323,14 @@ bool CFileManager::LoadData(void)
 #if defined(USE_BUILDING_DATA)
 	m_fileBuilding.LoadData(m_szFilePath);
 #endif
-#if defined(USE_COMPLEX_DATA) | defined(USE_BUILDING_DATA)
+#if defined(USE_COMPLEX_DATA) || defined(USE_BUILDING_DATA)
 	m_fileEntrance.LoadData(m_szFilePath);
 #endif
+
+	double sizeGap = checkMemorySize() - sizeMem;
+	if (sizeGap != 0) {
+		LOG_TRACE(LOG_DEBUG, tickMesh, "data memory usages : %s", getSizeString(sizeGap));
+	}
 
 	return true;
 }
@@ -356,41 +370,53 @@ bool CFileManager::LoadDataByIdx(IN const uint32_t idx)
 }
 
 
-bool CFileManager::GetData(IN const uint32_t idTile)
+bool CFileManager::GetData(IN const uint32_t idxTile)
 {
 	bool ret = false;
 
-	m_fileMesh.LoadDataByIdx(idTile);
+#if defined(_DEBUG)
+	size_t sizeMem = checkMemorySize();
+	time_t tickMesh = LOG_TRACE(LOG_TEST, "");// , "Before, Mesh memory usages : %u", sizeMem);
+#endif
+
+	m_fileMesh.LoadDataByIdx(idxTile);
+
+#if defined(_DEBUG)
+	double sizeGap = checkMemorySize() - sizeMem;
+	if (sizeGap != 0) {
+		LOG_TRACE(LOG_DEBUG, tickMesh, "Mesh memory usages : %s", getSizeString(sizeGap));
+	}
+#endif
 
 #if defined(USE_FOREST_DATA)
 #	if defined(USE_FOREST_DATA)
-	ret |= m_fileForest.LoadDataByIdx(idTile);
+	ret |= m_fileForest.LoadDataByIdx(idxTile);
 #	else
 	ret |= m_fileTrekking.LoadDataByIdx(idTile);
 #	endif // #	if defined(USE_FOREST_DATA)
-	ret |= m_fileMountain.LoadDataByIdx(idTile);
+	ret |= m_fileMountain.LoadDataByIdx(idxTile);
 #endif
 
 #if defined(USE_PEDESTRIAN_DATA)
-	ret |= m_filePedestrian.LoadDataByIdx(idTile);
-	ret |= m_fileExtend.LoadDataByIdx(idTile);	
+	ret |= m_filePedestrian.LoadDataByIdx(idxTile);
+	ret |= m_fileExtend.LoadDataByIdx(idxTile);	
 #endif
 
 #if defined(USE_VEHICLE_DATA)
-	ret |= m_fileVehicle.LoadDataByIdx(idTile);
-	ret |= m_fileVehicleEx.LoadDataByIdx(idTile);
+	ret |= m_fileVehicle.LoadDataByIdx(idxTile);
+	ret |= m_fileVehicleEx.LoadDataByIdx(idxTile);
 #endif
 
 #if defined(USE_COMPLEX_DATA)
-	ret |= m_fileComplex.LoadDataByIdx(idTile);
+	ret |= m_fileComplex.LoadDataByIdx(idxTile);
 #endif
 
 #if defined(USE_BUILDING_DATA)
-	ret |= m_fileBuilding.LoadDataByIdx(idTile);
+	ret |= m_fileBuilding.LoadDataByIdx(idxTile);
 #endif
 
 #if defined(USE_COMPLEX_DATA) | defined(USE_BUILDING_DATA)
-	ret |= m_fileEntrance.LoadDataByIdx(idTile);
+	ret |= m_fileEntrance.LoadDataByIdx(idxTile);
 #endif
 
 	return ret;

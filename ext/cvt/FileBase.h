@@ -275,10 +275,10 @@ private:
 
 protected:
 	void SetMeshBox(IN const SBox* pBox);
-	void SetNeighborMesh(void);
+	//void SetNeighborMesh(void);
 
 	stMeshInfo * GetMeshData(IN const uint32_t idx);
-	stMeshInfo * GetMeshDataById(IN const uint32_t id);
+	stMeshInfo * GetMeshDataById(IN const uint32_t id, IN const bool force = false);
 
 	bool AddMeshData(IN const stMeshInfo * pData);
 	//bool AddMeshDataByNode(IN const stMeshInfo * pInfo, IN const stNodeInfo * pData);

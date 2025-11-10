@@ -508,7 +508,8 @@ void TCross::changeSol( TIndi& tKid, int ABnum, int type ){
 
 void TCross::makeCompleteSol( TIndi& tKid ){
 	int j, j1, j2;
-	int st ,pre, curr, next, a, b, c, d, aa, bb, a1, b1;
+	int st, pre, curr, next;
+	int a=-1, b=-1, c=-1, d=-1, aa=-1, bb=-1, a1=-1, b1=-1;
 	int min_unit_city;
 	int center_un, select_un;
 	int diff, max_diff;
@@ -564,6 +565,10 @@ void TCross::makeCompleteSol( TIndi& tKid ){
 
 			//for( near_num = 1; near_num <= nearMax; ++near_num ){
 			for (near_num = 1; near_num < nearMax; ++near_num) {
+				if (eval->fNearCity[a].size() <= near_num) {
+					LOG_TRACE(LOG_ERROR, "out of range, eval->fNearCity[a].size(), %d <= %d", eval->fNearCity[a].size(), near_num);
+					return;
+				}
 				c = eval->fNearCity[ a ][ near_num ];
 				if( fCenterUnit[ c ] == 0 ){
 					for( j1 = 0; j1 < 2; ++j1 ){
@@ -607,6 +612,10 @@ void TCross::makeCompleteSol( TIndi& tKid ){
 					b1 = tKid.fLink[ j ][ 0 ];
 					break;
 				}
+			}
+			if (aa < 0 || bb < 0 || a1 < 0 || b1 || a < 0 || b < 0) {
+				LOG_TRACE(LOG_ERROR, "out of range, aa(%d) bb(%d) a1(%d) b1(%d) a(%d) b(%d)", aa,bb,a1,b1,a,b);
+				return;
 			}
 			max_diff = eval->fEdgeDis[aa][bb] + eval->fEdgeDis[a1][b1] - eval->fEdgeDis[a][a1] - eval->fEdgeDis[b][b1];
 		}

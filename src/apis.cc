@@ -754,7 +754,7 @@ void DoMultiRoute(const FunctionCallbackInfo<Value>& args) {
    }
 
 
-#if defined(USE_MOUNTAIN_DATA)
+#if defined(USE_MOUNTAIN_DATA) || defined(USE_PEDESTRIAN_DATA)
    if (cntRoute > 1) {
       ret = m_pRouteMgr.Route(cntRoute);
    } else {
@@ -1064,7 +1064,7 @@ void GetTable(const FunctionCallbackInfo<Value>& args) {
       
       // get table
       BaseOption option;
-	  RouteDistMatrix RDM;
+      RouteDistMatrix RDM;
 
       ret = m_pRouteMgr.GetWeightMatrix(strRequest.c_str(), RDM, option);
 
@@ -1115,7 +1115,7 @@ void GetCluster_for_geoyoung(const FunctionCallbackInfo<Value>& args) {
 
       // get cluster
       vector<stDistrict> vtClusters;
-      vector<SPoint> vtPositionLock;
+      vector<SPoint> EndPoint;
       ret = m_pRouteMgr.GetCluster_for_geoyoung(cntClusters, vtClusters);
       if (ret != ROUTE_RESULT_SUCCESS) {
          m_pRoutePkg.GetErrorResult(ret, strJson);

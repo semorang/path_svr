@@ -1,4 +1,8 @@
-const moment = require('../nodejs/node_modules/moment');
+'use strict';
+
+const common = require('./common.js');
+
+const moment = common.reqNode('moment');
 
 exports.getElapsedTime = function(created) {
     let now = Date.now();

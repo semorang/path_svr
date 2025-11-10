@@ -881,12 +881,12 @@ void CFileBase::SetMeshBox(IN const SBox* pBox)
 }
 
 
-void CFileBase::SetNeighborMesh(void)
-{
-	if (m_pDataMgr) {
-		m_pDataMgr->SetNeighborMesh();
-	}
-}
+//void CFileBase::SetNeighborMesh(void)
+//{
+//	if (m_pDataMgr) {
+//		m_pDataMgr->SetNeighborMesh();
+//	}
+//}
 
 
 bool CFileBase::AddMeshData(IN const stMeshInfo * pData)
@@ -997,21 +997,23 @@ bool CFileBase::AddPolygonData(IN const stPolygonInfo * pData)
 				//		}
 				//	} // for
 				//}
-#if !defined(USE_DATA_CACHE) 
-				if (pData->getAttributeCount(TYPE_POLYGON_DATA_ATTR_MESH) > 1) { // 항상 자신을 포함하므로 1개 이상일때만 인접메쉬 존재
-					stMeshInfo* pJoinedMesh;
-					uint32_t idMesh;
-					const uint32_t* pJoined = pData->getAttributeMesh();
-					for (int ii = pData->getAttributeCount(TYPE_POLYGON_DATA_ATTR_MESH) - 1; ii >= 0; --ii) {
-						idMesh = pJoined[ii];
-						// 23-01-06 // 단독 데이터 로딩 시, 메쉬가 순차적으로 로딩되기에 나자신보다 나중에 로딩되는 메시는 메쉬 정보가 없어 누락될 수 있음
-						// 메쉬 파일을 따로 관리하는게 나을라나??
-						if ((pData->poly_id.tile_id != idMesh) && ((pJoinedMesh = m_pDataMgr->GetMeshDataById(idMesh)) != nullptr)) { // 자신은 패스
-							pJoinedMesh->complexs.emplace_back(pData->poly_id);
-						}
-					} // for
-				}
-#endif
+
+				// 아래 구문은 for spatialindex 사용으로 인해 MapMesh::InsertComplex() 안으로 이동됨. 2025-08-13
+//#if !defined(USE_DATA_CACHE) 
+//				if (pData->getAttributeCount(TYPE_POLYGON_DATA_ATTR_MESH) > 1) { // 항상 자신을 포함하므로 1개 이상일때만 인접메쉬 존재
+//					stMeshInfo* pJoinedMesh;
+//					uint32_t idMesh;
+//					const uint32_t* pJoined = pData->getAttributeMesh();
+//					for (int ii = pData->getAttributeCount(TYPE_POLYGON_DATA_ATTR_MESH) - 1; ii >= 0; --ii) {
+//						idMesh = pJoined[ii];
+//						// 23-01-06 // 단독 데이터 로딩 시, 메쉬가 순차적으로 로딩되기에 나자신보다 나중에 로딩되는 메시는 메쉬 정보가 없어 누락될 수 있음
+//						// 메쉬 파일을 따로 관리하는게 나을라나??
+//						if ((pData->poly_id.tile_id != idMesh) && ((pJoinedMesh = m_pDataMgr->GetMeshDataById(idMesh)) != nullptr)) { // 자신은 패스
+//							pJoinedMesh->complexs.emplace_back(pData->poly_id);
+//						}
+//					} // for
+//				}
+//#endif
 			}
 		}
 		else if (GetDataType() == TYPE_DATA_BUILDING) {
@@ -1163,368 +1165,36 @@ bool CFileBase::GenServiceData()
 	// 비어있는 메쉬 검사
 	LOG_TRACE(LOG_DEBUG, "LOG, start mesh data generation, check empty mesh");
 
-	for (map<uint32_t, stMeshInfo*>::iterator itMesh = m_mapMesh.begin(); itMesh != m_mapMesh.end(); ) {
-		if (itMesh->second->nodes.empty() && itMesh->second->links.empty() 
+	stMeshInfo* pMesh = nullptr;
+#if 1
+	m_pDataMgr->ArrangementMesh();
+#else
+	map<uint32_t, stMeshInfo*>::iterator it;
+	for (it = m_mapMesh.begin(); it != m_mapMesh.end(); it++) {
+		pMesh = it->second;
+
+		if (
+#if defined(USE_FOREST_DATA)
+			(pMesh->setFLinkDuplicateCheck.empty())
+#endif 
+#if defined(USE_PEDESTRIAN_DATA)
+			(pMesh->setWLinkDuplicateCheck.empty())
+#endif 
+#if defined(USE_VEHICLE_DATA)
+			(pMesh->setVLinkDuplicateCheck.empty())
+#endif 
 #if defined(USE_OPTIMAL_POINT_API) || defined(USE_MOUNTAIN_DATA)
-			&&itMesh->second->complexs.empty() && itMesh->second->buildings.empty()
-#endif
-			) {
-			LOG_TRACE(LOG_DEBUG, "LOG, remove empty mesh : %d", itMesh->first);
-			m_mapMesh.erase(itMesh++);
-		}
-		else {
-			itMesh++;
+			&& ((pMesh->setCpxDuplicateCheck.empty() && pMesh->setBldDuplicateCheck.empty()))
+#endif 
+			)
+		{
+			LOG_TRACE(LOG_DEBUG, "LOG, remove empty mesh : %d", pMesh->mesh_id.tile_id);
+			//m_pDataMgr->DeleteData(pMesh->mesh_id.tile_id);
+			//cntMesh--;
+			m_mapMesh.erase(it++);
 		}
 	}
-	
-////#if defined (USE_PEDESTRIAN_DATA)
-////	return m_trackShpMgr.GenServiceData();
-////#endif
-//
-//	// mesh
-//	size_t numRawMesh = m_vtMeshRaw.size();
-//
-//	_MeshRaw* pCurMesh = nullptr;
-//	stMeshInfo* pMesh = nullptr;
-//
-//	for (map<int, SBox>::iterator pCurMesh = m_vtMeshRaw.begin(); pCurMesh != m_vtMeshRaw.end(); pCurMesh++) {
-//		pMesh = new stMeshInfo;
-//		//memset(pMesh, 0x00, sizeof(stMeshInfo));
-//
-//		pMesh->mesh_id.tile_id = pCurMesh->first;
-//		memcpy(&pMesh->mesh_box, &pCurMesh->second, sizeof(SBox));
-//
-//		if (!AddMeshData(pMesh)) {
-//			LOG_TRACE(LOG_ERROR, "Failed, add node data, mesh:%d, node:%d", pMesh->mesh_id.tile_id);
-//		}
-//	}
-//
-//	//여기서 Node 정렬 
-//	//std::sort(vNodeIDX.begin(), vNodeIDX.end(), CompareNode);
-//	//--------------------------------------------------
-//	// 서비스 노드 구성
-//	//--------------------------------------------------
-//	//sort(m_vtNodeRaw.begin(), m_vtNodeRaw.end(), CompareNode);
-//	size_t numRawNode = m_vtNodeRaw.size();
-//
-//	//vNodeIDX.reserve(numRawNode);
-//
-//	_NodeRaw* pCurNode = nullptr;
-//	stNodeInfo* pNode = nullptr;
-//	//1. 서비스 노드 인덱스 만들기 [완료]
-//	//stNodeIDX tmpNode;
-//
-//	unordered_map<uint64_t, stNodeInfo*> mapNode;
-//
-//	for (unsigned int idxRawNode = 0; idxRawNode < numRawNode; idxRawNode++) {
-//		pNode = new stNodeInfo;
-//		memset(pNode, 0x00, sizeof(stNodeInfo));
-//
-//		pCurNode = &m_vtNodeRaw[idxRawNode];
-//
-//		pNode->node_id.tile_id = pCurNode->MeshID;
-//		pNode->node_id.nid = pCurNode->NodeID;
-//		pNode->point_type = pCurNode->NodeTypeCode;
-//		pNode->edgenode_id.tile_id = atoi(pCurNode->AdjEdgeMesh);
-//		pNode->edgenode_id.nid = atoi(pCurNode->AdjEdgeNode);
-//		pNode->coord = pCurNode->nodePoint;
-//		for (vector<_ConnectNodeInfo>::iterator it = pCurNode->_vConnectNode.begin(); it != pCurNode->_vConnectNode.end(); it++) {
-//			if (strlen(it->connectNodeID) <= 0) {
-//				break;
-//			}
-//			pNode->connnodes[pNode->connnode_count].tile_id = pCurNode->MeshID;
-//			pNode->connnodes[pNode->connnode_count].nid = atoi(it->connectNodeID);
-//			//pNode->connnodes[pNode->connnode_count].dir = it->connectAngle;
-//			pNode->connnode_count++;
-//		}
-//
-//		//if (!m_routeManager.AddNodeData(pNode)) {
-//		//	LOG_TRACE(LOG_ERROR, "Failed, add node data, mesh:%d, node:%d", pCurNode->MeshID, pCurNode->NodeID);
-//		//}
-//
-//		mapNode.insert({ pNode->node_id.llid, pNode });
-//	}
-//
-//
-//
-//
-//	//--------------------------------------------------
-//	// 서비스 링크 구성
-//	//--------------------------------------------------
-//	//sort(m_vtLinkRaw.begin(), m_vtLinkRaw.end(), CompareLink);
-//	size_t numRawLink = m_vtLinkRaw.size();
-//	//m_vtLinkIDX.reserve(numRawLink);
-//	//vLinkVtx.reserve(numRawLink);
-//	//vLinkContent.reserve(numRawLink);
-//	int idxOff = 0;
-//
-//	stLinkInfo* pLink = nullptr;
-//
-//	unordered_map<uint64_t, stLinkInfo*> mapLink;
-//
-//	for (unsigned int idxRawLink = 0; idxRawLink < numRawLink; ++idxRawLink) {
-//		pLink = new stLinkInfo;
-//		//memset(pLink, 0x00, sizeof(stLinkInfo));
-//
-//		_LinkRaw* pCurLink = &m_vtLinkRaw[idxRawLink];
-//
-//		pLink->link_id.tile_id = pCurLink->MeshID;
-//		pLink->link_id.nid = pCurLink->LinkID;
-//		pLink->link_id.dir = atoi(pCurLink->Direction);
-//		if (pLink->link_id.dir > 0)
-//		{
-//			LOG_TRACE(LOG_ERROR, "Failed, link dir setted, mesh:%d, id:%d, dir:%d", pLink->link_id.tile_id, pLink->link_id.nid, pLink->link_id.dir);
-//		}
-//		pLink->ped.walk_type = atoi(pCurLink->CoursType);
-//
-//		pLink->snode_id.tile_id = pCurLink->MeshID;
-//		pLink->snode_id.nid = atoi(pCurLink->sNode_id);
-//		pLink->enode_id.tile_id = pCurLink->MeshID;
-//		pLink->enode_id.nid = atoi(pCurLink->eNode_id);
-//		pLink->length = pCurLink->LinkLen;
-//
-//		// 노드 확인
-//		// 종단/교차점이 아니면 이어서 사용하자
-//
-//
-//
-//
-//
-//		//INDEXED index;
-//
-//		////1. 서비스 링크 인덱스 만들기
-//		//stLinkIDX tmpLink;
-//
-//		//tmpLink.MeshID = pCurLink->MeshID;
-//		//tmpLink.LinkID = pCurLink->LinkID;
-//		//tmpLink.mesh_sNodeID = pCurLink->MeshID;
-//		//tmpLink.sNodeID = atoi(pCurLink->sNode_id);
-//		//tmpLink.mesh_eNodeID = pCurLink->MeshID;
-//		//tmpLink.eNodeID = atoi(pCurLink->eNode_id);
-//		//tmpLink.Direction = atoi(pCurLink->Direction);
-//		//tmpLink.LinkLength = pCurLink->LinkLen;
-//
-//
-//		//2. 서비스 링크의 버텍스 만들기
-//
-//		//stLinkVtx tmpLinkVtx;
-//		size_t numVtx = pCurLink->vtPoints.size();
-//
-//		pLink->vtPts.reserve(numVtx);
-//		for (unsigned int idxVtx = 0; idxVtx < numVtx; idxVtx++) {
-//			pLink->vtPts.push_back(pCurLink->vtPoints[idxVtx]);   //tmpLinkVtx.vtPts.push_back(pCurLink->vtPoints[idxVtx]);
-//		}
-//		//mLink.insert(std::make_pair(pCurLink->MeshID, tmpLink));
-//
-//		//m_vtLinkIDX.push_back(tmpLink);
-//
-//		//tmpLink.linkBase.MeshID = pCurLink->LinkBase.MeshID;
-//		//tmpLink.linkBase.ID = pCurLink->LinkBase.ID;
-//
-//		//tmpLink.LinkLength = pCurLink->LinkLen;
-//		//tmpLink.Direction = atoi(pCurLink->Direction);
-//
-//
-//		//tmpLink.sNodeBase.ID = atoi(pCurLink->sNode_id);
-//		//tmpLink.eNdoeBase.ID = atoi(pCurLink->eNode_id);
-//		//tmpLink.sNodeBase.MeshID = get_sNodeBase(pCurLink->LinkBase.MeshID, atoi(pCurLink->sNode_id));
-//		//tmpLink.eNdoeBase.MeshID = get_eNodeBase(;
-//		//tmpLink.nRoadLevel = atoi(pCurLink->Difficult);
-//		//tmpLink.nRoadType = atoi(pCurLink->CoursType);
-//
-//		//tmpLink.nContOffSet = idxOff + sizeof(m_vtLinkRaw[idxRawLink]);
-//		//idxOff = sizeof(m_vtLinkRaw[idxRawLink]);
-//
-//
-//		//3. 서비스 링크의 부가정보 만들기
-//		/*stLinkContent tmpLinkContent;
-//
-//		strcpy(tmpLinkContent.szName, pCurLink->szName);
-//		tmpLinkContent.SpringWinter_Rest = atoi(pCurLink->SpringWinter_Rest);
-//		tmpLinkContent.SummerAutumn_Rest = atoi(pCurLink->SummerAutumn_Rest);
-//		tmpLinkContent.Popular = atoi(pCurLink->Popular);
-//		strcpy(tmpLinkContent.Mountain_NM, pCurLink->Mountain_NM);
-//		tmpLinkContent.vVEG.assign(pCurLink->vVEG.begin(), pCurLink->vVEG.end());
-//
-//		vLinkContent.push_back(tmpLinkContent);*/
-//
-//
-//		//if (!m_routeManager.AddLinkData(pLink)) {
-//		//	LOG_TRACE(LOG_ERROR, "Failed, add link data, mesh:%d, node:%d", pCurLink->MeshID, pCurLink->LinkID);
-//		//}
-//
-//		mapLink.insert({ pLink->link_id.llid, pLink });
-//	}
-//
-//	//여기서 Link 정렬 
-//	/*std::sort(m_vtLinkIDX.begin(), m_vtLinkIDX.end(), [](const stLinkIDX a, const stLinkIDX b) {
-//	if (a.MeshID > b.MeshID)
-//	return true;
-//	});*/
-//
-//	//std::sort(m_vtLinkIDX.begin(), m_vtLinkIDX.end(), CompareLink);
-//
-//	//MakeIndexTable(NETWORKTYPE::LINK);
-//	//MakeIndexTable(NETWORKTYPE::NODE);
-//
-//
-//	unordered_map<uint64_t, stNodeInfo*>::iterator itNode;
-//	unordered_map<uint64_t, stNodeInfo*>::iterator itConnNode;
-//	unordered_map<uint64_t, stLinkInfo*>::iterator itLink;
-//	unordered_map<uint64_t, stLinkInfo*>::iterator itConnLink;
-//
-//
-//	// 인덱싱
-//	uint32_t nodeIdx = 1000000;
-//	uint32_t linkIdx = 1000000;
-//
-//	// 노드 인덱싱
-//	for (itNode = mapNode.begin(); itNode != mapNode.end(); itNode++)
-//	{
-//		itNode->second->node_id.nid = nodeIdx++;
-//	}
-//
-//	for (itNode = mapNode.begin(); itNode != mapNode.end(); itNode++)
-//	{
-//		// 인접 노드 인덱스 적용
-//		for (int ii = 0; ii < itNode->second->connnode_count; ii++)
-//		{
-//			itConnNode = mapNode.find(itNode->second->connnodes[ii].llid);
-//			if (itConnNode == mapNode.end())
-//			{
-//				LOG_TRACE(LOG_ERROR, "Failed, find connected node, idx:%d, conn mesh:%d, conn node:%d", itNode->second->node_id.llid, itNode->second->connnodes[ii].tile_id, itNode->second->connnodes[ii].nid);
-//				continue;
-//			}
-//
-//			if (itConnNode->second->node_id.llid <= 0)
-//			{
-//				LOG_TRACE(LOG_ERROR, "Failed, connected node index not adjusted, idx:%d, conn mesh:%d, conn node:%d", itNode->second->node_id.llid, itNode->second->connnodes[ii].tile_id, itNode->second->connnodes[ii].nid);
-//				continue;
-//			}
-//
-//			itNode->second->connnodes[ii] = itConnNode->second->node_id;
-//		}
-//
-//		// 변교점 노드 인덱스 적용
-//		if (itNode->second->edgenode_id.llid != 0)
-//		{
-//			itConnNode = mapNode.find(itNode->second->edgenode_id.llid);
-//			if (itConnNode == mapNode.end())
-//			{
-//				LOG_TRACE(LOG_ERROR, "Failed, find edge node, idx:%d, edge mesh:%d, edge node:%d", itNode->second->node_id.llid, itNode->second->edgenode_id.tile_id, itNode->second->edgenode_id.nid);
-//				continue;
-//			}
-//
-//			if (itConnNode->second->node_id.llid <= 0)
-//			{
-//				LOG_TRACE(LOG_ERROR, "Failed, edge node index not adjusted, idx:%d, conn mesh:%d, conn node:%d", itNode->second->node_id.llid, itNode->second->edgenode_id.tile_id, itNode->second->edgenode_id.nid);
-//				continue;
-//			}
-//
-//			itNode->second->edgenode_id = itConnNode->second->node_id;
-//		}
-//	}
-//
-//
-//
-//	// 링크 인덱싱
-//	//for (itLink = mapLink.begin(); itLink != mapLink.end(); itLink++)
-//	//{
-//	//	itLink->second->link_idx = linkIdx++;
-//	//}
-//
-//	// 인덱스 매칭
-//	for (itLink = mapLink.begin(); itLink != mapLink.end(); itLink++)
-//	{
-//		itLink->second->link_id.nid = linkIdx++;
-//
-//		// snode
-//		itNode = mapNode.find(itLink->second->snode_id.llid);
-//		if (itNode == mapNode.end())
-//		{
-//			LOG_TRACE(LOG_ERROR, "Failed, can't find snode by link, mesh:%d, link:%d", itLink->second->link_id.tile_id, itLink->second->link_id.nid);
-//			continue;
-//		}
-//		else if (itNode->second->node_id.llid <= 0)
-//		{
-//			LOG_TRACE(LOG_ERROR, "Failed, snode not indexed, mesh:%d, link:%d", itNode->second->node_id.tile_id, itNode->second->node_id.nid);
-//			continue;
-//		}
-//
-//		itLink->second->snode_id = itNode->second->node_id;
-//
-//
-//		// enode
-//		itNode = mapNode.find(itLink->second->enode_id.llid);
-//		if (itNode == mapNode.end())
-//		{
-//			LOG_TRACE(LOG_ERROR, "Failed, can't find enode by link, mesh:%d, link:%d", itLink->second->link_id.tile_id, itLink->second->link_id.nid);
-//			continue;
-//		}
-//		else if (itNode->second->node_id.llid <= 0)
-//		{
-//			LOG_TRACE(LOG_ERROR, "Failed, enode not indexed, mesh:%d, link:%d", itNode->second->node_id.tile_id, itNode->second->node_id.nid);
-//			continue;
-//		}
-//
-//		itLink->second->enode_id = itNode->second->node_id;
-//	}
-//
-//	// 링크 결합
-//	for (itLink = mapLink.begin(); itLink != mapLink.end(); itLink++)
-//	{
-//		MergeLink(itLink->second, &mapLink, &mapNode);
-//	}
-//
-//	// 클래스에 추가
-//	for (itNode = mapNode.begin(); itNode != mapNode.end(); itNode++)
-//	{
-//		if (!AddNodeData(itNode->second)) {
-//			if (itNode->second->node_id.tile_id != 153303)
-//				LOG_TRACE(LOG_ERROR, "Failed, add node data, mesh:%d, node:%d", itNode->second->node_id.tile_id, itNode->second->node_id.nid);
-//
-//			stMeshInfo* pMeshExt = new stMeshInfo;
-//			pMeshExt->mesh_id.tile_id = itNode->second->node_id.tile_id;
-//
-//			if (AddMeshDataByNode(pMeshExt, itNode->second)) {
-//				LOG_TRACE(LOG_DEBUG, "add new mesh, when mesh info not exist, mesh:%d, node:%d", pMesh->mesh_id.tile_id, itNode->second->node_id.nid);
-//			}
-//		}
-//	}
-//
-//	for (itLink = mapLink.begin(); itLink != mapLink.end(); itLink++)
-//	{
-//		if (!AddLinkData(itLink->second)) {
-//			if (itLink->second->link_id.tile_id != 153303)
-//				LOG_TRACE(LOG_ERROR, "Failed, add link data, mesh:%d, node:%d", itLink->second->link_id.tile_id, itLink->second->link_id.nid);
-//
-//			stMeshInfo* pMeshExt = new stMeshInfo;
-//			pMeshExt->mesh_id.tile_id = itLink->second->link_id.tile_id;
-//
-//			if (AddMeshDataByLink(pMeshExt, itLink->second)) {
-//				LOG_TRACE(LOG_DEBUG, "add new mesh, when mesh info not exist, mesh:%d, link:%d", pMesh->mesh_id.tile_id, itLink->second->link_id.nid);
-//			}
-//		}
-//	}
-//
-//	// 연결 노드 정보로 링크 정보를 설정
-//	for (itNode = mapNode.begin(); itNode != mapNode.end(); itNode++)
-//	{
-//		if (itNode->second->sub_info == NOT_USE) {
-//			continue;
-//		}
-//
-//		for (int ii = 0; ii < itNode->second->connnode_count; ii++)
-//		{
-//			if (!(pLink = GetLinkDataBySENode(itNode->second->node_id, itNode->second->connnodes[ii])))
-//			{
-//				LOG_TRACE(LOG_ERROR, "Failed, can't find link by s/e node, node:%d, node:%d", itNode->second->node_id, itNode->second->connnodes[ii]);
-//				continue;
-//			}
-//
-//			itNode->second->connnodes[ii] = pLink->link_id;
-//		}
-//	}
+#endif
 
 	Release();
 
@@ -1532,67 +1202,6 @@ bool CFileBase::GenServiceData()
 
 	return true;
 }
-
-
-//bool CFileBase::GetData(IN const uint32_t idTile)
-//{
-//	if (m_vtIndex.empty())
-//		return false;
-//
-//	unordered_map<uint32_t, FileIndex*> mapNeedMatch;
-//
-//	// id 매칭, 로딩되야 할 메쉬
-//	for (int ii = 0; ii < m_vtIndex.size(); ii++)
-//	{
-//		if (m_vtIndex[ii].idTile == idTile)
-//		{
-//			mapNeedMatch.emplace(m_vtIndex[ii].idTile, &m_vtIndex[ii]);
-//			break;
-//		}
-//	}
-//
-//	return CalculateCache(mapNeedMatch);
-//}
-//
-//
-//bool CFileBase::GetData(IN const SBox& rtWorld)
-//{
-//	if (m_vtIndex.empty())
-//		return false;
-//
-//	unordered_map<uint32_t, FileIndex*> mapNeedMatch;
-//
-//	// 영역에 포함, 로딩되야 할 메쉬
-//	for (int ii = 0; ii < m_vtIndex.size(); ii++)
-//	{
-//		if (isInPitBox(m_vtIndex[ii].rtData, rtWorld))
-//		{
-//			mapNeedMatch.emplace(m_vtIndex[ii].idTile, &m_vtIndex[ii]);
-//		}
-//	}
-//
-//	return CalculateCache(mapNeedMatch);
-//}
-//
-//
-//bool CFileBase::GetData(IN const double& lng, IN const double& lat)
-//{
-//	if (m_vtIndex.empty())
-//		return false;
-//
-//	unordered_map<uint32_t, FileIndex*> mapNeedMatch;
-//
-//	// 영역에 포함, 로딩되야 할 메쉬
-//	for (int ii = 0; ii < m_vtIndex.size(); ii++)
-//	{
-//		if (isInBox(lng, lat, m_vtIndex[ii].rtData))
-//		{
-//			mapNeedMatch.emplace(m_vtIndex[ii].idTile, &m_vtIndex[ii]);
-//		}
-//	}
-//
-//	return CalculateCache(mapNeedMatch);
-//}
 
 
 bool CFileBase::Initialize()
@@ -1606,38 +1215,6 @@ bool CFileBase::Initialize()
 
 void CFileBase::Release()
 {
-	// release memory
-	//if (!m_vtLinkIdxTable.empty()) {
-	//	m_vtLinkIdxTable.clear();
-	//	vector<INDEXED>().swap(m_vtLinkIdxTable);
-	//}
-
-	//if (!m_vtNodeIdxTable.empty()) {
-	//	m_vtNodeIdxTable.clear();
-	//	vector<INDEXED>().swap(m_vtNodeIdxTable);
-	//}
-
-	//if (!m_vtNodeRaw.empty()) {
-	//	m_vtNodeRaw.clear();
-	//	vector<_NodeRaw>().swap(m_vtNodeRaw);
-	//}
-
-	//if (!m_vtLinkRaw.empty()) {
-	//	m_vtLinkRaw.clear();
-	//	vector<_LinkRaw>().swap(m_vtLinkRaw);
-	//}
-
-	//if (!m_vtLinkIDX.empty()) {
-	//	m_vtLinkIDX.clear();
-	//	vector<stLinkIDX>().swap(m_vtLinkIDX);
-	//}
-
-	//if (!m_vtMeshRaw.empty()) {
-	//	m_vtMeshRaw.clear();
-	//	map<int, SBox>().swap(m_vtMeshRaw);
-	//}
-
-
 	if (!m_vtIndex.empty()) {
 		m_vtIndex.clear();
 		vector<FileIndex>().swap(m_vtIndex);
@@ -1723,10 +1300,10 @@ stMeshInfo * CFileBase::GetMeshData(IN const uint32_t idx)
 	return nullptr;
 }
 
-stMeshInfo * CFileBase::GetMeshDataById(IN const uint32_t id)
+stMeshInfo * CFileBase::GetMeshDataById(IN const uint32_t id, IN const bool force)
 {
 	if (m_pDataMgr) {
-		return m_pDataMgr->GetMeshDataById(id);
+		return m_pDataMgr->GetMeshDataById(id, force);
 	}
 
 	return nullptr;
@@ -2134,8 +1711,9 @@ size_t CFileBase::WriteBody(FILE* fp, IN const uint32_t fileOff)
 	FileNode fileNode = { 0, };
 	FileLink fileLink = { 0, };
 
-	uint32_t ii, jj;
+	uint32_t ii, jj = 0;
 	uint32_t cntNode, cntLink;
+	uint32_t retNode = 0, retLink = 0;
 	const size_t sizeFileBody = sizeof(fileBody);
 
 	// write body - node, link, vertex
@@ -2152,23 +1730,37 @@ size_t CFileBase::WriteBody(FILE* fp, IN const uint32_t fileOff)
 
 #if defined(USE_VEHICLE_DATA)
 		if (m_nDataType == TYPE_DATA_VEHICLE) {
+#ifdef TEST_SPATIALINDEX
+			cntNode = pMesh->setVNodeDuplicateCheck.size();
+			cntLink = pMesh->setVLinkDuplicateCheck.size();
+#else
 			cntNode = pMesh->vnodes.size();
 			cntLink = pMesh->vlinks.size();
+#endif
 		}
-		else 
 #endif
 #if defined(USE_PEDESTRIAN_DATA)
 		if (m_nDataType == TYPE_DATA_PEDESTRIAN) {
+#ifdef TEST_SPATIALINDEX
+			cntNode = pMesh->setWNodeDuplicateCheck.size();
+			cntLink = pMesh->setWLinkDuplicateCheck.size();
+#else
 			cntNode = pMesh->wnodes.size();
 			cntLink = pMesh->wlinks.size();
-		}
-		else
 #endif
-		{
+		}
+#endif
+#if defined(USE_FOREST_DATA)
+		if (m_nDataType == TYPE_DATA_FOREST) {
+#ifdef TEST_SPATIALINDEX
+			cntNode = pMesh->setFNodeDuplicateCheck.size();
+			cntLink = pMesh->setFLinkDuplicateCheck.size();
+#else
 			cntNode = pMesh->nodes.size();
 			cntLink = pMesh->links.size();
+#endif
 		}
-
+#endif
 		
 		if ((cntNode > 0) || (cntLink > 0)) {
 			// write body
@@ -2184,23 +1776,52 @@ size_t CFileBase::WriteBody(FILE* fp, IN const uint32_t fileOff)
 			offItem = sizeFileBody;
 
 			// write node
+#ifdef TEST_SPATIALINDEX
+			set<KeyID>* pSetNode = nullptr;
+#if defined(USE_VEHICLE_DATA)
+			if (m_nDataType == TYPE_DATA_VEHICLE) {
+				pSetNode = &pMesh->setVNodeDuplicateCheck;
+			}
+#endif
+#if defined(USE_PEDESTRIAN_DATA)
+			if (m_nDataType == TYPE_DATA_PEDESTRIAN) {
+				pSetNode = &pMesh->setWNodeDuplicateCheck;
+			}
+#endif
+			for (const auto key : *pSetNode) {
+#else
 			for (jj = 0; jj < cntNode; jj++) {
+#endif
 #if defined(USE_VEHICLE_DATA)
 				if (m_nDataType == TYPE_DATA_VEHICLE) {
+#ifdef TEST_SPATIALINDEX
+					pNode = m_pDataMgr->GetVNodeDataById(key);
+#else
 					pNode = m_pDataMgr->GetVNodeDataById(pMesh->vnodes[jj]);
-				} else
+#endif
+				}
 #endif
 #if defined(USE_PEDESTRIAN_DATA)
 				if (m_nDataType == TYPE_DATA_PEDESTRIAN) {
+#ifdef TEST_SPATIALINDEX
+					pNode = m_pDataMgr->GetWNodeDataById(key);
+#else
 					pNode = m_pDataMgr->GetWNodeDataById(pMesh->wnodes[jj]);
-				} else
 #endif
-				{
-					pNode = m_pDataMgr->GetFNodeDataById(pMesh->nodes[jj]);
 				}
+#endif
+#if defined(USE_FOREST_DATA)
+				if (m_nDataType == TYPE_DATA_TREKKING) {
+#ifdef TEST_SPATIALINDEX
+					pNode = m_pDataMgr->GetFNodeDataById(key);
+#else
+					pNode = m_pDataMgr->GetFNodeDataById(pMesh->nodes[jj]);
+#endif
+				}
+#endif
 
 				if (!pNode) {
-					LOG_TRACE(LOG_ERROR, "Failed, can't access node, idx:%d, tile_id:%d", jj, pMesh->mesh_id.nid);
+					LOG_TRACE(LOG_ERROR, "Failed, can't access node, idx:%d, tile_id:%d", jj, pMesh->mesh_id.tile_id);
 					return 0;
 				}
 
@@ -2220,30 +1841,57 @@ size_t CFileBase::WriteBody(FILE* fp, IN const uint32_t fileOff)
 				}
 
 				offItem += sizeof(fileNode);
+
+				retNode++;
 			} // write node
 
-#if defined(_DEBUG)
-			LOG_TRACE(LOG_DEBUG, "Save data, mesh:%d, node cnt:%lld", pMesh->mesh_id.tile_id, jj);
-#endif
-
 			// write link
+#ifdef TEST_SPATIALINDEX
+			set<KeyID>* pSetLink = nullptr;
+#if defined(USE_VEHICLE_DATA)
+			if (m_nDataType == TYPE_DATA_VEHICLE) {
+				pSetLink = &pMesh->setVLinkDuplicateCheck;
+			}
+#endif
+#if defined(USE_PEDESTRIAN_DATA)
+			if (m_nDataType == TYPE_DATA_PEDESTRIAN) {
+				pSetLink = &pMesh->setWLinkDuplicateCheck;
+			}
+#endif
+			for (const auto key : *pSetLink) {
+#else
 			for (jj = 0; jj < cntLink; jj++) {
+#endif
 	#if defined(USE_VEHICLE_DATA)
 				if (m_nDataType == TYPE_DATA_VEHICLE) {
-					pLink = m_pDataMgr->GetVLinkDataById(pMesh->vlinks[jj]);// GetLinkDataById(pMesh->links[jj]);
-				} else
+#ifdef TEST_SPATIALINDEX
+					pLink = m_pDataMgr->GetVLinkDataById(key);
+#else
+					pLink = m_pDataMgr->GetVLinkDataById(pMesh->vlinks[jj]);
+#endif
+				}
 	#endif
 	#if defined(USE_PEDESTRIAN_DATA)
 				if (m_nDataType == TYPE_DATA_PEDESTRIAN) {
-					pLink = m_pDataMgr->GetWLinkDataById(pMesh->wlinks[jj]);// GetLinkDataById(pMesh->links[jj]);
-				} else
+	#ifdef TEST_SPATIALINDEX
+					pLink = m_pDataMgr->GetWLinkDataById(key);
+	#else
+					pLink = m_pDataMgr->GetWLinkDataById(pMesh->wlinks[jj]);
 	#endif
-				{
-					pLink = m_pDataMgr->GetFLinkDataById(pMesh->links[jj]);// GetLinkDataById(pMesh->links[jj]);
 				}
+	#endif
+#if defined(USE_FOREST_DATA)
+				if (m_nDataType == TYPE_DATA_TREKKING) {
+#ifdef TEST_SPATIALINDEX
+					pLink = m_pDataMgr->GetFLinkDataById(key);
+#else
+					pLink = m_pDataMgr->GetFLinkDataById(pMesh->links[jj]);
+#endif
+				}
+#endif
 
 				if (!pLink) {
-					LOG_TRACE(LOG_ERROR, "Failed, can't access link, idx:%d, tile_id:%d", jj, pMesh->mesh_id.nid);
+					LOG_TRACE(LOG_ERROR, "Failed, can't access link, idx:%d, tile_id:%d", jj, pMesh->mesh_id.tile_id);
 					return 0;
 				}
 
@@ -2277,11 +1925,10 @@ size_t CFileBase::WriteBody(FILE* fp, IN const uint32_t fileOff)
 					}
 					offItem += retWrite;
 				}
+
+				retLink++;
 			} // write link
 
-#if defined(_DEBUG)
-			LOG_TRACE(LOG_DEBUG, "Save data, mesh:%d, link cnt:%lld", pMesh->mesh_id.tile_id, jj);
-#endif
 
 			// re-write body size & off
 			if (offItem > sizeFileBody) {
@@ -2319,7 +1966,7 @@ size_t CFileBase::WriteBody(FILE* fp, IN const uint32_t fileOff)
 		}
 	}
 
-	LOG_TRACE(LOG_DEBUG, "Save data, node cnt:%d, link cnt:%d", cntNode, cntLink);
+	LOG_TRACE(LOG_DEBUG, "Save data, nodes, links : (before):%u,%u, (after)%u,%u", cntNode, cntLink, retNode, retLink);
 
 	return offFile;
 }
@@ -2351,7 +1998,7 @@ bool CFileBase::LoadData(IN const char* szFilePath)
 	// check offset 
 	if (retRead <= 0)
 	{
-		LOG_TRACE(LOG_ERROR, "Failed, file base size zero");
+		LOG_TRACE(LOG_ERROR, "Failed, file base size zero, file:%s", szFileName);
 		fclose(fp);
 		return false;
 	}
@@ -2363,7 +2010,7 @@ bool CFileBase::LoadData(IN const char* szFilePath)
 	// check offset 
 	if (retRead <= 0)
 	{
-		LOG_TRACE(LOG_ERROR, "Failed, file header size zero");
+		LOG_TRACE(LOG_ERROR, "Failed, file header size zero, file:%s", szFileName);
 		fclose(fp);
 		return false;
 	}
@@ -2375,7 +2022,7 @@ bool CFileBase::LoadData(IN const char* szFilePath)
 	// check offset 
 	if (retRead <= 0)
 	{
-		LOG_TRACE(LOG_ERROR, "Failed, file index size zero");
+		LOG_TRACE(LOG_ERROR, "Failed, file index size zero, file:%s", szFileName);
 		fclose(fp);
 		return false;
 	}
@@ -2394,7 +2041,7 @@ bool CFileBase::LoadData(IN const char* szFilePath)
 	// check offset 
 	if (retRead <= 0)
 	{
-		LOG_TRACE(LOG_ERROR, "Failed, file body size zero");
+		LOG_TRACE(LOG_ERROR, "Failed, file body size zero, file:%s", szFileName);
 		fclose(fp);
 		return false;
 	}
@@ -2411,12 +2058,10 @@ bool CFileBase::LoadData(IN const char* szFilePath)
 bool CFileBase::LoadDataByIdx(IN const uint32_t idx)
 {
 	FILE* fp = fopen(m_szDataPath, "rb");
-	if (!fp)
-	{
+	if (!fp) {
 		LOG_TRACE(LOG_ERROR, "Failed, can't open file for load data, file:%s", m_szDataPath);
 		return false;
-	}
-	else if (idx < 0 || m_vtIndex.size() <= idx) {
+	} else if (idx < 0 || m_vtIndex.size() <= idx) {
 		LOG_TRACE(LOG_ERROR, "Failed, request load data idx range, max:%d, req idx:%d", m_vtIndex.size(), idx);
 		fclose(fp);
 		return false;
@@ -2426,17 +2071,15 @@ bool CFileBase::LoadDataByIdx(IN const uint32_t idx)
 	FileNode fileNode = { 0, };
 	FileLink fileLink = { 0, };
 
-	stMeshInfo* pMesh;
-	stNodeInfo* pNode;
-	stLinkInfo* pLink;
+	stMeshInfo* pMesh = nullptr;
+	stNodeInfo* pNode = nullptr;
+	stLinkInfo* pLink = nullptr;
 
 	size_t offFile = 0;
 	size_t offItem = 0;
 	size_t retRead = 0;
 
 	// read index
-	pMesh = new stMeshInfo;
-
 
 	// read body
 	if (m_vtIndex[idx].offBody <= 0 /*|| m_vtIndex[idx].szBody <= 0*/) // 메쉬내 하위데이터가 없어도 메쉬 자체는 포함하자
@@ -2446,34 +2089,6 @@ bool CFileBase::LoadDataByIdx(IN const uint32_t idx)
 		return false;
 	}
 
-	fseek(fp, m_vtIndex[idx].offBody, SEEK_SET);
-	if ((retRead = fread(&fileBody, sizeof(fileBody), 1, fp)) != 1)
-	{
-		LOG_TRACE(LOG_ERROR, "Failed, can't read body, offset:%d", m_vtIndex[idx].offBody);
-		fclose(fp);
-		return false;
-	}
-
-	if (m_vtIndex[idx].idTile != fileBody.idTile)
-	{
-		LOG_TRACE(LOG_ERROR, "Failed, index tile info not match with body, index tile id:%d vs body tile id:%d", m_vtIndex[idx].idTile, fileBody.idTile);
-		fclose(fp);
-		return false;
-	}
-
-
-	// mesh
-	pMesh->mesh_id.tile_id = m_vtIndex[idx].idTile;
-	memcpy(&pMesh->mesh_box, &m_vtIndex[idx].rtTile, sizeof(pMesh->mesh_box));
-	memcpy(&pMesh->data_box, &m_vtIndex[idx].rtData, sizeof(pMesh->data_box));
-	for (int ii = 0; ii < 8; ii++) {
-		if (m_vtIndex[idx].idNeighborTile[ii] <= 0) {
-			continue;
-		}
-		pMesh->neighbors.emplace(m_vtIndex[idx].idNeighborTile[ii]);
-	}
-	AddMeshData(pMesh);
-
 
 	// 내용이 없으면 메쉬만 포함하자
 	if (m_vtIndex[idx].szBody <= 0) {
@@ -2481,6 +2096,38 @@ bool CFileBase::LoadDataByIdx(IN const uint32_t idx)
 		return true;
 	}
 
+
+	fseek(fp, m_vtIndex[idx].offBody, SEEK_SET);
+	if ((retRead = fread(&fileBody, sizeof(fileBody), 1, fp)) != 1) {
+		LOG_TRACE(LOG_ERROR, "Failed, can't read body, offset:%d", m_vtIndex[idx].offBody);
+		fclose(fp);
+		return false;
+	}
+
+	if (m_vtIndex[idx].idTile != fileBody.idTile) {
+		LOG_TRACE(LOG_ERROR, "Failed, index tile info not match with body, index tile id:%d vs body tile id:%d", m_vtIndex[idx].idTile, fileBody.idTile);
+		fclose(fp);
+		return false;
+	}
+
+
+	// mesh
+	pMesh = GetMeshDataById(m_vtIndex[idx].idTile, false);
+	if (!pMesh) {
+		pMesh = new stMeshInfo;
+
+		pMesh->mesh_id.tile_id = m_vtIndex[idx].idTile;
+		memcpy(&pMesh->mesh_box, &m_vtIndex[idx].rtTile, sizeof(pMesh->mesh_box));
+		memcpy(&pMesh->data_box, &m_vtIndex[idx].rtData, sizeof(pMesh->data_box));
+		for (int ii = 0; ii < 8; ii++) {
+			if (m_vtIndex[idx].idNeighborTile[ii] <= 0) {
+				continue;
+			}
+			pMesh->neighbors.emplace(m_vtIndex[idx].idNeighborTile[ii]);
+		}
+		AddMeshData(pMesh);
+	}
+	
 
 	// node
 	for (uint32_t ii = 0; ii < fileBody.net.cntNode; ii++)
@@ -2549,9 +2196,21 @@ bool CFileBase::LoadDataByIdx(IN const uint32_t idx)
 		//}
 
 		AddLinkData(pLink);
-	}
+	} // for
 
 	fclose(fp);
+
+#ifdef TEST_SPATIALINDEX
+	if (pLink && fileBody.net.cntLink) {
+		if (pLink->base.link_type == TYPE_LINK_DATA_TREKKING) { // 숲길
+			m_pDataMgr->CreateSpatialindex(pMesh, TYPE_DATA_TREKKING);
+		} else if (pLink->base.link_type == TYPE_LINK_DATA_PEDESTRIAN) { // 보행자/자전거
+			m_pDataMgr->CreateSpatialindex(pMesh, TYPE_DATA_PEDESTRIAN);
+		} else if (pLink->base.link_type == TYPE_LINK_DATA_VEHICLE) { // 자동차
+			m_pDataMgr->CreateSpatialindex(pMesh, TYPE_DATA_VEHICLE);
+		}
+	}
+#endif
 
 	return true;
 }
@@ -2816,16 +2475,19 @@ size_t CFileBase::ReadBody(FILE* fp)
 	size_t retRead = 0;
 	const size_t sizeBody = sizeof(FileBody);
 
-	stMeshInfo* pMesh;
-	stNodeInfo* pNode;
-	stLinkInfo* pLink;
+	stMeshInfo* pMesh = nullptr;
+	stNodeInfo* pNode = nullptr;
+	stLinkInfo* pLink = nullptr;
 
 	size_t nTotalLinks = 0;
 	size_t nTotalNodes = 0;
 
 	for (vector<FileIndex>::const_iterator it = m_vtIndex.begin(); it != m_vtIndex.end(); it++)
-	//for (uint32_t idxTile = 0; idxTile < fileHeader.cntIndex; idxTile++)
 	{
+		if (!checkTestMesh(it->idTile)) {
+			continue;
+		}
+
 		// read body
 		if (it->szBody <= 0) {
 			continue;
@@ -2956,6 +2618,19 @@ size_t CFileBase::ReadBody(FILE* fp)
 		offFile += it->szBody;
 
 		nTotalLinks += fileBody.net.cntLink;
+
+#ifdef TEST_SPATIALINDEX
+		if (fileBody.net.cntLink) {
+			if (pLink->base.link_type == TYPE_LINK_DATA_TREKKING) { // 숲길
+				m_pDataMgr->CreateSpatialindex(pMesh, TYPE_DATA_TREKKING);
+			} else if (pLink->base.link_type == TYPE_LINK_DATA_PEDESTRIAN) { // 보행자/자전거
+				m_pDataMgr->CreateSpatialindex(pMesh, TYPE_DATA_PEDESTRIAN);
+			} else if (pLink->base.link_type == TYPE_LINK_DATA_VEHICLE) { // 자동차
+				m_pDataMgr->CreateSpatialindex(pMesh, TYPE_DATA_VEHICLE);
+			}
+		}
+#endif
+
 #if defined(_DEBUG)
 		//LOG_TRACE(LOG_DEBUG, "Data loading, link data loaded, mesh:%d, link cnt:%lld", pMesh->mesh_id.tile_id, fileBody.link.cntLink);
 #endif

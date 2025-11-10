@@ -361,11 +361,11 @@ bool CFileForest::ParseData(IN const char* fname)
 
 					// 툴에서 바로 사용하기 위한 용도
 					m_pDataMgr->AddLinkDataByCourse(courseCD, pLink->link_id.llid); // 코스 CD로 Link ID 검색용
-					m_pDataMgr->AddCourseDataByLink(pLink->link_id.llid, coursInfo.course_id); // 링크 ID로 코스 정보(type,cd) 검색용
+					m_pDataMgr->AddCourseDataByLink(pLink->link_id.llid, coursInfo.course_value); // 링크 ID로 코스 정보(type,cd) 검색용
 
 					// 저장하기 위한 용도
 					m_mapCourse.AddLinkDataByCourse(courseCD, pLink->link_id.llid); // 코스 CD로 Link ID 검색용
-					m_mapCourse.AddCourseDataByLink(pLink->link_id.llid, coursInfo.course_id); // 링크 ID로 코스 정보(type,cd) 검색용
+					m_mapCourse.AddCourseDataByLink(pLink->link_id.llid, coursInfo.course_value); // 링크 ID로 코스 정보(type,cd) 검색용
 
 					if (maxCourseCD < courseCD) {
 						maxCourseCD = courseCD;
@@ -688,6 +688,10 @@ bool CFileForest::GenServiceData()
 		}
 	}
 
+#if defined(TEST_SPATIALINDEX)
+	// 검색 트리 구성 필요
+	m_pDataMgr->CreateSpatialindex(TYPE_DATA_TREKKING);
+#endif
 
 	LOG_TRACE(LOG_DEBUG, "LOG, start, add to link class");
 
@@ -1118,7 +1122,7 @@ size_t CFileForest::WriteCourseBody(FILE* fp, IN const uint32_t fileOff)
 		{
 			if ((retWrite = fwrite(&course, sizeof(course), 1, fp)) != 1)
 			{
-				coursInfo.course_id = course;
+				coursInfo.course_value = course;
 				LOG_TRACE(LOG_ERROR, "Failed, can't write link course, tile_id:%d, link_id:%d, cours_type:%d, cours_cd:%d", link_id.tile_id, link_id.nid, coursInfo.course_type, coursInfo.course_cd);
 				return 0;
 			}
@@ -1203,7 +1207,7 @@ bool CFileForest::LoadCourseData(IN const char* szFilePath)
 		return false;
 	}
 
-	strcpy(m_szDataPath, szFileName);
+	strcpy(m_szCourseDataPath, szFileName);
 
 	// read base
 	retRead = ReadBase(fp);
@@ -1242,8 +1246,8 @@ bool CFileForest::LoadCourseData(IN const char* szFilePath)
 
 	// for cache
 #if defined(USE_DATA_CACHE)
-	//if (m_nFileType != TYPE_DATA_MESH) // 메쉬는 캐싱 인덱스이기에 바디를 읽어둠
-	return true;
+	// 코스는 아직 (2025-10-15)인덱싱 작업이 따로 되어있지 않기에 전체 데이터를 모두 읽자
+	//return true;
 #endif
 
 	// read course body

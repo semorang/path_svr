@@ -87,11 +87,14 @@ public:
 	uint32_t GetChromosomeSize(void) const;
 	vector<Gene>* GetChromosome(void);
 	uint32_t GetMutate(void);
+	int32_t GetStart(void) const;
+	int32_t GetFinish(void) const;
 
 	void SetFitness(IN const double val);
 	void SetFValue(IN const double val);
 	void SetParent(IN const uint32_t parent1, IN const uint32_t parent2);
 	void SetMutate(IN const uint32_t state);
+	void SetStartFinish(IN const int32_t nStart, IN const int32_t nFinish);
 
 	bool Create(IN const vector<tableItemNearlest>* pNearlest, IN const int32_t start = 0, IN const int32_t finish = -1, IN const uint32_t idx = 0); // ??u ??? ????
 

@@ -247,15 +247,21 @@ size_t CFileTraffic::ReadBody(FILE* fp)
 
 	stTrafficMesh* pTrafficMesh = nullptr;
 
+#if 0 // read by each value
 	uint8_t value8;
 	uint32_t value32;
 	uint64_t value64;
+#endif
 
 	size_t totalTrafficKS = 0;
 	size_t totalTrafficTTL = 0;
 
 	for (int32_t idx = 0; idx < m_vtIndex.size(); idx++)
 	{
+		if (!checkTestMesh(m_vtIndex[idx].idTile)) {
+			continue;
+		}
+
 		// read body
 		if (m_vtIndex[idx].szBody <= 0) {
 			continue;
@@ -410,7 +416,9 @@ bool CFileTraffic::LoadData(IN const char* szFilePath)
 	bool ret = CFileBase::LoadData(szFilePath);
 
 	if (m_pDataMgr != nullptr) {
+#if !defined(_DEBUG)
 		ret = m_pDataMgr->LoadStaticData(szFilePath);
+#endif
 	}
 
 	return ret;

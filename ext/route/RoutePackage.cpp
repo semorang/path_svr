@@ -297,7 +297,7 @@ bool CRoutePackage::GetRouteResultJson(IN const RouteResultInfo* pResult, IN con
 						stCourseInfo courseInfo;
 						for (const auto& course_id : *pCourse) {
 							cJSON* course = cJSON_CreateObject();
-							courseInfo.course_id = course_id;
+							courseInfo.course_value = course_id;
 							cJSON_AddItemToObject(course, "type", cJSON_CreateNumber(courseInfo.course_type));
 							cJSON_AddItemToObject(course, "code", cJSON_CreateNumber(courseInfo.course_cd));
 							cJSON_AddItemToArray(courses, course);
@@ -509,8 +509,8 @@ bool CRoutePackage::GetMapsRouteResultJson(IN const RouteResultInfo* pResult, IN
 	string request_id = pResult->reqInfo.RequestId;
 	uint32_t result_code = pResult->ResultCode;
 
-	time_t timer;
-	struct tm* tmNow;
+	// time_t timer;
+	// struct tm* tmNow;
 	string strEta;
 
 #if defined(USE_CJSON)
@@ -1140,281 +1140,8 @@ void CRoutePackage::GetMultiRouteResult(IN const vector<RouteResultInfo>& vtRout
 			cJSON* route = cJSON_CreateObject();
 
 			RouteResultInfo* pResult = const_cast<RouteResultInfo*>(&vtRouteResults[ii]);
-#if 1
+
 			GetRouteResultJson(pResult, timer, isJunction, route);
-#else
-			request_id = pResult->RequestId;
-			result_code = pResult->ResultCode;
-
-			// - summary
-			cJSON* summary = cJSON_CreateObject();
-			// - type
-			cJSON_AddItemToObject(summary, "option", cJSON_CreateNumber(pResult->RouteOption));
-			// - distance
-			cJSON_AddItemToObject(summary, "distance", cJSON_CreateNumber(static_cast<int32_t>(pResult->TotalLinkDist)));
-			// - time
-			cJSON_AddItemToObject(summary, "time", cJSON_CreateNumber(pResult->TotalLinkTime));
-			// - now
-			timer = time(NULL);
-			tmNow = localtime(&timer);
-			strEta = string_format("%04d-%02d-%02d %02d:%02d:%02d", tmNow->tm_year + 1900, tmNow->tm_mon + 1, tmNow->tm_mday, tmNow->tm_hour, tmNow->tm_min, tmNow->tm_sec);
-			cJSON_AddItemToObject(summary, "now", cJSON_CreateString(strEta.c_str()));
-
-			// eta
-			timer += pResult->TotalLinkTime;
-			tmNow = localtime(&timer);
-			strEta = string_format("%04d-%02d-%02d %02d:%02d:%02d", tmNow->tm_year + 1900, tmNow->tm_mon + 1, tmNow->tm_mday, tmNow->tm_hour, tmNow->tm_min, tmNow->tm_sec);
-			cJSON_AddItemToObject(summary, "eta", cJSON_CreateString(strEta.c_str()));
-
-			// add routes - summary
-			cJSON_AddItemToObject(route, "summary", summary);
-
-			unordered_set<uint64_t> setVisited;
-
-			// - link_info
-			cJSON* links = cJSON_CreateArray();
-			int cntLinks = pResult->LinkInfo.size();
-			int vertex_offset = 0;
-			for (const auto& link : pResult->LinkInfo) {
-				cJSON* idoff = cJSON_CreateObject();
-
-				setVisited.emplace(link.link_id.llid);
-
-				// 링크 부가 정보 
-				uint64_t sub_info = link.link_info;
-				stLinkBaseInfo* pBaseInfo = nullptr;
-				if (sub_info > 0) {
-					pBaseInfo = reinterpret_cast<stLinkBaseInfo*>(&sub_info);
-				}				
-				if (pBaseInfo && pBaseInfo->link_type == TYPE_LINK_DATA_TREKKING) {
-					cJSON_AddItemToObject(idoff, "link_id", cJSON_CreateNumber(link.link_id.nid));
-				} else {
-					cJSON_AddItemToObject(idoff, "link_id", cJSON_CreateNumber(link.link_id.llid));			
-				}
-				cJSON_AddItemToObject(idoff, "length", cJSON_CreateNumber(link.length));
-				cJSON_AddItemToObject(idoff, "time", cJSON_CreateNumber(link.time));
-				cJSON_AddItemToObject(idoff, "angle", cJSON_CreateNumber(link.angle));
-				cJSON_AddItemToObject(idoff, "vertex_offset", cJSON_CreateNumber(vertex_offset));
-				cJSON_AddItemToObject(idoff, "vertex_count", cJSON_CreateNumber(link.vtx_cnt));
-				cJSON_AddItemToObject(idoff, "remain_distance", cJSON_CreateNumber(link.rlength));
-				cJSON_AddItemToObject(idoff, "remain_time", cJSON_CreateNumber(link.rtime));
-				cJSON_AddItemToObject(idoff, "guide_type", cJSON_CreateNumber(link.guide_type));
-
-				if (link.vtx_cnt > 0) {
-					vertex_offset += link.vtx_cnt; // 경유지에서 offset 초기화 되지 않도록
-				}
-
-				if (pBaseInfo != nullptr) {
-					// 종단 노드 정보
-					stLinkInfo* pLink = m_pDataMgr->GetLinkDataById(link.link_id, pBaseInfo->link_type);
-					if (pLink) {
-						KeyID last_node_key;
-						uint64_t last_node_id = 0;
-						if (link.dir == 0) { // 정방향 enode가 종단 노드
-							last_node_key = pLink->enode_id;
-							if (pBaseInfo && pBaseInfo->link_type == TYPE_LINK_DATA_TREKKING) {
-								last_node_id = pLink->enode_id.nid;
-							} else {
-								last_node_id = pLink->enode_id.llid;
-							}
-						}
-						else { // 역방향 snode가 종단 노드
-							last_node_key = pLink->snode_id;
-							if (pBaseInfo && pBaseInfo->link_type == TYPE_LINK_DATA_TREKKING) {
-								last_node_id = pLink->snode_id.nid;
-							} else {
-								last_node_id = pLink->snode_id.llid;
-							}
-						}
-						cJSON_AddItemToObject(idoff, "node_id", cJSON_CreateNumber(last_node_id));
-
-						stNodeInfo* pNode = m_pDataMgr->GetNodeDataById(last_node_key, pBaseInfo->link_type);
-						if (pNode) {
-							cJSON_AddItemToObject(idoff, "conn_count", cJSON_CreateNumber(pNode->base.connnode_count));
-						}
-						//if (link.type == LINK_GUIDE_TYPE_DEPARTURE) { // 시작점은 항상 노드 연결이 2개다.
-						//	cJSON_AddItemToObject(idoff, "conn_count", cJSON_CreateNumber(2));
-						//}
-						//else {
-						//	stNodeInfo* pNode = m_pDataMgr->GetNodeDataById(link.node_id, pBaseInfo->link_type);
-						//	cJSON_AddItemToObject(idoff, "conn_count", cJSON_CreateNumber(pNode->base.connnode_count));
-						//}
-					}
-#if defined(USE_FOREST_DATA)
-					cJSON_AddItemToObject(idoff, "link_type", cJSON_CreateNumber(pBaseInfo->link_type));
-#endif
-					// 숲길 데이터
-					if (pBaseInfo->link_type == TYPE_LINK_DATA_TREKKING) {
-						stLinkTrekkingInfo* pForestInfo = reinterpret_cast<stLinkTrekkingInfo*>(&sub_info);
-						cJSON_AddItemToObject(idoff, "course_type", cJSON_CreateNumber(pForestInfo->course_type));
-						cJSON_AddItemToObject(idoff, "road_type", cJSON_CreateNumber(pForestInfo->road_info));
-						cJSON_AddItemToObject(idoff, "difficult", cJSON_CreateNumber(pForestInfo->diff));
-						cJSON_AddItemToObject(idoff, "slop", cJSON_CreateNumber(static_cast<int8_t>(pForestInfo->slop)));
-						cJSON_AddItemToObject(idoff, "popular", cJSON_CreateNumber(pForestInfo->popular));
-						cJSON_AddItemToObject(idoff, "legal", cJSON_CreateNumber(pForestInfo->legal));
-						// 고도(altitude)
-						if ((link.link_id.llid != NOT_USE) && (pLink != nullptr)) {
-							stNodeInfo* pSNode = m_pDataMgr->GetFNodeDataById(pLink->snode_id);
-							stNodeInfo* pENode = m_pDataMgr->GetFNodeDataById(pLink->enode_id);
-
-							if (link.dir == 0) { // 정
-								cJSON_AddItemToObject(idoff, "alt_s", cJSON_CreateNumber(static_cast<int16_t>(pSNode->trk.z_value)));
-								cJSON_AddItemToObject(idoff, "alt_e", cJSON_CreateNumber(static_cast<int16_t>(pENode->trk.z_value)));
-							}
-							else {
-								cJSON_AddItemToObject(idoff, "alt_s", cJSON_CreateNumber(static_cast<int16_t>(pENode->trk.z_value)));
-								cJSON_AddItemToObject(idoff, "alt_e", cJSON_CreateNumber(static_cast<int16_t>(pSNode->trk.z_value)));
-							}
-						}
-						// 서브코스 정보
-#if defined(USE_MOUNTAIN_DATA)
-						if ((pLink != nullptr) && pLink->trk_ext.course_cnt > 0) {
-							set<uint32_t>* pCourse = m_pDataMgr->GetCourseByLink(pLink->link_id.llid);
-							if (pCourse != nullptr) {
-								cJSON* courses = cJSON_CreateArray();
-								stCourseInfo courseInfo;
-								for (const auto& course_id : *pCourse) {
-									cJSON* course = cJSON_CreateObject();
-									courseInfo.course_id = course_id;
-									cJSON_AddItemToObject(course, "type", cJSON_CreateNumber(courseInfo.course_type));
-									cJSON_AddItemToObject(course, "code", cJSON_CreateNumber(courseInfo.course_cd));
-									cJSON_AddItemToArray(courses, course);
-								}
-								cJSON_AddItemToObject(idoff, "sub_course", courses);
-							}
-						}
-#endif // #if defined(USE_MOUNTAIN_DATA)
-					}
-					// 보행자 데이터
-					else if (pBaseInfo->link_type == TYPE_LINK_DATA_PEDESTRIAN) {
-						stLinkPedestrianInfo* pPedInfo = reinterpret_cast<stLinkPedestrianInfo*>(&sub_info);
-						cJSON_AddItemToObject(idoff, "walk_type", cJSON_CreateNumber(pPedInfo->walk_type));
-						cJSON_AddItemToObject(idoff, "bicycle_type", cJSON_CreateNumber(pPedInfo->bicycle_type));
-						cJSON_AddItemToObject(idoff, "facility_type", cJSON_CreateNumber(pPedInfo->facility_type));
-						cJSON_AddItemToObject(idoff, "gate_type", cJSON_CreateNumber(pPedInfo->gate_type));
-					}
-					else {
-						cJSON_AddItemToObject(idoff, "facility_type", cJSON_CreateNumber(9));
-						cJSON_AddItemToObject(idoff, "gate_type", cJSON_CreateNumber(9));
-					}
-				}
-				cJSON_AddItemToArray(links, idoff);
-			} // for
-
-			  // add routes - link_info
-			cJSON_AddItemToObject(route, "link_info", links);
-
-
-			// - vertex_info
-			cJSON* vertices = cJSON_CreateArray();
-			int cntVertices = pResult->LinkVertex.size();
-			for (auto jj = 0; jj < cntVertices; jj++) {
-				cJSON* lnglat = cJSON_CreateObject();
-				cJSON_AddItemToObject(lnglat, "x", cJSON_CreateNumber(pResult->LinkVertex[jj].x));
-				cJSON_AddItemToObject(lnglat, "y", cJSON_CreateNumber(pResult->LinkVertex[jj].y));
-				cJSON_AddItemToArray(vertices, lnglat);
-
-				// Local<Array> lnglat = Array::New(isolate);
-				// lnglat->Set(context, 0, Number::New(isolate, pResult->LinkVertex[ii].x));
-				// lnglat->Set(context, 1, Number::New(isolate, pResult->LinkVertex[ii].y));
-				// coords->Set(context, ii, lnglat);
-			}
-			// add routes - vertex_info
-			cJSON_AddItemToObject(route, "vertex_info", vertices);
-
-			if (isJunction == true) {
-				// junction_info
-				cJSON* junctions = cJSON_CreateArray();
-
-#if defined(TARGET_FOR_KAKAO_VX)
-				vector<RouteProbablePath*> vtRpp;
-
-				int cntRpp = GetRouteProbablePath(setVisited, pResult->LinkInfo, vtRpp);
-				for (auto jj = 0; jj < cntRpp; jj++) {
-					cJSON* link_info = cJSON_CreateObject();
-					cJSON* links = cJSON_CreateArray();
-					RouteProbablePath* pRpp = vtRpp[jj];
-					// for (auto kk = 0; kk<pRpp->JctLinks.size(); kk++) {
-					for (auto const& jct : pRpp->JctLinks) {
-						cJSON* jct_info = cJSON_CreateObject();
-						cJSON* link_vtx = cJSON_CreateArray();
-						stLinkInfo* pLink = jct.second;
-						for (auto ll = 0; ll < pLink->getVertexCount(); ll++) {
-							cJSON* lnglat = cJSON_CreateObject();
-							cJSON_AddItemToObject(lnglat, "x", cJSON_CreateNumber(pLink->getVertexX(ll)));
-							cJSON_AddItemToObject(lnglat, "y", cJSON_CreateNumber(pLink->getVertexY(ll)));
-							cJSON_AddItemToArray(link_vtx, lnglat);
-						} // for vtx
-						cJSON_AddItemToObject(jct_info, "id", cJSON_CreateNumber(pLink->link_id.nid));
-						cJSON_AddItemToObject(jct_info, "vertices", link_vtx);
-						cJSON_AddItemToArray(links, jct_info);
-					} // for links
-					cJSON_AddItemToObject(link_info, "id", cJSON_CreateNumber(pRpp->LinkId.nid));
-					cJSON_AddItemToObject(link_info, "node_id", cJSON_CreateNumber(pRpp->NodeId.nid));
-					cJSON_AddItemToObject(link_info, "junction", links);
-					cJSON_AddItemToArray(junctions, link_info);
-
-					//release
-					SAFE_DELETE(pRpp);
-				} // for junctions
-
-#else
-				vector<RouteProbablePath*> vtRpp;
-				int cntRpp = GetRouteProbablePathEx(&setVisited, 0, 0, 100, vtRpp);
-				stLinkInfo* pLink = nullptr;
-
-				for (const auto& link : vtRpp) {
-					//KeyID key = { key.llid = linkId };
-					//pLink = m_pDataMgr->GetLinkDataById(key, TYPE_LINK_DATA_NONE);
-
-					// ex에서는 1개만 들어있을 거임.
-					pLink = link->JctLinks.begin()->second;
-
-					if (pLink == nullptr) {
-						continue;
-					}
-
-					// 링크 부가 정보 
-					stLinkBaseInfo* pBaseInfo = nullptr;
-					if (pLink->sub_info > 0) {
-						pBaseInfo = reinterpret_cast<stLinkBaseInfo*>(&pLink->sub_info);
-					}
-
-					cJSON* link_info = cJSON_CreateObject();
-					if (pBaseInfo && pBaseInfo->link_type == TYPE_LINK_DATA_TREKKING) {
-						// link_id
-						cJSON_AddItemToObject(link_info, "link_id", cJSON_CreateNumber(pLink->link_id.nid));
-						// s_node_id
-						cJSON_AddItemToObject(link_info, "snode_id", cJSON_CreateNumber(pLink->snode_id.nid));
-						// e_node_id
-						cJSON_AddItemToObject(link_info, "enode_id", cJSON_CreateNumber(pLink->enode_id.nid));
-					} else {
-						// link_id
-						cJSON_AddItemToObject(link_info, "link_id", cJSON_CreateNumber(pLink->link_id.llid));
-						// s_node_id
-						cJSON_AddItemToObject(link_info, "snode_id", cJSON_CreateNumber(pLink->snode_id.llid));
-						// e_node_id
-						cJSON_AddItemToObject(link_info, "enode_id", cJSON_CreateNumber(pLink->enode_id.llid));
-					}
-
-					// vertex
-					cJSON* vertices = cJSON_CreateArray();
-					for (auto ll = 0; ll<pLink->getVertexCount(); ll++) {
-						cJSON* lnglat = cJSON_CreateObject();
-						cJSON_AddItemToObject(lnglat, "x", cJSON_CreateNumber(pLink->getVertexX(ll)));
-						cJSON_AddItemToObject(lnglat, "y", cJSON_CreateNumber(pLink->getVertexY(ll)));
-						cJSON_AddItemToArray(vertices, lnglat);
-					} // for vtx
-					cJSON_AddItemToObject(link_info, "vertices", vertices);
-
-					cJSON_AddItemToArray(junctions, link_info);
-				} // for jct
-#endif
-
-				  // add routes - junction_info
-				cJSON_AddItemToObject(route, "junction_info", junctions);
-			} // if (isJunction == true)
-#endif 
 
 			// increse route
 			cJSON_AddItemToArray(routes, route);
@@ -1455,115 +1182,7 @@ int32_t CRoutePackage::GetMapsRouteResult(IN const RouteResultInfo* pResult, OUT
 		cJSON* routes = cJSON_CreateArray();
 		cJSON* route = cJSON_CreateObject();
 
-#if 1
 		GetMapsRouteResultJson(pResult, timer, route);
-#else
-		cJSON_AddItemToObject(data, "option", cJSON_CreateNumber(pResult->RouteOption));
-		cJSON_AddItemToObject(data, "spend_time", cJSON_CreateNumber(pResult->TotalLinkTime));
-		cJSON_AddItemToObject(data, "distance", cJSON_CreateNumber(static_cast<int32_t>(pResult->TotalLinkDist)));
-		cJSON_AddItemToObject(data, "toll_fee", cJSON_CreateNumber(0));
-		cJSON_AddItemToObject(data, "taxiFare", cJSON_CreateNumber(0));
-		cJSON_AddItemToObject(data, "isHighWay", cJSON_CreateBool(false));
-
-		stLinkInfo* pLink = nullptr;
-		stLinkVehicleInfo vehInfo;
-		char szBuff[MAX_PATH] = { 0, };
-
-		int vertex_offset = 0;
-
-		// 경로 정보 (Array)
-		cJSON* paths = cJSON_CreateArray();
-
-		for (const auto& link : pResult->LinkInfo) {
-			// 경로 링크 정보
-			cJSON* path = cJSON_CreateObject();
-
-			// 경로선 (Array)
-			cJSON* coords = cJSON_CreateArray();
-			int vtxCount = link.vtx_cnt;
-
-			memcpy(&vehInfo, &link.link_info, sizeof(vehInfo));
-
-			// 경로선 확장
-			for (int ii = 0; ii < vtxCount; ii++) {
-				// 남은 거리로 vertex 확인
-
-				cJSON* coord = cJSON_CreateObject();
-				cJSON_AddItemToObject(coord, "x", cJSON_CreateNumber(pResult->LinkVertex[vertex_offset].x));
-				cJSON_AddItemToObject(coord, "y", cJSON_CreateNumber(pResult->LinkVertex[vertex_offset].y));
-
-				vertex_offset++;
-
-				// add coord to coords
-				cJSON_AddItemToArray(coords, coord);
-			} // for
-
-			  // add coords to path
-			cJSON_AddItemToObject(path, "coords", coords);
-
-			// speed
-			cJSON_AddNumberToObject(path, "speed", 0);
-
-			// time
-			cJSON_AddNumberToObject(path, "spend_time", link.time);
-
-			// distance
-			cJSON_AddNumberToObject(path, "distance", link.length);
-
-			// road_code
-			cJSON_AddNumberToObject(path, "road_code", vehInfo.road_type);
-
-			// traffic_color
-			cJSON_AddStringToObject(path, "traffic_color", "green");
-
-#if defined(USE_P2P_DATA) // P2P HD 매칭을 위한 SD 링크 ID 정보
-			pLink = m_pDataMgr->GetVLinkDataById(link.link_id);
-			if (pLink != nullptr && link.link_id.llid != NULL_VALUE) {
-				// road_name
-				if (pLink->name_idx > 0) {
-#if defined(_WIN32)
-					char szUTF8[MAX_PATH] = { 0, };
-					MultiByteToUTF8(m_pDataMgr->GetNameDataByIdx(pLink->name_idx), szUTF8);
-					cJSON_AddStringToObject(path, "road_name", szUTF8);
-#else
-					cJSON_AddStringToObject(path, "road_name", encoding(m_pDataMgr->GetNameDataByIdx(pLink->name_idx), "euc-kr", "utf-8"));
-#endif // #if defined(_WIN32)
-				}
-
-				// p2p 추가정보
-				cJSON* p2p = cJSON_CreateObject();
-
-				// speed 재설정
-				cJSON_SetNumberHelper(cJSON_GetObjectItem(path, "speed"), pLink->veh.speed_f);
-
-				// hd matching link id
-				// LOG_TRACE(LOG_DEBUG, "tile:%d, id:%d, snode:%d, enode:%d",pLink->link_id.tile_id, pLink->link_id.nid, pLink->snode_id.nid, pLink->enode_id.nid);
-				sprintf(szBuff, "%d%06d%06d", pLink->link_id.tile_id, pLink->snode_id.nid, pLink->enode_id.nid);
-				// cJSON_AddNumberToObject(p2p, "link_id", (pLink->link_id.tile_id * 1000000000000) + (pLink->snode_id.nid * 1000000) + pLink->enode_id.nid); // 원본 ID 사용, (snode 6자리 + enode 6자리)
-				cJSON_AddStringToObject(p2p, "link_id", szBuff);
-
-				// dir, 0:정방향, 1:역방향
-				cJSON_AddNumberToObject(p2p, "dir", link.dir);
-
-				// type 링크 타입, 0:일반, 1:출발지링크, 2:경유지링크, 3:도착지링크
-				cJSON_AddNumberToObject(p2p, "guide_type", link.guide_type);
-
-				// ang, 진행각
-				cJSON_AddNumberToObject(p2p, "angle", link.angle);
-
-				// add p2p to path
-				cJSON_AddItemToObject(path, "p2p_extend", p2p);
-			}
-#endif // #if 1 defined(USE_P2P_DATA)
-
-			// add path to paths
-			cJSON_AddItemToArray(paths, path);
-
-			// add paths to route
-			cJSON_AddItemToObject(route, "paths", paths);
-
-		} // for paths
-#endif
 
 		cJSON_AddItemToArray(routes, route);
 
@@ -1939,16 +1558,16 @@ void CRoutePackage::GetClusteringResult(IN const Cluster& CLUST, IN const RouteD
 		cJSON_AddNumberToObject(summary, "avg_time", static_cast<int>(totTime) / cntCluster);
 		cJSON_AddNumberToObject(summary, "avg_distance", static_cast<int>(totDist) / cntCluster);
 
-		// position_lock
-		if (!CLUST.vtPositionLock.empty()) {
-			if (CLUST.vtPositionLock[0].x != 0 && CLUST.vtPositionLock[0].y) {
-				double arrLoc[2] = { CLUST.vtPositionLock[0].x, CLUST.vtPositionLock[0].y };
+		// endpoint type
+		if (!CLUST.vtEndPoint.empty()) {
+			if (CLUST.vtEndPoint[0].x != 0 && CLUST.vtEndPoint[0].y) {
+				double arrLoc[2] = { CLUST.vtEndPoint[0].x, CLUST.vtEndPoint[0].y };
 				cJSON* coord = cJSON_CreateDoubleArray(arrLoc, 2);
 				cJSON_AddItemToObject(summary, "start_lock", coord);
 			}
 
-			if (CLUST.vtPositionLock[1].x != 0 && CLUST.vtPositionLock[1].y) {
-				double arrLoc[2] = { CLUST.vtPositionLock[1].x, CLUST.vtPositionLock[1].y };
+			if (CLUST.vtEndPoint[1].x != 0 && CLUST.vtEndPoint[1].y) {
+				double arrLoc[2] = { CLUST.vtEndPoint[1].x, CLUST.vtEndPoint[1].y };
 				cJSON* coord = cJSON_CreateDoubleArray(arrLoc, 2);
 				cJSON_AddItemToObject(summary, "end_lock", coord);
 			}
@@ -2117,21 +1736,20 @@ void CRoutePackage::GetBestWaypointResult(IN const BestWaypoints& TSP, IN const 
 
 void CRoutePackage::GetWeightMatrixResult(IN const RouteDistMatrix& RDM, OUT string& strJson)
 {
-	int nCount = 0;
-
 #if defined(USE_CJSON)
    cJSON* root = cJSON_CreateObject();
 
 	if (!RDM.vtDistMatrix.empty()) {
-		nCount = RDM.vtDistMatrix.size();
-
 		// for rdm info table
 		cJSON* rows = cJSON_CreateArray();
-		for(int ii=0; ii<nCount; ii++) {
+
+		int cntOrigin = RDM.vtDistMatrix.size();
+		for(int ii=0; ii<cntOrigin; ii++) {
 			cJSON* elements = cJSON_CreateArray();
 			cJSON* cols = cJSON_CreateObject();
 
-			for(int jj=0; jj<nCount; jj++) {
+			int cntDestination = RDM.vtDistMatrix[ii].size();
+			for(int jj=0; jj<cntDestination; jj++) {
 				cJSON* element = cJSON_CreateObject();
 				cJSON* distance = cJSON_CreateObject();
 				cJSON* duration = cJSON_CreateObject();
@@ -2200,15 +1818,15 @@ void CRoutePackage::GetWeightMatrixRouteLineResult(IN const RouteDistMatrix& RDM
 	cJSON* root = cJSON_CreateObject();
 
 	if (!RDM.vtDistMatrix.empty()) {
-		int nCount = RDM.vtDistMatrix.size();
-
 		// for route line info table
 		cJSON* lines = cJSON_CreateArray();
 
-		for (int ii = 0; ii<nCount; ii++) {
+		int cntOrigin = RDM.vtDistMatrix.size();
+		for (int ii = 0; ii<cntOrigin; ii++) {
 			cJSON* line = cJSON_CreateArray();			
 
-			for (int jj = 0; jj<nCount; jj++) {
+			int cntDestination = RDM.vtDistMatrix[ii].size();
+			for (int jj = 0; jj<cntDestination; jj++) {
 				cJSON* vertex = cJSON_CreateArray();			
 				const stPathMatrix* pMatrix = &RDM.vtPathMatrix[ii][jj];
 				if (!pMatrix->vtRoutePath.empty()) {
@@ -2303,23 +1921,20 @@ int32_t CRoutePackage::GetWeightMatrixResultFile(IN const RouteDistMatrix& RDM, 
 	strBuff.append("{");
 
 	if (!RDM.vtDistMatrix.empty()) {
-		int nCount = RDM.vtDistMatrix.size();
-
 		// header
 		sprintf(szBuff, "\"status\":\"OK\",\"result_code\":%d,\"msg\":\"success\"", ROUTE_RESULT_SUCCESS);
 		strBuff.append(szBuff);
 
-
 		// origins
 		strBuff.append(",\"origins\":[");
-		for (int idx = 0; idx < RDM.vtOrigins.size(); idx++) {
+		for (int idx = 0; idx < RDM.vtOrigin.size(); idx++) {
 			if (idx != 0) {
 				strBuff.append(",");
 			}
 			strBuff.append("[");
-			strBuff.append(to_string(RDM.vtOrigins[idx].position.x));
+			strBuff.append(to_string(RDM.vtOrigin[idx].position.x));
 			strBuff.append(",");
-			strBuff.append(to_string(RDM.vtOrigins[idx].position.y));
+			strBuff.append(to_string(RDM.vtOrigin[idx].position.y));
 			strBuff.append("]");
 		}
 		strBuff.append("]");
@@ -2329,17 +1944,38 @@ int32_t CRoutePackage::GetWeightMatrixResultFile(IN const RouteDistMatrix& RDM, 
 		strBuff.clear();
 		// ~origiins
 
+		// destinations
+		if (!RDM.vtDestination.empty()) {
+			strBuff.append(",\"destinations\":[");
+			for (int idx = 0; idx < RDM.vtDestination.size(); idx++) {
+				if (idx != 0) {
+					strBuff.append(",");
+				}
+				strBuff.append("[");
+				strBuff.append(to_string(RDM.vtDestination[idx].position.x));
+				strBuff.append(",");
+				strBuff.append(to_string(RDM.vtDestination[idx].position.y));
+				strBuff.append("]");
+			}
+			strBuff.append("]");
+
+			fwrite(strBuff.c_str(), 1, strBuff.length(), fp);
+			retCount += strBuff.length();
+			strBuff.clear();
+			// ~destinations
+		}
 
 		// rows
 		strBuff.append(",\"rows\":[");
-		for (int row = 0; row < nCount; row++) {
+		int cntOrigin = RDM.vtDistMatrix.size();
+		for (int row = 0; row < cntOrigin; row++) {
 			// element
 			if (row != 0) {
 				strBuff.append(",");
 			}
 			strBuff.append("{\"elements\":[");
-
-			for (int col = 0; col < nCount; col++) {
+			int cntDestination = RDM.vtDistMatrix[row].size();
+			for (int col = 0; col < cntDestination; col++) {
 				const stDistMatrix* pCols = &RDM.vtDistMatrix[row][col];
 
 				// column
@@ -2357,7 +1993,7 @@ int32_t CRoutePackage::GetWeightMatrixResultFile(IN const RouteDistMatrix& RDM, 
 				strBuff.append(szBuff);
 
 				// cost
-				sprintf(szBuff, "\"cost\":{\"value\":%d,\"text\":\"%s\"},", static_cast<long long int>(pCols->dbTotalCost), getCostString(pCols->dbTotalCost));
+				sprintf(szBuff, "\"cost\":{\"value\":%ld,\"text\":\"%s\"},", static_cast<long long int>(pCols->dbTotalCost), getCostString(pCols->dbTotalCost));
 				strBuff.append(szBuff);
 
 				// status
@@ -2434,23 +2070,20 @@ int32_t CRoutePackage::GetWeightMatrixRouteLineResultFile(IN const RouteDistMatr
 	strBuff.append("{");
 
 	if (!RDM.vtPathMatrix.empty()) {
-		int nCount = RDM.vtDistMatrix.size();
-
 		// header
 		sprintf(szBuff, "\"status\":\"OK\",\"result_code\":%d,\"msg\":\"success\"", ROUTE_RESULT_SUCCESS);
 		strBuff.append(szBuff);
 
-
 		// origins
 		strBuff.append(",\"origins\":[");
-		for (int idx = 0; idx < RDM.vtOrigins.size(); idx++) {
+		for (int idx = 0; idx < RDM.vtOrigin.size(); idx++) {
 			if (idx != 0) {
 				strBuff.append(",");
 			}
 			strBuff.append("[");
-			strBuff.append(to_string(RDM.vtOrigins[idx].position.x));
+			strBuff.append(to_string(RDM.vtOrigin[idx].position.x));
 			strBuff.append(",");
-			strBuff.append(to_string(RDM.vtOrigins[idx].position.y));
+			strBuff.append(to_string(RDM.vtOrigin[idx].position.y));
 			strBuff.append("]");
 		}
 		strBuff.append("]");
@@ -2460,23 +2093,41 @@ int32_t CRoutePackage::GetWeightMatrixRouteLineResultFile(IN const RouteDistMatr
 		strBuff.clear();
 		// ~origiins
 
+		// destinations
+		if (!RDM.vtDestination.empty()) {
+			strBuff.append(",\"destinations\":[");
+			for (int idx = 0; idx < RDM.vtDestination.size(); idx++) {
+				if (idx != 0) {
+					strBuff.append(",");
+				}
+				strBuff.append("[");
+				strBuff.append(to_string(RDM.vtDestination[idx].position.x));
+				strBuff.append(",");
+				strBuff.append(to_string(RDM.vtDestination[idx].position.y));
+				strBuff.append("]");
+			}
+			strBuff.append("]");
+
+			fwrite(strBuff.c_str(), 1, strBuff.length(), fp);
+			retCount += strBuff.length();
+			strBuff.clear();
+			// ~destinations
+		}
 
 		// row
 		strBuff.append(",\"table\":[");
 
 		// for route line info table
-		stLinkInfo* pLink;
-		KeyID keyLink;
 		vector<SPoint> vtLines;
-
-		for (int row = 0; row < nCount; row++) {
+		int cntOrigin = RDM.vtPathMatrix.size();
+		for (int row = 0; row < cntOrigin; row++) {
 			// col
 			if (row != 0) {
 				strBuff.append(",");
 			} 
 			strBuff.append("[");
-
-			for (int col = 0; col < nCount; col++) {
+			int cntDestination = RDM.vtPathMatrix[row].size();
+			for (int col = 0; col < cntDestination; col++) {
 				// matrix {"info": "1x3"
 				if (col != 0) {
 					strBuff.append(",");

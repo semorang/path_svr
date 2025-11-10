@@ -6,6 +6,8 @@
 
 ReadTTLSpd::ReadTTLSpd()
 {
+	m_pTrfCtrl = nullptr;
+	m_isInitialized = -1;
 	m_size = 1024 * 1024 * 10;	// int RpInitParam::_cache_trf;	/	rp_init_param._cache_trf   = (1024 * 1024 * 10);
 }
 
@@ -35,7 +37,7 @@ bool ReadTTLSpd::LoadData(const char* szPath)
 		strcpy(m_szPath, szPath);
 
 		m_pTrfCtrl = thlib::MemPolicyNew<sTrfCtrl>::alloc(1);
-		m_pTrfCtrl->init(m_szPath, m_size, sTrfCache::CACHE_TTL, sTrfReader::STRF_TYPE_TTL, 0);	// traffic_pattern_ttl.bin
+		m_isInitialized = m_pTrfCtrl->init(m_szPath, m_size, sTrfCache::CACHE_TTL, sTrfReader::STRF_TYPE_TTL, 0);	// traffic_pattern_ttl.bin
 
 		ret = (load_ttl() == 0) ? true : false;
 	}
@@ -48,11 +50,11 @@ uint8_t ReadTTLSpd::GetSpd(const unsigned long long ttlId, const time_t time, co
 {
 	uint8_t retSpd = 255;
 
-	if (m_pTrfCtrl == nullptr) {
-		m_pTrfCtrl->init(m_szPath, m_size, sTrfCache::CACHE_TTL, sTrfReader::STRF_TYPE_TTL, time);	// traffic_pattern_ttl.bin
+	if (m_pTrfCtrl != nullptr && m_isInitialized != 0) {
+		m_isInitialized = m_pTrfCtrl->init(m_szPath, m_size, sTrfCache::CACHE_TTL, sTrfReader::STRF_TYPE_TTL, time);	// traffic_pattern_ttl.bin
 	}
 
-	if (ttlId > 0 && (m_mapTTL.find(ttlId) != m_mapTTL.end())) {
+	if (m_isInitialized == 0 && ttlId > 0 && (m_mapTTL.find(ttlId) != m_mapTTL.end())) {
 		int bidx = m_mapTTL[ttlId] / 2048;
 		int iidx = m_mapTTL[ttlId] % 2048;
 
@@ -70,15 +72,17 @@ int ReadTTLSpd::GetStaticSpeedBlock(const time_t time, std::unordered_map<uint64
 {
 	int ret = -1;
 
-	if (m_pTrfCtrl == nullptr) {
-		m_pTrfCtrl->init(m_szPath, m_size, sTrfCache::CACHE_TTL, sTrfReader::STRF_TYPE_TTL, time);	// traffic_pattern_ttl.bin
+	if (m_pTrfCtrl != nullptr && m_isInitialized != 0) {
+		m_isInitialized = m_pTrfCtrl->init(m_szPath, m_size, sTrfCache::CACHE_TTL, sTrfReader::STRF_TYPE_TTL, time);	// traffic_pattern_ttl.bin
 	}
 
-	std::vector<uint8_t> vtBlock(m_vtStatic.size());
-	ret = m_pTrfCtrl->speed_block(vtBlock, time);
+	if (m_isInitialized == 0) {
+		std::vector<uint8_t> vtBlock(m_vtStatic.size());
+		ret = m_pTrfCtrl->speed_block(vtBlock, time);
 
-	for (const auto& item : m_vtStatic) {
-		umapStatic[item.ttlid] = item.spd;
+		for (const auto& item : m_vtStatic) {
+			umapStatic[item.ttlid] = item.spd;
+		}
 	}
 
 	return ret;

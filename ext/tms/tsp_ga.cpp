@@ -54,7 +54,8 @@ int32_t Gene::GetGlued(void) const
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // Individual
-bool cmpFitness(Individual lhs, Individual rhs) {
+bool cmpFitness(Individual lhs, Individual rhs) 
+{
 	return lhs.GetFitness() < rhs.GetFitness(); // 올림차순 // fitness가 큰 개체 우선
 }
 
@@ -149,6 +150,16 @@ double Individual::CalculateCost(IN const vector<vector<stDistMatrix>>& vtDistMa
 	for (int ii = 0; ii < count - 1; ii++) {
 		prv = chromosome[ii].GetAttribute();
 		next = chromosome[ii+1].GetAttribute();
+
+		if ((m_start >= 0) && (m_start == m_finish)) { // 출발지 원점회귀
+			if (prv == vtDistMatrix.size()) {
+				prv = 0;
+			} else if (next == vtDistMatrix.size()) {
+				next = 0;
+			}
+		} else if ((m_start != 0) && (m_start == m_finish)) {
+			next = 0;
+		}
 #if defined(USE_REAL_ROUTE_TSP)
 		cost += vtDistMatrix[prv][next].dbTotalCost;
 		dist += vtDistMatrix[prv][next].nTotalDist;
@@ -242,6 +253,18 @@ uint32_t Individual::GetMutate(void)
 }
 
 
+int32_t Individual::GetStart(void) const
+{
+	return m_start;
+}
+
+
+int32_t Individual::GetFinish(void) const
+{
+	return m_finish;
+}
+
+
 void Individual::SetFitness(IN const double val)
 {
 	fitness = val;
@@ -264,6 +287,51 @@ void Individual::SetParent(IN const uint32_t p1, IN const uint32_t p2)
 void Individual::SetMutate(IN const uint32_t state)
 {
 	mutate = state;
+}
+
+
+void Individual::SetStartFinish(IN const int32_t nStart, IN const int32_t nEnd)
+{
+	m_start = nStart;
+	m_finish = nEnd;
+
+	// 출발지 원점회귀
+	if ((m_start >= 0) && (m_start == m_finish)) {
+		// 첫 유전자 생성
+		chromosome[0].SetGlued(m_start);
+
+		// 마지막 유전자는 이후로 컨트롤하지 말자
+		//enableGeneSize--;
+
+		// 마지막 유전자 생성
+		chromosome[GetGeneSize() - 1].SetGlued(m_finish);
+	}
+	// 출-도착지 고정
+	else if ((m_start >= 0) && (m_finish >= 0) && (m_start != m_finish)) {
+		// 첫 유전자 생성
+		chromosome[0].SetGlued(m_start);
+
+		// 마지막 유전자는 이후로 컨트롤하지 말자
+		//enableGeneSize--;
+
+		// 마지막 유전자 생성
+		chromosome[GetGeneSize() - 1].SetGlued(m_finish);
+	}
+	// 출발지 고정
+	else if (m_start >= 0) {
+		// 첫 유전자 생성
+		chromosome[0].SetGlued(m_start);
+	}
+	// 도착지 고정
+	else if (m_finish >= 0) {
+		// 마지막 유전자는 이후로 컨트롤하지 말자
+		//enableGeneSize--;
+
+		// 마지막 유전자 생성
+		chromosome[GetGeneSize() - 1].SetGlued(m_finish);
+	} else {
+
+	}
 }
 
 
@@ -342,7 +410,7 @@ bool Individual::Propagation(IN const vector<tableItemNearlest>* pNearlest, IN c
 	}
 
 
-	int nMaxNode = 1;// 2 + maxLoop; // 처음에는 각 정점에서 확장 가능한 다음 정점을 3개로 제한
+	int nMaxNode = 5; //1;// 2 + maxLoop; // 처음에는 각 정점에서 확장 가능한 다음 정점을 3개로 제한
 
 	stCandidateWaypoint* pItem = nullptr;
 	stCandidateWaypoint* pSuccess = nullptr;
@@ -757,9 +825,7 @@ bool Individual::Create(IN const vector<tableItemNearlest>* pNearlest, IN const 
 					//	//order = rand() % (geneSize * (idx % 10) * 10 / 100); // 우선순위 10%~100% 내에서 선택 // 1,2,3 순위를 랜덤으로 가져오도록
 					//}
 				} else {
-					order = (rand() % 3); // 우선순위 30%내에서 선택 // 1,2,3 순위를 랜덤으로 가져오도록
-					//order = (rand() % 6) * orderRate / 100; // 우선순위 30%내에서 선택 // 1,2,3 순위를 랜덤으로 가져오도록
-
+					order = (rand() % 5); //3->5 2025-09-23 변경 // 우선순위 30%내에서 선택 // 1,2,3 순위를 랜덤으로 가져오도록
 					//order = (rand() % enableGeneSize) * orderRate / 100; // 우선순위 30%내에서 선택 // 1,2,3 순위를 랜덤으로 가져오도록
 					//order = rand() % (geneSize * (idx % 10) * 10 / 100); // 우선순위 10%~100% 내에서 선택 // 1,2,3 순위를 랜덤으로 가져오도록
 				}
@@ -926,22 +992,22 @@ bool Environment::SetCostTable(IN const vector<vector<stDistMatrix>>& vtDistMatr
 	uint32_t maxGene = tableCount;
 
 	// 출발지 고정 & 원점 회귀
-	if (tspOption.positionLock == TYPE_TSP_RECURSIVE) {
+	if (tspOption.endpointType == TYPE_TSP_ENDPOINT_RECURSIVE) {
 		// 회귀는 마지막 강제 추가
 		tableCount++;
 		maxGene++;
 	}
 	// 출발지-도착지 고정
-	else if (tspOption.positionLock == TYPE_TSP_LOCK_START_END) {
+	else if (tspOption.endpointType == TYPE_TSP_ENDPOINT_START_END) {
 		//maxGene = tableCount - 1;
 		maxGene = tableCount;
 	}	
 	// 출발지 고정
-	else if (tspOption.positionLock == TYPE_TSP_LOCK_START) {
+	else if (tspOption.endpointType == TYPE_TSP_ENDPOINT_START) {
 		maxGene = tableCount;
 	}
 	// 도착지 고정
-	else if (tspOption.positionLock == TYPE_TSP_LOCK_END) {
+	else if (tspOption.endpointType == TYPE_TSP_ENDPOINT_END) {
 		//maxGene = tableCount - 1;
 		maxGene = tableCount;
 	} else {
@@ -957,7 +1023,7 @@ bool Environment::SetCostTable(IN const vector<vector<stDistMatrix>>& vtDistMatr
 		uint32_t max = 0;
 
 		tableItemNearlest currentGene;
-		if ((tspOption.positionLock == TYPE_TSP_RECURSIVE) && (ii == maxGene - 1)) {
+		if ((tspOption.endpointType == TYPE_TSP_ENDPOINT_RECURSIVE) && (ii == maxGene - 1)) {
 			// 회귀는 마지막 강제 추가된 염색체를 첫번째 염색체와 동일하게 적용
 			currentGene.idx = 0;
 		} else {
@@ -966,7 +1032,7 @@ bool Environment::SetCostTable(IN const vector<vector<stDistMatrix>>& vtDistMatr
 
 		for (int jj = 0; jj < maxGene; jj++) {
 			tableItem neighborGene;
-			if ((tspOption.positionLock == TYPE_TSP_RECURSIVE) && (jj == maxGene - 1)) {
+			if ((tspOption.endpointType == TYPE_TSP_ENDPOINT_RECURSIVE) && (jj == maxGene - 1)) {
 				// 회귀는 마지막 강제 추가된 염색체를 첫번째 염색체와 동일하게 적용
 				currentGene.idx = 0;
 			} else {
@@ -1058,31 +1124,31 @@ void Environment::Genesis(IN const uint32_t maxGene, IN const uint32_t maxPopula
 		int nEnd = -1;
 
 		// 출발지 고정 & 원점 회귀
-		if (tspOption.positionLock == TYPE_TSP_RECURSIVE) {
+		if (tspOption.endpointType == TYPE_TSP_ENDPOINT_RECURSIVE) {
 			// 회귀는 마지막 강제 추가
 			newIndi.SetGeneSize(maxGene + 1);
 			nStart = 0;
 			nEnd = 0;
 		}
 		// 출발지-도착지 고정
-		else if (tspOption.positionLock == TYPE_TSP_LOCK_START_END) {
+		else if (tspOption.endpointType == TYPE_TSP_ENDPOINT_START_END) {
 			nStart = 0;
 			nEnd = maxGene - 1;
 		}
 		// 출발지 고정
-		else if (tspOption.positionLock == TYPE_TSP_LOCK_START) {
+		else if (tspOption.endpointType == TYPE_TSP_ENDPOINT_START) {
 			nStart = 0;
 			nEnd = -1;
 		}
 		// 도착지 고정
-		else if (tspOption.positionLock == TYPE_TSP_LOCK_END) {
+		else if (tspOption.endpointType == TYPE_TSP_ENDPOINT_END) {
 			nStart = -1;
 			nEnd = maxGene - 1;
 		} 
 		// 미지정
 		else {
-			//nStart = -1;
-			//nEnd = -1;
+			nStart = -1;
+			nEnd = -1;
 		}
 
 		newIndi.Create(&genePriority, nStart, nEnd, ii);
@@ -1318,7 +1384,15 @@ bool Environment::CrossBySelf(IN Individual* pSelf, IN const int32_t pos, IN con
 		// befor
 		for (int kk = jj - 1; kk < jj + off; kk++) {
 			prev = pGenes->at(kk).GetAttribute();
-			next = pGenes->at(kk+1).GetAttribute();
+			next = pGenes->at(kk + 1).GetAttribute();
+
+			if (tspOption.endpointType == TYPE_TSP_ENDPOINT_RECURSIVE) { // 원점회귀
+				if (prev == pGenes->size() - 1) {
+					prev = 0;
+				} else if (next == pGenes->size() - 1) {
+					next = 0;
+				}
+			}
 #if defined(USE_REAL_ROUTE_TSP)
 			costBefor = ppTables->at(prev)[next].dbTotalCost;
 			distBefor = ppTables->at(prev)[next].nTotalDist;
@@ -1339,6 +1413,14 @@ bool Environment::CrossBySelf(IN Individual* pSelf, IN const int32_t pos, IN con
 		for (int kk = jj - 1; kk < jj + off; kk++) {
 			prev = pGenes->at(kk).GetAttribute();
 			next = pGenes->at(kk + 1).GetAttribute();
+
+			if (tspOption.endpointType == TYPE_TSP_ENDPOINT_RECURSIVE) { // 원점회귀
+				if (prev == pGenes->size() - 1) {
+					prev = 0;
+				} else if (next == pGenes->size() - 1) {
+					next = 0;
+				}
+			}
 #if defined(USE_REAL_ROUTE_TSP)
 			costAfter = ppTables->at(prev)[next].dbTotalCost;
 			distAfter = ppTables->at(prev)[next].nTotalDist;
@@ -1377,7 +1459,7 @@ bool Environment::Crossover(IN vector<Parents>& pairs)
 	// 자식들
 	vector<Individual> offsprings;
 
-	const int32_t fullSize = population[0].GetGeneSize();// population[0].GetChromosomeSize();
+	int32_t fullSize = population[0].GetGeneSize();// population[0].GetChromosomeSize();
 	int32_t frontSize = fullSize / 2;
 	if (fullSize > 3) {
 		frontSize = fullSize % ((rand() % (fullSize - 3)) + 3); // 3~SIZE 위치 분할 
@@ -1387,9 +1469,15 @@ bool Environment::Crossover(IN vector<Parents>& pairs)
 
 	Individual child;
 	child.SetGeneSize(fullSize);
+	child.SetStartFinish(population[0].GetStart(), population[0].GetFinish()); // 부모속성 전달
 
 	visited.reserve(fullSize);
 	offsprings.reserve(pairs.size() * 4 + 11); // 
+
+
+	if (tspOption.endpointType == TYPE_TSP_ENDPOINT_RECURSIVE) { // 원점회귀
+		fullSize -= 1;
+	}
 
 	// elitism
 	// 상위 10% 부모는 형질을 그대로 전승.
@@ -1491,6 +1579,7 @@ bool Environment::Crossover(IN vector<Parents>& pairs)
 	//	//	offsprings.emplace_back(child);
 	//	//}
 	//}
+
 
 
 	// 유전자를 역순으로 배치
@@ -1596,7 +1685,11 @@ bool Environment::Crossover(IN vector<Parents>& pairs)
 
 				// 재시도 할 녀석들
 				if (next < 0) {
-					vtRetry.emplace_back(jj);
+					if ((tspOption.endpointType == TYPE_TSP_ENDPOINT_RECURSIVE) && (jj == child.GetGeneSize() - 1)) { // 원점회귀
+						// do notthing
+					} else {
+						vtRetry.emplace_back(jj);
+					}
 				}
 				else {
 					visited.emplace(cur);
@@ -1615,6 +1708,7 @@ bool Environment::Crossover(IN vector<Parents>& pairs)
 				}
 			}
 
+
 			// 자녀 등록
 #ifdef USE_PARALLEL
 #pragma omp critical
@@ -1624,7 +1718,8 @@ bool Environment::Crossover(IN vector<Parents>& pairs)
 
 			// 유전자 강제 변이
 			Mutation(&child, 50);
-		
+
+
 			// 자녀 등록
 #ifdef USE_PARALLEL
 #pragma omp critical
@@ -1718,7 +1813,7 @@ void Environment::GetBest(vector<int>& result)
 	for (int ii = 0; ii < population[0].GetChromosome()->size(); ii++) {
 		// 출발지 고정 & 원점 회귀
 		// 회귀는 마지막 강제 추가된 염색체 제외
-		if ((tspOption.positionLock == TYPE_TSP_RECURSIVE) && (ii == tableCount - 1)) {
+		if ((tspOption.endpointType == TYPE_TSP_ENDPOINT_RECURSIVE) && (ii == tableCount - 1)) {
 			break;
 		}
 		result.emplace_back(population[0].GetChromosome()->at(ii).GetAttribute());

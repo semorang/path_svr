@@ -76,6 +76,6 @@ public:
 	bool LoadData(void);
 	bool LoadDataByIdx(IN const uint32_t idx);
 
-	bool GetData(IN const uint32_t idTile);
+	bool GetData(IN const uint32_t idxTile);
 };
 

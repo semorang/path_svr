@@ -52,6 +52,10 @@ size_t CFileExtend::ReadBody(FILE* fp)
 
 	for (int32_t idx = 0; idx < m_vtIndex.size(); idx++)
 	{
+		if (!checkTestMesh(m_vtIndex[idx].idTile)) {
+			continue;
+		}
+
 		// read body
 		if (m_vtIndex[idx].szBody <= 0) {
 			continue;
@@ -155,7 +159,7 @@ bool CFileExtend::LoadDataByIdx(IN const uint32_t idx)
 	// read body
 	if (m_vtIndex[idx].offBody <= 0 || m_vtIndex[idx].szBody <= 0)
 	{
-		LOG_TRACE(LOG_ERROR, "Failed, index body info invalid, off:%d, size:%d", m_vtIndex[idx].offBody, m_vtIndex[idx].szBody);
+		//LOG_TRACE(LOG_ERROR, "Failed, index body info invalid, off:%d, size:%d", m_vtIndex[idx].offBody, m_vtIndex[idx].szBody);
 		fclose(fp);
 		return false;
 	}

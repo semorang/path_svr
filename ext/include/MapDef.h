@@ -117,15 +117,12 @@ typedef struct tagRECT
 // 0.0.6 change u-turn status behave action
 // 0.0.6 Turn-left allows a minimum distance applied as 50m to the intersection from start point
 // 0.0.6 add candidate request option
+// 0.0.7 add to avoid continuous short turns
 #define ENGINE_VERSION_MAJOR	0
 #define ENGINE_VERSION_MINOR	0
-#define ENGINE_VERSION_PATCH	6
+#define ENGINE_VERSION_PATCH	7
 #define ENGINE_VERSION_BUILD	0
 #elif defined(USE_OPTIMAL_POINT_API)
-#define ENGINE_VERSION_MAJOR	1
-#define ENGINE_VERSION_MINOR	0
-#define ENGINE_VERSION_PATCH	13
-#define ENGINE_VERSION_BUILD	0
 // 1.0.6 fix road param setting, and bycicle -> bicicle
 // 1.0.7 add optimal point angle attribute when data compile step, with data v1.0.3
 // 1.0.8 file execute name change
@@ -134,7 +131,12 @@ typedef struct tagRECT
 // 1.0.11 change max multi core max -> max - 1 
 // 1.0.12 fix cjson print free after using result
 // 1.0.13 add to multi optimal position function
-// 1.0.14 merge to request route options to struct data <-- 미리 추가함 2025-02-25
+// 1.0.14 change the minimum limit distance value when there are other near links from the matched link
+// 1.0.15 fix entry type case switching code and empty building case.
+#define ENGINE_VERSION_MAJOR	1
+#define ENGINE_VERSION_MINOR	0
+#define ENGINE_VERSION_PATCH	15
+#define ENGINE_VERSION_BUILD	0
 #elif defined(USE_ROUTING_POINT_API)
 #	if defined(USE_FOREST_DATA)
 // 0.0.5 add multi modal route (forest entrance + pedestrian)
@@ -166,9 +168,10 @@ typedef struct tagRECT
 // 0.0.13 add bicycle type link match for avoid link
 // 0.0.14 allow bicycle only stairs attribute when use bicycle mobility
 // 0.0.15 cross walk cost decrease when using bicycle
+// 0.0.16 change bike cost to increase path similarity with kakao/naver
 #define ENGINE_VERSION_MAJOR	0
 #define ENGINE_VERSION_MINOR	0
-#define ENGINE_VERSION_PATCH	15
+#define ENGINE_VERSION_PATCH	16
 #define ENGINE_VERSION_BUILD	0
 #	else // defined(USE_VEHICLE_DATA)
 #		if defined(USE_TMS_API)
@@ -187,7 +190,7 @@ typedef struct tagRECT
 // 0.1.0 propagation method change, 첫번쨰 지점 도착시 우선순위 큐의 휴리스틱을 확장 코스트로 변경하여 코스 외곡을 방지 & 먼거리 지점을 우선 타겟팅하여 휴리스특 적용
 // 0.1.1 한계값의 다중 타입 값을 중복처리 하도록 적용
 // 0.1.2 거리 분할 + 체류 시간 포함 적용
-// 0.1.3 시간 분할 + 체류 시간 포함 적용 해야 함 (...ing) 2025.06.02~
+// 0.1.3 출/도착지 정보의 분할 입력 가능하도록 적용, add destinations field in request json
 #define ENGINE_VERSION_MAJOR	0
 #define ENGINE_VERSION_MINOR	1
 #define ENGINE_VERSION_PATCH	3
@@ -219,7 +222,7 @@ typedef struct tagRECT
 
 #define USE_CJSON
 
-#define GLOBAL_MESH_ID		0 // 전체 데이터 영역 관리 메시 ID
+#define GLOBAL_MESH_ID		0 // 전체 데이터 영역 관리 메시 ID, z-order 와 관련있음, 0 일경우 좌표 등을 매칭 시 우선 타겟팅 됨
 
 enum NETWORKTYPE { LINK, NODE };
 enum DIRECTION { BIDIRECTION, FORWARD, DIR_POSITIVE = FORWARD, REVERSE, DIR_NAGATIVE = REVERSE };
@@ -272,32 +275,58 @@ struct stNameInfo {
 	string name;
 };
 
+
 struct stMeshInfo {
 	KeyID mesh_id;
 	SBox mesh_box;
 	SBox data_box;
+#if defined(USE_FOREST_DATA)
+#ifdef TEST_SPATIALINDEX
+	void* flinkStorage; // IStorageManager
+	void* flinkTree; // IStorageManager
+#else
 	vector<KeyID> nodes;
 	vector<KeyID> links;
+#endif
+#endif
 #if defined(USE_PEDESTRIAN_DATA)
+#ifdef TEST_SPATIALINDEX
+	void* wlinkStorage; // IStorageManager
+	void* wlinkTree; // IStorageManager
+#else
 	vector<KeyID> wnodes;
 	vector<KeyID> wlinks;
 #endif
+#endif
 #if defined(USE_VEHICLE_DATA)
+#ifdef TEST_SPATIALINDEX
+	void* vlinkStorage; // IStorageManager
+	void* vlinkTree; // IStorageManager
+#else
 	vector<KeyID> vnodes;
 	vector<KeyID> vlinks;
 #endif
+#endif
 #if defined(USE_OPTIMAL_POINT_API) || defined(USE_FOREST_DATA)
+#ifdef TEST_SPATIALINDEX
+	void* buildingStorage; // IStorageManager
+	void* buildingTree; // IStorageManager
+	void* complexStorage; // IStorageManager
+	void* complexTree; // IStorageManager
+#else
 	vector<KeyID> buildings;
 	vector<KeyID> complexs;
 #endif
+#endif
 	unordered_set<uint32_t> neighbors;
 
-#if 1//defined(_DEBUG)
-	set<KeyID> setNodeDuplicateCheck;
-	set<KeyID> setLinkDuplicateCheck;
+#if defined(USE_FOREST_DATA)
+	set<KeyID> setFNodeDuplicateCheck;
+	set<KeyID> setFLinkDuplicateCheck;
 #if defined(USE_PEDESTRIAN_DATA)
 	set<KeyID> setWNodeDuplicateCheck;
 	set<KeyID> setWLinkDuplicateCheck;
+#endif
 #endif
 #if defined(USE_VEHICLE_DATA)
 	set<KeyID> setVNodeDuplicateCheck;
@@ -307,34 +336,78 @@ struct stMeshInfo {
 	set<KeyID> setBldDuplicateCheck;
 	set<KeyID> setCpxDuplicateCheck;
 #endif
-#endif
 
 	stMeshInfo() {
 		mesh_id.llid = 0;
 		memset(&mesh_box, 0x00, sizeof(mesh_box));
 		memset(&data_box, 0x00, sizeof(data_box));
+
+#ifdef TEST_SPATIALINDEX
+#if defined(USE_FOREST_DATA)
+		flinkStorage = nullptr;
+		flinkTree = nullptr;
+#endif
+#if defined(USE_PEDESTRIAN_DATA)
+		wlinkStorage = nullptr;
+		wlinkTree = nullptr;
+#endif
+#if defined(USE_VEHICLE_DATA)
+		vlinkStorage = nullptr;
+		vlinkTree = nullptr;
+#endif
+#if defined(USE_OPTIMAL_POINT_API) || defined(USE_FOREST_DATA)
+		buildingStorage = nullptr;
+		buildingTree = nullptr;
+		complexStorage = nullptr;
+		complexTree = nullptr;
+#endif
+#endif // #ifdef TEST_SPATIALINDEX
 	}
 
 	~stMeshInfo() {
+#if defined(USE_FOREST_DATA)
+#ifdef TEST_SPATIALINDEX
+		if (flinkStorage) { SAFE_DELETE(flinkStorage); }
+		if (flinkTree) { SAFE_DELETE(flinkTree); }
+#else
 		if (!nodes.empty()) { nodes.clear(); vector<KeyID>().swap(nodes); }
 		if (!links.empty()) { links.clear(); vector<KeyID>().swap(links); }
+#endif
+#endif
 #if defined(USE_PEDESTRIAN_DATA)
+#ifdef TEST_SPATIALINDEX
+		if (wlinkStorage) { SAFE_DELETE(wlinkStorage); }
+		if (wlinkTree) { SAFE_DELETE(wlinkTree); }
+#else
 		if (!wnodes.empty()) { wnodes.clear(); vector<KeyID>().swap(wnodes); }
 		if (!wlinks.empty()) { wlinks.clear(); vector<KeyID>().swap(wlinks); }
 #endif
+#endif
 #if defined(USE_VEHICLE_DATA)
+#ifdef TEST_SPATIALINDEX
+		if (vlinkStorage) { SAFE_DELETE(vlinkStorage); }
+		if (vlinkTree) { SAFE_DELETE(vlinkTree); }
+#else
 		if (!vnodes.empty()) { vnodes.clear(); vector<KeyID>().swap(vnodes); }
 		if (!vlinks.empty()) { vlinks.clear(); vector<KeyID>().swap(vlinks); }
 #endif
+#endif
 #if defined(USE_OPTIMAL_POINT_API) || defined(USE_MOUNTAIN_DATA)
+#ifdef TEST_SPATIALINDEX
+		if (buildingStorage) { SAFE_DELETE(buildingStorage); }
+		if (buildingTree) { SAFE_DELETE(buildingTree); }
+		if (complexStorage) { SAFE_DELETE(complexStorage); }
+		if (complexTree) { SAFE_DELETE(complexTree); }
+#else
 		if (!buildings.empty()) { buildings.clear(); vector<KeyID>().swap(buildings); }
 		if (!complexs.empty()) { complexs.clear(); vector<KeyID>().swap(complexs); }
 #endif
+#endif
 		if (!neighbors.empty()) { neighbors.clear(); unordered_set<uint32_t>().swap(neighbors); }
 
-#if 1//defined(_DEBUG)
-		if (!setNodeDuplicateCheck.empty()) { setNodeDuplicateCheck.clear(); set<KeyID>().swap(setNodeDuplicateCheck); }
-		if (!setLinkDuplicateCheck.empty()) { setLinkDuplicateCheck.clear(); set<KeyID>().swap(setLinkDuplicateCheck); }
+#if defined(USE_FOREST_DATA)
+		if (!setFNodeDuplicateCheck.empty()) { setFNodeDuplicateCheck.clear(); set<KeyID>().swap(setFNodeDuplicateCheck); }
+		if (!setFLinkDuplicateCheck.empty()) { setFLinkDuplicateCheck.clear(); set<KeyID>().swap(setFLinkDuplicateCheck); }
 #if defined(USE_PEDESTRIAN_DATA)
 		if (!setWNodeDuplicateCheck.empty()) { setWNodeDuplicateCheck.clear(); set<KeyID>().swap(setWNodeDuplicateCheck); }
 		if (!setWLinkDuplicateCheck.empty()) { setWLinkDuplicateCheck.clear(); set<KeyID>().swap(setWLinkDuplicateCheck); }
@@ -436,7 +509,7 @@ typedef struct _tagstLinkTrekkingInfo {
 	uint64_t course_type : 3; // 0:미정의, 1:등산로, 2:둘레길, 3:자전거길, 4:종주코스, 5:추천코스, 6:MTB코스, 7:인기코스
 	uint64_t road_info : 12; // 노면정보, 0:기타, 1:오솔길, 2:포장길, 3:계단, 4:교량, 5:암릉, 6:릿지, 7;사다리, 8:밧줄, 9:너덜길, 10:야자수매트, 11:데크로드, 12:철구조물
 	uint64_t dir_cd : 2; // 방면방향정보, 0:미정의, 1:정, 2:역
-	uint64_t diff : 3; // 법정탐방로 1비를를 위해 4->3비트 변경 (diff는 아직 값이 없기에), 2024-02-27 <== 난도 0~15, (숫자가 클수록 어려움)
+	uint64_t diff : 3; // 법정탐방로 1비트를 위해 4->3비트 변경 (diff는 아직 값이 없기에), 2024-02-27 <== 난도 0~15, (숫자가 클수록 어려움)
 	uint64_t slop : 8; // 경사도 +/- 100
 	uint64_t fw_tm : 10;// 0~1023 정방향 이동 시간 (초)
 	uint64_t bw_tm : 10;// 0~1023 역방향 이동 시간 (초)
@@ -518,7 +591,7 @@ typedef struct _tagstLinkTrekkingInfoExt {
 
 typedef struct _tagstCourseInfo {
 	union {
-		uint32_t course_id;
+		uint32_t course_value;
 		struct {
 			uint32_t course_type : 3; // 코스타입, 0:미정의, 1:등산로, 2:둘레길, 3:자전거길, 4:종주코스, 5:추천코스, 6:MTB코스, 7:인기코스
 			uint32_t course_cd : 20; // 코스 CD
@@ -1503,9 +1576,9 @@ typedef struct _tagBaseOption
 		fileCache = 0;
 		binary = 0;
 		mobility = TYPE_MOBILITY_VEHICLE;
-		distance_type = 1;
-		compare_type = 0;
-		expand_method = 0;
+		distance_type = 1; // "0:NONE, 1:ROUTE",
+		compare_type = 0; // "0:NONE, 1:COST, 2:DIST, 3:TIME",
+		expand_method = 1; // "0:NONE, 1:LEVEL_PROPAGATION", // 2025-08-20 기본 레벨확장방식 사용
 	}
 
 	_tagBaseOption& operator=(const _tagBaseOption& rhs)
@@ -1543,7 +1616,7 @@ typedef struct _tagTspOption
 	int32_t loopCount;
 	int32_t seed; // 랜덤 seed
 	int32_t compareType;
-	int32_t positionLock; // 지점 고정, 0:미사용, 1:출발지 고정, 2:도착지 고정, 3:출발지-도착지 고정, 4:출발지 회귀
+	int32_t endpointType; // 지점 고정, 0:미사용, 1:출발지 고정, 2:도착지 고정, 3:출발지-도착지 고정, 4:출발지 회귀
 
 	_tagTspOption()
 	{
@@ -1553,7 +1626,7 @@ typedef struct _tagTspOption
 		loopCount = 1000;
 		seed = 10000;// 1000 + 49 * 2;
 		compareType = TYPE_TSP_VALUE_DIST;
-		positionLock = TYPE_TSP_LOCK_NONE;
+		endpointType = TYPE_TSP_ENDPOINT_NONE;
 	}
 
 	_tagTspOption& operator=(const _tagTspOption& rhs)
@@ -1566,7 +1639,7 @@ typedef struct _tagTspOption
 		this->loopCount = rhs.loopCount;
 		this->seed = rhs.seed;
 		this->compareType = rhs.compareType;
-		this->positionLock = rhs.positionLock;
+		this->endpointType = rhs.endpointType;
 
 		return *this;
 	}
@@ -1583,7 +1656,7 @@ typedef struct _tagClusteringOption
 
 	int32_t divisionType; // 분배 타입, 0:갯수균등, 1:거리균등, 2:시간균등
 	int32_t limitCluster; // 최대 배차(클러스터링) 차량 수
-	int32_t limitValue; // 차량당 최대 운행 가능 값, 거리(미터)/시간(초)-분으로 입력받아 초로 변환
+	int32_t limitValue; // 차량당 최대 배송지수, 최대 거리(미터), 최대 시간(초)-분으로 입력받아 초로 변환
 	int32_t limitDeviation; // 차량당 최대 운행 정보 편차
 	int32_t max_spot; // 차량당 최대 운송 가능 개수
 	int32_t max_distance; // 차량당 최대 운행 가능 거리
@@ -1591,7 +1664,7 @@ typedef struct _tagClusteringOption
 	int32_t max_cargo; // 차량당 최대 적재 가능 화물
 	int32_t reservation; // 예약 시각
 	int32_t reservationType; // 예약 타입, 0:미사용, 1:출발시간, 2:도착시간
-	int32_t positionLock; // 지점 고정, 0:미사용, 1:출발지 고정, 2:도착지 고정, 3:출발지-도착지 고정, 4:출발지 회귀
+	int32_t endpointType; // 지점 고정, 0:미사용, 1:출발지 고정, 2:도착지 고정, 3:출발지-도착지 고정, 4:출발지 회귀
 	int32_t additionalType; // 추가 배당 타입, "0:미사용, 1:갯수, 2:무게(g), 3:사이즈(cm)",
 	int32_t additionalLimit; // 추가 배당 최대 한도
 
@@ -1611,7 +1684,7 @@ typedef struct _tagClusteringOption
 		max_cargo = 0;
 		reservation = 0;
 		reservationType = 0;
-		positionLock = TYPE_TSP_LOCK_NONE;
+		endpointType = TYPE_TSP_ENDPOINT_NONE;
 		additionalType = 0;
 		additionalLimit = 0;
 	}
@@ -1634,7 +1707,7 @@ typedef struct _tagClusteringOption
 		this->max_cargo = rhs.max_cargo;
 		this->reservation = rhs.reservation;
 		this->reservationType = rhs.reservationType;
-		this->positionLock = rhs.positionLock;
+		this->endpointType = rhs.endpointType;
 		this->additionalType = rhs.additionalType;
 		this->additionalLimit = rhs.additionalLimit;
 

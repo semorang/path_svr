@@ -155,11 +155,8 @@ bool CFileComplex::ParseData(IN const char* fname)
 		}
 
 
-		// 테스트 메쉬가 있으면 정의된 메쉬만 확인하자
-		if (g_isUseTestMesh && !g_arrTestMesh.empty()) {
-			if (g_arrTestMesh.find(complex.MeshID) == g_arrTestMesh.end()) {
-				continue;
-			}
+		if (!checkTestMesh(complex.MeshID)) {
+			continue;
 		}
 
 
@@ -278,6 +275,11 @@ bool CFileComplex::GenServiceData()
 		}
 	}
 
+#if defined(TEST_SPATIALINDEX)
+	// 검색 트리 구성 필요
+	m_pDataMgr->CreateSpatialindex(TYPE_DATA_COMPLEX);
+#endif
+
 	// Entrance에서 사용하니까 릴리즈시점 조절 필요
 	//Release();
 	if (!m_mapComplex.empty()) {
@@ -313,8 +315,8 @@ size_t CFileComplex::ReadBody(FILE* fp)
 	FileBody fileBody = { 0, };
 	FilePolygon fileCpx = { 0, };
 
-	stMeshInfo* pMesh;
-	stPolygonInfo* pCpx;
+	stMeshInfo* pMesh = nullptr;
+	stPolygonInfo* pCpx = nullptr;
 
 	size_t offFile = 0;
 	size_t retRead = 0;
@@ -322,6 +324,10 @@ size_t CFileComplex::ReadBody(FILE* fp)
 
 	for (int idx = 0; idx < m_vtIndex.size(); idx++)
 	{
+		if (!checkTestMesh(m_vtIndex[idx].idTile)) {
+			continue;
+		}
+
 		// read body
 		if (m_vtIndex[idx].szBody <= 0) {
 			continue;
@@ -466,6 +472,10 @@ size_t CFileComplex::ReadBody(FILE* fp)
 
 		offFile += m_vtIndex[idx].szBody;
 
+#ifdef TEST_SPATIALINDEX
+		m_pDataMgr->CreateSpatialindex(pMesh, TYPE_DATA_COMPLEX);
+#endif
+
 #if defined(_DEBUG)
 		LOG_TRACE(LOG_DEBUG, "Data loading, complex data loaded, mesh:%d, cnt:%lld", pMesh->mesh_id.tile_id, fileBody.area.cntPolygon);
 #endif
@@ -492,24 +502,19 @@ bool CFileComplex::LoadDataByIdx(IN const uint32_t idx)
 	FileBody fileBody = { 0, };
 	FilePolygon fileCpx = { 0, };
 
-	stMeshInfo* pMesh;
-	stPolygonInfo* pCpx;
+	stMeshInfo* pMesh = nullptr;
+	stPolygonInfo* pCpx = nullptr;
 	
 	size_t offFile = 0;
 	size_t offItem = 0;
 	size_t retRead = 0;
 
 	// read index
-	pMesh = new stMeshInfo;
-	//memset(pMesh, 0x00, sizeof(stMeshInfo));
-
-
-
 
 	// read body
 	if (m_vtIndex[idx].offBody <= 0 || m_vtIndex[idx].szBody <= 0)
 	{
-		LOG_TRACE(LOG_ERROR, "Failed, index body info invalid, off:%d, size:%d", m_vtIndex[idx].offBody, m_vtIndex[idx].szBody);
+		//LOG_TRACE(LOG_ERROR, "Failed, index body info invalid, off:%d, size:%d", m_vtIndex[idx].offBody, m_vtIndex[idx].szBody);
 		fclose(fp);
 		return false;
 	}
@@ -531,16 +536,21 @@ bool CFileComplex::LoadDataByIdx(IN const uint32_t idx)
 
 
 	// mesh
-	pMesh->mesh_id.tile_id = m_vtIndex[idx].idTile;
-	memcpy(&pMesh->mesh_box, &m_vtIndex[idx].rtTile, sizeof(pMesh->mesh_box));
-	memcpy(&pMesh->data_box, &m_vtIndex[idx].rtData, sizeof(pMesh->data_box));
-	for (int ii = 0; ii < 8; ii++) {
-		if (m_vtIndex[idx].idNeighborTile[ii] <= 0) {
-			continue;
+	pMesh = GetMeshDataById(m_vtIndex[idx].idTile, false);
+	if (!pMesh) {
+		pMesh = new stMeshInfo;
+
+		pMesh->mesh_id.tile_id = m_vtIndex[idx].idTile;
+		memcpy(&pMesh->mesh_box, &m_vtIndex[idx].rtTile, sizeof(pMesh->mesh_box));
+		memcpy(&pMesh->data_box, &m_vtIndex[idx].rtData, sizeof(pMesh->data_box));
+		for (int ii = 0; ii < 8; ii++) {
+			if (m_vtIndex[idx].idNeighborTile[ii] <= 0) {
+				continue;
+			}
+			pMesh->neighbors.emplace(m_vtIndex[idx].idNeighborTile[ii]);
 		}
-		pMesh->neighbors.emplace(m_vtIndex[idx].idNeighborTile[ii]);
+		AddMeshData(pMesh);
 	}
-	AddMeshData(pMesh);
 
 
 	// complex
@@ -642,6 +652,10 @@ bool CFileComplex::LoadDataByIdx(IN const uint32_t idx)
 
 	fclose(fp);
 
+#ifdef TEST_SPATIALINDEX
+	m_pDataMgr->CreateSpatialindex(pMesh, TYPE_DATA_COMPLEX);
+#endif
+
 	return true;
 }
 
@@ -682,13 +696,14 @@ size_t CFileComplex::WriteBody(FILE* fp, IN const uint32_t fileOff)
 	FileBody fileBody;
 	FilePolygon fileCpx = { 0, };
 
+	int32_t cnt = 0;
 	size_t offFile = fileOff;
 	size_t retWrite = 0;
 	size_t retRead = 0;
 	long offItem = 0;
 	const size_t sizeFileBody = sizeof(fileBody);
 
-	uint32_t ii, jj;
+	uint32_t ii;
 
 	// write body - complex, vertex
 	for (ii = 0; ii < GetMeshCount(); ii++)
@@ -704,7 +719,6 @@ size_t CFileComplex::WriteBody(FILE* fp, IN const uint32_t fileOff)
 		// write body
 		memset(&fileBody, 0x00, sizeof(fileBody));
 
-		jj = 0;
 		fileBody.idTile = pMesh->mesh_id.tile_id;
 		if (pMesh->neighbors.size() > 8) {
 			LOG_TRACE(LOG_ERROR, "Error, --------------- Mesh neighbor count overflow, id:%d, %d", pMesh->mesh_id.tile_id, pMesh->neighbors.size());
@@ -720,12 +734,16 @@ size_t CFileComplex::WriteBody(FILE* fp, IN const uint32_t fileOff)
 
 		// write complex
 # if defined(USE_OPTIMAL_POINT_API)
-		for (jj = 0; jj < pMesh->complexs.size(); jj++)
+#ifdef TEST_SPATIALINDEX
+		for (const auto& key : pMesh->setCpxDuplicateCheck)
+#else
+		for (const auto& key : pMesh->complexs)
+#endif
 		{
-			pCpx = m_pDataMgr->GetComplexDataById(pMesh->complexs[jj]);
+			pCpx = m_pDataMgr->GetComplexDataById(key);		
 			if (!pCpx)
 			{
-				LOG_TRACE(LOG_ERROR, "Failed, can't access complex, idx:%d, tile_id:%d, id:%d", ii, pMesh->complexs[ii].tile_id, pMesh->complexs[ii].nid);
+				LOG_TRACE(LOG_ERROR, "Failed, can't access complex, idx:%d, tile_id:%d, id:%d", ii, key.tile_id, key.nid);
 				return 0;
 			}
 			else if (pMesh->mesh_id.tile_id != pCpx->poly_id.tile_id) {
@@ -747,7 +765,7 @@ size_t CFileComplex::WriteBody(FILE* fp, IN const uint32_t fileOff)
 
 			if ((retWrite = fwrite(&fileCpx, sizeof(fileCpx), 1, fp)) != 1)
 			{
-				LOG_TRACE(LOG_ERROR, "Failed, can't write complex[%d], tile_id:%d, id:%d", jj, fileCpx.polygon_id.tile_id, fileCpx.polygon_id.nid);
+				LOG_TRACE(LOG_ERROR, "Failed, can't write complex, idx:%d, tile_id:%d, id:%d", ii, fileCpx.polygon_id.tile_id, fileCpx.polygon_id.nid);
 				return 0;
 			}
 
@@ -768,7 +786,7 @@ size_t CFileComplex::WriteBody(FILE* fp, IN const uint32_t fileOff)
 			if (fileCpx.parts > 0)
 			{
 				if (!(retWrite = pCpx->writeAttribute(TYPE_POLYGON_DATA_ATTR_PART, fp))) {
-					LOG_TRACE(LOG_ERROR, "Failed, can't write complex[%d], parts", jj);
+					LOG_TRACE(LOG_ERROR, "Failed, can't write complex parts, idx:%d, tile_id:%d, id:%d", ii, fileCpx.polygon_id.tile_id, fileCpx.polygon_id.nid);
 					return 0;
 				}
 				offItem += retWrite;
@@ -787,7 +805,7 @@ size_t CFileComplex::WriteBody(FILE* fp, IN const uint32_t fileOff)
 			if (fileCpx.points > 0)
 			{
 				if (!(retWrite = pCpx->writeAttribute(TYPE_POLYGON_DATA_ATTR_VTX, fp))) {
-					LOG_TRACE(LOG_ERROR, "Failed, can't write complex[%d], vertex", jj);
+					LOG_TRACE(LOG_ERROR, "Failed, can't write complex vertex, tile_id:%d, id:%d", ii, fileCpx.polygon_id.tile_id, fileCpx.polygon_id.nid);
 					return 0;
 				}
 				offItem += retWrite;
@@ -806,7 +824,7 @@ size_t CFileComplex::WriteBody(FILE* fp, IN const uint32_t fileOff)
 			if (fileCpx.links > 0)
 			{
 				if (!(retWrite = pCpx->writeAttribute(TYPE_POLYGON_DATA_ATTR_LINK, fp))) {
-					LOG_TRACE(LOG_ERROR, "Failed, can't write complex[%d], links", jj);
+					LOG_TRACE(LOG_ERROR, "Failed, can't write complex links , tile_id:%d, id:%d", ii, fileCpx.polygon_id.tile_id, fileCpx.polygon_id.nid);
 					return 0;
 				}
 				offItem += retWrite;
@@ -825,15 +843,17 @@ size_t CFileComplex::WriteBody(FILE* fp, IN const uint32_t fileOff)
 			if (fileCpx.meshes > 0)
 			{
 				if (!(retWrite = pCpx->writeAttribute(TYPE_POLYGON_DATA_ATTR_MESH, fp))) {
-					LOG_TRACE(LOG_ERROR, "Failed, can't write complex[%d] joined mesh", jj);
+					LOG_TRACE(LOG_ERROR, "Failed, can't write complex mesh, tile_id:%d, id:%d", ii, fileCpx.polygon_id.tile_id, fileCpx.polygon_id.nid); 
 					return 0;
 				}
 				offItem += retWrite;
 			}
+			
+			cnt++;
 
 		} // write complex
 
-		LOG_TRACE(LOG_DEBUG, "Save data, complex, cnt:%lld", jj);
+		//LOG_TRACE(LOG_DEBUG, "Save data, complex, cnt:%lld", cnt);
 #endif // # if defined(USE_OPTIMAL_POINT_API)
 
 		// re-write body size & off
@@ -988,12 +1008,20 @@ uint32_t CFileComplex::getLinksInComplex(IN const stComplex& complex, OUT vector
 
 		stMeshInfo* pMesh = m_pDataMgr->GetMeshDataById(*itMesh);
 
+#ifdef TEST_SPATIALINDEX
+		if (pMesh && !pMesh->setVLinkDuplicateCheck.empty()) {
+#else
 		if (pMesh && !pMesh->vlinks.empty()) {
+#endif
 			stLinkInfo* pLink;
 			bool isInCpxLink = false;
 
 			// 해당 메쉬내 링크(단지내도로레벨(9) 속성) 확인
+#ifdef TEST_SPATIALINDEX
+			for (set<KeyID>::const_iterator it = pMesh->setVLinkDuplicateCheck.begin(); it != pMesh->setVLinkDuplicateCheck.end(); it++) {
+#else
 			for (vector<KeyID>::const_iterator it = pMesh->vlinks.begin(); it != pMesh->vlinks.end(); it++) {
+#endif			
 				isInCpxLink = false;
 				pLink = m_pDataMgr->GetVLinkDataById(*it);
 				if (pLink != nullptr && pLink->sub_info != NOT_USE && pLink->veh.level >= 9) {

@@ -640,6 +640,10 @@ exports.domultiroute = function(key, req, expend) {
             if (course_type == 3) // 코스ID없는 자전거탐색일 경우, 아이나비의 자전거 경로탐색 사용
             route_mobility = 2; // 자전거
         }
+    } else if (req.multiroute === 'true') {
+        route_cnt = 3;
+        route_opt = [codes.ROUTE_OPTIONS.ROUTE_OPT_RECOMMENDED, codes.ROUTE_OPTIONS.ROUTE_OPT_SHORTEST, codes.ROUTE_OPTIONS.ROUTE_OPT_COMFORTABLE];
+        route_avoid = [route_avoids, route_avoids, route_avoids];
     }
 
     logout("multiroute info, cnt:" + route_cnt + ", opt:" + route_opt + ", avoid:" + route_avoid + ", mobility: " + route_mobility + ", subopt: " + route_subopt + ", target:" + target);
@@ -758,7 +762,8 @@ exports.gettable = function(req) {
     let ret = {
         header: header,
         mode: (req.mode != undefined) ? req.mode : "driving",
-        origins: (req.origins != undefined) ? req.origins : null,
+        origins: req.origins,
+        destinations: req.destinations,
         rows: null,
     };
 

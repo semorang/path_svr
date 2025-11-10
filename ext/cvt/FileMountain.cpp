@@ -434,6 +434,11 @@ bool CFileMountain::GenServiceData()
 		}
 	} // for
 
+#if defined(USE_OPTIMAL_POINT_API) && defined(TEST_SPATIALINDEX)
+	// 검색 트리 구성 필요
+	m_pDataMgr->CreateSpatialindex(TYPE_DATA_COMPLEX);
+#endif
+
 	Release();
 	if (!m_mapBoundary.empty()) {
 		m_mapBoundary.clear();
@@ -479,6 +484,10 @@ size_t CFileMountain::ReadBody(FILE* fp)
 
 	for (int idx = 0; idx < m_vtIndex.size(); idx++)
 	{
+		if (!checkTestMesh(m_vtIndex[idx].idTile)) {
+			continue;
+		}
+
 		// read body
 		if (m_vtIndex[idx].szBody <= 0) {
 			continue;
@@ -580,6 +589,10 @@ size_t CFileMountain::ReadBody(FILE* fp)
 
 		offFile += m_vtIndex[idx].szBody;
 
+#ifdef TEST_SPATIALINDEX
+		m_pDataMgr->CreateSpatialindex(pMesh, TYPE_DATA_COMPLEX);
+#endif
+
 #if defined(_DEBUG)
 		LOG_TRACE(LOG_DEBUG, "Data loading, mountain data loaded, mesh:%d, cnt:%lld", pMesh->mesh_id.tile_id, fileBody.area.cntPolygon);
 #endif
@@ -606,22 +619,19 @@ bool CFileMountain::LoadDataByIdx(IN const uint32_t idx)
 	FileBody fileBody = { 0, };
 	FilePolygon fileMnt = { 0, };
 
-	stMeshInfo* pMesh;
-	stPolygonInfo* pMnt;
+	stMeshInfo* pMesh = nullptr;
+	stPolygonInfo* pMnt = nullptr;
 	
 	size_t offFile = 0;
 	size_t offItem = 0;
 	size_t retRead = 0;
 
 	// read index
-	pMesh = new stMeshInfo;
-	//memset(pMesh, 0x00, sizeof(stMeshInfo));
-
 
 	// read body
 	if (m_vtIndex[idx].offBody <= 0 || m_vtIndex[idx].szBody <= 0)
 	{
-		LOG_TRACE(LOG_ERROR, "Failed, index body info invalid, off:%d, size:%d", m_vtIndex[idx].offBody, m_vtIndex[idx].szBody);
+		//LOG_TRACE(LOG_ERROR, "Failed, index body info invalid, off:%d, size:%d", m_vtIndex[idx].offBody, m_vtIndex[idx].szBody);
 		fclose(fp);
 		return false;
 	}
@@ -641,18 +651,22 @@ bool CFileMountain::LoadDataByIdx(IN const uint32_t idx)
 		return false;
 	}
 
-
 	// mesh
-	pMesh->mesh_id.tile_id = m_vtIndex[idx].idTile;
-	memcpy(&pMesh->mesh_box, &m_vtIndex[idx].rtTile, sizeof(pMesh->mesh_box));
-	memcpy(&pMesh->data_box, &m_vtIndex[idx].rtData, sizeof(pMesh->data_box));
-	for (int ii = 0; ii < 8; ii++) {
-		if (m_vtIndex[idx].idNeighborTile[ii] <= 0) {
-			continue;
+	pMesh = GetMeshDataById(m_vtIndex[idx].idTile, false);
+	if (!pMesh) {
+		pMesh = new stMeshInfo;
+
+		pMesh->mesh_id.tile_id = m_vtIndex[idx].idTile;
+		memcpy(&pMesh->mesh_box, &m_vtIndex[idx].rtTile, sizeof(pMesh->mesh_box));
+		memcpy(&pMesh->data_box, &m_vtIndex[idx].rtData, sizeof(pMesh->data_box));
+		for (int ii = 0; ii < 8; ii++) {
+			if (m_vtIndex[idx].idNeighborTile[ii] <= 0) {
+				continue;
+			}
+			pMesh->neighbors.emplace(m_vtIndex[idx].idNeighborTile[ii]);
 		}
-		pMesh->neighbors.emplace(m_vtIndex[idx].idNeighborTile[ii]);
+		AddMeshData(pMesh);
 	}
-	AddMeshData(pMesh);
 
 
 	// mountain
@@ -710,6 +724,10 @@ bool CFileMountain::LoadDataByIdx(IN const uint32_t idx)
 	}
 
 	fclose(fp);
+
+#ifdef TEST_SPATIALINDEX
+	m_pDataMgr->CreateSpatialindex(pMesh, TYPE_DATA_COMPLEX);
+#endif
 
 	return true;
 }
@@ -794,12 +812,16 @@ size_t CFileMountain::WriteBody(FILE* fp, IN const uint32_t fileOff)
 
 		// write mountain
 #if defined(USE_FOREST_DATA)
-		for (jj = 0; jj < pMesh->complexs.size(); jj++)
+#ifdef TEST_SPATIALINDEX
+		for (const auto key : pMesh->setCpxDuplicateCheck)
+#else
+		for (const auto key : pMesh->complexs)
+#endif
 		{
-			pMnt = m_pDataMgr->GetComplexDataById(pMesh->complexs[jj]);
+			pMnt = m_pDataMgr->GetComplexDataById(key);
 			if (!pMnt)
 			{
-				LOG_TRACE(LOG_ERROR, "Failed, can't access mountain, idx:%d, tile_id:%d, id:%d", ii, pMesh->complexs[ii].tile_id, pMesh->complexs[ii].nid);
+				LOG_TRACE(LOG_ERROR, "Failed, can't access mountain, idx:%d, tile_id:%d, id:%d", ii, key.tile_id, key.nid);
 				return 0;
 			}
 			else if (pMesh->mesh_id.tile_id != pMnt->poly_id.tile_id) {

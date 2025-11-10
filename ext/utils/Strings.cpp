@@ -322,6 +322,8 @@ const char* getDistanceString(const int dist)
 
 	if (dist <= 0) {
 		return "0 Km";
+	} else if (dist < 1000.f) {
+		sprintf(szBuff, "%.2f km", dist / 1000.f);
 	} else {
 		sprintf(szBuff, "%.1f km", dist / 1000.f);
 	}
@@ -376,6 +378,24 @@ const char* getCostString(const double cost)
 		return "0 points";
 	} else {
 		sprintf(szBuff, "%d points", static_cast<long long int>(cost));
+	}
+
+	return szBuff;
+}
+
+const char* getSizeString(const unsigned long size)
+{
+	static char szBuff[MAX_UPPER_LEN];
+	memset(szBuff, 0x00, sizeof(szBuff));
+
+	if (size >= 1024 * 1024 * 1024) { // GiB
+		sprintf(szBuff, "%.2f GiB", static_cast<double>(size / (1024.f * 1024.f * 1024.f)));
+	} else if (size >= 1024 * 1024) { // MiB
+		sprintf(szBuff, "%.2f MiB", static_cast<double>(size / (1024.f * 1024.f)));
+	} else if (size >= 1024) { // KiB
+		sprintf(szBuff, "%.2f KiB", static_cast<double>(size / 1024.f));
+	} else {
+		sprintf(szBuff, "%d Byte", size);
 	}
 
 	return szBuff;

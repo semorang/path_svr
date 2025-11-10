@@ -321,7 +321,7 @@ int least(IN const vector<vector<stDistMatrix>>& vtDistMatrix, IN const int coun
 }
 
 void mincost(IN const vector<vector<stDistMatrix>>& vtDistMatrix, IN const int count, int start) {
-	int i, ncity;
+	int ncity;
 	best_path.visited = setVisited(best_path.visited, start);
 
 	//Travel new_travel;

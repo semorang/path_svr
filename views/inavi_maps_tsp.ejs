@@ -76,8 +76,8 @@
             <div id="menu_title" style="text-align:center"><P>검색 결과 목록</P></div>
             <hr>
             <div style="font-size:12px;font-family:'Malgun Gothic', '맑은 고딕', sans-serif;">
-                <div id="clicked_type" style="text-align:left;padding:5px 0px 5px 5px;">경유지 갯수: </div>
-                <div id="clicked_name" style="text-align:left;padding:0px 0px 5px 5px;">운행거리: , 운행시간:</div>
+                <div id="searched_type" style="text-align:left;padding:5px 0px 5px 5px;">경유지 갯수: </div>
+                <div id="searched_count" style="text-align:left;padding:0px 0px 5px 5px;">운행거리: , 운행시간:</div>
             </div>
             <hr>
             <ul id="placesList"></ul>
@@ -455,71 +455,6 @@
             } else {
                 waypoint_pos = null;
                 markers[2 + ii].setVisible(false);
-            }
-        }
-
-        function doRoute() {
-            document.getElementById('btnStart').className = 'btn';
-            document.getElementById('btnVia').className = 'btn';
-            document.getElementById('btnEnd').className = 'btn';
-
-            if (typeRouteStep == 0 || departure_pos === undefined || destination_pos === undefined ) {
-                alert("출,도착지를 새로 설정하고 사용하세요.")
-            } else {
-                var params = new URLSearchParams(window.location.search);
-                params.set('start', departure_pos.lng.toString() + ',' + departure_pos.lat.toString());
-                params.set('end', destination_pos.lng.toString() + ',' + destination_pos.lat.toString());
-                // var pathname = '/optimalposition'; // window.location.pathname;
-                // var move2url = pathname + '?' + params.toString();
-                // var move2url = pathname + '?lng=' + latlng.lng + '&lat=' + latlng.lat + '&type=0&near=true&expand=true&api=inavi';
-                if (waypoint_pos != undefined && waypoint_pos.lng > 120 && waypoint_pos.lat > 30) {
-                    params.set('via', waypoint_pos.lng.toString() + ',' + waypoint_pos.lat.toString());
-                } else if (params.has('via')) {
-                    params.delete('via');
-                }
-                var pathname = '/api/multiroute'; // window.location.pathname;
-                var route2url = pathname + '?' + params.toString();
-                // var route2url = window.location.pathname + '?' + params.toString();
-
-                console.log("request route : " + route2url.toString());
-
-                // window.open(move2url, '_self');
-                $.ajax({
-                type: 'get',         // 타입 (get, post, put 등등)
-                url: route2url,       // 요청할 서버 url
-                // async: false,         // 비동기화 여부 (default : true)
-                success: function(result) {                
-                    var header = result.header;
-                    if (header.isSuccessful == true) {      
-                        console.log("response, route data: " + result.route.data.length)
-
-                        // set route result
-                        result_obj = result;
-
-                        user_obj = result_obj.user_info;
-                        cnt_route = result_obj.route.data.length;
-
-                        user_pos.x = result.route.data[0].x;
-                        user_pos.y = result.route.data[0].y;
-
-                        releaseRoute();
-
-                        // 경로 그리기
-                        for (var ii = cnt_route - 1; ii >= 0; --ii) {
-                            drawRoute(result_obj.route.data[ii], route_offset[ii], route_color[ii], g_map);
-                        }
-
-                        drawRouteInfo();
-                    } else {
-                        alert('err code: ' + header.resultCode + '\nerr msg: ' + header.resultMessage)
-                    }
-                },
-                error: function(request, status, error) {
-                    alert('경로 탐색 요청 실패')
-                },
-                complete: function(xhr, status) {
-                }
-            });    
             }
         }
 

@@ -77,6 +77,10 @@ struct stVehicleLink
 	uint32_t Tpeg; // TPEG 유무(YTN기준), 0:없음, 1:있음
 	uint32_t EntryRestriction; // 진입제한 유무, 0:없음, 1:보행, 2:이륜, 3:화물, 4:택시, 5:입주자전용 외
 	double LinkLen; // 링크 길이
+	uint32_t MaxSpeedP; // 최대속도 정
+	uint32_t MaxSpeedN; // 최대속도 역
+	uint32_t LanesP; // 차선수 정
+	uint32_t LanesN; // 차선수 역
 	uint64_t TTLID_P; // TTL_ID 정방향 값
 	uint64_t TTLID_N; // TTL_ID 역방향 값
 

@@ -85,8 +85,8 @@
             <div id="menu_title" style="text-align:center"><P>검색 결과 목록</P></div>
             <hr>
             <div style="font-size:12px;font-family:'Malgun Gothic', '맑은 고딕', sans-serif;">
-                <div id="clicked_type" style="text-align:left">결과 갯수 : </div>
-                <div id="clicked_name" style="text-align:left"></div>
+                <div id="searched_type" style="text-align:left">결과 갯수 : </div>
+                <div id="searched_count" style="text-align:left"></div>
             </div>
             <hr>
             <ul id="placesList"></ul>
@@ -153,72 +153,6 @@
             drawRouteInfo(result_obj.routes);
         } // initMap
         
-
-
-        function doRoute() {
-            if (typeRouteStep == 0 || departure_pos === undefined || destination_pos === undefined ) {
-                alert("출,도착지를 새로 설정하고 사용하세요.")
-            } else {
-                var params = new URLSearchParams(window.location.search);
-                params.set('start', departure_pos.lng.toString() + ',' + departure_pos.lat.toString());
-                params.set('end', destination_pos.lng.toString() + ',' + destination_pos.lat.toString());
-                // var pathname = '/optimalposition'; // window.location.pathname;
-                // var move2url = pathname + '?' + params.toString();
-                // var move2url = pathname + '?lng=' + latlng.lng + '&lat=' + latlng.lat + '&type=0&near=true&expand=true&api=inavi';
-                params.delete('vias');
-                for(var ii = 0; ii < waypoint_pos.length; ii++) {
-                    if (waypoint_pos[ii] != null && waypoint_pos[ii].lng > 120 && waypoint_pos[ii].lat > 30) {
-                        params.append('vias', waypoint_pos[ii].lng.toString() + ',' + waypoint_pos[ii].lat.toString());
-                    }
-                }
-                params.set('course_type', getCourseType());
-                params.set('course_id', getCourseId());
-
-                getRoutes('/api/kakaovx/', params);
-            
-                setRouteType(0);
-            }
-        }
-
-
-        // 경로 결과를 새창에서 JSON 결과로 보내도록 하자
-        function gotoJSON() {
-            setRouteType(0);
-
-            if (departure_pos === undefined || destination_pos === undefined ) {
-                alert("출,도착지를 새로 설정하고 사용하세요.")
-            } else {
-                var params = new URLSearchParams(window.location.search);
-                params.set('start', departure_pos.lng.toString() + ',' + departure_pos.lat.toString());
-                params.set('end', destination_pos.lng.toString() + ',' + destination_pos.lat.toString());
-                // var pathname = '/optimalposition'; // window.location.pathname;
-                // var move2url = pathname + '?' + params.toString();
-                // var move2url = pathname + '?lng=' + latlng.lng + '&lat=' + latlng.lat + '&type=0&near=true&expand=true&api=inavi';
-                params.delete('vias');
-                for(var ii = 0; ii < waypoint_pos.length; ii++) {
-                    if (waypoint_pos[ii] != null && waypoint_pos[ii].lng > 120 && waypoint_pos[ii].lat > 30) {
-                        params.set('vias', waypoint_pos[ii].lng.toString() + ',' + waypoint_pos[ii].lat.toString());
-                    }
-                }
-                params.set('option', getOption());
-                params.set('mobility', getMobility());
-                params.set('junction', true);
-
-                params.set('course_type', getCourseType());
-                params.set('course_id', getCourseId());
-
-                // params.set('opt', 8);
-                // params.set('target', 'inavi');
-                var pathname = '/api/kakaovx'; // window.location.pathname;
-                var route2url = pathname + '?' + params.toString();
-                // var route2url = window.location.pathname + '?' + params.toString();
-
-                console.log("request route : " + route2url.toString());
-
-                window.open(route2url, '_blank');                    
-            }
-        }
-
 
         // 키워드 검색 
         function searchKeyword() {

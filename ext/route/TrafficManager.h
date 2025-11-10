@@ -13,8 +13,9 @@
 
 typedef enum
 {
+	TYPE_TRAFFIC_KS_ID = 10000,
 	TYPE_TRAFFIC_TTL_ID = 10001,
-	TYPE_TRAFFIC_KS_ID = 10003,
+	TYPE_TRAFFIC_KSR_ID = 10003,
 };
 
 typedef struct

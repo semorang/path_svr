@@ -120,7 +120,15 @@ void ConvexHull(IN vector<SPoint> &r, OUT vector<SPoint> &q)
 		// return h.size();
 	} else if ((r.size() == 2) && (r[0] != r[1])) {
 		q.reserve(4); // make rectangle;
-		calculateRectangle(r[0], r[1], 500 / 100000.0, q); // 500m 반경
+		
+		// 직선의 방향 벡터 계산
+		double dx = r[1].x - r[0].x;
+		double dy = r[1].y - r[0].y;
+		double length = sqrt(dx*dx + dy*dy);
+		if (length > 0.00500) {
+			length = 0.00500; // 500m 반경
+		}
+		calculateRectangle(r[0], r[1], length / 4, q); // 500m 반경
 	} else if (r.size() <= 2) {
 		q.reserve(3); // make triangle;
 		calculateTriangle(r[0], 500 / 100000.0, q); // 500m 반경

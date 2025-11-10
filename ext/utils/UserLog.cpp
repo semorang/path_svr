@@ -3,14 +3,16 @@
 #include <windows.h>
 #include <direct.h>
 #include <io.h>
+#include <psapi.h> // for mem check
 #ifndef PATH_MAX
 #define PATH_MAX MAX_PATH
 #endif
 #else
 #include <pthread.h>
 #include <math.h>
-#include <unistd.h>
+#include <unistd.h> // sysconf
 #include <sys/stat.h>
+#include <sys/resource.h>	// getrusage
 #endif
 
 #include "UserLog.h"
@@ -876,6 +878,62 @@ bool checkDirectory(const char* szFileName)
 	//}
 
 		return true;
+}
+
+
+size_t checkMemorySize(void)
+{
+	size_t physMemUsed = 0;
+#if defined(_WIN32)
+	PROCESS_MEMORY_COUNTERS memInfo;
+	if (GetProcessMemoryInfo(GetCurrentProcess(), &memInfo, sizeof(memInfo))) {
+		physMemUsed = memInfo.WorkingSetSize;
+	}
+#else
+	// 1) /proc/self/statm : 2번째 필드(resident pages) × 페이지 크기
+	{
+		FILE* f = fopen("/proc/self/statm", "r");
+		if (f) {
+			long pages = 0, dummy = 0;
+			if (fscanf(f, "%ld %ld", &dummy, &pages) == 2) {
+				long pageSize = sysconf(_SC_PAGESIZE); // bytes/page
+				if (pageSize > 0 && pages >= 0) {
+					physMemUsed = static_cast<size_t>(pages) * static_cast<size_t>(pageSize);
+				}
+			}
+			fclose(f);
+		}
+	}
+
+	// 2) 보조 경로: /proc/self/status 의 "VmRSS:" (단위 kB)
+	if (physMemUsed == 0) {
+		FILE* f = fopen("/proc/self/status", "r");
+		if (f) {
+			char line[256];
+			while (fgets(line, sizeof(line), f)) {
+				if (strncmp(line, "VmRSS:", 6) == 0) {
+					unsigned long kb = 0;
+					// 예: "VmRSS:   12345 kB"
+					if (sscanf(line + 6, "%lu", &kb) == 1) {
+						physMemUsed = static_cast<size_t>(kb) * 1024u; // bytes
+						break;
+					}
+				}
+			}
+			fclose(f);
+		}
+	}
+
+	// 3) 최후 수단: getrusage (Linux에선 kB 단위의 "최대" RSS, 현재값 아님)
+	if (physMemUsed == 0) {
+		struct rusage ru {};
+		if (getrusage(RUSAGE_SELF, &ru) == 0) {
+			physMemUsed = static_cast<size_t>(ru.ru_maxrss) * 1024u; // bytes (Linux: kB)
+		}
+	}
+#endif
+
+	return physMemUsed;
 }
 
 

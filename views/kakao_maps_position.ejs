@@ -42,8 +42,8 @@
         <div style="text-align:center"><P>입구점 목록</P></div>
         <hr>
         <div style="font-size:12px;font-family:'Malgun Gothic', '맑은 고딕', sans-serif;">
-            <div id="clicked_type" style="text-align:left">클릭지점 타입 : </div>
-            <div id="clicked_name" style="text-align:left"></div>
+            <div id="searched_type" style="text-align:left">클릭지점 타입 : </div>
+            <div id="searched_count" style="text-align:left"></div>
         </div>
         <hr>        
         <ul id="placesList"></ul>
@@ -405,12 +405,12 @@ var imageSize = new kakao.maps.Size(MARKER_WIDTH, MARKER_HEIGHT);
         resultDiv.innerHTML = message;
 
         message = '클릭지점 타입 : ' + getPolygonType(result_exp.type);
-        resultDiv = document.getElementById('clicked_type');
+        resultDiv = document.getElementById('searched_type');
         resultDiv.innerHTML = message;
 
         if (result_exp.name !== undefined) {
             message = '클릭지점 명칭 : ' + result_exp.name;
-            resultDiv = document.getElementById('clicked_name');
+            resultDiv = document.getElementById('searched_count');
             resultDiv.innerHTML = message;
         }
     }
