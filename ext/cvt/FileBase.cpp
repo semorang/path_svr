@@ -1751,7 +1751,7 @@ size_t CFileBase::WriteBody(FILE* fp, IN const uint32_t fileOff)
 		}
 #endif
 #if defined(USE_FOREST_DATA)
-		if (m_nDataType == TYPE_DATA_FOREST) {
+		if (m_nDataType == TYPE_DATA_TREKKING) {
 #ifdef TEST_SPATIALINDEX
 			cntNode = pMesh->setFNodeDuplicateCheck.size();
 			cntLink = pMesh->setFLinkDuplicateCheck.size();
@@ -1787,6 +1787,11 @@ size_t CFileBase::WriteBody(FILE* fp, IN const uint32_t fileOff)
 			if (m_nDataType == TYPE_DATA_PEDESTRIAN) {
 				pSetNode = &pMesh->setWNodeDuplicateCheck;
 			}
+#endif
+#if defined(USE_FOREST_DATA)
+			if (m_nDataType == TYPE_DATA_TREKKING) {
+				pSetNode = &pMesh->setFNodeDuplicateCheck;
+		}
 #endif
 			for (const auto key : *pSetNode) {
 #else
@@ -1856,6 +1861,11 @@ size_t CFileBase::WriteBody(FILE* fp, IN const uint32_t fileOff)
 #if defined(USE_PEDESTRIAN_DATA)
 			if (m_nDataType == TYPE_DATA_PEDESTRIAN) {
 				pSetLink = &pMesh->setWLinkDuplicateCheck;
+			}
+#endif
+#if defined(USE_FOREST_DATA)
+			if (m_nDataType == TYPE_DATA_TREKKING) {
+				pSetLink = &pMesh->setFLinkDuplicateCheck;
 			}
 #endif
 			for (const auto key : *pSetLink) {

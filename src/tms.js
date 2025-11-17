@@ -115,36 +115,31 @@ exports.boundary = function (key, mode, target, destinations) {
 }
 
 
-exports.bestwaypoints = function (key, req) {
-    var ret;
-
+exports.bestwaypoints = function (key, req, callback) {
     // 사용자 키 확인
-    var user = auth.checkAuth(key);
+    const user = auth.checkAuth(key);
     if (user != null && user.length > 0) {
-        logout("client user:'" + user + "', mode=" + ((req.mode !== undefined) ? req.mode : "null") + ", cache=" + ((req.cache !== undefined) ? req.cache : "null") + ", cnt=" + ((req.origins !== undefined) ? req.origins.length : "null"));
+        logout(`client user:'${user}', mode=${req.mode ?? 'null'}, cache=${req.cache ?? 'null'}, cnt=${Array.isArray(req.origins) ? req.origins.length : 'null'}`);
 
-        ret = route.getbestways(req);
+        // vrp 모드면 bestvrp로 분기
+        if (req.mode === 'vrp') {
+            exports.bestvrp(key, req, ret => callback(ret));
+        } else {
+            const ret = route.getbestways(req);
+            callback(ret);
+        }
     } else {
-        var header = {
-            isSuccessful: false,
-            resultCode: codes.ERROR_CODES.RESULT_APPKEY_ERROR,
-            resultMessage: codes.getErrMsg(codes.ERROR_CODES.RESULT_APPKEY_ERROR)
+        const ret = {
+            header: {
+                isSuccessful: false,
+                resultCode: codes.ERROR_CODES.RESULT_APPKEY_ERROR,
+                resultMessage: codes.getErrMsg(codes.ERROR_CODES.RESULT_APPKEY_ERROR)
+            },
+            origins: req?.origins
         };
-
-        var origins;
-        if (req.origins) {
-            origins = req.origins
-        };
-
-        ret = {
-            header: header,
-            origins: origins,
-        };
-
-        logout("client req error : " + JSON.stringify(ret));
+        logout(`client req error: ${JSON.stringify(ret)}`);
+        callback(ret);
     }
-
-    return ret;
 }
 
 
@@ -208,7 +203,7 @@ async function requestVrp(req, endpoint = 0, compare) {
             }
         }
     } else {
-        // "endpoint_type_desc": "0:NONE, 1:START, 2:END, 3:START-END"
+        // "endpoint_type_desc": "0:NONE, 1:START, 2:END, 3:START-END, 4:AUTO-START"
         let endpointType = "return_to_depot"; // default
         if (endpoint === 1) {
             endpointType = "fixed_start";
@@ -216,6 +211,8 @@ async function requestVrp(req, endpoint = 0, compare) {
             endpointType = "fixed_end";
         } else if (endpoint === 3) {
             endpointType = "fixed_start_end"
+        } else if (endpoint === 4) {
+            endpointType = "auto_start"
         }
 
         const req_vrp = {
@@ -319,7 +316,9 @@ exports.bestvrp = function (key, req, callback) {
                         resultCode: codes.ERROR_CODES.ROUTE_RESULT_SUCCESS,
                         resultMessage: codes.getErrMsg(codes.ERROR_CODES.ROUTE_RESULT_SUCCESS)
                     },
-                    origins: req?.origins ?? [],
+                    ...(req?.matrix
+                        ? { matrix: req.matrix }
+                        : { origins: req?.origins ?? [] }),
                     summary: ret_vrp.summary,
                     waypoints: ret_vrp.waypoints,
                     routes: ret_vrp.routes

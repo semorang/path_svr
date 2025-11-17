@@ -4220,7 +4220,7 @@ int32_t CDataManager::CreateSpatialindex(IN stMeshInfo* pMesh, IN const int32_t 
 				}
 			}
 
-			if (_regions.size() < 50) {
+			if (regions.size() < 50) {
 				m_pMapMesh->CreateSpatialindex(TYPE_DATA_PEDESTRIAN, pMesh, regions, ids);
 			} else {
 				m_pMapMesh->CreateSpatialindexByStream(TYPE_DATA_PEDESTRIAN, pMesh, regions, ids);

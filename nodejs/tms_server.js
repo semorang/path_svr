@@ -13,10 +13,10 @@ const fsextra = require('fs-extra');
 const cfg = require('dotenv').config();
 // const addon = require('./build/Release/trekking_svr.node');
 // const addon = require('./core_modules/walk_route.node');
-const route = require('../src/route.js');
+const route = require('../src/route');
 const tms = require('../src/tms.js');
 const auth = require('../src/auth.js');
-const logout = require('../src/logs.js');
+const logout = require('../src/logs');
 const times = require('../src/times.js')
 // const escapeJSON = require('escape-json-noide');
 // const addon = require('bindings')('openAPI')
@@ -36,9 +36,9 @@ let corsOptions = {
 app.set('view engine', 'ejs');
 app.engine('html', require('ejs').renderFile);
 app.use(express.static(publicPath)); 
-app.use(express.json());
+// app.use(express.json());
+app.use(express.json({limit:'10mb'}));
 app.use(cors(corsOptions));
-
 app.get('/', function(req, res) {
     logout("client IP : " + request_ip.getClientIp(req));
     res.send("this is trekking route server.")
@@ -113,8 +113,8 @@ app.post('/api/setdatacost', function(req, res) {
 app.get('/summary', function(req, res) {
     const startTime = logout("start route summary request");
 
-    // logout("client IP : " + request_ip.getClientIp(req));
-    // logout("client req : " + JSON.stringify(req.query));
+    logout("client IP : " + request_ip.getClientIp(req));
+    logout("client req : " + JSON.stringify(req.query));
 
     var ret = route.doroute(req, 'summary');
 
@@ -134,8 +134,8 @@ app.get('/summary', function(req, res) {
 app.get('/api/route', function(req, res) {
     const startTime = logout("start route request");
 
-    // logout("client IP : " + request_ip.getClientIp(req));
-    // logout("client req : " + JSON.stringify(req.query));
+    logout("client IP : " + request_ip.getClientIp(req));
+    logout("client req : " + JSON.stringify(req.query));
 
     req.query.mobility = "3"; // 기본 자동차 모드
 
@@ -163,8 +163,8 @@ app.get('/api/route', function(req, res) {
 app.get('/api/multiroute', function(req, res) {
     const startTime = logout("start multiroute request");
 
-    // logout("client IP : " + request_ip.getClientIp(req));
-    // logout("client req : " + JSON.stringify(req.query));
+    logout("client IP : " + request_ip.getClientIp(req));
+    logout("client req : " + JSON.stringify(req.query));
 
     req.query.mobility = "3"; // 기본 자동차 모드
 
@@ -195,25 +195,17 @@ app.get('/path', function(req, res) {
 app.get('/api/path', function(req, res) {
     const startTime = logout("start multiroute request");
 
-    // logout("client IP : " + request_ip.getClientIp(req));
-    // logout("client req : " + JSON.stringify(req.query));
-
     // 2p2 path 전용 옵션
     req.query.target = "p2p";
-    if (req.query.mode === undefined) {
-        req.query.mode = "path";
-    }
     req.query.mobility = "4"; // 기본 자율주행 자동차 모드
     if (req.query.option == undefined) {
         req.query.option = "4"; // 기본 큰길 옵션 
     }
 
-    // 짧은 도로 연속회전 회피 기본 값
-    req.query.avoid = req.query.avoid || {};
-    req.query.avoid.shortturn = req.query.avoid.shortturn ?? 'true';
+    logout("client IP : " + request_ip.getClientIp(req));
+    logout("client req : " + JSON.stringify(req.query));
 
     const key = "2Y41Z0H-7QS4Z5X-JZJBHJQ-95BSGD6";
-
     var ret = route.domultiroute(key, req.query, "");
 
     if (ret.header.isSuccessful == true) {
@@ -231,8 +223,8 @@ app.get('/api/path', function(req, res) {
 app.get('/api/kakaovx', function(req, res) {
     const startTime = logout("start kakaovx route request");
 
-    // logout("client IP : " + request_ip.getClientIp(req));
-    // logout("client req : " + JSON.stringify(req.query));
+    logout("client IP : " + request_ip.getClientIp(req));
+    logout("client req : " + JSON.stringify(req.query));
 
     req.query.target = "kakaovx";
 
@@ -254,8 +246,8 @@ app.get('/api/kakaovx', function(req, res) {
 app.get('/view/kakaovx', function(req, res) {
     const startTime = logout("start kakaovx request");
 
-    // logout("client IP : " + request_ip.getClientIp(req));
-    // logout("client req : " + JSON.stringify(req.query));
+    logout("client IP : " + request_ip.getClientIp(req));
+    logout("client req : " + JSON.stringify(req.query));
 
     req.query.target = "kakaovx";
     const api = req.query.api;
@@ -314,8 +306,8 @@ app.get('/view/route', function(req, res) {
 app.get('/view/multiroute', function(req, res) {
     const startTime = logout("start multiroute(view) request");
 
-    // logout("client IP : " + request_ip.getClientIp(req));
-    // logout("client req : " + JSON.stringify(req.query));
+    logout("client IP : " + request_ip.getClientIp(req));
+    logout("client req : " + JSON.stringify(req.query));
 
     req.query.mobility = "3"; // 기본 자동차 모드
 
@@ -451,25 +443,18 @@ app.get('/view/route_result', function(req, res) {
 app.get('/view/path', function(req, res) {
     const startTime = logout("start pathview request");
 
-    // logout("client IP : " + request_ip.getClientIp(req));
-    // logout("client req : " + JSON.stringify(req.query));
-        
     // 2p2 path 전용 옵션
     req.query.target = "p2p";
-    if (req.query.mode === undefined) {
-        req.query.mode = "path";
-    }
     req.query.mobility = "4"; // 기본 자율주행 자동차 모드
     if (req.query.option == undefined) {
         req.query.option = "4"; // 기본 큰길 옵션 
     }
 
-    // 짧은 도로 연속회전 회피 기본 값
-    req.query.avoid = req.query.avoid || {};
-    req.query.avoid.shortturn = req.query.avoid.shortturn ?? 'true';
+    logout("client IP : " + request_ip.getClientIp(req));
+    logout("client req : " + JSON.stringify(req.query));
 
     const api = req.query.api;
-    const key = "716Y8EX-0MWMZ0Y-JQ1PTWF-QZHEMZK";
+    const key = "2Y41Z0H-7QS4Z5X-JZJBHJQ-95BSGD6";
     
     var ret = route.domultiroute(key, req.query, "view");
 
@@ -676,7 +661,6 @@ app.get('/api/bestwaypoints/appkeys/:userkey', function(req, res) {
     const startTime = logout("start bestwaypoints request");
 
     const ret = tms.bestwaypoints(req.params.userkey, req.query);
-
     res.send(ret);
 
     logout("end bestwaypoints request by GET", startTime);
@@ -686,11 +670,10 @@ app.get('/api/bestwaypoints/appkeys/:userkey', function(req, res) {
 app.post('/api/bestwaypoints', function(req, res) {
     const startTime = logout("start bestwaypoints request" + ": " + req);
 
-    const ret = tms.bestwaypoints(req.headers.authorization, req.body);
-
-    res.send(ret);
-
-    logout("end bestwaypoints request", startTime);
+    tms.bestwaypoints(req.headers.authorization, req.body, ret => {
+        logout("end bestwaypoints request", startTime);
+        res.json(ret)
+    });    
 });
 
 
@@ -709,7 +692,7 @@ app.get('/view/bestwaypoints', function(req, res) {
         res.send(ret);
     }
 
-    logout("end bestwaypoints request by GET", startTime);
+    logout("end bestwaypoints(view) request", startTime);
 });
 
 
@@ -726,11 +709,11 @@ app.get('/api/createkey', function(req, res) {
 });
 
 const cur_ip = require("ip");
-const cur_port = (process.env.VEH_SVR_PORT === undefined) ? 20301 : process.env.VEH_SVR_PORT;
+const cur_port = (process.env.TMS_SVR_PORT === undefined) ? 20301 : process.env.TMS_SVR_PORT;
 const cur_pid = process.pid;
 const start_time = new Date();
 const backlog_cnt = 100; // 대기열 크기 설정, 기본값:120
-const req_timeout = 20000; // 요청(대기열포함) 타임아웃: 20초, 기본값:2분(120000)
+const req_timeout = 180000; // 요청(대기열포함) 타임아웃: 180초, 기본값:2분(120000)
 const keepalive_timeout = 100000; // 연결 유지 타임아웃: 100초, 기본값:5초(5000)
 
 // traffic 처리 로직
@@ -784,9 +767,9 @@ const server = app.listen(cur_port, function () {
     let data_path = process.env.DATA_PATH;
     let file_path = process.env.FILE_PATH;
     let log_path = process.env.LOG_PATH;
-    
+
     // var cur_time = cur_date.toFormat('YYYY-MM-DD HH24:MI:SS');
-    logout("start path route server response at " + cur_ip.address() + ":" + cur_port);
+    logout("start tms route server response at " + cur_ip.address() + ":" + cur_port);
     logout("OS : " + os.type());
     logout("process pid:" + cur_pid);
 

@@ -138,6 +138,35 @@ const ROUTE_AVOIDS_PED = {
 	ROUTE_AVOID_PED_COMPLEXETC : 16777216, // 단지도로_기타
 };
 
+// route avoids
+const ROUTE_AVOIDS_VEH = {
+    ROUTE_AVOID_NONE : 0, // 없음
+	ROUTE_AVOID_SHORTTURN : 1, // 짧은회전
+    
+    // ROUTE_AVOID_VEH_ : 2, // 
+	// ROUTE_AVOID_VEH_: 4, // 
+	// ROUTE_AVOID_VEH_ : 8, // 
+	// ROUTE_AVOID_VEH_ : 16, // 
+	// ROUTE_AVOID_VEH_: 32, // 
+	// ROUTE_AVOID_VEH_ : 64, // 
+    // ROUTE_AVOID_VEH_ : 128, // 
+    // ROUTE_AVOID_VEH_ : 256, // 
+	// ROUTE_AVOID_VEH_ : 512, // 
+	// ROUTE_AVOID_VEH_ : 2048, // 
+	// ROUTE_AVOID_VEH_ : 4096, // 
+	// ROUTE_AVOID_VEH_ : 8192, // 
+	// ROUTE_AVOID_VEH_ : 16384, // 
+	// ROUTE_AVOID_VEH_ : 32768, // 
+	// ROUTE_AVOID_VEH_ : 65536, // 
+	// ROUTE_AVOID_VEH_ : 131072, // 
+	// ROUTE_AVOID_VEH_ : 262144, // 
+	// ROUTE_AVOID_VEH_ : 524288, // 
+	// ROUTE_AVOID_VEH_ : 1048576, // 
+	// ROUTE_AVOID_VEH_ : 2097152, // 
+	// ROUTE_AVOID_VEH_ : 4194304, // 
+	// ROUTE_AVOID_VEH_ : 8388608, // 
+	// ROUTE_AVOID_VEH_ : 16777216, // 
+};
 
 function getErrMsg(code) {
     var msg;
@@ -287,6 +316,7 @@ module.exports = {
     // route avoids
     ROUTE_AVOIDS_TRK,
     ROUTE_AVOIDS_PED,
+    ROUTE_AVOIDS_VEH,
 
     // type
     MOBILITY_TYPE,

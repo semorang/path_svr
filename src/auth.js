@@ -1,8 +1,8 @@
-const uuidApiKey = require('../nodejs/node_modules/uuid-apikey');
-
 const apikey = require('../views/script/key.js');
 const logout = require('./logs');
+const common = require('./common.js');
 
+const uuidApiKey = common.reqNode('uuid-apikey');
 
 exports.checkAuth = function(userkey) {
     var user = null;

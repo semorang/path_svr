@@ -14,8 +14,9 @@ const cfg = require('dotenv').config();
 // const addon = require('./build/Release/trekking_svr.node');
 // const addon = require('./core_modules/walk_route.node');
 const route = require('../src/route');
+const tms = require('../src/tms');
+const auth = require('../src/auth');
 const logout = require('../src/logs');
-const apis = require('../src/apis');
 const times = require('../src/times.js')
 // const escapeJSON = require('escape-json-noide');
 // const addon = require('bindings')('openAPI')
@@ -564,7 +565,7 @@ app.get('/view/clustering', function(req, res) {
     const reqBuffer = fs.readFileSync(filePath)
     const reqJSON = reqBuffer.toString()
 
-    const ret = apis.clustering(req.query.userkey, JSON.parse(reqJSON));
+    const ret = tms.clustering(req.query.userkey, JSON.parse(reqJSON));
 
     if (ret.header.resultCode == 0) {
         res.render(__dirname + "/../views/inavi_maps_multiroute_ex", {javascriptkey:apikey.INAVIMAPAPIKEY, result:ret});
@@ -580,7 +581,7 @@ app.get('/api/distancematrix/appkeys/:userkey', function(req, res) {
     const startTime = logout("start distance matrix request by GET");
 
     // distance matrix api 호출
-    const ret = apis.distancematrix(req.params.userkey, req);
+    const ret = tms.distancematrix(req.params.userkey, req);
 
     res.send(ret);
 
@@ -592,7 +593,7 @@ app.post('/api/distancematrix', function(req, res) {
     const startTime = logout("start distance matrix request");
 
     // distance matrix api 호출
-    const ret = apis.distancematrix(req.headers.authorization, req.body);
+    const ret = tms.distancematrix(req.headers.authorization, req.body);
 
     res.send(ret);
 
@@ -604,7 +605,7 @@ app.post('/api/distancematrix', function(req, res) {
 app.get('/api/clustering/appkeys/:userkey', function(req, res) {
     const startTime = logout("start clustering request");
 
-    const ret = apis.clustering(req.params.userkey, req);
+    const ret = tms.clustering(req.params.userkey, req);
 
     res.send(ret);
 
@@ -615,7 +616,7 @@ app.get('/api/clustering/appkeys/:userkey', function(req, res) {
 app.post('/api/clustering', function(req, res) {
     const startTime = logout("start clustering request" + ": " + req);
 
-    ret = apis.clustering(req.headers.authorization, req.body);
+    ret = tms.clustering(req.headers.authorization, req.body);
 
     res.send(ret);
 
@@ -632,7 +633,7 @@ app.get('/api/boundary/appkeys/:userkey', function(req, res) {
     const target = req.query.target;
     const destinations = req.query.origins;
 
-    const ret = apis.boundary(key, mode, target, destinations);
+    const ret = tms.boundary(key, mode, target, destinations);
 
     res.send(ret);
 
@@ -648,7 +649,7 @@ app.post('/api/boundary', function(req, res) {
     const target = req.body.target;
     const destinations = req.body.origins;
 
-    const ret = apis.boundary(key, mode, target, destinations);
+    const ret = tms.boundary(key, mode, target, destinations);
 
     res.send(ret);
 
@@ -659,7 +660,7 @@ app.post('/api/boundary', function(req, res) {
 app.get('/api/bestwaypoints/appkeys/:userkey', function(req, res) {
     const startTime = logout("start bestwaypoints request");
 
-    const ret = apis.bestwaypoints(req.params.userkey, req.query);
+    const ret = tms.bestwaypoints(req.params.userkey, req.query);
 
     res.send(ret);
 
@@ -670,7 +671,7 @@ app.get('/api/bestwaypoints/appkeys/:userkey', function(req, res) {
 app.post('/api/bestwaypoints', function(req, res) {
     const startTime = logout("start bestwaypoints request" + ": " + req);
 
-    const ret = apis.bestwaypoints(req.headers.authorization, req.body);
+    const ret = tms.bestwaypoints(req.headers.authorization, req.body);
 
     res.send(ret);
 
@@ -685,7 +686,7 @@ app.get('/view/bestwaypoints', function(req, res) {
     const reqBuffer = fs.readFileSync(filePath)
     const reqJSON = reqBuffer.toString()
 
-    const ret = apis.bestwaypoints(req.query.userkey, JSON.parse(reqJSON));
+    const ret = tms.bestwaypoints(req.query.userkey, JSON.parse(reqJSON));
 
     if (ret.header.resultCode == 0) {
         res.render(__dirname + "/../views/inavi_maps_multiroute_ex", {javascriptkey:apikey.INAVIMAPAPIKEY, result:ret});
@@ -704,7 +705,7 @@ app.get('/api/createkey', function(req, res) {
     logout("client req : " + JSON.stringify(req.query));
 
     // 필요시 uuid api key 생성
-    logout("created new key :" + JSON.stringify(apis.createkey()));
+    logout("created new key :" + JSON.stringify(auth.createkey()));
 
     res.send('success, created key, ask to check your key to the administrator');
 });
@@ -715,7 +716,7 @@ const cur_pid = process.pid;
 const start_time = new Date();
 const backlog_cnt = 100; // 대기열 크기 설정, 기본값:120
 const req_timeout = 20000; // 요청(대기열포함) 타임아웃: 20초, 기본값:2분(120000)
-const keepalive_timeout = 5000; // 연결 유지 타임아웃: 5초, 기본값:5초(5000)
+const keepalive_timeout = 100000; // 연결 유지 타임아웃: 100초, 기본값:5초(5000)
 
 // traffic 처리 로직
 const time_gap = 10 * 1000; // n초 간격으로 새로운 교통정보 파일 확인
@@ -749,6 +750,7 @@ const server = app.listen(cur_port, function () {
 });
 
 server.timeout = req_timeout;
+server.keepAliveTimeout = keepalive_timeout;
 
 
 // http.createServer(app).listen(cur_port, '0.0.0.0', function () { //http://133.186.212.20:9095/

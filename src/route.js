@@ -216,13 +216,25 @@ exports.doroute = function(key, req, expend) {
     const waypoint = req.via;
     const waypoints = req.vias;
     const option = (req.option === undefined) ? 0 : parseInt(req.option);
-    const avoid = (req.avoid === undefined) ? 0 : parseInt(req.avoid);
     const mobility = (req.mobility === undefined) ? 0 : parseInt(req.mobility);
     const is_sum = (expend !== undefined && expend == 'summary') ? true : false;
     const is_optimal = (req.optimal !== undefined && req.optimal != 'false') ? true : false; // 최적지점 사용, p2p는 무시
     const target = (req.target === undefined) ? '' : req.target;
     let typeMatch = (target === 'kakaovx') ? codes.LINK_MATCH_TYPE.TYPE_LINK_MATCH_FOR_FOREST : 0;
     const is_junction = (req.junction !== undefined && req.junction == 'true') ? true : false;
+    let avoid = 0;
+    let avoids = {};
+
+    if (typeof req.avoid === 'number') { // 숫자일 경우    
+        avoid = req.avoid;
+    } else if (typeof req.avoid === 'string') { // 문자열일 경우 숫자로 변환 시도
+        const parsed = parseInt(req.avoid, 10);
+        if (!isNaN(parsed)) {
+            avoid = parsed;
+        } 
+    } else if (typeof req.avoid === 'object' && req.avoid !== null) { // 객체일 경우
+        avoids = req.avoid;
+    }
 
     // header
     let ret_header = {
@@ -238,6 +250,13 @@ exports.doroute = function(key, req, expend) {
         header: ret_header,
         user_info: ret_user_info,
     };
+
+
+    let tickStart = 0;
+    let tickEnd = 0;
+    if (target === 'p2p') {
+        tickStart = logout("start p2p route tick-count");
+    }
 
 
     // 출발지
@@ -341,10 +360,15 @@ exports.doroute = function(key, req, expend) {
     // var route_opt = [codes.ROUTE_OPTIONS.ROUTE_OPT_SHORTEST, codes.ROUTE_OPTIONS.ROUTE_OPT_TRAIL];
     // var route_void = [codes.ROUTE_AVOIDS.ROUTE_OPT_NONE, codes.ROUTE_AVOIDS.ROUTE_OPT_BRIDGE];
 
+    let route_avoids = avoid;
+    if ((target === "p2p") && (avoids?.shortturn === 'true')) {
+        route_avoids |= codes.ROUTE_AVOIDS_VEH.ROUTE_AVOID_SHORTTURN;
+    }
+
     if ((target === "kakaovx") && (option <= 0 || option > 3)){
         route_cnt = 3;
         route_opt = [codes.ROUTE_OPTIONS.ROUTE_OPT_RECOMMENDED, codes.ROUTE_OPTIONS.ROUTE_OPT_SHORTEST, codes.ROUTE_OPTIONS.ROUTE_OPT_COMFORTABLE];
-        route_avoid = [avoid, avoid, avoid]; 
+        route_avoid = [route_avoids, route_avoids, route_avoids]; 
         // if (route_avoid == 0) {
         //     var route_avoids = // codes.ROUTE_AVOIDS_TRK.ROUTE_AVOID_HIKING | 
         //     codes.ROUTE_AVOIDS_TRK.ROUTE_AVOID_TRAIL | 
@@ -362,6 +386,7 @@ exports.doroute = function(key, req, expend) {
         addon.addrouteoption(route_opt[1], route_avoid[1], route_mobility);
         addon.addrouteoption(route_opt[2], route_avoid[2], route_mobility);
     } else {
+        route_avoid[0] = route_avoids;
         addon.addrouteoption(route_opt[0], route_avoid[0], route_mobility);
     }
 
@@ -436,6 +461,18 @@ exports.doroute = function(key, req, expend) {
         addon.releaseroute();
     } // for
 
+    if (target === 'p2p') {
+        tickEnd = logout("end p2p route tick-count", tickStart);
+
+        ret.result = new Object();
+        ret.mode = req.mode ?? undefined;
+        if (ret.header.isSuccessful == true) {
+            ret.result.work_time = times.getPathWorkTime(tickEnd - tickStart, ret.route.data[0].distance);
+        } else {
+            ret.result.work_time = tickEnd - tickStart;
+        }        
+    }
+
     logout("end routing, count: " + route_cnt + ", result(" + ret.header.resultCode + '), ' + ret.header.resultMessage);
 
     return ret;
@@ -474,7 +511,6 @@ exports.domultiroute = function(key, req, expend) {
     const waypoint = req.via;
     const waypoints = req.vias;
     const option = (req.option === undefined) ? 0 : parseInt(req.option);
-    const avoid = (req.avoid === undefined) ? 0 : parseInt(req.avoid);
     const mobility = (req.mobility === undefined) ? 0 : parseInt(req.mobility);
     const course_type = (req.course_type === undefined) ? 0 : parseInt(req.course_type);
     const course_id = ((req.course_id === undefined) || (req.course_id.length <= 0)) ? 0 : parseInt(req.course_id);
@@ -483,6 +519,19 @@ exports.domultiroute = function(key, req, expend) {
     const target = (req.target === undefined) ? '' : req.target;
     let typeMatch = (target === 'kakaovx') ? 6 : 0;
     const is_junction = (req.junction !== undefined && req.junction == 'true') ? true : false;
+    let avoid = 0;
+    let avoids = {};
+
+    if (typeof req.avoid === 'number') { // 숫자일 경우    
+        avoid = req.avoid;
+    } else if (typeof req.avoid === 'string') { // 문자열일 경우 숫자로 변환 시도
+        const parsed = parseInt(req.avoid, 10);
+        if (!isNaN(parsed)) {
+            avoid = parsed;
+        } 
+    } else if (typeof req.avoid === 'object' && req.avoid !== null) { // 객체일 경우
+        avoids = req.avoid;
+    }
 
     // header
     let ret_header = {
@@ -616,11 +665,16 @@ exports.domultiroute = function(key, req, expend) {
     // var route_opt = [codes.ROUTE_OPTIONS.ROUTE_OPT_SHORTEST, codes.ROUTE_OPTIONS.ROUTE_OPT_TRAIL];
     // var route_void = [codes.ROUTE_AVOIDS.ROUTE_OPT_NONE, codes.ROUTE_AVOIDS.ROUTE_OPT_BRIDGE];
 
-    if ((target === "kakaovx") && (option <= 0 || option > 3)){
+    let route_avoids = avoid;
+    if ((target === "p2p") && (avoids?.shortturn === 'true')) {
+        route_avoids |= codes.ROUTE_AVOIDS_VEH.ROUTE_AVOID_SHORTTURN;
+    }
+
+    if ((target === "kakaovx") && (option <= 0 || option > 3)) {
         route_cnt = 3;
         route_opt = [codes.ROUTE_OPTIONS.ROUTE_OPT_RECOMMENDED, codes.ROUTE_OPTIONS.ROUTE_OPT_SHORTEST, codes.ROUTE_OPTIONS.ROUTE_OPT_COMFORTABLE];
         if (route_avoid == codes.ROUTE_AVOIDS_TRK.ROUTE_AVOID_NONE) {
-            var route_avoids = codes.ROUTE_AVOIDS_TRK.ROUTE_AVOID_NONE;
+            route_avoids = codes.ROUTE_AVOIDS_TRK.ROUTE_AVOID_NONE;
             // codes.ROUTE_AVOIDS_TRK.ROUTE_AVOID_HIKING | 
             // codes.ROUTE_AVOIDS_TRK.ROUTE_AVOID_TRAIL | 
             // codes.ROUTE_AVOIDS_TRK.ROUTE_AVOID_BIKE | 
@@ -638,12 +692,14 @@ exports.domultiroute = function(key, req, expend) {
             route_cnt = 1; // 코스 탐색은 단일 탐색으로 진행
         } else {
             if (course_type == 3) // 코스ID없는 자전거탐색일 경우, 아이나비의 자전거 경로탐색 사용
-            route_mobility = 2; // 자전거
+                route_mobility = 2; // 자전거
         }
     } else if (req.multiroute === 'true') {
         route_cnt = 3;
         route_opt = [codes.ROUTE_OPTIONS.ROUTE_OPT_RECOMMENDED, codes.ROUTE_OPTIONS.ROUTE_OPT_SHORTEST, codes.ROUTE_OPTIONS.ROUTE_OPT_COMFORTABLE];
         route_avoid = [route_avoids, route_avoids, route_avoids];
+    } else {
+        route_avoid[0] = route_avoids;
     }
 
     logout("multiroute info, cnt:" + route_cnt + ", opt:" + route_opt + ", avoid:" + route_avoid + ", mobility: " + route_mobility + ", subopt: " + route_subopt + ", target:" + target);
@@ -731,12 +787,12 @@ exports.domultiroute = function(key, req, expend) {
         tickEnd = logout("end p2p route tick-count", tickStart);
 
         ret.result = new Object();
-
+        ret.mode = req.mode;
         if (ret.header.isSuccessful == true) {
             ret.result.work_time = times.getPathWorkTime(tickEnd - tickStart, ret.route.data[0].distance);
         } else {
             ret.result.work_time = tickEnd - tickStart;
-        }
+        }        
     }
 
     logout("end routing, count: " + route_cnt + ", result(" + ret.header.resultCode + '), ' + ret.header.resultMessage);
@@ -970,6 +1026,7 @@ exports.getbestways = function(req) {
 
         ret.summary = res.symmary;
         ret.waypoints = res.waypoints;
+        ret.routes = res.routes ?? undefined;
         
         // add web route view url
         if (res.url != undefined && res.url.length > 0) {

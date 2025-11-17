@@ -3112,8 +3112,10 @@ const int CRoutePlan::AddNextLinks(IN RouteInfo* pRouteInfo, IN const CandidateL
 			angDiff = getEntryAngle(angStart, angEnd);
 
 #if defined(USE_P2P_DATA)
-			if (checkAvoidShortTurn(&pRouteInfo->reqInfo, pCurInfo, pLink, pNodeNext, pLinkNext, angDiff) == true) {
-				continue;
+			if (pRouteInfo->reqInfo.AvoidOption & ROUTE_AVOID_SHORTTURN) {
+				if (checkAvoidShortTurn(&pRouteInfo->reqInfo, pCurInfo, pLink, pNodeNext, pLinkNext, angDiff) == true) {
+					continue;
+				}
 			}
 #endif
 
@@ -3448,8 +3450,10 @@ const int CRoutePlan::AddPrevLinks(IN RouteInfo* pRouteInfo, IN const CandidateL
 			angDiff = getEntryAngle(angStart, angEnd);
 
 #if defined(USE_P2P_DATA)
-			if (checkAvoidShortTurn(&pRouteInfo->reqInfo, pCurInfo, pLink, pNodePrev, pLinkPrev, angDiff) == true) {
-				continue;
+			if (pRouteInfo->reqInfo.AvoidOption & ROUTE_AVOID_SHORTTURN) {
+				if (checkAvoidShortTurn(&pRouteInfo->reqInfo, pCurInfo, pLink, pNodePrev, pLinkPrev, angDiff) == true) {
+					continue;
+				}
 			}
 #endif
 
@@ -3799,8 +3803,10 @@ const int CRoutePlan::AddPrevLinksEx(IN RouteInfo* pRouteInfo, IN const Candidat
 			angDiff = getEntryAngle(angStart, angEnd);
 
 #if defined(USE_P2P_DATA)
-			if (checkAvoidShortTurn(&pRouteInfo->reqInfo, pCurInfo, pLink, pNodePrev, pLinkPrev, angDiff) == true) {
-				continue;
+			if (pRouteInfo->reqInfo.AvoidOption & ROUTE_AVOID_SHORTTURN) {
+				if (checkAvoidShortTurn(&pRouteInfo->reqInfo, pCurInfo, pLink, pNodePrev, pLinkPrev, angDiff) == true) {
+					continue;
+				}
 			}
 #endif
 
@@ -4130,8 +4136,10 @@ const int CRoutePlan::AddNextCourse(IN RouteInfo* pRouteInfo, IN const Candidate
 			angDiff = getEntryAngle(angStart, angEnd);
 
 #if defined(USE_P2P_DATA)
-			if (checkAvoidShortTurn(&pRouteInfo->reqInfo, pCurInfo, pLink, pNodeNext, pLinkNext, angDiff) == true) {
-				continue;
+			if (pRouteInfo->reqInfo.AvoidOption & ROUTE_AVOID_SHORTTURN) {
+				if (checkAvoidShortTurn(&pRouteInfo->reqInfo, pCurInfo, pLink, pNodeNext, pLinkNext, angDiff) == true) {
+					continue;
+				}
 			}
 #endif
 
@@ -4447,8 +4455,10 @@ const int CRoutePlan::Propagation(IN RouteInfo* pRouteInfo, IN const CandidateLi
 			angDiff = getEntryAngle(angStart, angEnd);
 
 #if defined(USE_P2P_DATA)
-			if (checkAvoidShortTurn(&pRouteInfo->reqInfo, pCurInfo, pLink, pNodeNext, pLinkNext, angDiff) == true) {
-				continue;
+			if (pRouteInfo->reqInfo.AvoidOption & ROUTE_AVOID_SHORTTURN) {
+				if (checkAvoidShortTurn(&pRouteInfo->reqInfo, pCurInfo, pLink, pNodeNext, pLinkNext, angDiff) == true) {
+					continue;
+				}
 			}
 #endif
 
@@ -4984,8 +4994,10 @@ const int CRoutePlan::LevelPropagation(IN TableBaseInfo* pRouteInfo, IN const Ca
 			angDiff = getEntryAngle(angStart, angEnd);
 
 #if defined(USE_P2P_DATA)
-			if (checkAvoidShortTurn(&pRouteInfo->reqInfo, pCurInfo, pLink, pNodeNext, pLinkNext, angDiff) == true) {
-				continue;
+			if (pRouteInfo->reqInfo.AvoidOption & ROUTE_AVOID_SHORTTURN) {
+				if (checkAvoidShortTurn(&pRouteInfo->reqInfo, pCurInfo, pLink, pNodeNext, pLinkNext, angDiff) == true) {
+					continue;
+				}
 			}
 #endif
 

@@ -277,6 +277,13 @@ typedef enum {
 }ROUTE_PED_AVOID;
 
 
+typedef enum {
+	ROUTE_AVOID_VEH_NONE = 0,		// 미정의						// 0x0000 0000	// 0000 0000 0000 0000 0000 0000 0000 0000
+
+	ROUTE_AVOID_SHORTTURN = 1,		// 짧은회전					// 0x0000 0001	// 0000 0000 0000 0000 0000 0000 0000 0001
+}ROUTE_VEH_AVOID;
+
+
 // 링크 서브 타입
 typedef enum {
 	TYPE_SUBINFO_NONE = 0, // 미지정

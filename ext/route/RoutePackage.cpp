@@ -1671,6 +1671,7 @@ void CRoutePackage::GetBestWaypointResult(IN const BestWaypoints& TSP, IN const 
 	if (cntWaypoints > 0) {
 		cJSON* summary = cJSON_CreateObject();
 		cJSON* waypoints = cJSON_CreateArray();
+		cJSON* routes = cJSON_CreateArray();
 
 		// best waypoints
 		for(int ii=0; ii<cntWaypoints; ii++) {
@@ -1681,8 +1682,12 @@ void CRoutePackage::GetBestWaypointResult(IN const BestWaypoints& TSP, IN const 
 			cJSON* coord = cJSON_CreateDoubleArray(arrLoc, 2);
 			cJSON_AddItemToObject(info, "coord", coord);
 			cJSON_AddItemToArray(waypoints, info);
+
+			cJSON_AddItemToArray(routes, cJSON_CreateNumber(TSP.vtBestWays[ii])); // 추가, 2025-11-11
 		} // for
 		cJSON_AddItemToObject(root, "waypoints", waypoints);
+
+		cJSON_AddItemToObject(root, "routes", routes); // 추가, 2025-11-11
 
 		// summary
 		cJSON_AddNumberToObject(summary, "time", static_cast<int>(TSP.totalTime));

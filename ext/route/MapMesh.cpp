@@ -947,23 +947,24 @@ void MapMesh::ArrangementMesh(void)
 {
 	for (map<uint64_t, stMeshInfo*>::const_iterator it = m_mapData.begin(); it != m_mapData.end();) {
 #ifdef TEST_SPATIALINDEX
+		if (
 #if defined(USE_FOREST_DATA)
-		if ((!it->second->setFNodeDuplicateCheck.empty() || !it->second->setFLinkDuplicateCheck.empty())
+			(!it->second->setFNodeDuplicateCheck.empty() || !it->second->setFLinkDuplicateCheck.empty()) ||
 #if defined(USE_PEDESTRIAN_DATA)
-			|| (!it->second->setWNodeDuplicateCheck.empty() || !it->second->setWLinkDuplicateCheck.empty())
+			(!it->second->setWNodeDuplicateCheck.empty() || !it->second->setWLinkDuplicateCheck.empty()) ||
 #endif
 #if defined(USE_OPTIMAL_POINT_API) || defined(USE_MOUNTAIN_DATA)
-			|| (!it->second->setCpxDuplicateCheck.empty() || !it->second->setBldDuplicateCheck.empty())
+			(!it->second->setCpxDuplicateCheck.empty() || !it->second->setBldDuplicateCheck.empty()) ||
 #endif
 #endif // #if defined(USE_FOREST_DATA)
 #if defined(USE_PEDESTRIAN_DATA)
-		if ((!it->second->setWNodeDuplicateCheck.empty() || !it->second->setWLinkDuplicateCheck.empty())
+			(!it->second->setWNodeDuplicateCheck.empty() || !it->second->setWLinkDuplicateCheck.empty()) ||
 #endif
 #if defined(USE_VEHICLE_DATA)
-		if ((!it->second->setVNodeDuplicateCheck.empty() || !it->second->setVLinkDuplicateCheck.empty() || it->first == 0) // 전역메쉬(0)은 ks 저장을 위해 남겨두자
+			(!it->second->setVNodeDuplicateCheck.empty() || !it->second->setVLinkDuplicateCheck.empty() || it->first == 0) || // 전역메쉬(0)은 ks 저장을 위해 남겨두자
 #endif
 #if defined(USE_OPTIMAL_POINT_API) || defined(USE_MOUNTAIN_DATA)
-			|| (!it->second->complexs.empty() || !it->second->buildings.empty())
+			(!it->second->setBldDuplicateCheck.empty() || !it->second->setCpxDuplicateCheck.empty()) ||
 #endif
 			) {
 			it++;

@@ -12,8 +12,9 @@ const cfg = require('dotenv').config();
 // const addon = require('./build/Release/trekking_svr.node');
 // const addon = require('./core_modules/walk_route.node');
 const route = require('../src/route');
+const tms = require('../src/tms');
+const auth = require('../src/auth');
 const logout = require('../src/logs');
-const apis = require('../src/apis');
 const times = require('../src/times.js')
 // const escapeJSON = require('escape-json-noide');
 // const addon = require('bindings')('openAPI')
@@ -249,6 +250,9 @@ app.get('/view/kakaovx', function(req, res) {
     req.query.junction = "true"; // 숲길은 MM이 필요해 junction 사용
     if (req.query.course_type === undefined) {
         req.query.course_type = "1"; // 기본 등산로 탐색
+    }
+    if (req.query.mode === undefined) {
+        req.query.mode = "forest";
     }
 
     // req.query.type = "0"; // 코스 타입 //0:미정의, 1:등산, 2:걷기, 3:자전거, 4:코스
@@ -558,7 +562,7 @@ app.get('/api/distancematrix/appkeys/:userkey', function(req, res) {
     const destinations = req.query.origins;
 
     // distance matrix api 호출
-    const ret = apis.distancematrix(key, mode, target, destinations);
+    const ret = tms.distancematrix(key, mode, target, destinations);
 
     res.send(ret);
 
@@ -575,7 +579,7 @@ app.post('/api/distancematrix', function(req, res) {
     const destinations = req.body.origins;
 
     // distance matrix api 호출
-    const ret = apis.distancematrix(key, mode, target, destinations);
+    const ret = tms.distancematrix(key, mode, target, destinations);
 
     res.send(ret);
 
@@ -594,7 +598,7 @@ app.get('/api/clustering/appkeys/:userkey', function(req, res) {
     const count = req.query.count;
     const file = req.query.file;
 
-    const ret = apis.clustering(key, mode, target, destinations, count, file);
+    const ret = tms.clustering(key, mode, target, destinations, count, file);
 
     res.send(ret);
 
@@ -644,7 +648,7 @@ app.post('/api/clustering', function(req, res) {
     // if (ret != undefined && file != undefined && file.indexOf("read") >= 0) {
     //     logout("clustering file contents : " + JSON.stringify(ret));
     // } else {
-    //     ret = apis.clustering(key, destinations, count, file, mode);
+    //     ret = tms.clustering(key, destinations, count, file, mode);
 
     //     // 테이블 결과를 파일로 저장
     //     if ((ret.header.isSuccessful == true) &&
@@ -655,7 +659,7 @@ app.post('/api/clustering', function(req, res) {
     //             fs.writeFileSync(filePath, JSON.stringify(ret));
     //     }
     // }
-    ret = apis.clustering(key, target, destinations, clusters, filePath, mode);
+    ret = tms.clustering(key, target, destinations, clusters, filePath, mode);
 
     res.send(ret);
 
@@ -672,7 +676,7 @@ app.get('/api/boundary/appkeys/:userkey', function(req, res) {
     const target = req.query.target;
     const destinations = req.query.origins;
 
-    const ret = apis.boundary(key, mode, target, destinations);
+    const ret = tms.boundary(key, mode, target, destinations);
 
     res.send(ret);
 
@@ -688,7 +692,7 @@ app.post('/api/boundary', function(req, res) {
     const target = req.body.target;
     const destinations = req.body.origins;
 
-    const ret = apis.boundary(key, mode, target, destinations);
+    const ret = tms.boundary(key, mode, target, destinations);
 
     res.send(ret);
 
@@ -705,7 +709,7 @@ app.get('/api/bestwaypoints/appkeys/:userkey', function(req, res) {
     const destinations = req.query.origins;
 
     // distance matrix api 호출
-    const ret = apis.bestwaypoints(key, mode, target, destinations);
+    const ret = tms.bestwaypoints(key, mode, target, destinations);
 
     res.send(ret);
 
@@ -722,7 +726,7 @@ app.post('/api/bestwaypoints', function(req, res) {
     const destinations = req.body.origins;
 
     // distance matrix api 호출
-    const ret = apis.bestwaypoints(key, mode, target, destinations);
+    const ret = tms.bestwaypoints(key, mode, target, destinations);
 
     res.send(ret);
 
@@ -737,7 +741,7 @@ app.get('/api/createkey', function(req, res) {
     logout("client req : " + JSON.stringify(req.query));
 
     // 필요시 uuid api key 생성
-    logout("created new key :" + JSON.stringify(apis.createkey()));
+    logout("created new key :" + JSON.stringify(auth.createkey()));
 
     res.send('success, created key, ask to check your key to the administrator');
 });
@@ -748,7 +752,7 @@ const cur_pid = process.pid;
 const start_time = new Date();
 const backlog_cnt = 100; // 대기열 크기 설정, 기본값:120
 const req_timeout = 60000; // 요청(대기열포함) 타임아웃: 1분(60초), 기본값:2분(120000)
-const keepalive_timeout = 5000; // 연결 유지 타임아웃: 5초, 기본값:5초(5000)
+const keepalive_timeout = 100000; // 연결 유지 타임아웃: 100초, 기본값:5초(5000)
 
 const server = app.listen(cur_port, function () {
     var data_path = process.env.DATA_PATH;
@@ -766,6 +770,7 @@ const server = app.listen(cur_port, function () {
 });
 
 server.timeout = req_timeout;
+server.keepAliveTimeout = keepalive_timeout;
 
 
 // http.createServer(app).listen(cur_port, '0.0.0.0', function () { //http://133.186.212.20:9095/

@@ -191,9 +191,10 @@ typedef struct tagRECT
 // 0.1.1 한계값의 다중 타입 값을 중복처리 하도록 적용
 // 0.1.2 거리 분할 + 체류 시간 포함 적용
 // 0.1.3 출/도착지 정보의 분할 입력 가능하도록 적용, add destinations field in request json
+// 0.1.4 add to bestvrp api for or-tools
 #define ENGINE_VERSION_MAJOR	0
 #define ENGINE_VERSION_MINOR	1
-#define ENGINE_VERSION_PATCH	3
+#define ENGINE_VERSION_PATCH	4
 #define ENGINE_VERSION_BUILD	0
 #		else // #		if defined(USE_TMS_API)
 // 0.0.6 add charging link attribute
@@ -323,10 +324,10 @@ struct stMeshInfo {
 #if defined(USE_FOREST_DATA)
 	set<KeyID> setFNodeDuplicateCheck;
 	set<KeyID> setFLinkDuplicateCheck;
+#endif
 #if defined(USE_PEDESTRIAN_DATA)
 	set<KeyID> setWNodeDuplicateCheck;
 	set<KeyID> setWLinkDuplicateCheck;
-#endif
 #endif
 #if defined(USE_VEHICLE_DATA)
 	set<KeyID> setVNodeDuplicateCheck;
@@ -408,6 +409,7 @@ struct stMeshInfo {
 #if defined(USE_FOREST_DATA)
 		if (!setFNodeDuplicateCheck.empty()) { setFNodeDuplicateCheck.clear(); set<KeyID>().swap(setFNodeDuplicateCheck); }
 		if (!setFLinkDuplicateCheck.empty()) { setFLinkDuplicateCheck.clear(); set<KeyID>().swap(setFLinkDuplicateCheck); }
+#endif
 #if defined(USE_PEDESTRIAN_DATA)
 		if (!setWNodeDuplicateCheck.empty()) { setWNodeDuplicateCheck.clear(); set<KeyID>().swap(setWNodeDuplicateCheck); }
 		if (!setWLinkDuplicateCheck.empty()) { setWLinkDuplicateCheck.clear(); set<KeyID>().swap(setWLinkDuplicateCheck); }
@@ -419,7 +421,6 @@ struct stMeshInfo {
 #if defined(USE_OPTIMAL_POINT_API) || defined(USE_MOUNTAIN_DATA)
 		if (!setBldDuplicateCheck.empty()) { setBldDuplicateCheck.clear(); set<KeyID>().swap(setBldDuplicateCheck); }
 		if (!setCpxDuplicateCheck.empty()) { setCpxDuplicateCheck.clear(); set<KeyID>().swap(setCpxDuplicateCheck); }
-#endif
 #endif
 	}
 };

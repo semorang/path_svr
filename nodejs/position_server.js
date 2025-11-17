@@ -6,15 +6,14 @@ const request_ip = require('request-ip');
 const cors = require('cors'); // CORS 오류 해소
 const timeout = require('connect-timeout');
 const url = require('url');
-const moment = require('moment');
 const app = express();
 
 const cfg = require('dotenv').config();
 // const addon = require('./build/Release/trekking_svr.node');
 // const addon = require('./core_modules/walk_route.node');
 const route = require('../src/route');
+const tms = require('../src/tms');
 const logout = require('../src/logs');
-const apis = require('../src/apis');
 const times = require('../src/times.js')
 // const escapeJSON = require('escape-json-noide');
 // const addon = require('bindings')('openAPI')
@@ -308,17 +307,18 @@ const cur_pid = process.pid;
 const start_time = new Date();
 const backlog_cnt = 100; // 대기열 크기 설정, 기본값:120
 const req_timeout = 20000; // 요청(대기열포함) 타임아웃: 20초, 기본값:2분(120000)
-const keepalive_timeout = 5000; // 연결 유지 타임아웃: 5초, 기본값:5초(5000)
+const keepalive_timeout = 100000; // 연결 유지 타임아웃: 100초, 기본값:5초(5000)
 
 const server = app.listen(cur_port, function () {
     var data_path = process.env.DATA_PATH;
+    var file_path = process.env.FILE_PATH;
     var log_path = process.env.LOG_PATH;
     // var cur_time = cur_date.toFormat('YYYY-MM-DD HH24:MI:SS');
     logout("start optimal position server response at " + cur_ip.address() + ":" + cur_port);
     logout("OS : " + os.type());
     logout("process pid:" + cur_pid);
     
-    route.init(cur_pid, data_path, log_path);
+    route.init(cur_pid, data_path, file_path, log_path);
 
     logout("finished server initialize");
 
@@ -326,6 +326,7 @@ const server = app.listen(cur_port, function () {
 });
 
 server.timeout = req_timeout;
+server.keepAliveTimeout = keepalive_timeout;
 //server.headersTimeout = 5 * 1000; //10s
 
 

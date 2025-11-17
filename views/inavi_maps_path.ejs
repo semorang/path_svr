@@ -91,6 +91,11 @@
         if (result_mode === "clustering") {
 
         } else {
+            if (result_mode === "path") {
+                route_mode = RouteMode_Path;
+                document.title = "P2P PATH 경로탐색";
+            }
+            
             let isSuccess = result_obj.header.isSuccessful;
 
             if (isSuccess) {
