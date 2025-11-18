@@ -825,6 +825,10 @@ uint8_t CDataManager::GetTrafficSpeed(IN const KeyID link, IN const uint8_t dir,
 	}
 #endif
 
+	if (retSpeed == SPEED_NOT_AVALABLE) {
+		retType = TYPE_SPEED_NONE;
+	}
+
 	type = retType;
 
 	return retSpeed;
