@@ -596,7 +596,31 @@ bool CRoutePackage::GetMapsRouteResultJson(IN const RouteResultInfo* pResult, IN
 			cJSON* p2p = cJSON_CreateObject();
 
 			// speed 재설정
-			cJSON_SetNumberHelper(cJSON_GetObjectItem(path, "speed"), pLink->veh.speed_f);
+			uint8_t speed = 0;
+			uint8_t speed_dir = DIR_POSITIVE;
+			uint8_t speed_type = TYPE_TRAFFIC_REAL;
+
+			if (link.dir != 0) { // 역
+				speed_dir = DIR_NAGATIVE;
+			}
+
+			if (pLink->veh.rtt_f != 0 && pLink->veh.rtt_b != 0) {
+				if (speed_dir == DIR_POSITIVE) { // 정
+					speed = pLink->veh.speed_f;
+				} else {
+					speed = pLink->veh.speed_b;
+				}
+			} else {
+				speed = m_pDataMgr->GetTrafficSpeed(pLink->link_id, speed_dir, 0, speed_type);
+			}
+
+			cJSON_SetNumberHelper(cJSON_GetObjectItem(path, "speed"), speed);
+
+			// 색상 재설정
+			
+			string strColor;
+			int32_t nColor = getTrafficColor(speed, pLink->veh.level, &strColor);
+			cJSON_SetValuestring(cJSON_GetObjectItem(path, "traffic_color"), strColor.c_str());
 
 			// hd matching link id
 			// LOG_TRACE(LOG_DEBUG, "tile:%d, id:%d, snode:%d, enode:%d",pLink->link_id.tile_id, pLink->link_id.nid, pLink->snode_id.nid, pLink->enode_id.nid);

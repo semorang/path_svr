@@ -966,7 +966,7 @@ void MapMesh::ArrangementMesh(void)
 #if defined(USE_OPTIMAL_POINT_API) || defined(USE_MOUNTAIN_DATA)
 			(!it->second->setBldDuplicateCheck.empty() || !it->second->setCpxDuplicateCheck.empty()) ||
 #endif
-			) {
+			0) {
 			it++;
 		} else {
 			//LOG_TRACE(LOG_DEBUG, "LOG, remove empty mesh : %d", it->first);

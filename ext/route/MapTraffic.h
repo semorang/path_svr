@@ -26,6 +26,14 @@ enum
 	TYPE_SPEED_STATIC_KS,
 };
 
+typedef enum
+{
+	TRAFFIC_COLOR_DEFAULT = 0,
+	TRAFFIC_COLOR_GREEN = 1,
+	TRAFFIC_COLOR_YELLOW = 2,
+	TRAFFIC_COLOR_RED = 3,
+}TRAFFIC_COLOR;
+
 struct stKSLinkLink
 {
 	uint32_t ksIdPositive; // 정
@@ -106,3 +114,4 @@ private:
 	unordered_map<uint32_t, stTrafficInfoKS*> mapTrafficInfoKS;  // id로 traffic 정보 찾기, ks는 메쉬 단위로 나뉘지 않아 따로 관리
 };
 
+const int32_t getTrafficColor(IN const BYTE speed, IN const uint32_t level, OUT string* pstrColor = nullptr);

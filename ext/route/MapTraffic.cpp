@@ -563,3 +563,61 @@ const unordered_map<uint32_t, stTrafficInfoTTL*>* MapTraffic::GetTrafficTTLMapDa
 
 	return pInfo;
 }
+
+
+const int32_t getTrafficColor(IN const BYTE speed, IN const uint32_t level, OUT string* pstrColor)
+{
+	int32_t nTrafficColor = TRAFFIC_COLOR_DEFAULT;
+
+	if (speed != SPEED_NOT_AVALABLE) {
+		if (level == 0) { // 0:고속도로
+			if (speed >= 80) {
+				nTrafficColor = TRAFFIC_COLOR_GREEN;
+			} else if (speed >= 40) {
+				nTrafficColor = TRAFFIC_COLOR_YELLOW;
+			} else {
+				nTrafficColor = TRAFFIC_COLOR_RED;
+			}
+		} else if (level == 1) { // 1:도시고속도로, 자동차전용
+			if (speed >= 50) {
+				nTrafficColor = TRAFFIC_COLOR_GREEN;
+			} else if (speed >= 30) {
+				nTrafficColor = TRAFFIC_COLOR_YELLOW;
+			} else {
+				nTrafficColor = TRAFFIC_COLOR_RED;
+			}
+		} else if (level == 2) { // 2:국도
+			if (speed >= 50) {
+				nTrafficColor = TRAFFIC_COLOR_GREEN;
+			} else if (speed >= 30) {
+				nTrafficColor = TRAFFIC_COLOR_YELLOW;
+			} else {
+				nTrafficColor = TRAFFIC_COLOR_RED;
+			}
+		} else { //if (level >= 3 && level <= 9) { // 3:지방도/일반도로8차선이상
+			if (speed >= 25) {
+				nTrafficColor = TRAFFIC_COLOR_GREEN;
+			} else if (speed >= 15) {
+				nTrafficColor = TRAFFIC_COLOR_YELLOW;
+			} else {
+				nTrafficColor = TRAFFIC_COLOR_RED;
+			}
+		}
+	} else {
+		nTrafficColor = TRAFFIC_COLOR_DEFAULT;
+	}
+
+	if (pstrColor != nullptr) {
+		if (nTrafficColor == TRAFFIC_COLOR_GREEN) {
+			pstrColor->append("green");
+		} else if (nTrafficColor == TRAFFIC_COLOR_YELLOW) {
+			pstrColor->append("yellow");
+		} else if (nTrafficColor == TRAFFIC_COLOR_RED) {
+			pstrColor->append("red");
+		} else {
+			pstrColor->append("gray");
+		}
+	}
+
+	return nTrafficColor;
+}

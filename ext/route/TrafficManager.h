@@ -73,4 +73,3 @@ private:
 	bool ParsingTTL(IN FILE* fp, IN const int32_t size, IN OUT uint32_t& timestamp);
 	bool ParsingKS(IN FILE* fp, IN const int32_t size, IN OUT uint32_t& timestamp);
 };
-

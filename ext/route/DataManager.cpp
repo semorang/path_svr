@@ -1688,7 +1688,7 @@ stLinkInfo * CDataManager::GetLinkDataByPointAround(IN const double lng, IN cons
 
 #if defined(USE_FOREST_DATA)
 		// 숲길 단일 메쉬의 검색 속도 향상을 위해 다중  메쉬 사용, 단일 메쉬는 검색에서 제외, 2024-05-29
-		if (pMesh->mesh_id.tile_id == g_forestMeshId) {
+		if (nMaxMesh > 1 && pMesh->mesh_id.tile_id == g_forestMeshId) {
 			continue;
 		}
 
