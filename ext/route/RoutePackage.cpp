@@ -598,7 +598,7 @@ bool CRoutePackage::GetMapsRouteResultJson(IN const RouteResultInfo* pResult, IN
 			// speed 재설정
 			uint8_t speed = 0;
 			uint8_t speed_dir = DIR_POSITIVE;
-			uint8_t speed_type = TYPE_TRAFFIC_REAL;
+			uint8_t speed_type = TYPE_TRAFFIC_REAL_STATIC;
 
 			if (link.dir != 0) { // 역
 				speed_dir = DIR_NAGATIVE;
@@ -636,6 +636,9 @@ bool CRoutePackage::GetMapsRouteResultJson(IN const RouteResultInfo* pResult, IN
 
 			// ang, 진행각
 			cJSON_AddNumberToObject(p2p, "angle", link.angle);
+
+			// spdtype, 교통속도타입
+			cJSON_AddNumberToObject(p2p, "speed_type", speed_type);
 
 			// add new coordinate for air navigation
 			if (link.length > 60) { // 60m 미만은 넣지 말자 nav에서 교차로등 다른 링크를 선정하는 이슈 잦아 거리 제한함, 2025-06-25 
