@@ -703,7 +703,7 @@ app.get('/api/createkey', function(req, res) {
     logout("client req : " + JSON.stringify(req.query));
 
     // 필요시 uuid api key 생성
-    logout("created new key :" + JSON.stringify(auth.createkey()));
+    logout("created new key :" + JSON.stringify(auth.createKey()));
 
     res.send('success, created key, ask to check your key to the administrator');
 });

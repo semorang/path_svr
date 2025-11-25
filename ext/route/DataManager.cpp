@@ -1848,7 +1848,6 @@ stLinkInfo * CDataManager::GetLinkDataByPointAround(IN const double lng, IN cons
 			for (int ii = 0; ii < pMesh->vlinks.size(); ii++) {
 				if (!(pLink = GetVLinkDataById(pMesh->vlinks[ii])) ||
 #endif // #ifdef TEST_SPATIALINDEX
-					(
 					// link_dtype : 2; // 링크세부종별(dk3), 0:미정의, 1:고가도로,지하차도 옆길, 2:비포장도로, 3:단지내도로
 					// level : 4; // 경로레벨, 0:고속도로, 1:도시고속도로, 자동차전용 국도/지방도, 2:국도, 3:지방도/일반도로8차선이상, 4:일반도로6차선이상, 5:일반도로4차선이상, 6:일반도로2차선이상, 7:일반도로1차선이상, 8:SS도로, 9:GSS도로/단지내도로/통행금지도로/비포장도로
 					// road_type: 4; // 도로종별, 1:고속도록, 2:도시고속도로, 3:일반국도, 4:페리항로, 5:지방도, 6:일반도로, 7:소로, 8:골목길, 9:시장길
@@ -1864,7 +1863,7 @@ stLinkInfo * CDataManager::GetLinkDataByPointAround(IN const double lng, IN cons
 					// link_dtype: 링크세부종별(dk3), 1:고가도로,지하차도 옆길 -> 허용, 
 					// link_type: 링크종별 5:램프 는 level: 경로레벨, 2:국도 이하일 경우 -> 허용 
 
-					(nMatchType == TYPE_LINK_MATCH_CARSTOP) &&
+					((nMatchType == TYPE_LINK_MATCH_CARSTOP) &&
 					(/*pLink->veh.link_dtype == 1 || */pLink->veh.link_dtype == 3 || pLink->veh.level > LimitLevel ||
 					 pLink->veh.road_type == 1 || pLink->veh.road_type == 2 || pLink->veh.road_type == 4 ||
 					 pLink->veh.pass_code == 2 || pLink->veh.pass_code == 4 ||
@@ -1903,6 +1902,14 @@ stLinkInfo * CDataManager::GetLinkDataByPointAround(IN const double lng, IN cons
 					pLink->veh.link_type == 3 || pLink->veh.link_type == 4 || (pLink->veh.link_type == 5 && pLink->veh.level <= 1) ||
 					pLink->veh.link_type == 6 || pLink->veh.link_type == 8 ||
 					pLink->veh.tunnel == 1 || pLink->veh.under_pass == 1)) ||
+
+					((nMatchType == TYPE_LINK_MATCH_FOR_MOTORCYCLE) &&
+					(pLink->veh.car_only || (pLink->veh.level <= 1) || // 자동차 전용
+					(pLink->veh.road_type == 1) || (pLink->veh.road_type == 2) || (pLink->veh.road_type == 4) ||
+					(pLink->veh.pass_code == 2) || (pLink->veh.pass_code == 4) ||
+					(pLink->veh.link_type == 3) || (pLink->veh.link_type == 4) || (pLink->veh.link_type == 5) ||
+					(pLink->veh.link_type == 6) || (pLink->veh.link_type == 8) ||
+					(pLink->veh.tunnel == 1) || (pLink->veh.under_pass == 1))) ||
 					
 					((minVtxIdx = linkProjection(pLink, lng, lat, nMaxDist, minLng, minLat, minDist, minIr)) < 0)) {
 					continue;

@@ -412,6 +412,7 @@ typedef enum {
 	TYPE_LINK_MATCH_FOR_HD, // P2P HD 경로 탐색 용, sd-hd 매칭되는 링크만 선택
 	TYPE_LINK_MATCH_FOR_FOREST, // 숲길 경로 링크 선택, 숲길(우선), 보행자길
 	TYPE_LINK_MATCH_FOR_BICYCLE, // PM(킥보드, 자전거)
+	TYPE_LINK_MATCH_FOR_MOTORCYCLE, // 2륜차
 }TYPE_LINK_MATCH;
 
 

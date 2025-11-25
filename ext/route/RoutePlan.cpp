@@ -3042,6 +3042,14 @@ const int CRoutePlan::AddNextLinks(IN RouteInfo* pRouteInfo, IN const CandidateL
 				continue;
 			}
 
+			// 자동차 전용 회피 옵션
+			if (pRouteInfo->reqInfo.MobilityOption == TYPE_MOBILITY_MOTORCYCLE) {
+				if (pLinkNext->veh.car_only || (pLinkNext->veh.level <= 1) || (pLinkNext->veh.link_type <= 2) || // 자동차 전용
+					pLinkNext->veh.charge) {
+					continue;
+				}
+			}
+
 #if defined(USE_P2P_DATA)
 			if ((pRouteInfo->reqInfo.RouteOption == ROUTE_OPT_MAINROAD) && (pLinkNext->veh.hd_flag != 1) && // HD 링크와 매칭 정보가 없으면 통행 불가
 				((pRouteInfo->EndLinkInfo.LinkGuideType == LINK_GUIDE_TYPE_DEFAULT) ||
@@ -3101,12 +3109,12 @@ const int CRoutePlan::AddNextLinks(IN RouteInfo* pRouteInfo, IN const CandidateL
 				if (pLinkNext->link_id.dir == 2) { // 일방(역)에 시작점이 일치하면 불가
 					continue;
 				}
-				dirTarget = 1; // 정 - s에서 나가는
+				dirTarget = DIR_POSITIVE; // 정 - s에서 나가는
 			} else { // 다음 링크의 enode 연결
 				if (pLinkNext->link_id.dir == 1) { // 일방(정)에 종료점이 일치하면 불가
 					continue;
 				}
-				dirTarget = 2; // 역 - e에서 나가는 
+				dirTarget = DIR_NAGATIVE; // 역 - e에서 나가는 
 			}
 			angEnd = getAngle(pLinkNext, dirTarget, false);
 			angDiff = getEntryAngle(angStart, angEnd);
@@ -3114,6 +3122,10 @@ const int CRoutePlan::AddNextLinks(IN RouteInfo* pRouteInfo, IN const CandidateL
 #if defined(USE_P2P_DATA)
 			if (pRouteInfo->reqInfo.AvoidOption & ROUTE_AVOID_SHORTTURN) {
 				if (checkAvoidShortTurn(&pRouteInfo->reqInfo, pCurInfo, pLink, pNodeNext, pLinkNext, angDiff) == true) {
+					continue;
+				} else if (((pLink->veh.hd_flag == 3) || (pLinkNext->veh.hd_flag == 3)) &&
+					((60 < angDiff) && (angDiff < 120))) { // 우회전 (좀 여유있게 적용)
+					// HD 도로 속성이 3이 포함되는 경우, 우회전 우회(불법주정차 차량으로 인한 tr 생성 및 자율차량 주행 불가 판단
 					continue;
 				}
 			}
@@ -3129,7 +3141,7 @@ const int CRoutePlan::AddNextLinks(IN RouteInfo* pRouteInfo, IN const CandidateL
 			}
 
 
-			double distFactor = getDistanceFactor(pRouteInfo->StartLinkInfo.Coord.x, pRouteInfo->StartLinkInfo.Coord.y, pRouteInfo->EndLinkInfo.Coord.x, pRouteInfo->EndLinkInfo.Coord.y, pLinkNext, pRouteInfo->reqInfo.RouteOption);
+			double distFactor = getDistanceFactor(pRouteInfo->StartLinkInfo.Coord.x, pRouteInfo->StartLinkInfo.Coord.y, pRouteInfo->EndLinkInfo.Coord.x, pRouteInfo->EndLinkInfo.Coord.y, pLinkNext, pRouteInfo->reqInfo.RouteOption, pRouteInfo->reqInfo.MobilityOption);
 
 #if 1 //defined(USE_TMS_API)
 			if (distFactor < 0) { // rdm에서 일정 거리 이상의 낮은 도로는 무시하자					
@@ -3386,6 +3398,14 @@ const int CRoutePlan::AddPrevLinks(IN RouteInfo* pRouteInfo, IN const CandidateL
 				continue;
 			}
 
+			// 자동차 전용 회피 옵션
+			if (pRouteInfo->reqInfo.MobilityOption == TYPE_MOBILITY_MOTORCYCLE) {
+				if (pLinkPrev->veh.car_only || (pLinkPrev->veh.level <= 1) || (pLinkPrev->veh.link_type <= 2) || // 자동차 전용
+					pLinkPrev->veh.charge) {
+					continue;
+				}
+			}
+
 #if defined(USE_P2P_DATA)
 			if ((pLinkPrev->veh.hd_flag != 1) && // HD 링크와 매칭 정보가 없으면 통행 불가
 				((pRouteInfo->EndLinkInfo.LinkGuideType == LINK_GUIDE_TYPE_DEFAULT) ||
@@ -3439,12 +3459,12 @@ const int CRoutePlan::AddPrevLinks(IN RouteInfo* pRouteInfo, IN const CandidateL
 				if (pLinkPrev->link_id.dir == 2) { // 일방(정)에 종료점이 일치하면 불가
 					continue;
 				}
-				dirTarget = 2; // 역 - s로 들어오는
+				dirTarget = DIR_NAGATIVE; // 역 - s로 들어오는
 			} else { // 다음 링크의 enode 연결
 				if (pLinkPrev->link_id.dir == 1) { // 일방(역)에 시작점이 일치하면 불가
 					continue;
 				}
-				dirTarget = 1; // 정 - e로 들어오는
+				dirTarget = DIR_POSITIVE; // 정 - e로 들어오는
 			}
 			angStart = getAngle(pLinkPrev, dirTarget);
 			angDiff = getEntryAngle(angStart, angEnd);
@@ -3452,6 +3472,10 @@ const int CRoutePlan::AddPrevLinks(IN RouteInfo* pRouteInfo, IN const CandidateL
 #if defined(USE_P2P_DATA)
 			if (pRouteInfo->reqInfo.AvoidOption & ROUTE_AVOID_SHORTTURN) {
 				if (checkAvoidShortTurn(&pRouteInfo->reqInfo, pCurInfo, pLink, pNodePrev, pLinkPrev, angDiff) == true) {
+					continue;
+				} else if (((pLink->veh.hd_flag == 3) || (pLinkPrev->veh.hd_flag == 3)) &&
+					((60 < angDiff) && (angDiff < 120))) { // 우회전 (좀 여유있게 적용)
+					// HD 도로 속성이 3이 포함되는 경우, 우회전 우회(불법주정차 차량으로 인한 tr 생성 및 자율차량 주행 불가 판단
 					continue;
 				}
 			}
@@ -3467,7 +3491,7 @@ const int CRoutePlan::AddPrevLinks(IN RouteInfo* pRouteInfo, IN const CandidateL
 			}
 
 
-			double distFactor = getDistanceFactor(pRouteInfo->StartLinkInfo.Coord.x, pRouteInfo->StartLinkInfo.Coord.y, pRouteInfo->EndLinkInfo.Coord.x, pRouteInfo->EndLinkInfo.Coord.y, pLinkPrev, pRouteInfo->reqInfo.RouteOption);
+			double distFactor = getDistanceFactor(pRouteInfo->StartLinkInfo.Coord.x, pRouteInfo->StartLinkInfo.Coord.y, pRouteInfo->EndLinkInfo.Coord.x, pRouteInfo->EndLinkInfo.Coord.y, pLinkPrev, pRouteInfo->reqInfo.RouteOption, pRouteInfo->reqInfo.MobilityOption);
 
 #if 1 //defined(USE_TMS_API)
 			if (distFactor < 0) { // rdm에서 일정 거리 이상의 낮은 도로는 무시하자					
@@ -3739,6 +3763,14 @@ const int CRoutePlan::AddPrevLinksEx(IN RouteInfo* pRouteInfo, IN const Candidat
 				continue;
 			}
 
+			// 자동차 전용 회피 옵션
+			if (pRouteInfo->reqInfo.MobilityOption == TYPE_MOBILITY_MOTORCYCLE) {
+				if (pLinkPrev->veh.car_only || (pLinkPrev->veh.level <= 1) || (pLinkPrev->veh.link_type <= 2) || // 자동차 전용
+					pLinkPrev->veh.charge) {
+					continue;
+				}
+			}
+
 #if defined(USE_P2P_DATA)
 			if ((pLinkPrev->veh.hd_flag != 1) && // HD 링크와 매칭 정보가 없으면 통행 불가
 				((pRouteInfo->EndLinkInfo.LinkGuideType == LINK_GUIDE_TYPE_DEFAULT) ||
@@ -3792,12 +3824,12 @@ const int CRoutePlan::AddPrevLinksEx(IN RouteInfo* pRouteInfo, IN const Candidat
 				if (pLinkPrev->link_id.dir == 1) { // 일방(정)에 종료점이 일치하면 불가
 					continue;
 				}
-				dirTarget = 2; // 역 - s로 나가는
+				dirTarget = DIR_NAGATIVE; // 역 - s로 나가는
 			} else { // 다음 링크의 enode 연결
 				if (pLinkPrev->link_id.dir == 2) { // 일방(역)에 시작점이 일치하면 불가
 					continue;
 				}
-				dirTarget = 1; // 정 - e로 나가는
+				dirTarget = DIR_POSITIVE; // 정 - e로 나가는
 			}
 			angStart = getAngle(pLinkPrev, dirTarget);
 			angDiff = getEntryAngle(angStart, angEnd);
@@ -3805,6 +3837,10 @@ const int CRoutePlan::AddPrevLinksEx(IN RouteInfo* pRouteInfo, IN const Candidat
 #if defined(USE_P2P_DATA)
 			if (pRouteInfo->reqInfo.AvoidOption & ROUTE_AVOID_SHORTTURN) {
 				if (checkAvoidShortTurn(&pRouteInfo->reqInfo, pCurInfo, pLink, pNodePrev, pLinkPrev, angDiff) == true) {
+					continue;
+				} else if (((pLink->veh.hd_flag == 3) || (pLinkPrev->veh.hd_flag == 3)) &&
+					((60 < angDiff) && (angDiff < 120))) { // 우회전 (좀 여유있게 적용)
+					// HD 도로 속성이 3이 포함되는 경우, 우회전 우회(불법주정차 차량으로 인한 tr 생성 및 자율차량 주행 불가 판단
 					continue;
 				}
 			}
@@ -3820,7 +3856,7 @@ const int CRoutePlan::AddPrevLinksEx(IN RouteInfo* pRouteInfo, IN const Candidat
 			}
 
 
-			double distFactor = getDistanceFactor(pRouteInfo->StartLinkInfo.Coord.x, pRouteInfo->StartLinkInfo.Coord.y, pRouteInfo->EndLinkInfo.Coord.x, pRouteInfo->EndLinkInfo.Coord.y, pLinkPrev, pRouteInfo->reqInfo.RouteOption);
+			double distFactor = getDistanceFactor(pRouteInfo->StartLinkInfo.Coord.x, pRouteInfo->StartLinkInfo.Coord.y, pRouteInfo->EndLinkInfo.Coord.x, pRouteInfo->EndLinkInfo.Coord.y, pLinkPrev, pRouteInfo->reqInfo.RouteOption, pRouteInfo->reqInfo.MobilityOption);
 
 #if 1 //defined(USE_TMS_API)
 			if (distFactor < 0) { // rdm에서 일정 거리 이상의 낮은 도로는 무시하자					
@@ -4063,6 +4099,14 @@ const int CRoutePlan::AddNextCourse(IN RouteInfo* pRouteInfo, IN const Candidate
 				continue;
 			}
 
+			// 자동차 전용 회피 옵션
+			if (pRouteInfo->reqInfo.MobilityOption == TYPE_MOBILITY_MOTORCYCLE) {
+				if (pLinkNext->veh.car_only || (pLinkNext->veh.level <= 1) || (pLinkNext->veh.link_type <= 2) || // 자동차 전용
+					pLinkNext->veh.charge) {
+					continue;
+				}
+			}
+
 #if defined(USE_P2P_DATA)
 			if ((pLinkNext->veh.hd_flag != 1) && // HD 링크와 매칭 정보가 없으면 통행 불가
 				((pRouteInfo->EndLinkInfo.LinkGuideType == LINK_GUIDE_TYPE_DEFAULT) ||
@@ -4125,12 +4169,12 @@ const int CRoutePlan::AddNextCourse(IN RouteInfo* pRouteInfo, IN const Candidate
 				if (pLinkNext->link_id.dir == 2) { // 일방(역)에 시작점이 일치하면 불가
 					continue;
 				}
-				dirTarget = 1; // 정 - s에서 나가는
+				dirTarget = DIR_POSITIVE; // 정 - s에서 나가는
 			} else { // 다음 링크의 enode 연결
 				if (pLinkNext->link_id.dir == 1) { // 일방(정)에 종료점이 일치하면 불가
 					continue;
 				}
-				dirTarget = 2; // 역 - e에서 나가는
+				dirTarget = DIR_NAGATIVE; // 역 - e에서 나가는
 			}
 			angEnd = getAngle(pLinkNext, dirTarget, false);
 			angDiff = getEntryAngle(angStart, angEnd);
@@ -4138,6 +4182,10 @@ const int CRoutePlan::AddNextCourse(IN RouteInfo* pRouteInfo, IN const Candidate
 #if defined(USE_P2P_DATA)
 			if (pRouteInfo->reqInfo.AvoidOption & ROUTE_AVOID_SHORTTURN) {
 				if (checkAvoidShortTurn(&pRouteInfo->reqInfo, pCurInfo, pLink, pNodeNext, pLinkNext, angDiff) == true) {
+					continue;
+				} else if (((pLink->veh.hd_flag == 3) || (pLinkNext->veh.hd_flag == 3)) &&
+					((60 < angDiff) && (angDiff < 120))) { // 우회전 (좀 여유있게 적용)
+					// HD 도로 속성이 3이 포함되는 경우, 우회전 우회(불법주정차 차량으로 인한 tr 생성 및 자율차량 주행 불가 판단
 					continue;
 				}
 			}
@@ -4389,6 +4437,14 @@ const int CRoutePlan::Propagation(IN RouteInfo* pRouteInfo, IN const CandidateLi
 				if (m_pDataMgr->IsAvoidTruckLink(pRouteInfo->reqInfo.RouteTruckOption.option(), pLinkNext)) {
 					continue;
 				}
+
+				// 자동차 전용 회피 옵션
+				if (pRouteInfo->reqInfo.MobilityOption == TYPE_MOBILITY_MOTORCYCLE) {
+					if (pLinkNext->veh.car_only || (pLinkNext->veh.level <= 1) || (pLinkNext->veh.link_type <= 2) || // 자동차 전용
+						pLinkNext->veh.charge) {
+						continue;
+					}
+				}
 				// 낮은 레벨은 제외
 #if defined(USE_TMS_API)
 			//if (pLinkNext->veh.level > USE_ROUTE_TABLE_LEVEL) { // 일반도로 이상만 따져보자
@@ -4457,6 +4513,10 @@ const int CRoutePlan::Propagation(IN RouteInfo* pRouteInfo, IN const CandidateLi
 #if defined(USE_P2P_DATA)
 			if (pRouteInfo->reqInfo.AvoidOption & ROUTE_AVOID_SHORTTURN) {
 				if (checkAvoidShortTurn(&pRouteInfo->reqInfo, pCurInfo, pLink, pNodeNext, pLinkNext, angDiff) == true) {
+					continue;
+				} else if (((pLink->veh.hd_flag == 3) || (pLinkNext->veh.hd_flag == 3)) &&
+					((60 < angDiff) && (angDiff < 120))) { // 우회전 (좀 여유있게 적용)
+					// HD 도로 속성이 3이 포함되는 경우, 우회전 우회(불법주정차 차량으로 인한 tr 생성 및 자율차량 주행 불가 판단
 					continue;
 				}
 			}
@@ -4935,6 +4995,14 @@ const int CRoutePlan::LevelPropagation(IN TableBaseInfo* pRouteInfo, IN const Ca
 				continue;
 			}
 
+			// 자동차 전용 회피 옵션
+			if (pRouteInfo->reqInfo.MobilityOption == TYPE_MOBILITY_MOTORCYCLE) {
+				if (pLinkNext->veh.car_only || (pLinkNext->veh.level <= 1) || (pLinkNext->veh.link_type <= 2) || // 자동차 전용
+					pLinkNext->veh.charge) {
+					continue;
+				}
+			}
+
 #if defined(USE_P2P_DATA)
 			if (pLinkNext->veh.hd_flag != 1) { // HD 링크와 매칭 정보가 없으면 통행 불가
 				continue;
@@ -4996,6 +5064,10 @@ const int CRoutePlan::LevelPropagation(IN TableBaseInfo* pRouteInfo, IN const Ca
 #if defined(USE_P2P_DATA)
 			if (pRouteInfo->reqInfo.AvoidOption & ROUTE_AVOID_SHORTTURN) {
 				if (checkAvoidShortTurn(&pRouteInfo->reqInfo, pCurInfo, pLink, pNodeNext, pLinkNext, angDiff) == true) {
+					continue;
+				} else if (((pLink->veh.hd_flag == 3) || (pLinkNext->veh.hd_flag == 3)) &&
+					((60 < angDiff) && (angDiff < 120))) { // 우회전 (좀 여유있게 적용)
+					// HD 도로 속성이 3이 포함되는 경우, 우회전 우회(불법주정차 차량으로 인한 tr 생성 및 자율차량 주행 불가 판단
 					continue;
 				}
 			}
@@ -6504,7 +6576,12 @@ const int CRoutePlan::DoComplexRoutesEx(IN const RequestRouteInfo* pReqInfo/*, I
 					if (((routeInfo.ComplexPointInfo.nGroupId != 0) && (routeInfo.ComplexPointInfo.nGroupId == routeInfoNext.ComplexPointInfo.nGroupId)) ||
 						((routeInfo.reqInfo.RouteSubOption.mnt.course_type == TYPE_TRE_CROSS ||
 							routeInfo.reqInfo.RouteSubOption.mnt.course_type == TYPE_TRE_RECOMMENDED) &&
-						(routeInfo.ComplexPointInfo.id == 0) && (routeInfoNext.ComplexPointInfo.id == 0))) // 둘레길이면, 일반 탐색 우선 수행
+						(routeInfo.ComplexPointInfo.id == 0) && (routeInfoNext.ComplexPointInfo.id == 0)) 
+#if defined(TARGET_FOR_ORDA_AI)
+						// 숲길 바운더리 및 입구점 데이터 생성 전달 전까지 임시로 사용하자, 2025-11-24
+						|| ((routeInfo.ComplexPointInfo.nGroupId == 0) && routeInfo.ComplexPointInfo.nGroupId == 0)
+#endif
+						) // 둘레길이면, 일반 탐색 우선 수행
 					{
 						routeInfoTrk.StartLinkInfo = routeInfo.StartLinkInfo;
 						routeInfoTrk.EndLinkInfo = routeInfo.EndLinkInfo;

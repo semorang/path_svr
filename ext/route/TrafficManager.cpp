@@ -162,8 +162,8 @@ bool CTrafficManager::ParsingKS(IN FILE* fp, IN const int32_t size, IN OUT uint3
 
 		trfItem.id = swap_uint32(trfItem.id);
 
-		if (ii == 0 && trfItem.id == 0) {
-			tmData = swap_uint32(trfItem.time);
+		if ((ii == 0) && (trfItem.id != 0) && (trfItem.speed == SPEED_NOT_AVALABLE)) {
+			tmData = trfItem.id;// swap_uint32(trfItem.id);
 			timestamp = tmData;
 
 			if (tmNow < tmData) { // 데이터가 요청 시각보다 미래 데이터면 무시

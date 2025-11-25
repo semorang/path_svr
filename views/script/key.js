@@ -13,6 +13,7 @@ const ROUTEAPIKEYS = [
     {name: 'fleetune', apiKey: '035VE7J-2EF4T7W-J9PZ6GB-9H8SVHC', uuid: '00cbb71e-139e-4d1f-926d-f3414c519dc5'}, // for fleetune
     {name: 'geoyoung', apiKey: '2Y41Z0H-7QS4Z5X-JZJBHJQ-95BSGD6', uuid: '17881f82-3df2-4f97-97e4-b8ca49579834'}, // for geo-young
     {name: 'kakaovx', apiKey: '2KYY49S-G3Z4N66-KEXK9NR-7F976TP', uuid: '14fde227-80fe-4a98-9bbb-34d73bd2736a'}, // for kakaovx
+    {name: 'inaviad', apiKey: 'K0AT0R9-RSH49WT-G6G8TNB-TB37P8S', uuid: '9815a061-c662-44f3-81a0-8d55d2c67b23'}, // for inavi 자율주행기술개발팀
 ];
 
 module.exports = {

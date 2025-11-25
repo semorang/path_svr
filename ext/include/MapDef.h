@@ -118,9 +118,10 @@ typedef struct tagRECT
 // 0.0.6 Turn-left allows a minimum distance applied as 50m to the intersection from start point
 // 0.0.6 add candidate request option
 // 0.0.7 add to avoid continuous short turns
+// 0.0.8 add to avoid turn-right on HD type 3 road 
 #define ENGINE_VERSION_MAJOR	0
 #define ENGINE_VERSION_MINOR	0
-#define ENGINE_VERSION_PATCH	7
+#define ENGINE_VERSION_PATCH	8
 #define ENGINE_VERSION_BUILD	0
 #elif defined(USE_OPTIMAL_POINT_API)
 // 1.0.6 fix road param setting, and bycicle -> bicicle
@@ -192,9 +193,10 @@ typedef struct tagRECT
 // 0.1.2 거리 분할 + 체류 시간 포함 적용
 // 0.1.3 출/도착지 정보의 분할 입력 가능하도록 적용, add destinations field in request json
 // 0.1.4 add to bestvrp api for or-tools
+// 0.1.5 add to motocycle in mobility option
 #define ENGINE_VERSION_MAJOR	0
 #define ENGINE_VERSION_MINOR	1
-#define ENGINE_VERSION_PATCH	4
+#define ENGINE_VERSION_PATCH	5
 #define ENGINE_VERSION_BUILD	0
 #		else // #		if defined(USE_TMS_API)
 // 0.0.6 add charging link attribute
@@ -521,7 +523,7 @@ typedef struct _tagstLinkTrekkingInfo {
 
 typedef struct _tagstLinkVehicleInfo {
 	uint64_t dummy_type : 3; // link_type 공유 공간
-	uint64_t road_type : 4; // 도로종별, 1:고속도록, 2:도시고속도로, 3:일반국도, 4:페리항로, 5:지방도, 6:일반도로, 7:소로, 8:골목길, 9:시장길
+	uint64_t road_type : 4; // 도로종별, 1:고속도로, 2:도시고속도로, 3:일반국도, 4:페리항로, 5:지방도, 6:일반도로, 7:소로, 8:골목길, 9:시장길
 	uint64_t lane_cnt : 4; // 차선수, 15
 	uint64_t link_type : 4; // 링크종별, 0:입구점, 1:본선비분리, 2:본선분리, 3:연결로, 4:교차로, 5:램프, 6:로터리, 7:휴계소(SA), 8:유턴
 	uint64_t link_dtype : 2; // 링크세부종별(dk3), 0:미정의, 1:고가도로,지하차도 옆길, 2:비포장도로, 3:단지내도로
@@ -945,7 +947,7 @@ struct stEntranceInfo {
 			uint32_t reserved : 17;
 			double x;
 			double y;
-			uint64_t reserved1; 
+			uint64_t vlink_id; // 최근접 링크 ID, 링크 정보를 넣으면 굳이 angle을 따로 안들고 다녀도 되긴 한데...
 			uint64_t reserved2;
 		};
 		struct {
