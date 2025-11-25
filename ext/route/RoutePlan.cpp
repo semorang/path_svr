@@ -2336,7 +2336,7 @@ double getHueristicCost(IN const double departCoordX, IN const double departCoor
 }
 
 
-double getDistanceFactor(IN const double departCoordX, IN const double departCoordY, IN const double destCoordX, IN const double destCoordY, IN const stLinkInfo* pLink, IN const int32_t routeOption)
+double getDistanceFactor(IN const double departCoordX, IN const double departCoordY, IN const double destCoordX, IN const double destCoordY, IN const stLinkInfo* pLink, IN const int32_t routeOption, IN const int32_t mobilityOption)
 {
 	double fFactor = 0;
 
