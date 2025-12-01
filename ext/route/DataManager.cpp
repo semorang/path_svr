@@ -1876,7 +1876,7 @@ stLinkInfo * CDataManager::GetLinkDataByPointAround(IN const double lng, IN cons
 					 pLink->veh.road_type == 1 || pLink->veh.road_type == 2 || pLink->veh.road_type == 4 ||
 					 pLink->veh.pass_code == 2 || pLink->veh.pass_code == 4 ||
 #if defined(USE_P2P_DATA)
-					pLink->veh.over_pass == 1 || pLink->veh.hd_flag != 1 || // 전체 링크가 HD로 구성된 링크만 사용(경유지)
+					pLink->veh.over_pass == 1 || (pLink->veh.hd_flag == 0 || pLink->veh.hd_flag == 2) || // 전체 링크가 HD로 구성된 링크만 사용(경유지)
 #endif
 					 pLink->veh.link_type == 3 || pLink->veh.link_type == 4 || (pLink->veh.link_type == 5 && pLink->veh.level <= 1) ||
 					 pLink->veh.link_type == 6 || pLink->veh.link_type == 8 ||
