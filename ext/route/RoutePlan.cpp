@@ -3051,7 +3051,8 @@ const int CRoutePlan::AddNextLinks(IN RouteInfo* pRouteInfo, IN const CandidateL
 			}
 
 #if defined(USE_P2P_DATA)
-			if ((pRouteInfo->reqInfo.RouteOption == ROUTE_OPT_MAINROAD) && (pLinkNext->veh.hd_flag != 1) && // HD 링크와 매칭 정보가 없으면 통행 불가
+			if ((pRouteInfo->reqInfo.RouteOption == ROUTE_OPT_MAINROAD) && 
+				(pLinkNext->veh.hd_flag == 0 || pLinkNext->veh.hd_flag == 2) && // HD 링크와 매칭 정보가 없으면 통행 불가
 				((pRouteInfo->EndLinkInfo.LinkGuideType == LINK_GUIDE_TYPE_DEFAULT) ||
 					(pRouteInfo->EndLinkInfo.LinkGuideType == LINK_GUIDE_TYPE_WAYPOINT))) {
 				// 출발지와 도착지는 HD 부분 링크를 허용, 하지만 경유지는 불허
@@ -3060,7 +3061,7 @@ const int CRoutePlan::AddNextLinks(IN RouteInfo* pRouteInfo, IN const CandidateL
 				continue;
 			} else if ((pLinkNext->veh.link_type == 8) && (pLinkNext->veh.level > 3)) { // 지방도 이하 레벨의 유턴 도로는 금지
 				continue;
-			} else if ((pRouteInfo->reqInfo.RequestMode == 100) && (pLinkNext->veh.hd_flag != 1)) { // 대안경로 요청일 경우, HD만 매칭
+			} else if ((pRouteInfo->reqInfo.RequestMode == 100) && (pLinkNext->veh.hd_flag == 0 || pLinkNext->veh.hd_flag == 2)) { // 대안경로 요청일 경우, HD만 매칭
 				continue;
 			}
 #endif
@@ -3407,7 +3408,7 @@ const int CRoutePlan::AddPrevLinks(IN RouteInfo* pRouteInfo, IN const CandidateL
 			}
 
 #if defined(USE_P2P_DATA)
-			if ((pLinkPrev->veh.hd_flag != 1) && // HD 링크와 매칭 정보가 없으면 통행 불가
+			if ((pLinkPrev->veh.hd_flag == 0 || pLinkPrev->veh.hd_flag == 2) && // HD 링크와 매칭 정보가 없으면 통행 불가
 				((pRouteInfo->EndLinkInfo.LinkGuideType == LINK_GUIDE_TYPE_DEFAULT) ||
 					(pRouteInfo->EndLinkInfo.LinkGuideType == LINK_GUIDE_TYPE_WAYPOINT))) {
 				// 출발지와 도착지는 HD 부분 링크를 허용, 하지만 경유지는 불허
@@ -3415,6 +3416,8 @@ const int CRoutePlan::AddPrevLinks(IN RouteInfo* pRouteInfo, IN const CandidateL
 			} else if (retPassCode == PASS_CODE_UTURN) { // 유턴 코드는 불가
 				continue;
 			} else if ((pLinkPrev->veh.link_type == 8) && (pLinkPrev->veh.level > 3)) { // 지방도 이하 레벨의 유턴 도로는 금지
+				continue;
+			} else if ((pRouteInfo->reqInfo.RequestMode == 100) && (pLinkPrev->veh.hd_flag == 0 || pLinkPrev->veh.hd_flag == 2)) { // 대안경로 요청일 경우, HD만 매칭
 				continue;
 			}
 #endif
@@ -3772,7 +3775,7 @@ const int CRoutePlan::AddPrevLinksEx(IN RouteInfo* pRouteInfo, IN const Candidat
 			}
 
 #if defined(USE_P2P_DATA)
-			if ((pLinkPrev->veh.hd_flag != 1) && // HD 링크와 매칭 정보가 없으면 통행 불가
+			if ((pLinkPrev->veh.hd_flag == 0 || pLinkPrev->veh.hd_flag == 2) && // HD 링크와 매칭 정보가 없으면 통행 불가
 				((pRouteInfo->EndLinkInfo.LinkGuideType == LINK_GUIDE_TYPE_DEFAULT) ||
 					(pRouteInfo->EndLinkInfo.LinkGuideType == LINK_GUIDE_TYPE_WAYPOINT))) {
 				// 출발지와 도착지는 HD 부분 링크를 허용, 하지만 경유지는 불허
@@ -3780,6 +3783,8 @@ const int CRoutePlan::AddPrevLinksEx(IN RouteInfo* pRouteInfo, IN const Candidat
 			} else if (retPassCode == PASS_CODE_UTURN) { // 유턴 코드는 불가
 				continue;
 			} else if ((pLinkPrev->veh.link_type == 8) && (pLinkPrev->veh.level > 3)) { // 지방도 이하 레벨의 유턴 도로는 금지
+				continue;
+			} else if ((pRouteInfo->reqInfo.RequestMode == 100) && (pLinkPrev->veh.hd_flag == 0 || pLinkPrev->veh.hd_flag == 2)) { // 대안경로 요청일 경우, HD만 매칭
 				continue;
 			}
 #endif
@@ -4108,7 +4113,7 @@ const int CRoutePlan::AddNextCourse(IN RouteInfo* pRouteInfo, IN const Candidate
 			}
 
 #if defined(USE_P2P_DATA)
-			if ((pLinkNext->veh.hd_flag != 1) && // HD 링크와 매칭 정보가 없으면 통행 불가
+			if ((pLinkNext->veh.hd_flag == 0 || pLinkNext->veh.hd_flag == 2) && // HD 링크와 매칭 정보가 없으면 통행 불가
 				((pRouteInfo->EndLinkInfo.LinkGuideType == LINK_GUIDE_TYPE_DEFAULT) ||
 					(pRouteInfo->EndLinkInfo.LinkGuideType == LINK_GUIDE_TYPE_WAYPOINT))) {
 				// 출발지와 도착지는 HD 부분 링크를 허용, 하지만 경유지는 불허
@@ -4116,6 +4121,8 @@ const int CRoutePlan::AddNextCourse(IN RouteInfo* pRouteInfo, IN const Candidate
 			} else if (retPassCode == PASS_CODE_UTURN) { // 유턴 코드는 불가
 				continue;
 			} else if ((pLinkNext->veh.link_type == 8) && (pLinkNext->veh.level > 3)) { // 지방도 이하 레벨의 유턴 도로는 금지
+				continue;
+			} else if ((pRouteInfo->reqInfo.RequestMode == 100) && (pLinkNext->veh.hd_flag == 0 || pLinkNext->veh.hd_flag == 2)) { // 대안경로 요청일 경우, HD만 매칭
 				continue;
 			}
 #endif
@@ -4451,7 +4458,7 @@ const int CRoutePlan::Propagation(IN RouteInfo* pRouteInfo, IN const CandidateLi
 			//	continue;
 			//}
 #elif defined(USE_P2P_DATA)
-				if (pLinkNext->veh.hd_flag != 1) { // HD 링크와 매칭 정보가 없으면 통행 불가
+				if (pLinkNext->veh.hd_flag == 0 || pLinkNext->veh.hd_flag == 2) { // HD 링크와 매칭 정보가 없으면 통행 불가
 					continue;
 				}
 #endif
@@ -5004,7 +5011,7 @@ const int CRoutePlan::LevelPropagation(IN TableBaseInfo* pRouteInfo, IN const Ca
 			}
 
 #if defined(USE_P2P_DATA)
-			if (pLinkNext->veh.hd_flag != 1) { // HD 링크와 매칭 정보가 없으면 통행 불가
+			if (pLinkNext->veh.hd_flag == 0 || pLinkNext->veh.hd_flag == 2) { // HD 링크와 매칭 정보가 없으면 통행 불가
 				continue;
 			}
 #endif
@@ -13311,7 +13318,7 @@ const int CRoutePlan::GetMostProbableLink(IN const RouteResultInfo* pResult, OUT
 				}
 #elif defined(USE_P2P_DATA)
 				// 4차선 미만 도로는 제외
-				if ((pJctLink == nullptr) || (pJctLink->veh.lane_cnt < 4) || (pJctLink->veh.hd_flag != 1))
+				if ((pJctLink == nullptr) || (pJctLink->veh.lane_cnt < 4) || (pJctLink->veh.hd_flag == 0 || pJctLink->veh.hd_flag == 2))
 					continue;
 #endif
 
