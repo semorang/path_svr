@@ -31,6 +31,12 @@ bool isOnPitBox(IN const SBox& onBox, IN const SBox& baseBox);
 void getClosestPoint(IN const double lng1, IN const double lat1, IN const double lng2, IN const double lat2, IN const double lng3, IN const double lat3, OUT double *lng, OUT double *lat, IN OUT double *ir);
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////
+// POLYLINE
+// 열린 폴리라인의 전체 길이를 따라 절반 지점 좌표를 구하는 함수
+bool getPolylineCenter(const SPoint *pptPolyline, const int32_t nPolyline, OUT SPoint& pCenter);
+// 열린 폴리라인의 전체 길이를 따라 절반 지점 좌표 및 offset(미터) 만큼 수직으로 떨어진 좌표를 구하는 함수
+bool getPolylineCenterWithOffset(const SPoint* pptPolyline, const int32_t nPolyline, double offsetDistMeters, OUT SPoint& ptCenter, OUT SPoint& ptOffset);
+//////////////////////////////////////////////////////////////////////////////////////////////////////
 // POLYGON
 bool isPointInPolygon(const double x, const double y, const SPoint *pptPolygon, const int32_t nPolygon);
 bool isPointInPolygon(const SPoint *ppt, const SPoint *pptPolygon, const int32_t nPolygon);

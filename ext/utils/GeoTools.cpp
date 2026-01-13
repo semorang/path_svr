@@ -476,6 +476,156 @@ bool translateUTMKtoWGS84(IN const double lng, IN const double lat, OUT double& 
 
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////
+// POLYLINE
+// 열린 폴리라인의 전체 길이를 따라 절반 지점 좌표를 구하는 함수
+bool getPolylineCenter(const SPoint *pptPolyline, const int32_t nPolyline, OUT SPoint& ptCenter)
+{
+	if (pptPolyline == NULL || nPolyline < 2) {
+		return false; // 최소 2점 이상 필요
+	}
+
+	// 전체 길이 계산
+	double totalLength = 0.0;
+	for (int32_t i = 0; i < nPolyline - 1; ++i) {
+		double dx = pptPolyline[i + 1].x - pptPolyline[i].x;
+		double dy = pptPolyline[i + 1].y - pptPolyline[i].y;
+		totalLength += sqrt(dx*dx + dy*dy);
+	}
+
+	if (totalLength <= 0.0) {
+		return false;
+	}
+
+	double targetLength = totalLength / 2.0;
+	double accumulated = 0.0;
+
+	// 절반 지점 찾기
+	for (int32_t i = 0; i < nPolyline - 1; ++i) {
+		double dx = pptPolyline[i + 1].x - pptPolyline[i].x;
+		double dy = pptPolyline[i + 1].y - pptPolyline[i].y;
+		double segLength = sqrt(dx*dx + dy*dy);
+
+		if (accumulated + segLength >= targetLength) {
+			double remain = targetLength - accumulated;
+			double ratio = remain / segLength;
+
+			ptCenter.x = pptPolyline[i].x + dx * ratio;
+			ptCenter.y = pptPolyline[i].y + dy * ratio;
+			return true;
+		}
+
+		accumulated += segLength;
+	}
+
+	// 마지막 점이 절반 지점인 경우
+	ptCenter = pptPolyline[nPolyline - 1];
+
+	return true;
+}
+
+// 열린 폴리라인의 전체 길이를 따라 절반 지점 좌표 및 offset(미터) 만큼 수직으로 떨어진 좌표를 구하는 함수
+bool getPolylineCenterWithOffset(const SPoint* pptPolyline, const int32_t nPolyline, double offsetDistMeters, OUT SPoint& ptCenter, OUT SPoint& ptOffset)
+{
+	if (pptPolyline == NULL || nPolyline < 2) {
+		return false;
+	}
+
+	// 전체 길이 계산 (단순 유클리드 거리, 위도/경도 차이를 도 단위로 계산)
+	double totalLength = 0.0;
+	for (int32_t i = 0; i < nPolyline - 1; ++i) {
+		double dx = pptPolyline[i + 1].x - pptPolyline[i].x; // 경도 차이 (deg)
+		double dy = pptPolyline[i + 1].y - pptPolyline[i].y; // 위도 차이 (deg)
+		totalLength += sqrt(dx*dx + dy*dy);
+	}
+
+	if (totalLength <= 0.0) {
+		return false;
+	}
+
+	double targetLength = totalLength / 2.0;
+	double accumulated = 0.0;
+
+	for (int32_t i = 0; i < nPolyline - 1; ++i) {
+		double dx = pptPolyline[i + 1].x - pptPolyline[i].x;
+		double dy = pptPolyline[i + 1].y - pptPolyline[i].y;
+		double segLength = sqrt(dx*dx + dy*dy);
+
+		if (accumulated + segLength >= targetLength) {
+			double remain = targetLength - accumulated;
+			double ratio = remain / segLength;
+
+			// 중심 좌표 (lon, lat)
+			ptCenter.x = pptPolyline[i].x + dx * ratio;
+			ptCenter.y = pptPolyline[i].y + dy * ratio;
+
+			// offsetDistMeters == 0 → 중심 좌표 그대로 반환
+			if (offsetDistMeters == 0.0) {
+				ptOffset = ptCenter;
+				return true;
+			}
+
+			// 방향 벡터 정규화 (도 단위)
+			double dirX = dx / segLength;
+			double dirY = dy / segLength;
+
+			// 진행 방향 기준 우측 수직 벡터 (도 단위)
+			double perpX = dirY;
+			double perpY = -dirX;
+
+			// 위도/경도 → 미터 변환 계수
+			double latRad = ptCenter.y * M_PI / 180.0;
+			double metersPerDegLat = 111320.0; // 위도 1도 ? 111.32 km
+			double metersPerDegLon = 111320.0 * cos(latRad);
+
+			// 오프셋을 미터 단위로 적용
+			double offsetLon = (perpX * offsetDistMeters) / metersPerDegLon;
+			double offsetLat = (perpY * offsetDistMeters) / metersPerDegLat;
+
+			ptOffset.x = ptCenter.x + offsetLon;
+			ptOffset.y = ptCenter.y + offsetLat;
+
+			return true;
+		}
+
+		accumulated += segLength;
+	}
+
+	// 마지막 점이 절반 지점인 경우
+	ptCenter = pptPolyline[nPolyline - 1];
+
+	if (offsetDistMeters == 0.0) {
+		ptOffset = ptCenter;
+		return true;
+	}
+
+	// 마지막 선분 방향으로 수직 벡터 계산
+	double dx = pptPolyline[nPolyline - 1].x - pptPolyline[nPolyline - 2].x;
+	double dy = pptPolyline[nPolyline - 1].y - pptPolyline[nPolyline - 2].y;
+	double segLength = sqrt(dx*dx + dy*dy);
+	if (segLength > 0) {
+		double dirX = dx / segLength;
+		double dirY = dy / segLength;
+		double perpX = dirY;
+		double perpY = -dirX;
+
+		double latRad = ptCenter.y * M_PI / 180.0;
+		double metersPerDegLat = 111320.0;
+		double metersPerDegLon = 111320.0 * cos(latRad);
+
+		double offsetLon = (perpX * offsetDistMeters) / metersPerDegLon;
+		double offsetLat = (perpY * offsetDistMeters) / metersPerDegLat;
+
+		ptOffset.x = ptCenter.x + offsetLon;
+		ptOffset.y = ptCenter.y + offsetLat;
+	} else {
+		ptOffset = ptCenter;
+	}
+
+	return true;
+}
+
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////
 // POLYGON
 bool isPointInPolygon(const double x, const double y, const SPoint *pptPolygon, const int32_t nPolygon)
 {
