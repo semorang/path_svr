@@ -556,7 +556,7 @@ void SetCandidateOption(const FunctionCallbackInfo<Value>& args) {
    LOG_TRACE(LOG_DEBUG, "Set candidate option");
 
    if (cnt < 1) {
-      LOG_TRACE(LOG_DEBUG, "function call argument too short : %d", cnt);
+      auto msgText = string_format("function call argument too short : %d", cnt);
 
       LOG_TRACE(LOG_DEBUG, msgText.c_str());
       msg = String::NewFromUtf8(isolate, msgText.c_str()).ToLocalChecked();
@@ -606,11 +606,11 @@ void DoRoute(const FunctionCallbackInfo<Value>& args) {
       // set route cost
 		string strTarget;
 #if defined(USE_FOREST_DATA)
-		strTarget = "forest"
+		strTarget = "forest";
 #elif defined(USE_PEDESTRIAN_DATA)
-		strTarget = "pedestrian"
+		strTarget = "pedestrian";
 #elif defined(USE_P2P_DATA)
-		strTarget = "vehicle"
+		strTarget = "vehicle";
 #else
 		strTarget = "vehicle";
 #endif
@@ -681,11 +681,11 @@ void DoMultiRoute(const FunctionCallbackInfo<Value>& args) {
       // set route cost
 		string strTarget;
 #if defined(USE_FOREST_DATA)
-		strTarget = "forest"
+		strTarget = "forest";
 #elif defined(USE_PEDESTRIAN_DATA)
-		strTarget = "pedestrian"
+		strTarget = "pedestrian";
 #elif defined(USE_P2P_DATA)
-		strTarget = "vehicle"
+		strTarget = "vehicle";
 #else
 		strTarget = "vehicle";
 #endif
