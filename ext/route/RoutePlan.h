@@ -304,6 +304,8 @@ typedef struct _tagRouteLinkInfo {
 typedef struct _tagRequestRouteInfo
 {
 	string RequestId; // 요청 ID
+	string RouteMode; // 탐색 모드
+	string RouteCost; // 확장 코스트 타입
 	uint32_t RequestMode; // 요청 모드, 0:일반(최초탐색, 정차 후 출발), 1:재탐색, 2:..., 100:대안경로
 	uint32_t RequestTime; // 요청 시각
 	uint32_t RequestTraffic; // 교통 정보, 0:미사용, 1:실시간(REAL), 2:통계(STATIC), 3:실시간-통계(REAL-STATIC)
@@ -334,7 +336,8 @@ typedef struct _tagRequestRouteInfo
 
 	_tagRequestRouteInfo()
 	{
-		RequestId = "";
+		RequestId.clear();
+		RouteCost.clear();
 		RequestMode = 0;
 		RequestTime = 0;
 		RequestTraffic = 0;
@@ -390,6 +393,7 @@ typedef struct _tagRequestRouteInfo
 	{
 		if (pRhs != nullptr) {
 			RequestId = pRhs->RequestId;
+			RouteCost = pRhs->RouteCost;
 			RequestMode = pRhs->RequestMode;
 			RequestTime = pRhs->RequestTime;
 			RequestTraffic = pRhs->RequestTraffic;
@@ -814,6 +818,8 @@ typedef struct _tagBestWaypoint
 	TspOption option;
 	vector<stWaypoints> vtWaypoints;
 	vector<int32_t> vtBestWays;
+	vector<int32_t> vtBestDist;
+	vector<int32_t> vtBestTime;
 	double totalDist;
 	int totalTime;
 	int totalSpot;
@@ -860,7 +866,7 @@ public:
 
 	const DataCost* GetRouteCost(void) const;
 	void SetRouteCost(IN const DataCost* pCost);
-	void SetRouteCost(IN const uint32_t type, IN const DataCost* pCost, IN const uint32_t cntCost = 0);
+	void SetRouteCost(IN const DataCost* pCost, IN const uint32_t cntCost);
 
 	const int Planning(IN const RequestRouteInfo* pReqInfo, OUT RouteResultInfo* pRouteResult);
 

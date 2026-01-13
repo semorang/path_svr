@@ -226,6 +226,10 @@ typedef struct _tagSPoint {
 	bool has(void) const {
 		return (x != 0.f && y != 0.f) ? true : false;
 	}
+
+	void clear(void)  {
+		x = 0.f; y = 0.f;
+	}
 }SPoint;
 
 typedef struct _tagSBox {
@@ -237,6 +241,14 @@ typedef struct _tagSBox {
 	_tagSBox& operator=(const _tagSBox& rhs) {
 		Xmin = rhs.Xmin; Ymin = rhs.Ymin; Xmax = rhs.Xmax; Ymax = rhs.Ymax;
 		return *this;
+	}
+
+	bool contains(double lng, double lat) const {
+		return (lng >= Xmin && lng <= Xmax && lat >= Ymin && lat <= Ymax);
+	}
+
+	void clear() {
+		Xmin = 0.f; Ymin = 0.f; Xmax = 0.f; Ymax = 0.f;
 	}
 }SBox;
 

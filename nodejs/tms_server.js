@@ -98,11 +98,9 @@ app.post('/api/setdatacost', function(req, res) {
     logout('start set data cost');
 
     const key = req.headers.authorization;
-    const mode = req.body.mode;
-    const base = req.body.base;
-    const cost = req.body.cost;
+    const body = req.body;
 
-    const ret = route.setdatacost(key, mode, base, cost);
+    const ret = route.setdatacost(key, body);
 
     res.send(ret);
 
@@ -616,11 +614,22 @@ app.get('/api/clustering/appkeys/:userkey', function(req, res) {
 app.post('/api/clustering', function(req, res) {
     const startTime = logout("start clustering request");
 
-    ret = tms.clustering(req.headers.authorization, req.body);
+    const ret = tms.clustering(req.headers.authorization, req.body);
 
     res.send(ret);
 
     logout("end clustering request", startTime);
+});
+
+
+app.post('/api/grouping', function(req, res) {
+    const startTime = logout("start grouping request");
+
+    const ret = tms.grouping(req.headers.authorization, req.body);
+
+    res.send(ret);
+
+    logout("end grouping request", startTime);
 });
 
 
@@ -721,7 +730,7 @@ const time_gap = 10 * 1000; // n초 간격으로 새로운 교통정보 파일 �
 const ttl_svr_ip = '133.186.159.224';
 const ttl_svr_port = 30012;
 const traffic = require('../src/traffic.js')
-const trafficPath = process.env.DATA_PATH + "/traffic";
+const trafficPath = process.env.TRAFFIC_PATH ?? process.env.DATA_PATH + "/traffic";
 const trafficManagerKS = new traffic();
 const trafficManagerTTL = new traffic();
 const trafficManagerKSR = new traffic();

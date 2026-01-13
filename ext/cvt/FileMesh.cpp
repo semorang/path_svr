@@ -311,11 +311,7 @@ void CFileMesh::SetDataManager(IN CDataManager* pDataMgr)
 		if (fp) {
 			const size_t nBuff = 1024;
 			char szBuff[nBuff + 1] = { 0, };
-#if defined(_WIN32)
-			while (fread_s(szBuff, nBuff, nBuff, 1, fp) != 0) {
-#else
 			while (fread(szBuff, nBuff, 1, fp) != 0) {
-#endif
 				strBuff.append(szBuff);
 				memset(szBuff, 0x00, nBuff);
 			}

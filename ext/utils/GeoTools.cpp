@@ -4,7 +4,7 @@
 
 #include "../utils/UserLog.h"
 #include "../utils/Strings.h"
-
+#include "../utils/CoordinateParser.h"
 #if defined(USE_PROJ4_LIB)
 #include "../proj4/include/proj.h"
 //#pragma comment(lib, "../proj4/lib/proj.lib")
@@ -56,10 +56,13 @@ double get_road_slope(long x1, long y1, long z1, long x2, long y2, long z2)
 {
 	double road_slope = 0.f;
 	// calc real distance in Meter`
-	long double iDistance = sqrtl((x2 - x1) + (y2 - y1));
+	long double iDistance = sqrtl((x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1));
 	long iHeight = (z2 - z1);
 
-	return road_slope = atan(iHeight / static_cast<double>(iDistance)) * 100;
+	if (iDistance != 0.f) {
+		road_slope = atan(iHeight / static_cast<double>(iDistance)) * 100;
+	}
+	return road_slope;
 }
 
 
@@ -537,3 +540,19 @@ double getPolygonArea(IN const vector<SPoint>& points) {
 
 	return ret * 100000;
 }
+
+// 텍스트에서 좌표 확인
+bool parseCoordinate(const std::string& strInfo, SPoint& coord)
+{
+	coordparser::ParseResult ret = coordparser::ParseCoordinate(strInfo); // default = Korea
+	if (ret.ok) coord = ret.pt;
+	return ret.ok;
+}
+
+//bool getCoordinateEx(const std::string& strInfo, SPoint& coord, coordparser::ParseResult& outRet,
+//	const coordparser::ParseOptions& opt = coordparser::ParseOptions())
+//{
+//	outRet = coordparser::ParseCoordinate(strInfo, opt);
+//	if (outRet.ok) coord = outRet.pt;
+//	return outRet.ok;
+//}

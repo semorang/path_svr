@@ -37,7 +37,7 @@ public:
 #endif
 	void SetRouteTruckOption(IN const TruckOption* pOption);
 	void SetRouteDirOption(IN const uint32_t departuretDir, IN const uint32_t waypointDir, IN const uint32_t destinationDir);
-	void SetRouteCost(IN const uint32_t type, IN const DataCost* pCost, IN const uint32_t cntCost = 0);
+	void SetRouteCost(IN const DataCost* pCost, IN const uint32_t cntCost = 0);
 
 	const int GetWayPointCount(void) const;
 
@@ -50,10 +50,15 @@ public:
 
 	void SetLimitPointCount(IN const int32_t nCount);
 	const int32_t GetLimitPointCount(void) const;
-	int GetWeightMatrix(IN const char* szRequest, OUT RouteDistMatrix& RDM, OUT BaseOption& option);
-	int GetWeightMatrixRouteLine(IN const char* szRequest, OUT RouteDistMatrixLine& RDMLN);
+	int ParsingBaseOption(IN const char* szRequest, OUT BaseOption& option);
+	int ParsingRequestRoute(IN const char* szRequest, OUT BaseOption& baseOpt, OUT vector<Origins>& vtOrigin);
+	int ParsingWeightMatrix(IN const char* szRequest, OUT RouteDistMatrix& RDM, OUT BaseOption& option);
+	int ParsingWeightMatrixRoute(IN const char* szRequest, OUT RouteDistMatrix& RDM, OUT BaseOption& option);
+	int ParsingWeightMatrixRouteLine(IN const char* szRequest, OUT RouteDistMatrixLine& RLN);
+	int GetWeightMatrix(IN OUT RouteDistMatrix& RDM, const IN BaseOption& option);
 	int GetBestway(IN const char* szRequest, IN RouteDistMatrix& RDM, OUT BestWaypoints& TSP);
 	int GetCluster(IN const char* szRequest, IN RouteDistMatrix& RDM, OUT Cluster& CLUST);
+	int GetGroup(IN const char* szRequest, IN OUT Cluster& CLUST);
 	int GetBoundary(IN const vector<SPoint>& vtPois, OUT vector<SPoint>& vtBoundary, OUT SPoint& center);
 
 	int GetCluster_for_geoyoung(IN const int32_t cntCluster, OUT vector<stDistrict>& vtCluster);
@@ -113,7 +118,7 @@ private:
 	uint32_t m_nTimestampOpt;
 	uint32_t m_nFreeOpt; // 무료 적용, 0:미사용, 1:무료
 	uint32_t m_nTrafficOpt; // 교통 정보, 0:미사용, 1:실시간(REAL), 2:통계(STATIC), 3:실시간-통계(REAL-STATIC)
-#if defined(USE_P2P_DATA)	
+#if defined(USE_P2P_DATA)
 	uint32_t m_nCandiateOpt; // 대안경로 사용 옵션, 대안경로 최대 요청 수(1 ~ 5 ?)
 #endif
 

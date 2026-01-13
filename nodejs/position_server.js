@@ -6,7 +6,7 @@ const request_ip = require('request-ip');
 const cors = require('cors'); // CORS 오류 해소
 const timeout = require('connect-timeout');
 const url = require('url');
-const app = express();
+
 
 const cfg = require('dotenv').config();
 // const addon = require('./build/Release/trekking_svr.node');
@@ -17,8 +17,8 @@ const logout = require('../src/logs');
 const times = require('../src/times.js')
 // const escapeJSON = require('escape-json-noide');
 // const addon = require('bindings')('openAPI')
-
 const apikey = require('../views/script/key.js');
+const fs = require('fs-extra');
 
 const publicPath = path.join(__dirname, '../public') // web에서 공유할 path
 
@@ -29,6 +29,7 @@ let corsOptions = {
     credential: true,
 }
 
+const app = express();
 
 // app.set('views', __dirname + '/openApi/views');
 app.set('view engine', 'ejs');
@@ -95,15 +96,27 @@ app.get('/version', function(req, res) {
 });
 
 
+app.get('/health', function(req, res) {
+    const health_file = process.env.DATA_PATH + "/usr/health.flag";
+    fs.access(process.env.HEALTH_FILE, fs.constants.F_OK, err => {
+        if (err) return res.status(500).send("FAIL");
+        else return res.status(200).send("OK");
+    });
+});
+
+
+app.get('/ready', function(req, res) {
+    return res.status(200).send("OK");
+});
+
+
 app.post('/api/setdatacost', function(req, res) {
     let startTime = logout('start set data cost');
 
     const key = req.headers.authorization;
-    const mode = req.body.mode;
-    const base = req.body.base;
-    const cost = req.body.cost;
+    const body = req.body;
 
-    const ret = route.setdatacost(key, mode, base, cost);
+    const ret = route.setdatacost(key, body);
 
     res.send(ret);
 

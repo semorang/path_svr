@@ -98,11 +98,9 @@ app.post('/api/setdatacost', function(req, res) {
     logout('start set data cost');
 
     const key = req.headers.authorization;
-    const mode = req.body.mode;
-    const base = req.body.base;
-    const cost = req.body.cost;
+    const body = req.body;
 
-    const ret = route.setdatacost(key, mode, base, cost);
+    const ret = route.setdatacost(key, body);
 
     res.send(ret);
 

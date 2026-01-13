@@ -1,6 +1,6 @@
 const { createDiffieHellmanGroup } = require('crypto');
 const util = require('util');
-var addon = require(process.env.USER_MODULE);
+const addon = require(process.env.USER_MODULE);
 
 const logout = require('./logs');
 const auth = require('./auth');
@@ -802,36 +802,32 @@ exports.domultiroute = function(key, req, expend) {
 
 
 // distance matrix
-exports.gettable = function(req) {
-
+exports.getmatrix = function(req) {
     addon.logout("start distance matrix");
 
-    let result = addon.gettable(JSON.stringify(req));
-    let res = JSON.parse(result);
+    const result = addon.getmatrix(JSON.stringify(req));
+    const res = JSON.parse(result);
 
-    let header = {
+    const header = {
         isSuccessful: false,
         resultCode: codes.ERROR_CODES.ROUTE_RESULT_FAILED,
         resultMessage: ""
     };
 
-    let ret = {
-        header: header,
-        mode: (req.mode != undefined) ? req.mode : "driving",
-        origins: req.origins,
-        destinations: req.destinations,
+    const ret = {
+        header,
+        mode: req.mode ?? "driving",
+        origins: req.origins ?? null,
+        destinations: req.destinations ?? null,
         rows: null,
     };
 
-    if (res.result_code == 0) {
+    header.resultCode = res.result_code;
+    header.resultMessage = codes.getErrMsg(header.resultCode);
+
+    if (res.result_code === codes.ERROR_CODES.ROUTE_RESULT_SUCCESS) {
         ret.header.isSuccessful = true;
-        ret.header.resultCode = res.result_code;
-        ret.header.resultMessage = codes.getErrMsg(ret.header.resultCode);
         ret.rows = res.rows;
-    } else {
-        ret.header.isSuccessful = false;
-        ret.header.resultCode = res.result_code;
-        ret.header.resultMessage = codes.getErrMsg(ret.header.resultCode);
     }
 
     addon.logout("end distance matrix");
@@ -841,48 +837,30 @@ exports.gettable = function(req) {
 
 
 // 경탐 코스트 설정
-exports.setdatacost = function(key, mode, base, cost) {
-
+exports.setdatacost = function(key, req) {
     addon.logout("start set data cost");
 
-    let header = {
+    const header = {
         isSuccessful: false,
         resultCode: codes.ERROR_CODES.ROUTE_RESULT_FAILED,
         resultMessage: ""
     };
 
-    let ret = {
-        header: header,
+    const ret = {
+        header,
     };
 
-    let user = auth.checkAuth(key);
-    if (user != null && user.length > 0) {
-        if (mode !== undefined && cost !== undefined) {       
-            logout("client user:'" + user + "', mode:'" + mode + "', base:" + base + ", req:" + JSON.stringify(cost));
-            
-            var type = 5; // default = TYPE_DATA_VEHICLE
-            if (mode === 'vehicle') { 
-                type = 5; // vehicle = TYPE_DATA_VEHICLE
-            } else if (mode === 'forest') {
-                type = 2; // forest = TYPE_DATA_TREKKING
-            } else if (mode === 'optimal') {
-                type = 7; // optimal = TYPE_DATA_ENTRANCE
-            }else {
-                type = 4;
-            }
-            var devide = base;
-            if (devide == undefined) {
-                devide = 0;
-            }
-            var count = cost.length;
-            var res = addon.setdatacost(type, devide, count, cost);
-        
-            if (res.result_code == 0) {
-                ret.header.isSuccessful = true;
-            }
+    const user = auth.checkAuth(key);
+    if (user && user.length > 0) {
+        addon.logout("client user:'" + user + ", req:" + JSON.stringify(req));
 
-            ret.header.resultCode = res.result_code;
-            ret.header.resultMessage = res.result_message;
+        const res = addon.setdatacost(JSON.stringify(req));
+    
+        header.resultCode = res.result_code;
+        header.resultMessage = codes.getErrMsg(header.resultCode);
+
+        if (res.result_code === codes.ERROR_CODES.ROUTE_RESULT_SUCCESS) {
+            ret.header.isSuccessful = true;
         }
     } else {
         ret.header.resultCode = codes.ERROR_CODES.RESULT_APPKEY_ERROR;
@@ -894,154 +872,6 @@ exports.setdatacost = function(key, mode, base, cost) {
     return ret;
 }
 
-
-// 클러스터링
-exports.getcluster = function(req) {
-    let result = codes.ERROR_CODES.ROUTE_RESULT_FAILED;
-
-    if (req.tsp == undefined) {
-        var tsp = {
-            seed: 10000,
-            algorithm: 0,
-            compare_type: 1,
-        };
-        req.tsp = tsp;
-    }
-
-    if (req.clust == undefined) {
-        var clust = {
-            seed: 10006,
-            algorithm: 3,
-            compare_type : 1,
-        };
-        req.clust = clust;
-    }
-
-    if ((req.target === undefined) && (req.target === 'geoyoung')) {
-        result = addon.getcluster_for_geoyoung(JSON.stringify(req));
-    } else {
-        result = addon.getcluster(JSON.stringify(req));
-    }
-
-    let res = JSON.parse(result);
-
-    let header = {
-        isSuccessful: false,
-        resultCode: codes.ERROR_CODES.ROUTE_RESULT_FAILED,
-        resultMessage: ""
-    };
-
-    let ret = {
-        header: header,
-        mode: (req.mode != undefined) ? req.mode : "clustering",
-        origins: (req.origins != undefined) ? req.origins : null,
-        summary: null,
-        clusters: null,
-    };
-
-    if (res.result_code == 0) {
-        ret.header.isSuccessful = true;
-        ret.header.resultCode = res.result_code;
-        ret.header.resultMessage = codes.getErrMsg(ret.header.resultCode);
-        ret.summary = res.summary;
-        ret.clusters = res.clusters;
-    } else {
-        ret.header.isSuccessful = false;
-        ret.header.resultCode = res.result_code;
-        ret.header.resultMessage = codes.getErrMsg(ret.header.resultCode);
-    }
-
-    return ret;
-}
-
-
-exports.getboundary = function(mode, in_target, destinations) {
-    const target = (in_target === undefined) ? '' : req.query.target;
-
-    let header = {
-        isSuccessful: false,
-        resultCode: codes.ERROR_CODES.ROUTE_RESULT_FAILED,
-        resultMessage: ""
-    };
-
-    let boundary = {
-        boundary: new Array,
-    };
-
-    let ret = {
-        header: header,
-        origins: destinations,
-        boundary: boundary,
-    };
-
-    let cntDestinations = destinations.length;
-
-    let result = addon.getboundary(cntDestinations, destinations);
-    let res = JSON.parse(result);
-
-    if (res.result_code == 0) {
-        ret.header.isSuccessful = true;
-        ret.header.resultCode = res.result_code;
-        ret.header.resultMessage = codes.getErrMsg(ret.header.resultCode);
-
-        ret.boundary = res.boundary;
-    } else {
-        ret.header.isSuccessful = false;
-        ret.header.resultCode = res.result_code;
-        ret.header.resultMessage = codes.getErrMsg(ret.header.resultCode);
-    }
-
-    return ret;
-}
-
-
-// 클러스터링 영역
-exports.getbestways = function(req) {
-    let result = addon.getwaypoints(JSON.stringify(req));
-    let res = JSON.parse(result);
-
-    let header = {
-        isSuccessful: false,
-        resultCode: codes.ERROR_CODES.ROUTE_RESULT_FAILED,
-        resultMessage: ""
-    };
-
-    let ret = {
-        header: header,
-        mode: (req.mode != undefined) ? req.mode : "tsp",
-        origins: (req.origins != undefined) ? req.origins : null,
-        summary: null,
-        waypoints: null,
-    };
-
-    // let type_match = 4; //TYPE_LINK_MATCH_FOR_TABLE; // 최적지점 사용
-    // if (target === "samsung_heavy") {
-    //     type_match = 0; // TYPE_LINK_MATCH_NONE
-    // }
-
-    if (res.result_code == 0) {
-        ret.header.isSuccessful = true;
-        ret.header.resultCode = res.result_code;
-        ret.header.resultMessage = codes.getErrMsg(ret.header.resultCode);
-
-        ret.summary = res.symmary;
-        ret.waypoints = res.waypoints;
-        ret.routes = res.routes ?? undefined;
-        
-        // add web route view url
-        if (res.url != undefined && res.url.length > 0) {
-            ret.url = res.url;
-        }
-    } else {
-        ret.header.isSuccessful = false;
-        ret.header.resultCode = res.result_code;
-        ret.header.resultMessage = codes.getErrMsg(ret.header.resultCode);
-    }
-
-    addon.releaseroute();
-
-    return ret;
-}
 
 exports.updatetraffic = function(file, path, timestamp) {
     addon.updatetraffic(file, path, timestamp);

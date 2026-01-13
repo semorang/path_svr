@@ -28,13 +28,26 @@
 #pragma pack (push, 1)
 // 입구점 정보
 struct stEntryPointInfo {
-	int32_t nAttribute; // 속성, 1: 차량 입구점, 2: 택시 승하차 지점(건물), 3: 택시 승하차 지점(건물군), 4: 택배 차량 하차 거점, 5: 보행자 입구점, 	6: 배달 하차점(차량, 오토바이), 7: 배달 하차점(자전거, 도보)
+	uint32_t nAttribute : 4; // 속성, 1: 차량 입구점, 2: 택시 승하차 지점(건물), 3: 택시 승하차 지점(건물군), 4: 택배 차량 하차 거점, 5: 보행자 입구점, 	6: 배달 하차점(차량, 오토바이), 7: 배달 하차점(자전거, 도보), 8:숲길 입구점
+	uint32_t nAngle : 9; // 최적지점API는 링크 각도 0~360
+	uint32_t linkLeft : 1; // 매칭 정보의 도로 사이드 정보, 0:right, 1:left
+	uint32_t reserved : 18;
 	double dwDist; // 요청 지점으로부터 거리(m)
 	double x;
 	double y;
-	int32_t nAngle; // 최적지점API는 링크 각도 0~360
-	uint64_t nID_1; // 숲길 경탐 시, 입구점 매칭 숲길 노드 ID 정보
-	uint64_t nID_2; // 숲길 경탐 시, 입구점 매칭 보행자 노드 ID 정보
+	union
+	{
+		struct
+		{
+			uint64_t nID_1; // 숲길 경탐 시, 입구점 매칭 숲길 노드 ID 정보, 기타 링크 id
+			uint64_t nID_2; // 숲길 경탐 시, 입구점 매칭 보행자 노드 ID 정보
+		};
+		struct
+		{
+			KeyID linkId;
+			uint64_t linkReserved;
+		}bylink;
+	};
 };
 
 // 최적 지점 결과 정보
@@ -55,7 +68,7 @@ struct stOptimalPointInfo {
 struct stReqOptimal {
 	double x;
 	double y;
-	bool isExpand;
+	bool isExpand; // 확장 요청
 	union {
 		int32_t typeAll;
 		struct {
@@ -65,8 +78,19 @@ struct stReqOptimal {
 			uint8_t type4th;
 		};
 	};
-	int32_t reqCount;
-	int32_t subOption;
+	int32_t reqCount; // 응답 개수 제한, 0:무제한, else:최대 요청 개수 이하
+	int32_t subOption; // 추가 옵션, 0:NONE, 1:주변도로 추가
+	int32_t sortOption; // 정렬 옵션, 0:미정렬, 1:정렬(거리)
+
+	stReqOptimal() {
+		x = 0.f;
+		y = 0.f;
+		isExpand = false;
+		typeAll = 0;
+		reqCount = 0;
+		subOption = 0;
+		sortOption = 1;
+	}
 };
 
 struct FileCacheData {
@@ -89,6 +113,7 @@ struct stLinkMatchTable {
 
 // 나중에 Cost Manager 따로 두고 관리하는 것도 고려해볼만함.
 typedef struct _tagDataCost {
+	char  szType[128] = { 0, }; // forest, pedestrian, vehicle, ...
 	union {
 		double base[256];
 		struct {
@@ -176,8 +201,7 @@ typedef struct _tagDataCost {
 		}optimal;
 	};
 
-	_tagDataCost()
-	{
+	_tagDataCost() {
 		memset(&base, 0x00, sizeof(base));
 	}
 }DataCost;
@@ -268,7 +292,8 @@ public:
 
 
 	// set value
-	int GetDataCost(IN const uint32_t type, OUT DataCost& costData);
+	int ParseRequestDataCost(IN const char* szReqJson, OUT DataCost& pDataCost);
+	int GetDataCost(IN const char* pszTarget, OUT DataCost& costData);
 	void SetDataCost(IN const uint32_t type, IN const DataCost* pCost);
 
 	// cache
@@ -377,12 +402,12 @@ public:
 	int32_t GetLinkVertexDataByPoint(IN const double lng, IN const double lat, IN const int32_t nMaxDist, IN const KeyID linkId, OUT double& retLng, OUT double& retLat, OUT double& retDist);
 	stPolygonInfo* GetPolygonDataByPoint(IN const double lng, IN const double lat, IN const int32_t nType = 0, IN const bool useNeighborMesh = true); // nType 0:입구점있는것만, 1:모두, 2:빌딩만, 3:단지만, useNeighborMesh : 이웃메쉬 확장 검색	
 	stLinkInfo * GetNearRoadByPoint(IN const double lng, IN const double lat, IN const int32_t maxDist, IN const int32_t nMatchType, IN const int32_t nLinkDataType, IN const int32_t nLinkLimitLevel, OUT stEntryPointInfo& entInfo);
-	int32_t GetOptimalPointDataByPoint(IN const double lng, IN const double lat, OUT stOptimalPointInfo* pOptInfo, IN const int32_t nEntType = 0, IN const int32_t nReqCount = 0, IN const int32_t nMatchType = TYPE_LINK_MATCH_CARSTOP, IN const int32_t nLinkDataType = TYPE_LINK_DATA_NONE, IN const int32_t nSubOption = 0);
+	int32_t GetOptimalPointDataByPoint(OUT stOptimalPointInfo* pOptInfo, IN const double lng, IN const double lat, IN const stReqOptimal& reqOpt, IN const int32_t nMatchType = TYPE_LINK_MATCH_CARSTOP, IN const int32_t nLinkDataType = TYPE_LINK_DATA_NONE);
 	// nPolyType, 폴리곤 타입 // 0:알아서, 1:빌딩만, 2:단지만	
-	int32_t GetMultiOptimalPointDataByPoints(IN const vector<SPoint>& vtOrigins, OUT vector<stOptimalPointInfo>& vtOptInfos, IN const int32_t nEntType = 0, IN const int32_t nReqCount = 0, IN const int32_t nSubOption = 0, IN const int32_t nMatchType = TYPE_LINK_MATCH_CARSTOP, IN const int32_t nLinkDataType = TYPE_LINK_DATA_NONE);
+	int32_t GetMultiOptimalPointDataByPoints(OUT vector<stOptimalPointInfo>& vtOptInfos, IN const vector<SPoint>& vtOrigins, IN const stReqOptimal& reqOpt, IN const int32_t nMatchType = TYPE_LINK_MATCH_CARSTOP, IN const int32_t nLinkDataType = TYPE_LINK_DATA_NONE);
 	stLinkInfo * GetNearLinkDataByCourseId(IN const int32_t courseId, IN const double lng, IN const double lat, IN const int32_t nMaxDist, OUT double& retLng, OUT double& retLat, OUT double& retDist);
 
-	int32_t GetRequestMultiOptimalPoints(IN const char* szRequest, OUT vector<SPoint>& vtOrigins, OUT stReqOptimal& reqOpt);
+	int32_t ParsingRequestMultiOptimalPoints(IN const char* szRequest, OUT vector<SPoint>& vtOrigins, OUT stReqOptimal& reqOpt);
 	// nEntType, 입구점 타입 // 0:알아서, 1: 차량 입구점, 2: 택시 승하차 지점(건물), 3: 택시 승하차 지점(건물군), 4: 택배 차량 하차 거점, 5: 보행자 입구점, 	6: 배달 하차점(차량, 오토바이), 7: 배달 하차점(자전거, 도보)
 	// nOption, 0: 없음, 1: 주변 가까운 도로 무조건 추가
 	///////////////////////////////////////////////////////////////////////////

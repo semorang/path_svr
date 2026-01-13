@@ -317,9 +317,9 @@ void CRouteManager::SetRouteDirOption(IN const uint32_t departuretDir, IN const 
 }
 
 
-void CRouteManager::SetRouteCost(IN const uint32_t type, IN const DataCost* pCost, IN const uint32_t cntCost)
+void CRouteManager::SetRouteCost(IN const DataCost* pCost, IN const uint32_t cntCost)
 {
-	m_pRoutePlan->SetRouteCost(type, pCost, cntCost);
+	m_pRoutePlan->SetRouteCost(pCost, cntCost);
 }
 
 
@@ -698,9 +698,6 @@ const int CRouteManager::GetCandidateRoute(void)
 	vector<RouteResultInfo> vtRouteResults[maxRouteCount];
 	CRoutePlan routePlans[maxRouteCount];
 
-//#if defined(USE_MULTIPROCESS)
-//#pragma omp parallel for
-//#endif
 	for (int ii = 0; ii < newRouteCount; ii++) {
 		routePlans[ii].Initialize();
 		routePlans[ii].SetDataMgr(m_pDataMgr);
@@ -725,7 +722,7 @@ const int CRouteManager::GetCandidateRoute(void)
 		RouteLinkInfo linkInfo;
 		// 시작 지점 정보 변경
 		// start 
-		
+
 		linkInfo.init();
 		linkInfo.KeyType = TYPE_KEY_LINK;
 		linkInfo.LinkDataType = m_linkDeparture.LinkDataType;
@@ -802,7 +799,12 @@ const int CRouteManager::GetCandidateRoute(void)
 
 		// 위 벡터들 통합
 		reqInfos[ii].vtPointsInfo.emplace_back(m_linkDestination);
+	}
 
+//#if defined(USE_MULTIPROCESS)
+//#pragma omp parallel for
+//#endif
+	for (int ii = 0; ii < newRouteCount; ii++) {
 		KeyID keyId = { 0, };
 
 		vtRouteInfos[ii].resize(reqInfos[ii].vtPoints.size());
@@ -1016,7 +1018,7 @@ int CRouteManager::DoRouting(/*Packet*/)
 
 			RouteSummary summary;
 			// for (int ii = vtRouteResult.size() - 1; ii >= 0; --ii) {
-			for (const auto& route : vtRouteResult) {
+			for (auto& route : vtRouteResult) {
 				// summarys
 				summary.TotalDist = static_cast<uint32_t>(route.TotalLinkDist);
 				summary.TotalTime = route.TotalLinkTime;
@@ -1026,10 +1028,12 @@ int CRouteManager::DoRouting(/*Packet*/)
 				boxMerge(result.RouteBox, route.RouteBox);
 				linkMerge(result.LinkVertex, route.LinkVertex);
 
+				int offVtx = result.LinkVertex.size() - route.LinkVertex.size();
 				result.LinkInfo.reserve(result.LinkInfo.size() + route.LinkInfo.size());
-				for (const auto& link : route.LinkInfo) {
+				for (auto& link : route.LinkInfo) {
 					// 경유지가 있을 경우, 전체 경로를 합치면, 개별 offset 및 거리, 시간이 누적되어 변경되어야 함.
 					// 작업 추가 필요
+					link.vtx_off = offVtx + link.vtx_off;
 					result.LinkInfo.emplace_back(link);
 				} // for
 
@@ -1069,9 +1073,6 @@ int CRouteManager::DoMultiRouting(IN const int32_t routeCount/*, IN const int32_
 
 	time_t timeStart = LOG_TRACE(LOG_DEBUG, "DoMultiRouting, request cnt: %d", routeCount);
 
-#if defined(USE_MULTIPROCESS)
-#pragma omp parallel for
-#endif
 	for (int ii = 0; ii < routeCount; ii++) {
 		routePlans[ii].Initialize();
 		routePlans[ii].SetDataMgr(m_pDataMgr);
@@ -1098,8 +1099,7 @@ int CRouteManager::DoMultiRouting(IN const int32_t routeCount/*, IN const int32_
 #if defined(USE_MOUNTAIN_DATA)
 		if (m_linkDeparture.LinkDataType == TYPE_LINK_DATA_TREKKING) { // 링크 속성으로 데이터 타입 변경
 			reqInfos[ii].vtLinkDataType.emplace_back(TYPE_LINK_DATA_TREKKING);
-		}
-		else
+		} else
 #endif
 		{
 			reqInfos[ii].vtLinkDataType.emplace_back(TYPE_LINK_DATA_PEDESTRIAN);
@@ -1121,8 +1121,7 @@ int CRouteManager::DoMultiRouting(IN const int32_t routeCount/*, IN const int32_
 #if defined(USE_MOUNTAIN_DATA)
 			if (waypoint.LinkDataType == TYPE_LINK_DATA_TREKKING) { // 링크 속성으로 데이터 타입 변경
 				reqInfos[ii].vtLinkDataType.emplace_back(TYPE_LINK_DATA_TREKKING);
-			}
-			else
+			} else
 #endif
 			{
 				reqInfos[ii].vtLinkDataType.emplace_back(TYPE_LINK_DATA_PEDESTRIAN);
@@ -1135,7 +1134,7 @@ int CRouteManager::DoMultiRouting(IN const int32_t routeCount/*, IN const int32_
 			reqInfos[ii].vtPointsInfo.emplace_back(waypoint);
 		} // for
 
-			// end
+		// end
 		reqInfos[ii].vtPoints.emplace_back(m_linkDestination.Coord);
 		reqInfos[ii].vtKeyId.emplace_back(m_linkDestination.LinkId);
 		reqInfos[ii].vtKeyType.emplace_back(TYPE_KEY_LINK); // 기본은 링크 매칭
@@ -1143,8 +1142,7 @@ int CRouteManager::DoMultiRouting(IN const int32_t routeCount/*, IN const int32_
 #if defined(USE_MOUNTAIN_DATA)
 		if (m_linkDestination.LinkDataType == TYPE_LINK_DATA_TREKKING) { // 링크 속성으로 데이터 타입 변경
 			reqInfos[ii].vtLinkDataType.emplace_back(TYPE_LINK_DATA_TREKKING);
-		}
-		else
+		} else
 #endif
 		{
 			reqInfos[ii].vtLinkDataType.emplace_back(TYPE_LINK_DATA_PEDESTRIAN);
@@ -1155,8 +1153,13 @@ int CRouteManager::DoMultiRouting(IN const int32_t routeCount/*, IN const int32_
 
 		// 위 벡터들 통합
 		reqInfos[ii].vtPointsInfo.emplace_back(m_linkDestination);
+	}
 
 
+#if defined(USE_MULTIPROCESS)
+#pragma omp parallel for
+#endif
+	for (int ii = 0; ii < routeCount; ii++) {
 		KeyID keyId = { 0, };
 
 		vtRouteInfos[ii].resize(reqInfos[ii].vtPoints.size());
@@ -1585,9 +1588,6 @@ int CRouteManager::DoMultiComplexRouting(IN const int32_t routeCount/*, IN const
 
 	time_t timeStart = LOG_TRACE(LOG_DEBUG, "DoMultiComplexRouting, request cnt: %d", routeCount);
 
-#if defined(USE_MULTIPROCESS)
-#pragma omp parallel for
-#endif
 	for (int ii = 0; ii < routeCount; ii++) {
 		routePlans[ii].Initialize();
 		routePlans[ii].SetDataMgr(m_pDataMgr);
@@ -1662,19 +1662,20 @@ int CRouteManager::DoMultiComplexRouting(IN const int32_t routeCount/*, IN const
 
 		// 위 벡터들 통합
 		reqInfos[ii].vtPointsInfo.emplace_back(m_linkDestination);
+	}
 
-
+#if defined(USE_MULTIPROCESS)
+#pragma omp parallel for
+#endif
+	for (int ii = 0; ii < routeCount; ii++) {
 		vtRouteInfos[ii].resize(reqInfos[ii].vtPoints.size());
 		vtRouteResults[ii].resize(reqInfos[ii].vtPoints.size() - 1);
 
 		// 입구점 여부 확인 필요 
 		//vector<ComplexPointInfo> vtComplexPointInfo(reqInfos[ii].vtPoints.size());
 
-
-
 		// 숲길인데 산바운더리 입구점이 없으면 링크 확장으로 입구점 검색
 		routePlans[ii].DoEdgeRoute(&reqInfos[ii], vtRouteInfos[ii]/*, vtComplexPointInfo*/);
-
 
 		// 경탐 수행
 #if 0 // 각 지점간 이종 링크의 가장 가까운 입구점을 찾아 경유지로 선정하고 경로 탐색 
@@ -1899,22 +1900,65 @@ const int32_t CRouteManager::GetLimitPointCount(void) const
 }
 
 
-int CRouteManager::GetWeightMatrix(IN const char* szRequest, OUT RouteDistMatrix& RDM, OUT BaseOption& option)
+int CRouteManager::ParsingBaseOption(IN const char* szRequest, OUT BaseOption& option)
 {
 	int ret = RESULT_FAILED;
 
-	if (szRequest == nullptr && strlen(szRequest) <= 0) {
-		LOG_TRACE(LOG_WARNING, "GetWeightMatrix request failed, request string is null or zero size");
+	if (szRequest == nullptr || strlen(szRequest) <= 0) {
+		LOG_TRACE(LOG_WARNING, "ParsingBaseOption request failed, request string is null or zero size");
 		return ret;
 	}
 
-	time_t timeStart = LOG_TRACE(LOG_DEBUG, "GetWeightMatrix request: %s", szRequest);
+	uint32_t crc = m_pTmsMgr->ParsingRequestBaseOption(szRequest, option);
+
+	return ret;
+}
 
 
-	uint32_t crc = m_pTmsMgr->ParsingRequestWeightMatrix(szRequest, option, RDM.vtOrigin, RDM.vtDestination, RDM.vtDistMatrix, RDM.typeCreate);
+int32_t CRouteManager::ParsingRequestRoute(IN const char* szRequest, OUT BaseOption& baseOpt, OUT vector<Origins>& vtOrigin)
+{
+	int ret = RESULT_FAILED;
+
+	if (szRequest == nullptr || strlen(szRequest) <= 0) {
+		LOG_TRACE(LOG_WARNING, "ParsingRequestRoute request failed, request string is null or zero size");
+		return ret;
+	}
+
+	uint32_t crc = m_pTmsMgr->ParsingRequestRoute(szRequest, baseOpt, vtOrigin);
+
+	return ret;
+}
+
+
+int CRouteManager::ParsingWeightMatrix(IN const char* szRequest, OUT RouteDistMatrix& RDM, OUT BaseOption& option)
+{
+	int ret = RESULT_FAILED;
+
+	if (szRequest == nullptr || strlen(szRequest) <= 0) {
+		LOG_TRACE(LOG_WARNING, "ParsingWeightMatrix request failed, request string is null or zero size");
+		return ret;
+	}
+
+	time_t timeStart = timeStart = LOG_TRACE(LOG_DEBUG, "ParsingWeightMatrix request: %s", szRequest);
+
+	ret = m_pTmsMgr->ParsingRequestWeightMatrix(szRequest, option, RDM.vtOrigin, RDM.vtDestination, RDM.vtDistMatrix, RDM.typeCreate);
+
+	LOG_TRACE(LOG_DEBUG, timeStart, "ParsingWeightMatrix, result: %d", ret);
+
+	return ret;
+}
+
+
+int CRouteManager::GetWeightMatrix(IN OUT RouteDistMatrix& RDM, const IN BaseOption& option)
+{
+	int ret = RESULT_FAILED;
+	time_t timeStart = TICK_COUNT();
+	uint32_t crc = 0;
+
+	timeStart = LOG_TRACE(LOG_DEBUG, "GetWeightMatrix request");
+
 	const int cntOrigins = RDM.vtOrigin.size();
 	const int cntDestinations = RDM.vtDestination.size();
-
 
 	// 서버 사양에 따른 개수 제한 필요 (메모리 피크 등)
 	static const int32_t MAX_TMS_LIMIT_POINT_COUNT = 1000; // 현재(2025-10-21) 기준 최대 1000개 이하만 처리하자 
@@ -1949,6 +1993,8 @@ int CRouteManager::GetWeightMatrix(IN const char* szRequest, OUT RouteDistMatrix
 
 	RequestRouteInfo reqInfo;
 	reqInfo.RequestId = option.userId;
+	reqInfo.RouteMode = option.route_mode;
+	reqInfo.RouteCost = option.route_cost;
 	reqInfo.RequestTime = option.timestamp;
 	reqInfo.RequestTraffic = option.traffic;
 	reqInfo.MobilityOption = option.mobility;
@@ -1968,34 +2014,34 @@ int CRouteManager::GetWeightMatrix(IN const char* szRequest, OUT RouteDistMatrix
 		// 선행 RDM 데이터 획득했으면 여기서 완료
 		LOG_TRACE(LOG_DEBUG, "restore distance matrix, success, type:%d", RDM.typeCreate);
 		ret = RESULT_OK;
-	}
-	else if (option.distance_type == 0) {
+	} else if (option.distance_type == 0) {
 		// 직선거리 테이블 생성
 		ret = DoDistanceTabulate(RDM);
 	} else if (cntDestinations != 0) {
 		// 출/도착지 정보가 각기 존재하면 NxN이 아닌 NxM으로 처리하고, 캐시 정보를 사용하지 않는다.
 		ret = DoTabulate(RDM, reqInfo);
 	} else {
-		sprintf(szFileName, "result_rdm_u%s_t%04d%02d%02d%02d%02d%02d", RDM.strUser.c_str(), timeNow.year, timeNow.month, timeNow.day, timeNow.hour, timeNow.minute, timeNow.second);
-		sprintf(szFilePath, "%s/usr/rdm/%s.rdm", m_pDataMgr->GetDataPath(), szFileName);
+		//if (RDM.vtDistMatrix.empty() && (option.fileCache == 1 || option.fileCache == 3)) { // read, read-write
+		//	BaseOption optionFile;
+		//	ret = m_pTmsMgr->LoadWeightMatrix(szFilePath, cntOrigins, sizeItem, crc, optionFile, RDM.vtOrigin, RDM.vtDistMatrix);
+		//	if (ret == RESULT_OK) {
+		//		isRead = true;
+		//		memcpy(&option, &optionFile, sizeof(BaseOption)); // 저장된 rdm 옵션으로 변경
 
-		if (RDM.vtDistMatrix.empty() && (option.fileCache == 1 || option.fileCache == 3)) { // read, read-write
-			BaseOption optionFile;
-			ret = m_pTmsMgr->LoadWeightMatrix(szFilePath, cntOrigins, sizeItem, crc, optionFile, RDM.vtOrigin, RDM.vtDistMatrix);
-			if (ret == RESULT_OK) {
-				isRead = true;
-				memcpy(&option, &optionFile, sizeof(BaseOption)); // 저장된 rdm 옵션으로 변경
-
-				LOG_TRACE(LOG_DEBUG, "LoadWeightMatrix, success, cache:%s", szFilePath);
-			}
-		}
+		//		LOG_TRACE(LOG_DEBUG, "LoadWeightMatrix, success, cache:%s", szFilePath);
+		//	}
+		//}
 
 		// 캐쉬된 WM이 없으면 새로 생성
 		if (RDM.vtDistMatrix.empty() && !isRead) {
 			ret = DoTabulate(RDM, reqInfo);
+
 			// 테이블 데이터 미리 읽어 저장하면서 사용하자
+			sprintf(szFileName, "result_rdm_u%s_t%04d%02d%02d%02d%02d%02d", RDM.strUser.c_str(), timeNow.year, timeNow.month, timeNow.day, timeNow.hour, timeNow.minute, timeNow.second);
+			sprintf(szFilePath, "%s/usr/rdm/%s.rdm", m_pDataMgr->GetDataPath(), szFileName);
+
 			if ((ret == RESULT_OK) && (option.fileCache == 2 || option.fileCache == 3 || option.binary == 1 || option.binary == 3)) { // write, read-write)) {
-				ret = m_pTmsMgr->SaveWeightMatrix(szFilePath, &option, cntOrigins, sizeItem, crc, RDM.vtOrigin, RDM.vtDistMatrix);				
+				ret = m_pTmsMgr->SaveWeightMatrix(szFilePath, &option, cntOrigins, sizeItem, crc, RDM.vtOrigin, RDM.vtDistMatrix);
 				if (ret == RESULT_OK) {
 					isWritten = true;
 				}
@@ -2014,27 +2060,45 @@ int CRouteManager::GetWeightMatrix(IN const char* szRequest, OUT RouteDistMatrix
 		}
 	}
 
-	LOG_TRACE(LOG_DEBUG, timeStart, "GetWeightMatrix, result: %d", ret);
+	LOG_TRACE(LOG_DEBUG, timeStart, "ParsingWeightMatrix, result: %d", ret);
 
 	return ret;
 }
 
 
-int CRouteManager::GetWeightMatrixRouteLine(IN const char* szRequest, OUT RouteDistMatrixLine& RDMLN)
+int CRouteManager::ParsingWeightMatrixRoute(IN const char* szRequest, OUT RouteDistMatrix& RDM, OUT BaseOption& option)
 {
 	int ret = RESULT_FAILED;
 
-	if (szRequest == nullptr && strlen(szRequest) <= 0) {
-		LOG_TRACE(LOG_WARNING, "GetWeightMatrix request failed, request string is null or zero size");
+	if (szRequest == nullptr || strlen(szRequest) <= 0) {
+		LOG_TRACE(LOG_WARNING, "ParsingWeightMatrixRoute request failed, request string is null or zero size");
 		return ret;
 	}
 
-	//time_t timeStart = LOG_TRACE(LOG_DEBUG, "GetWeightMatrixRouteLine request: %s", szRequest);
-	time_t timeStart = LOG_TRACE(LOG_DEBUG, "GetWeightMatrixRouteLine request, lenth: %d", strlen(szRequest));
+	time_t timeStart = LOG_TRACE(LOG_DEBUG, "ParsingWeightMatrixRoute request, lenth: %d", strlen(szRequest));
 
-	ret = m_pTmsMgr->ParsingRequestWeightMatrixRouteLine(szRequest, RDMLN.strFileName, RDMLN.sizeFile, RDMLN.vtPathFileIndex);
+	ret = m_pTmsMgr->ParsingRequestWeightMatrixRoute(szRequest, option, RDM.vtOrigin, RDM.vtDestination, RDM.vtDistMatrix);
 
-	LOG_TRACE(LOG_DEBUG, timeStart, "GetWeightMatrixRouteLine, result: %d", ret);
+	LOG_TRACE(LOG_DEBUG, timeStart, "ParsingWeightMatrixRoute, result: %d", ret);
+
+	return ret;
+}
+
+
+int CRouteManager::ParsingWeightMatrixRouteLine(IN const char* szRequest, OUT RouteDistMatrixLine& RLN)
+{
+	int ret = RESULT_FAILED;
+
+	if (szRequest == nullptr || strlen(szRequest) <= 0) {
+		LOG_TRACE(LOG_WARNING, "ParsingWeightMatrixRouteLine request failed, request string is null or zero size");
+		return ret;
+	}
+
+	time_t timeStart = LOG_TRACE(LOG_DEBUG, "ParsingWeightMatrixRouteLine request, lenth: %d", strlen(szRequest));
+
+	ret = m_pTmsMgr->ParsingRequestWeightMatrixRouteLine(szRequest, RLN.strFileName, RLN.sizeFile, RLN.vtPathFileIndex);
+
+	LOG_TRACE(LOG_DEBUG, timeStart, "ParsingWeightMatrixRouteLine, result: %d", ret);
 
 	return ret;
 }
@@ -2112,6 +2176,11 @@ int CRouteManager::GetCluster(IN const char* szRequest, IN RouteDistMatrix& RDM,
 {
 	int ret = RESULT_FAILED;
 
+	if (szRequest == nullptr || strlen(szRequest) <= 0) {
+		LOG_TRACE(LOG_WARNING, "GetCluster request failed, request string is null or zero size");
+		return ret;
+	}
+
 	time_t timeStart = LOG_TRACE(LOG_DEBUG, "GetCluster request : %s", szRequest);
 
 	if (!CLUST.vtDistrict.empty()) {
@@ -2119,13 +2188,14 @@ int CRouteManager::GetCluster(IN const char* szRequest, IN RouteDistMatrix& RDM,
 		vector<stDistrict>().swap(CLUST.vtDistrict);
 	}
 
-	if (szRequest == nullptr && strlen(szRequest) <= 0) {
-		LOG_TRACE(LOG_WARNING, "GetCluster request failed, request string is null or zero size");
-		return ret;
-	}
-
 	// get table
-	ret = GetWeightMatrix(szRequest, RDM, CLUST.option.tspOption.baseOption);
+	// 저장된 RDM, RND 요청 정보 확인
+	if ((ret = ParsingWeightMatrixRoute(szRequest, RDM, CLUST.option.tspOption.baseOption)) != RESULT_OK) {
+		ret = ParsingWeightMatrix(szRequest, RDM, CLUST.option.tspOption.baseOption);
+		if (RDM.vtDistMatrix.empty()) {
+			ret = GetWeightMatrix(RDM, CLUST.option.tspOption.baseOption);
+		}
+	}
 
 	uint32_t crc = m_pTmsMgr->ParsingRequestCluster(szRequest, CLUST.option, RDM.vtOrigin);
 	const int cntOrigins = RDM.vtOrigin.size();
@@ -2379,21 +2449,53 @@ int CRouteManager::GetCluster(IN const char* szRequest, IN RouteDistMatrix& RDM,
 }
 
 
-int CRouteManager::GetBestway(IN const char* szRequest, IN RouteDistMatrix& RDM, OUT BestWaypoints& TSP)
+int CRouteManager::GetGroup(IN const char* szRequest, IN OUT Cluster& CLUST)
 {
 	int ret = RESULT_FAILED;
 
-	time_t timeStart = LOG_TRACE(LOG_DEBUG, "GetBestway, request: %s", szRequest);
-
-	if (szRequest == nullptr && strlen(szRequest) <= 0) {
-		LOG_TRACE(LOG_WARNING, "GetBestway request failed, request string is null or zero size");
+	if (szRequest == nullptr || strlen(szRequest) <= 0) {
+		LOG_TRACE(LOG_WARNING, "GetGroup request failed, request string is null or zero size");
 		return ret;
 	}
-	
-	// get table	
-	ret = GetWeightMatrix(szRequest, RDM, TSP.option.baseOption);
-	
-	uint32_t crc = m_pTmsMgr->ParsingRequestBestway(szRequest, TSP.option, RDM.vtOrigin);
+
+	time_t timeStart = LOG_TRACE(LOG_DEBUG, "GetGroup request : %s", szRequest);
+
+	uint32_t crc = m_pTmsMgr->ParsingRequestGroup(szRequest, CLUST.option, CLUST.vtOrigins);
+	const int cntOrigins = CLUST.vtOrigins.size();
+
+	if (cntOrigins <= 0) {
+		return ROUTE_RESULT_FAILED_WRONG_PARAM;
+	}
+
+	// get cluster
+	ret = m_pTmsMgr->GetGroup(&CLUST.option, CLUST.vtOrigins, CLUST.vtDistrict);
+
+	LOG_TRACE(LOG_DEBUG, timeStart, "GetGroup, result: %d", ret);
+
+	return ret;
+}
+
+
+int CRouteManager::GetBestway(IN const char* szRequest, IN RouteDistMatrix& RDM, OUT BestWaypoints& TSP)
+{
+	int ret = RESULT_FAILED;
+	time_t timeStart = TICK_COUNT();
+
+	if (szRequest != nullptr && strlen(szRequest) > 0) {
+		time_t timeStart = LOG_TRACE(LOG_DEBUG, "GetBestway, request: %s", szRequest);
+
+		// get table	
+		ret = ParsingWeightMatrix(szRequest, RDM, TSP.option.baseOption);
+		if (RDM.vtDistMatrix.empty()) {
+			ret = GetWeightMatrix(RDM, TSP.option.baseOption);
+		}
+
+		uint32_t crc = m_pTmsMgr->ParsingRequestBestway(szRequest, TSP.option, RDM.vtOrigin);
+	} else {
+		LOG_TRACE(LOG_DEBUG, "GetBestway request null, using rdm struct info, origin:%d, destination:%d", RDM.vtOrigin.size(), RDM.vtDestination.size());
+		ret = RESULT_OK;
+	}	
+
 	
 	const int cntOrigins = RDM.vtOrigin.size();	
 	if (cntOrigins <= 0) {
@@ -2635,6 +2737,8 @@ int CRouteManager::DoTabulate(IN OUT RouteDistMatrix& RDM, OUT RequestRouteInfo&
 
 #if defined(DEMO_FOR_IPO)
 	int matchLinkType = TYPE_LINK_MATCH_CARSTOP;
+#elif defined(DEMO_FOR_HANJIN)
+	int matchLinkType = TYPE_LINK_MATCH_CARSTOP;
 #else
 	int matchLinkType = TYPE_LINK_MATCH_FOR_TABLE;
 #endif
@@ -2707,7 +2811,8 @@ int CRouteManager::DoTabulate(IN OUT RouteDistMatrix& RDM, OUT RequestRouteInfo&
 		// get optimal end point
 #if defined(USE_OPTIMAL_POINT_API)
 		stOptimalPointInfo optInfo;
-		if (m_pDataMgr->GetOptimalPointDataByPoint(coord.x, coord.y, &optInfo, 0, 0, matchLinkType) > 0) {
+		stReqOptimal reqOpt;
+		if (m_pDataMgr->GetOptimalPointDataByPoint(&optInfo, coord.x, coord.y, reqOpt, matchLinkType) > 0) {
 			sID = SetPosition(optInfo.vtEntryPoint[0].x, optInfo.vtEntryPoint[0].y, matchLinkType, routeLinkInfo);
 		} else
 #endif
@@ -2736,7 +2841,8 @@ int CRouteManager::DoTabulate(IN OUT RouteDistMatrix& RDM, OUT RequestRouteInfo&
 		// get optimal end point
 #if defined(USE_OPTIMAL_POINT_API)
 		stOptimalPointInfo optInfo;
-		if (m_pDataMgr->GetOptimalPointDataByPoint(coord.x, coord.y, &optInfo, 0, 0, matchLinkType) > 0) {
+		stReqOptimal reqOpt;
+		if (m_pDataMgr->GetOptimalPointDataByPoint(&optInfo, coord.x, coord.y, reqOpt, matchLinkType) > 0) {
 			eID = SetPosition(optInfo.vtEntryPoint[0].x, optInfo.vtEntryPoint[0].y, matchLinkType, routeLinkInfo);
 		} else
 #endif
@@ -2805,6 +2911,15 @@ int CRouteManager::DoTabulate(IN OUT RouteDistMatrix& RDM, OUT RequestRouteInfo&
 	//reqInfo.vtKeyType.emplace_back(m_linkDestination.KeyType);
 	//reqInfo.vtLinkDataType.emplace_back(m_linkDestination.LinkDataType);
 
+	//check cost
+	if (!reqInfo.RouteCost.empty()) {
+		DataCost routeCost;
+		int cnt = m_pDataMgr->GetDataCost(reqInfo.RouteCost.c_str(), routeCost);
+		if (cnt > 0) {
+			SetRouteCost(&routeCost, cnt);
+		}
+	}
+
 	ret = m_pRoutePlan->DoTabulate(&reqInfo, vtOriginLinkInfos, vtDestLinkInfos, RDM);
 	if (ret != ROUTE_RESULT_SUCCESS) {
 		LOG_TRACE(LOG_WARNING, "failed, get weight matrix");
@@ -2817,7 +2932,6 @@ int CRouteManager::DoTabulate(IN OUT RouteDistMatrix& RDM, OUT RequestRouteInfo&
 
 	return ret;
 }
-
 
 
 int CRouteManager::DoDistanceTabulate(IN OUT RouteDistMatrix& RDM)
@@ -2852,7 +2966,8 @@ int CRouteManager::DoDistanceTabulate(IN OUT RouteDistMatrix& RDM)
 		RouteLinkInfo pointLinkInfo;
 #if defined(USE_OPTIMAL_POINT_API)
 		stOptimalPointInfo optEndInfo;
-		if (m_pDataMgr->GetOptimalPointDataByPoint(coord.x, coord.y, &optEndInfo, 0, 0, matchLinkType) > 0) {
+		stReqOptimal reqOpt;
+		if (m_pDataMgr->GetOptimalPointDataByPoint(&optEndInfo, coord.x, coord.y, reqOpt, matchLinkType) > 0) {
 			matchID = SetPosition(optEndInfo.vtEntryPoint[0].x, optEndInfo.vtEntryPoint[0].y, matchLinkType, pointLinkInfo);
 		} else
 #endif

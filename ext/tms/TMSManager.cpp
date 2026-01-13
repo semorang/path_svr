@@ -396,8 +396,6 @@ int32_t CTMSManager::GetCluster(IN const ClusteringOption* pClustOpt, IN const v
 		GetBoundary(coords, cluster.border);
 	}
 
-	ret = ROUTE_RESULT_SUCCESS;
-
 	for (int ii = 0; ii < cntPois; ii++) {
 		if (ppWeightMatrix) {
 			SAFE_DELETE_ARR(ppWeightMatrix[ii]);
@@ -980,11 +978,62 @@ int32_t CTMSManager::GetCluster(IN const ClusteringOption* pClustOpt, IN const v
 }
 
 
+int32_t CTMSManager::GetGroup(IN const ClusteringOption* pClustOpt, IN const vector<Origins>& vtOrigin, OUT vector<stDistrict>& vtDistrict)
+{
+	int32_t ret = DevideClusterUsingLink(pClustOpt, vtOrigin, vtDistrict);
+
+	if (ret == RESULT_OK) {
+		//for (auto& cluster : vtDistrict) {
+		//	// make border
+		//	GetBoundary(cluster.vtCoord, cluster.vtBorder, cluster.center);
+		//}
+		
+		int prepareTime = 60 * 1; // 정차 후, 기본 배송 준비 시간(60초)
+		int layoverTime = 60 * 1; // 건당 배송 소요시간(60초)
+		for (auto& cluster : vtDistrict) {
+			// 배송지 소요 시간			
+			for (int ii = 0; ii < cluster.vtPois.size(); ii++) {
+				if (ii == 0) {
+					// 구역의 최초 배송지는 준비 시간 적용
+					// 기본 배송 준비 시간 + 배송 건당 준비 시간(10초 * n)
+					cluster.vtTimes.emplace_back(layoverTime + prepareTime + (10 * cluster.vtPois.size()));
+				} else {
+					cluster.vtTimes.emplace_back(layoverTime);
+				}
+			}
+
+			// 배송처 권역
+			// make border
+			vector<SPoint> vtBorder;
+			vtBorder.assign(cluster.vtCoord.begin(), cluster.vtCoord.end());
+
+			// 출발지 고정 제외
+			if (pClustOpt->endpointType == TYPE_TSP_ENDPOINT_START ||
+				pClustOpt->endpointType == TYPE_TSP_ENDPOINT_START_END ||
+				pClustOpt->endpointType == TYPE_TSP_ENDPOINT_RECURSIVE) {
+				vtBorder.erase(vtBorder.begin());
+			}
+
+			// 도착지 고정 제외
+			if (pClustOpt->endpointType == TYPE_TSP_ENDPOINT_END ||
+				pClustOpt->endpointType == TYPE_TSP_ENDPOINT_START_END) {
+				vtBorder.erase(vtBorder.end() - 1);
+			}
+
+			SPoint tmpCenter; // 라인 중심 정보는 바꾸지 않는다.
+			GetBoundary(vtBorder, cluster.vtBorder, tmpCenter);
+		}
+	}
+
+	return ret;
+}
+
+
 int32_t CTMSManager::GetRecommendedDeviation(IN ClusteringOption* pClustOpt, IN const vector<vector<stDistMatrix>>& vtDistMatrix, IN vector<stWaypoints>& vtWaypoints, IN vector<int32_t>& vtBestway, OUT vector<stDistrict>& vtDistrict)
 {
-	LOG_TRACE(LOG_DEBUG, "calculate auto deviation value");
-
 	int32_t ret = RESULT_OK;
+
+	LOG_TRACE(LOG_DEBUG, "calculate auto deviation value");
 
 	// get bestway
 	//TspOptions tspOpt;
@@ -1164,7 +1213,7 @@ int32_t CTMSManager::GetRecommendedDeviation(IN ClusteringOption* pClustOpt, IN 
 
 int32_t CTMSManager::GetNewBestway(IN const TspOption* pTspOpt, IN const vector<vector<stDistMatrix>>& vtDistMatrix, IN const vector<stWaypoints>& vtWaypoints, OUT vector<stWaypoints>& vtNewWaypoints, OUT vector<int32_t>& vtNewBestways, OUT stClustValue& clustValue)
 {
-	int32_t ret = -1;
+	int32_t ret = RESULT_OK;
 
 	clustValue.init();
 
@@ -1185,8 +1234,6 @@ int32_t CTMSManager::GetNewBestway(IN const TspOption* pTspOpt, IN const vector<
 
 		idxPrev = idxNext;
 	}
-
-	ret = RESULT_OK;
 #	else
 	// 클러스터당 POI WM을 새로 구성한다. 
 	vector<vector<stDistMatrix>> vtNewDistMatrix;
@@ -1511,7 +1558,7 @@ int32_t CTMSManager::GetBestway(IN const TspOption* pTspOpt, IN const vector<vec
 
 int32_t devideCluster(IN const ClusteringOption* pClustOpt, IN const vector<vector<stDistMatrix>>& vtDistMatrix, IN const vector<int32_t>& vtBestways, IN const int32_t bonusValue, IN const int32_t firstIdx, IN const int32_t lastIdx, OUT stDistrict& cluster, OUT vector<uint32_t>& vtRemains)
 {
-	int32_t ret = 0;
+	int32_t cnt = 0;
 
 	int maxSize = vtBestways.size();
 
@@ -1721,9 +1768,9 @@ int32_t devideCluster(IN const ClusteringOption* pClustOpt, IN const vector<vect
 	} // for
 #endif
 
-	ret = cluster.vtPois.size();
+	cnt = cluster.vtPois.size();
 
-	return ret;
+	return cnt;
 }
 
 
@@ -1763,7 +1810,7 @@ int getNextGrothMode(const int currDirection, const int currValue, const int nex
 
 int32_t CTMSManager::DevideClusterUsingTsp(IN const ClusteringOption* pClustOpt, IN const vector<vector<stDistMatrix>>& vtDistMatrix, IN const vector<stWaypoints>& vtWaypoints, IN const vector<int32_t>& vtBestways, IN const int32_t firstIdx, IN const int32_t lastIdx, IN OUT int32_t& bonusValue, OUT stDistrict& cluster, OUT vector<int32_t>& vtRemains)
 {
-	int32_t ret = 0;
+	int32_t cnt = 0;
 
 	int maxSize = vtBestways.size();
 	double maxValue = 0.f;
@@ -1932,6 +1979,7 @@ int32_t CTMSManager::DevideClusterUsingTsp(IN const ClusteringOption* pClustOpt,
 		;
 	}
 
+	int ret = RESULT_FAILED;
 	int nUpDownState = DIRECTION_NONE;
 	bool isStop = false;
 
@@ -2216,10 +2264,10 @@ int32_t CTMSManager::DevideClusterUsingTsp(IN const ClusteringOption* pClustOpt,
 	//	vtNewClust.emplace_back(vtWaypoints[lastIdx]);
 	//}
 
-	ret = getNewDistrictResult(pClustOpt, vtDistMatrix, vtNewClust, cluster);
+	cnt = getNewDistrictResult(pClustOpt, vtDistMatrix, vtNewClust, cluster);
 #endif
 
-	return ret;
+	return cnt;
 }
 
 
@@ -2285,6 +2333,141 @@ int32_t CTMSManager::Clustering(IN const ClusteringOption* pClustOpt, IN const v
 }
 
 
+int32_t CTMSManager::DevideClusterUsingLink(IN const ClusteringOption* pClustOpt, IN const vector<Origins>& vtOrigin, OUT vector<stDistrict>& vtDistrict)
+{
+	int32_t ret = RESULT_OK;
+
+	int maxSize = vtOrigin.size();
+
+	typedef struct _tagstGroupItem
+	{
+		// id, link nid 사용
+		int32_t idxOrigin;
+		KeyID linkId;
+		SPoint ptOrigin;
+		int32_t groupId;
+		SPoint ptCenter;
+		SPoint ptOptimal;
+		int32_t leftSide; // 0:right, 1:left
+	}stGroupItem;
+	vector<stGroupItem> vtItems;
+
+	unordered_map<uint64_t, int32_t> umapRightItems;
+	unordered_map<uint64_t, int32_t> umapLeftItems;
+	unordered_map<uint64_t, int32_t>::iterator itItems;
+
+	int distId = 0;
+
+	// 최적지점 위치 확인
+	for (int ii = 0; ii < vtOrigin.size(); ii++) {
+		stLinkInfo* pLink = nullptr;
+		stEntryPointInfo entInfo;
+		stGroupItem item = {};
+		item.idxOrigin = ii;
+		item.ptOrigin = item.ptOptimal = vtOrigin[ii].position;
+
+		//if (!vtLinkKey.empty() && (vtLinkKey.size() < ii) && (vtLinkKey[ii].llid != 0)) {
+		//	pLink = m_pDataMgr->GetVLinkDataById(item.linkId);
+		//}
+
+		// 가까운 링크 찾기
+		if (pLink == nullptr) {
+			const int maxDist = 3000; // 3km
+			pLink = m_pDataMgr->GetNearRoadByPoint(item.ptOptimal.x, item.ptOptimal.y, maxDist, TYPE_LINK_MATCH_CARSTOP_EX, TYPE_LINK_DATA_VEHICLE, -1, entInfo);
+
+			if (pLink == nullptr) {
+				LOG_TRACE(LOG_WARNING, "near link info not exist, idx:%d, x:%.5f, y:%.5f, dist:%d", ii, vtOrigin[ii].position.x, vtOrigin[ii].position.y, maxDist);
+				continue;
+			}		
+		}
+
+		item.linkId = pLink->link_id;
+
+		// link vertex 구하고 중심 계산
+		double dwOffsetMeter = 1.5;//0.3; // 30 cm 좀 크게 떨어뜨렸을때 경탐시 의도한 링크가 아닌 근처 다른 링크에 매칭될 수 있어 주의 필요
+
+		bool isLeft = entInfo.linkLeft;
+
+		// pass_code(규제코드), 1:통행가능, 2:통행불가, 3:공사구간, 4:공사계획구간, 5:일방통행_정, 6:일방통행_역
+		// 2차선 이하(8레벨 이하) 비분리 도로는 도로 우측				
+		if ((pLink->veh.level >= 5) && ((pLink->veh.lane_cnt <= 2) && (pLink->veh.link_type != 2))) {
+			// 무조건 정방향 우측에 두자
+			// 2차선 이하(5레벨 이하) 추가 // 2025-12-22
+			if (pLink->veh.lane_cnt >= 2) {
+				dwOffsetMeter = 3.0;
+			}
+			item.leftSide = 0;
+		} else if (pLink->veh.pass_code == 5) {
+			// 일방 정방향이면 무조건 도로 우측으로 매칭
+			if (isLeft) {
+				dwOffsetMeter *= -1;
+			}
+			item.leftSide = 0;
+		} else if (pLink->veh.pass_code == 6) {
+			// 일방 역방향이면 무조건 도로 좌측으로 매칭
+			if (!isLeft) {
+				dwOffsetMeter *= -1;
+			}
+			item.leftSide = 1;
+		} else {
+			if (isLeft) {
+				dwOffsetMeter *= -1;
+				item.leftSide = 1;
+			} else {
+				item.leftSide = 0;
+			}
+		}
+
+		SPoint ptCenter;
+		SPoint ptOffset;
+
+		if (getPolylineCenterWithOffset(pLink->getVertex(), pLink->getVertexCount(), dwOffsetMeter, ptCenter, ptOffset) == true) {
+			item.ptCenter = ptOffset;
+		} else if (getPolylineCenter(pLink->getVertex(), pLink->getVertexCount(), ptCenter) == true) {
+			item.ptCenter = ptCenter;
+		}
+
+
+		// find and insert
+		unordered_map<uint64_t, int32_t>* pMap;
+		if (item.leftSide) {
+			pMap = &umapLeftItems;
+		} else {
+			pMap = &umapRightItems;
+		}
+
+		if ((itItems = pMap->find(item.linkId.llid)) != pMap->end()) {
+			item.groupId = itItems->second;
+		} else { // or create
+			item.groupId = distId++;
+			pMap->emplace(item.linkId.llid, item.groupId);
+		}
+
+		vtItems.emplace_back(item);
+	} // for
+
+	vtDistrict.clear();
+	vtDistrict.resize(umapLeftItems.size() + umapRightItems.size());
+
+	for (const auto& item : vtItems) {
+		int idx = item.groupId;
+		
+		if (vtDistrict[idx].vtPois.empty()) {
+			// 첫번째
+			vtDistrict[idx].id = item.groupId;
+			vtDistrict[idx].center = item.ptCenter;
+		}
+
+		vtDistrict[idx].vtPois.emplace_back(item.idxOrigin);
+		vtDistrict[idx].vtCoord.emplace_back(item.ptOptimal);
+	}
+
+	LOG_TRACE(LOG_DEBUG, "total groups:%d, origins:%d", vtDistrict.size(), vtItems.size());
+
+	return ret;
+}
+
+
 SPoint calculateCentroid(const vector<SPoint>& points)
 {
 	double cx = 0, cy = 0, area = 0;
@@ -2323,7 +2506,7 @@ SPoint calculateCentroid(const vector<SPoint>& points)
 
 int32_t CTMSManager::GetBoundary(IN vector<SPoint>& vtCoord, OUT vector<SPoint>& vtBoundary, OUT SPoint& center)
 {
-	int32_t ret = -1;
+	int32_t ret = RESULT_OK;
 
 	if (vtCoord.empty()) {
 		return ret;
@@ -2344,7 +2527,6 @@ int32_t CTMSManager::GetBoundary(IN vector<SPoint>& vtCoord, OUT vector<SPoint>&
 
 	center = calculateCentroid(vtBoundary);
 
-	ret = 0;
 
 #if 0
 	// 면적 조사
@@ -2375,21 +2557,24 @@ int32_t CTMSManager::GetBoundary(IN vector<SPoint>& vtCoord, OUT vector<SPoint>&
 }
 
 
-uint32_t readWeightMatrix(IN const BYTE* pszBinary, IN const uint32_t sizeData, OUT BaseOption& option, OUT vector<Origins>& vtOrigin, OUT vector<vector<stDistMatrix>>& vtDistMatrix)
+int32_t readWeightMatrix(IN const BYTE* pszBinary, IN const size_t sizeData, OUT BaseOption& option, OUT vector<Origins>& vtOrigin, OUT vector<vector<stDistMatrix>>& vtDistMatrix)
 {
-	uint32_t ret = RESULT_FAILED;
+	int32_t ret = RESULT_FAILED;
 
 	if (pszBinary == nullptr || sizeData <= 0) {
 		return ret;
 	}
 
-	uint32_t sizeRead = 0;
+	size_t readOffset = 0;
 
 	// read base & check
 	FileBase base;
-	//sizeRead += fread(&base, 1, sizeof(base), fp);
-	memcpy(&base, &pszBinary[sizeRead], sizeof(base));
-	sizeRead += sizeof(base);
+	if (readOffset >= sizeData) {
+		LOG_TRACE(LOG_ERROR, "rdm base offset is over than size, %d, %d", readOffset, sizeData);
+		return ret;
+	}
+	memcpy(&base, &pszBinary[readOffset], sizeof(base));
+	readOffset += sizeof(base);
 	if (strcmp(base.szType, "RDM") != 0) {
 		LOG_TRACE(LOG_ERROR, "rdm file type not match with RDM, type:%s", base.szType);
 		return ret;
@@ -2397,9 +2582,12 @@ uint32_t readWeightMatrix(IN const BYTE* pszBinary, IN const uint32_t sizeData, 
 
 	// read header & check
 	FileHeaderRDM header;
-	//sizeRead += fread(&header, 1, sizeof(header), fp);
-	memcpy(&header, &pszBinary[sizeRead], sizeof(header));
-	sizeRead += sizeof(header);
+	if (readOffset >= sizeData) {
+		LOG_TRACE(LOG_ERROR, "rdm header offset is over than size, %d, %d", readOffset, sizeData);
+		return ret;
+	}
+	memcpy(&header, &pszBinary[readOffset], sizeof(header));
+	readOffset += sizeof(header);
 
 	//if (header.crcData != crc) {
 	//	LOG_TRACE(LOG_ERROR, "rdm crc not match with %d vs %d", header.crcData, crc);
@@ -2412,14 +2600,22 @@ uint32_t readWeightMatrix(IN const BYTE* pszBinary, IN const uint32_t sizeData, 
 	//}
 
 	// read option
-	memcpy(&option, &pszBinary[sizeRead], sizeof(option));
-	sizeRead += sizeof(option);
+	if (readOffset >= sizeData) {
+		LOG_TRACE(LOG_ERROR, "rdm option offset is over than size, %d, %d", readOffset, sizeData);
+		return ret;
+	}
+	memcpy(&option, &pszBinary[readOffset], sizeof(option));
+	readOffset += sizeof(option);
 
 	// read origin
 	for (int ii = 0; ii < header.cntItem; ii++) {
 		Origins origin;
-		memcpy(&origin.position, &pszBinary[sizeRead], sizeof(origin));
-		sizeRead += sizeof(origin);
+		if (readOffset >= sizeData) {
+			LOG_TRACE(LOG_ERROR, "rdm origin offset is over than size, %d, %d", readOffset, sizeData);
+			return ret;
+		}
+		memcpy(&origin.position, &pszBinary[readOffset], sizeof(origin));
+		readOffset += sizeof(origin);
 		vtOrigin.emplace_back(origin);
 	}
 	
@@ -2429,15 +2625,19 @@ uint32_t readWeightMatrix(IN const BYTE* pszBinary, IN const uint32_t sizeData, 
 		for (int jj = 0; jj < header.cntItem; jj++) {
 			stDistMatrix item;
 			// read matrix
-			memcpy(&item, &pszBinary[sizeRead], sizeof(item)); // read 4byte
-			sizeRead += sizeof(item);
+			if (readOffset >= sizeData) {
+				LOG_TRACE(LOG_ERROR, "rdm matrix offset is over than size, %d, %d", readOffset, sizeData);
+				return ret;
+			}
+			memcpy(&item, &pszBinary[readOffset], sizeof(item)); // read 4byte
+			readOffset += sizeof(item);
 
 			vtDistMatrixRow.emplace_back(item);
 		} // for
 		vtDistMatrix.emplace_back(vtDistMatrixRow);
 	} // for
 
-	if ((sizeRead <= 0 || vtDistMatrix.empty()) || (vtOrigin.size() != vtDistMatrix.size())) {
+	if ((readOffset <= 0 || vtDistMatrix.empty()) || (vtOrigin.size() != vtDistMatrix.size())) {
 		LOG_TRACE(LOG_ERROR, "failed, read weight matrix count, origin:%d vs matrix:%d", vtOrigin.size(), vtDistMatrix.size());
 	} else {
 		ret = RESULT_OK;
@@ -2447,19 +2647,25 @@ uint32_t readWeightMatrix(IN const BYTE* pszBinary, IN const uint32_t sizeData, 
 }
 
 
-uint32_t readWeightMatrixRouteLine(IN FILE* fp, IN const uint32_t sizeData, OUT vector<vector<FileIndex>>& vtPathMatrixIndex)
+int32_t readWeightMatrixRouteLine(IN const BYTE* pszBinary, IN const size_t sizeData, OUT vector<vector<FileIndex>>& vtPathMatrixIndex)
 {
-	uint32_t ret = RESULT_FAILED;
+	int32_t ret = RESULT_FAILED;
 
-	if (fp == nullptr || sizeData <= 0) {
+	if (pszBinary == nullptr || sizeData <= 0) {
 		return ret;
 	}
 
-	size_t sizeFileOffset = 0;
+	size_t readOffset = 0;
 
 	// base
 	FileBase base;
-	sizeFileOffset += fread(&base, 1, sizeof(base), fp);
+	if (readOffset >= sizeData) {
+		LOG_TRACE(LOG_ERROR, "rdm line base offset is over than size, %d, %d", readOffset, sizeData);
+		return ret;
+	}
+	memcpy(&base, &pszBinary[readOffset], sizeof(base));
+	readOffset += sizeof(base);
+
 	if (strcmp(base.szType, "RLN") != 0) {
 		LOG_TRACE(LOG_ERROR, "rdm file type not match with RLN, type:%s", base.szType);
 		return ret;
@@ -2467,7 +2673,13 @@ uint32_t readWeightMatrixRouteLine(IN FILE* fp, IN const uint32_t sizeData, OUT 
 
 	// header
 	FileHeader header;
-	sizeFileOffset += fread(&header, 1, sizeof(header), fp);
+	if (readOffset >= sizeData) {
+		LOG_TRACE(LOG_ERROR, "rdm line header offset is over than size, %d, %d", readOffset, sizeData);
+		return ret;
+	}
+	memcpy(&header, &pszBinary[readOffset], sizeof(header));
+	readOffset += sizeof(header);
+
 	int nCount = sqrt(header.cntIndex);
 
 	// index
@@ -2475,7 +2687,13 @@ uint32_t readWeightMatrixRouteLine(IN FILE* fp, IN const uint32_t sizeData, OUT 
 		vector<FileIndex> vtCol;
 		for (int jj = 0; jj < nCount; jj++) {
 			FileIndex index;
-			sizeFileOffset += fread(&index, 1, sizeof(index), fp);
+			if (readOffset >= sizeData) {
+				LOG_TRACE(LOG_ERROR, "rdm line index offset is over than size, %d, %d", readOffset, sizeData);
+				return ret;
+			}
+			memcpy(&index, &pszBinary[readOffset], sizeof(index));
+			readOffset += sizeof(index);
+
 			vtCol.emplace_back(index);
 		}
 		vtPathMatrixIndex.emplace_back(vtCol);
@@ -2498,15 +2716,15 @@ uint32_t readWeightMatrixRouteLine(IN FILE* fp, IN const uint32_t sizeData, OUT 
 	//	vtPathMatrix.emplace_back(vtPathMatrixCol);
 	//} // for
 
-	fclose(fp);
+	ret = RESULT_OK;
 
 	return ret;
 }
 
 
-uint32_t getRequestBase(IN const cJSON* pJson, IN const uint32_t nCrc, OUT BaseOption& option)
+int32_t getRequestBaseOption(IN const cJSON* pJson, IN const uint32_t nCrc, OUT BaseOption& option)
 {
-	uint32_t crc = nCrc;
+	int32_t crc = nCrc;
 
 	cJSON* pValue = cJSON_GetObjectItem(pJson, "id");
 	if ((pValue != NULL) && cJSON_IsNumber(pValue)) {
@@ -2609,6 +2827,16 @@ uint32_t getRequestBase(IN const cJSON* pJson, IN const uint32_t nCrc, OUT BaseO
 	}
 	crc = crc32(crc, reinterpret_cast<Bytef*>(&option.binary), sizeof(option.binary));
 
+	pValue = cJSON_GetObjectItem(pJson, "mode");
+	if ((pValue != NULL) && cJSON_IsString(pValue)) {
+		strcpy(option.route_mode, cJSON_GetStringValue(pValue));
+	}
+
+	pValue = cJSON_GetObjectItem(pJson, "route_cost");
+	if ((pValue != NULL) && cJSON_IsString(pValue)) {
+		strcpy(option.route_cost, cJSON_GetStringValue(pValue));
+	}
+
 	pValue = cJSON_GetObjectItem(pJson, "mobility");
 	if ((pValue != NULL) && cJSON_IsNumber(pValue)) {
 		option.mobility = cJSON_GetNumberValue(pValue);
@@ -2675,9 +2903,9 @@ uint32_t getRequestBase(IN const cJSON* pJson, IN const uint32_t nCrc, OUT BaseO
 }
 
 
-uint32_t getRequestOrigin(IN const cJSON* pJson, IN const uint32_t nCrc, OUT vector<Origins>& vtOrigin, OUT vector<Origins>& vtDestination)
+int32_t getRequestOrigin(IN const cJSON* pJson, IN const uint32_t nCrc, OUT vector<Origins>& vtOrigin, OUT vector<Origins>& vtDestination)
 {
-	uint32_t crc = nCrc;
+	int32_t crc = nCrc;
 
 	// origins
 	cJSON* pValue;
@@ -2800,9 +3028,9 @@ uint32_t getRequestOrigin(IN const cJSON* pJson, IN const uint32_t nCrc, OUT vec
 }
 
 
-uint32_t getRequestAdditional(IN const cJSON* pJson, IN const uint32_t nCrc, OUT vector<Origins>& vtOrigin)
+int32_t getRequestAdditional(IN const cJSON* pJson, IN const uint32_t nCrc, OUT vector<Origins>& vtOrigin)
 {
-	uint32_t crc = nCrc;
+	int32_t crc = nCrc;
 
 	// origins
 	int32_t nMaxSize = vtOrigin.size();
@@ -2868,7 +3096,117 @@ uint32_t getRequestAdditional(IN const cJSON* pJson, IN const uint32_t nCrc, OUT
 	return crc;
 }
 
+#if 1
+int32_t getRequestWeightMatrixInfo(IN const cJSON* pJson, IN const char* pszType, IN const char* pszPath, OUT FILE_INFO_RDM& fileInfo)
+//IN const cJSON* pJson, IN const char* pszDataPath, OUT BaseOption& option, OUT vector<Origins>& vtOrigin, OUT vector<vector<stDistMatrix>>& vtDistMatrix, OUT int32_t& typeDistMatrix)
+{
+	int32_t ret = RESULT_FAILED;
 
+	char szBuff[MAX_PATH] = { 0, };
+	cJSON* pValue;
+	cJSON* pRaw = cJSON_GetObjectItem(pJson, pszType);
+	if (pRaw != NULL) {
+		pValue = cJSON_GetObjectItem(pRaw, "type");
+		if ((pValue != NULL) && cJSON_IsString(pValue)) {
+			strcpy(szBuff, cJSON_GetStringValue(pValue));
+			strlower(szBuff);
+			fileInfo.type = szBuff;
+		}
+		pValue = cJSON_GetObjectItem(pRaw, "format");
+		if ((pValue != NULL) && cJSON_IsString(pValue)) {
+			strcpy(szBuff, cJSON_GetStringValue(pValue));
+			strlower(szBuff);
+			fileInfo.format = szBuff;
+		}
+		pValue = cJSON_GetObjectItem(pRaw, "size");
+		if ((pValue != NULL) && cJSON_IsNumber(pValue)) {
+			fileInfo.size = cJSON_GetNumberValue(pValue);
+		} else if ((pValue != NULL) && cJSON_IsString(pValue)) {
+			fileInfo.size = atoi(cJSON_GetStringValue(pValue));
+		}
+		pValue = cJSON_GetObjectItem(pRaw, "name");
+		if ((pValue != NULL) && cJSON_IsString(pValue)) {
+			fileInfo.name = cJSON_GetStringValue(pValue);
+		}
+		pValue = cJSON_GetObjectItem(pRaw, "data");
+		if ((pValue != NULL) && cJSON_IsString(pValue)) {
+			fileInfo.data = cJSON_GetStringValue(pValue);
+		}
+	}
+
+	if (fileInfo.size > 0) {		
+		BYTE* pszBinary = nullptr;
+		size_t sizeRaw = 0;
+
+		if ((fileInfo.type.compare("base64") == 0) && !fileInfo.data.empty()) {
+			// base to binary
+			sizeRaw = fileInfo.data.size();
+			if (sizeRaw > 0) {
+				pszBinary = new BYTE[sizeRaw];
+				sizeRaw = base64toBinary(fileInfo.data.c_str(), fileInfo.data.size(), pszBinary);
+			}
+		} else if ((fileInfo.type.compare("file") == 0) && !fileInfo.name.empty()) {
+			// loading from file
+			string strFilePath = pszPath + fileInfo.name;
+			FILE* fp = fopen(strFilePath.c_str(), "rb");
+			if (fp) {
+				sizeRaw = fileInfo.size;
+
+				size_t sizeRead = 0;
+				fseek(fp, 0, SEEK_END);
+				size_t sizeFile = ftell(fp);
+				fseek(fp, 0, SEEK_SET);
+
+				if (sizeFile > 0 && (sizeFile == fileInfo.size)) {
+					pszBinary = new BYTE[sizeFile];
+					for (; sizeRead - sizeFile > 0;) {
+						sizeRead += fread(pszBinary, 1, sizeFile - sizeRead, fp);
+					}
+				} else {
+					LOG_TRACE(LOG_WARNING, "getRequestWeightMatrixInfo file size not same with req size, %d vs %d", sizeFile, fileInfo.size);
+					return ret;
+				}
+				fclose(fp);
+			} // fp
+		} else {
+			LOG_TRACE(LOG_WARNING, "undefined file type, %s", fileInfo.type.c_str());
+			return ret;
+		}
+
+		
+		if (fileInfo.format.compare("zip") == 0) {
+			// unzip
+			size_t sizeUncomp = fileInfo.size * 1.2;
+			Bytef* pszUncompress = new Bytef[sizeUncomp];
+			int retUnzip = uncompress((Bytef*)pszUncompress, (uLongf*)&sizeUncomp, (Bytef*)pszBinary, sizeRaw);
+			if (retUnzip == Z_OK) {
+				if (fileInfo.size != sizeUncomp) {
+					LOG_TRACE(LOG_WARNING, "received binary data size not match with uncompressed data size, recv:%d vs uncomp:%d", fileInfo.size, sizeUncomp);
+				}
+			} else {
+				LOG_TRACE(LOG_WARNING, "failed, uncompress rdm data, recv:%d vs uncomp:%d", fileInfo.size, sizeUncomp);
+			}
+
+			if (pszBinary && (sizeUncomp > 0)) {
+				fileInfo.data.clear();
+				fileInfo.data.assign(reinterpret_cast<const char*>(pszBinary), sizeUncomp);
+			}
+		} else if (fileInfo.format.compare("bin") == 0) {
+			// copy
+			fileInfo.data.clear();
+			fileInfo.data.assign(reinterpret_cast<const char*>(pszBinary), fileInfo.size);
+		} else {
+			LOG_TRACE(LOG_WARNING, "undefined file type, %s", fileInfo.type.c_str());
+		}
+
+		SAFE_DELETE_ARR(pszBinary);
+
+		ret = RESULT_OK;
+	}
+
+	return ret;
+}
+#else
 uint32_t getRequestDistanceMatrix(IN const cJSON* pJson, IN const char* pszDataPath, OUT BaseOption& option, OUT vector<Origins>& vtOrigin, OUT vector<vector<stDistMatrix>>& vtDistMatrix, OUT int32_t& typeDistMatrix)
 {
 	char szType[32] = { 0, };
@@ -2990,85 +3328,12 @@ uint32_t getRequestDistanceMatrix(IN const cJSON* pJson, IN const char* pszDataP
 
 	return vtDistMatrix.size();
 }
+#endif
 
 
-uint32_t getRequestDistanceMatrixRouteLine(IN const cJSON* pJson, OUT string& strFileName, OUT size_t& sizeFile)
+int32_t getRequestTspOption(const cJSON* pJson, const uint32_t nCrc, OUT TspOption& tspOpt)
 {
-	char szType[32] = { 0, };
-	char szForm[32] = { 0, };
-	uint32_t sizeData = 0;
-	string strData;
-
-	cJSON* pValue;
-	cJSON* pRaw = cJSON_GetObjectItem(pJson, "rln");
-	if (pRaw != NULL) {
-		pValue = cJSON_GetObjectItem(pRaw, "type");
-		if ((pValue != NULL) && cJSON_IsString(pValue)) {
-			strcpy(szType, cJSON_GetStringValue(pValue));
-			strlower(szType);
-		}
-		pValue = cJSON_GetObjectItem(pRaw, "form");
-		if ((pValue != NULL) && cJSON_IsString(pValue)) {
-			strcpy(szForm, cJSON_GetStringValue(pValue));
-			strlower(szForm);
-		}
-		pValue = cJSON_GetObjectItem(pRaw, "size");
-		if ((pValue != NULL) && cJSON_IsNumber(pValue)) {
-			sizeData = cJSON_GetNumberValue(pValue);
-		} else if ((pValue != NULL) && cJSON_IsString(pValue)) {
-			sizeData = atoi(cJSON_GetStringValue(pValue));
-		}
-		pValue = cJSON_GetObjectItem(pRaw, "data");
-		if ((pValue != NULL) && cJSON_IsString(pValue)) {
-			strData = cJSON_GetStringValue(pValue);
-		}
-	}
-
-	if ((sizeData > 0) && !strData.empty()) {		
-		// base to binary
-		//int sizeBin = Base64toBinary(strData.c_str(), strData.size(), nullptr);
-		int sizeBin = strData.size();
-		if (sizeBin > 0) {
-			if (strcmp(szForm, "zip") == 0) {
-				BYTE* pszBinary = new BYTE[sizeBin];
-				sizeBin = base64toBinary(strData.c_str(), strData.size(), pszBinary);
-
-				int sizeUncomp = sizeData * 1.2;
-				Bytef* pszUncompress = new Bytef[sizeUncomp];
-				int retUnzip = uncompress((Bytef*)pszUncompress, (uLongf*)&sizeUncomp, (Bytef*)pszBinary, sizeBin);
-				if (retUnzip == Z_OK) {
-					if (sizeData != sizeUncomp) {
-						LOG_TRACE(LOG_WARNING, "received binary data size not match with uncompressed data size, recv:%d vs uncomp:%d", sizeData, sizeUncomp);
-					}
-				} else {
-					LOG_TRACE(LOG_WARNING, "failed, uncompress rdm data, recv:%d vs uncomp:%d", sizeData, sizeUncomp);
-				}
-
-				if (pszBinary) {
-					SAFE_DELETE_ARR(pszBinary);
-				}
-				pszBinary = pszUncompress;
-
-				////////
-				// do it
-
-				if (pszBinary) {
-					SAFE_DELETE_ARR(pszBinary);
-				}
-			} else if (strcmp(szType, "file") == 0) {
-				strFileName = strData;
-				sizeFile = sizeData;
-			}
-		}
-	}
-
-	return RESULT_OK;
-}
-
-
-uint32_t getRequestTsp(const cJSON* pJson, const uint32_t nCrc, OUT TspOption& tspOpt)
-{
-	uint32_t crc = nCrc;
+	int32_t crc = nCrc;
 
 	// tsp
 	cJSON* pValue;
@@ -3123,9 +3388,9 @@ uint32_t getRequestTsp(const cJSON* pJson, const uint32_t nCrc, OUT TspOption& t
 }
 
 
-uint32_t getRequestCluster(const cJSON* pJson, const uint32_t nCrc, OUT ClusteringOption& clustOpt)
+int32_t getRequestCluster(const cJSON* pJson, const uint32_t nCrc, OUT ClusteringOption& clustOpt)
 {
-	uint32_t crc = nCrc;
+	int32_t crc = nCrc;
 
 	// cluster
 	cJSON* pValue;
@@ -3271,46 +3536,119 @@ uint32_t getRequestCluster(const cJSON* pJson, const uint32_t nCrc, OUT Clusteri
 }
 
 
-uint32_t CTMSManager::ParsingRequestWeightMatrix(IN const char* szRequest, OUT BaseOption& option, OUT vector<Origins>& vtOrigin, OUT vector<Origins>& vtDestination, OUT vector<vector<stDistMatrix>>& vtDistanceMatrix, OUT int32_t& typeDistMatrix)
+int32_t getRequestGroupOption(const cJSON* pJson, const uint32_t nCrc, OUT ClusteringOption& clustOpt)
 {
-	uint32_t crc = 0;
+	int32_t crc = nCrc;
 
-#if defined(USE_CJSON)
-	cJSON* root = cJSON_Parse(szRequest);
-	if (root != NULL) {
-		// check rdm field
-		if (getRequestDistanceMatrix(root, m_pDataMgr->GetDataPath(), option, vtOrigin, vtDistanceMatrix, typeDistMatrix) <= 0) {
-			// base
-			crc = getRequestBase(root, crc, option);
-
-			// origin
-			crc = getRequestOrigin(root, crc, vtOrigin, vtDestination);
+	// cluster
+	cJSON* pValue;
+	cJSON* pClust = cJSON_GetObjectItem(pJson, "clust");
+	if (pClust != NULL) {
+		pValue = cJSON_GetObjectItem(pClust, "seed");
+		if ((pValue != NULL) && cJSON_IsNumber(pValue)) {
+			clustOpt.seed = cJSON_GetNumberValue(pValue);
+		} else if ((pValue != NULL) && cJSON_IsString(pValue)) {
+			clustOpt.seed = atoi(cJSON_GetStringValue(pValue));
 		}
-			
-		cJSON_Delete(root);
-	} // cJSON
-#endif // #if defined(USE_CJSON)
+
+		pValue = cJSON_GetObjectItem(pClust, "compare_type");
+		if ((pValue != NULL) && cJSON_IsNumber(pValue)) {
+			clustOpt.compareType = cJSON_GetNumberValue(pValue);
+		} else if ((pValue != NULL) && cJSON_IsString(pValue)) {
+			clustOpt.compareType = atoi(cJSON_GetStringValue(pValue));
+		}
+
+		pValue = cJSON_GetObjectItem(pClust, "algorithm");
+		if ((pValue != NULL) && cJSON_IsNumber(pValue)) {
+			clustOpt.algorithm = cJSON_GetNumberValue(pValue);
+		} else if ((pValue != NULL) && cJSON_IsString(pValue)) {
+			clustOpt.algorithm = atoi(cJSON_GetStringValue(pValue));
+		}
+	} else {
+		clustOpt.seed = 10006;
+		clustOpt.compareType = TYPE_TSP_VALUE_DIST;
+		clustOpt.algorithm = TYPE_TSP_ALGORITHM_TSP;
+	}
+
+
+	// option
+	cJSON* pOption = cJSON_GetObjectItem(pJson, "option");
+	if (pOption != NULL) {
+		pValue = cJSON_GetObjectItem(pOption, "division_type"); // 분배 방식
+		if ((pValue != NULL) && cJSON_IsNumber(pValue)) {
+			clustOpt.bylink.divisionType = cJSON_GetNumberValue(pValue);
+		} else if ((pValue != NULL) && cJSON_IsString(pValue)) {
+			clustOpt.bylink.divisionType = atoi(cJSON_GetStringValue(pValue));
+		}
+
+		pValue = cJSON_GetObjectItem(pClust, "limit_length");
+		if ((pValue != NULL) && cJSON_IsNumber(pValue)) {
+			clustOpt.bylink.limitLength = cJSON_GetNumberValue(pValue);
+		} else if ((pValue != NULL) && cJSON_IsString(pValue)) {
+			clustOpt.bylink.limitLength = atoi(cJSON_GetStringValue(pValue));
+		}
+	}
 
 	return crc;
 }
 
 
-uint32_t CTMSManager::ParsingRequestWeightMatrixRouteLine(IN const char* szRequest, OUT string& strFilePath, OUT size_t& sizeFile, OUT vector<vector<FileIndex>>& vtPathMatrixIndex)
+int32_t CTMSManager::ParsingRequestBaseOption(IN const char* szRequest, OUT BaseOption& option)
 {
-	uint32_t ret = RESULT_OK;
+	int32_t crc = 0;
 
 #if defined(USE_CJSON)
 	cJSON* root = cJSON_Parse(szRequest);
 	if (root != NULL) {
-		// check rdm field
-		string strFileName;
-		if (getRequestDistanceMatrixRouteLine(root, strFileName, sizeFile) <= 0) {
-			// path matrix route line file path
-			strFilePath = m_pDataMgr->GetDataPath();
-			strFilePath.append("/usr/rdm/");
-			strFilePath.append(strFileName);
+		crc = getRequestBaseOption(root, crc, option);
 
-			LoadWeightMatrixRouteLine(strFilePath.c_str(), sizeFile, vtPathMatrixIndex);
+		cJSON_Delete(root);
+	}	
+#endif
+
+	return crc;
+}
+
+
+int32_t CTMSManager::ParsingRequestRoute(IN const char* szRequest, OUT BaseOption& baseOpt, OUT vector<Origins>& vtOrigin)
+{
+	int32_t ret = RESULT_FAILED;
+
+	int32_t crc = 0;
+
+#if defined(USE_CJSON)
+	cJSON* root = cJSON_Parse(szRequest);
+	if (root != NULL) {
+		crc = getRequestBaseOption(root, crc, baseOpt);
+
+		vector<Origins> vtDestination;
+		crc = getRequestOrigin(root, crc, vtOrigin, vtDestination);
+
+		crc = getRequestAdditional(root, crc, vtOrigin);
+
+		cJSON_Delete(root);
+	}
+#endif
+
+	ret = RESULT_OK;
+
+	return ret;
+}
+
+
+int32_t CTMSManager::ParsingRequestWeightMatrix(IN const char* szRequest, OUT BaseOption& option, OUT vector<Origins>& vtOrigin, OUT vector<Origins>& vtDestination, OUT vector<vector<stDistMatrix>>& vtDistanceMatrix, OUT int32_t& typeDistMatrix)
+{
+	int32_t ret = RESULT_FAILED;
+
+#if defined(USE_CJSON)
+	cJSON* root = cJSON_Parse(szRequest);
+	if (root != NULL) {
+		// check origin
+		int crc = getRequestBaseOption(root, 0, option);
+		crc = getRequestOrigin(root, crc, vtOrigin, vtDestination);
+
+		if (!vtOrigin.empty()) {
+			ret = RESULT_OK;
 		}
 
 		cJSON_Delete(root);
@@ -3321,24 +3659,74 @@ uint32_t CTMSManager::ParsingRequestWeightMatrixRouteLine(IN const char* szReque
 }
 
 
-uint32_t CTMSManager::ParsingRequestBestway(IN const char* szRequest, OUT TspOption& tspOpt, OUT vector<Origins>& vtOrigin)
+int32_t CTMSManager::ParsingRequestWeightMatrixRoute(IN const char* szRequest, OUT BaseOption& option, OUT vector<Origins>& vtOrigin, OUT vector<Origins>& vtDestination, OUT vector<vector<stDistMatrix>>& vtDistanceMatrix/*, OUT int32_t& typeDistMatrix*/)
 {
-	uint32_t crc = 0;
+	int32_t ret = RESULT_FAILED;
+
+#if defined(USE_CJSON)
+	cJSON* root = cJSON_Parse(szRequest);
+	if (root != NULL) {
+		// check rdm field
+		FILE_INFO_RDM fileInfo;
+		string strPath = m_pDataMgr->GetDataPath() + string("/usr/rdm/");
+		if (getRequestWeightMatrixInfo(root, "rdm", strPath.c_str(), fileInfo) == RESULT_OK) {
+			ret = readWeightMatrix((BYTE*)fileInfo.data.c_str(), fileInfo.size, option, vtOrigin, vtDistanceMatrix);
+		}
+
+		cJSON_Delete(root);
+	} // cJSON
+#endif // #if defined(USE_CJSON)
+
+	return ret;
+}
+
+
+int32_t CTMSManager::ParsingRequestWeightMatrixRouteLine(IN const char* szRequest, OUT string& fileName, OUT size_t& fileSize, OUT vector<vector<FileIndex>>& vtPathMatrixIndex)
+{
+	int32_t ret = RESULT_FAILED;
+
+#if defined(USE_CJSON)
+	cJSON* root = cJSON_Parse(szRequest);
+	if (root != NULL) {
+		// check rdm field
+		FILE_INFO_RDM fileInfo;
+		string strPath = m_pDataMgr->GetDataPath() + string("/usr/rdm/");
+		if (getRequestWeightMatrixInfo(root, "rln", strPath.c_str(), fileInfo) == RESULT_OK) {
+			ret = readWeightMatrixRouteLine((BYTE*)fileInfo.data.c_str(), fileInfo.size, vtPathMatrixIndex);
+
+			if (ret == RESULT_OK) {
+				fileName = fileInfo.name;
+				fileSize = fileInfo.size;
+			}
+		}
+
+		cJSON_Delete(root);
+	} // cJSON
+#endif // #if defined(USE_CJSON)
+
+	return ret;
+}
+
+
+int32_t CTMSManager::ParsingRequestBestway(IN const char* szRequest, OUT TspOption& tspOpt, OUT vector<Origins>& vtOrigin)
+{
+	int32_t crc = 0;
 
 #if defined(USE_CJSON)
 	cJSON* root = cJSON_Parse(szRequest);
 	if (root != NULL) {
 		if (vtOrigin.empty()) {
 			// base
-			crc = getRequestBase(root, crc, tspOpt.baseOption);
+			crc = getRequestBaseOption(root, crc, tspOpt.baseOption);
 
 			// origins
 			vector<Origins> vtDestination;
 			crc = getRequestOrigin(root, crc, vtOrigin, vtDestination);
 		}
+
 		// tsp
 		tspOpt.geneSize = vtOrigin.size();
-		crc = getRequestTsp(root, crc, tspOpt);
+		crc = getRequestTspOption(root, crc, tspOpt);
 
 		cJSON_Delete(root);
 	} // cJSON
@@ -3348,16 +3736,16 @@ uint32_t CTMSManager::ParsingRequestBestway(IN const char* szRequest, OUT TspOpt
 }
 
 
-uint32_t CTMSManager::ParsingRequestCluster(IN const char* szRequest, OUT ClusteringOption& clustOpt, OUT vector<Origins>& vtOrigin)
+int32_t CTMSManager::ParsingRequestCluster(IN const char* szRequest, OUT ClusteringOption& clustOpt, OUT vector<Origins>& vtOrigin)
 {
-	uint32_t crc = 0;
+	int32_t crc = 0;
 
 #if defined(USE_CJSON)
 	cJSON* root = cJSON_Parse(szRequest);
 	if (root != NULL) {
 		if (vtOrigin.empty()) {
 			// base
-			crc = getRequestBase(root, crc, clustOpt.tspOption.baseOption);
+			crc = getRequestBaseOption(root, crc, clustOpt.tspOption.baseOption);
 
 			// origins
 			vector<Origins> vtDestination;
@@ -3365,7 +3753,7 @@ uint32_t CTMSManager::ParsingRequestCluster(IN const char* szRequest, OUT Cluste
 		}
 
 		// tsp
-		crc = getRequestTsp(root, crc, clustOpt.tspOption);
+		crc = getRequestTspOption(root, crc, clustOpt.tspOption);
 
 		// cluster
 		crc = getRequestCluster(root, crc, clustOpt);
@@ -3383,74 +3771,106 @@ uint32_t CTMSManager::ParsingRequestCluster(IN const char* szRequest, OUT Cluste
 }
 
 
-uint32_t CTMSManager::LoadWeightMatrix(IN const char* szFileName, IN const int cntItem, IN const int sizeItem, IN const uint32_t crc, OUT BaseOption& option, OUT vector<Origins>& vtOrigin, OUT vector<vector<stDistMatrix>>& vtDistMatrix)
+int32_t CTMSManager::ParsingRequestGroup(IN const char* szRequest, OUT ClusteringOption& clustOpt, OUT vector<Origins>& vtOrigin)
 {
-	uint32_t ret = -1;
+	int32_t crc = 0;
 
-	if (szFileName == nullptr) {
-		return ret;
-	}
+#if defined(USE_CJSON)
+	cJSON* root = cJSON_Parse(szRequest);
+	if (root != NULL) {
+		// base
+		crc = getRequestBaseOption(root, crc, clustOpt.tspOption.baseOption);
 
-	FILE* fp = fopen(szFileName, "rb");
-	if (fp) {
-		size_t sizeRead = 0;
-		size_t sizeFile = fseek(fp, 0, SEEK_END);
-		fseek(fp, 0, SEEK_SET);
-
-		BYTE* pszBinary = new BYTE[sizeFile];
-		for (; sizeRead - sizeFile > 0;) {
-			sizeRead += fread(pszBinary, 1, sizeFile - sizeRead, fp);
-		}
-		fclose(fp);
-
-		if (sizeRead == sizeFile) {
-			ret = readWeightMatrix(pszBinary, sizeFile, option, vtOrigin, vtDistMatrix);
+		if (vtOrigin.empty()) {
+			// origins
+			vector<Origins> vtDestination;
+			crc = getRequestOrigin(root, crc, vtOrigin, vtDestination);
 		}
 
-		if (pszBinary) {
-			delete[] pszBinary;
-		}
+		// tsp
+		crc = getRequestTspOption(root, crc, clustOpt.tspOption);
 
-		fclose(fp);
-	} // fp
+		// group
+		crc = getRequestGroupOption(root, crc, clustOpt);
 
-	return ret;
+		cJSON_Delete(root);
+	} // cJSON
+#endif // #if defined(USE_CJSON)
+
+	return crc;
 }
 
 
-uint32_t CTMSManager::LoadWeightMatrixRouteLine(IN const char* szFileName, IN const int sizeFile, OUT vector<vector<FileIndex>>& vtPathMatrixIndex)
-{
-	uint32_t ret = -1;
+//int32_t CTMSManager::LoadWeightMatrix(IN const char* szFileName, IN const size_t sizeFile, OUT BaseOption& option, OUT vector<Origins>& vtOrigin, OUT vector<vector<stDistMatrix>>& vtDistMatrix)
+//{
+//	int32_t ret = -1;
+//
+//	if (szFileName == nullptr) {
+//		return ret;
+//	}
+//
+//	FILE* fp = fopen(szFileName, "rb");
+//	if (fp) {
+//		size_t sizeRead = 0;
+//		size_t sizeFile = fseek(fp, 0, SEEK_END);
+//		fseek(fp, 0, SEEK_SET);
+//
+//		BYTE* pszBinary = new BYTE[sizeFile];
+//		for (; sizeRead - sizeFile > 0;) {
+//			sizeRead += fread(pszBinary, 1, sizeFile - sizeRead, fp);
+//		}
+//		fclose(fp);
+//
+//		if (sizeRead == sizeFile) {
+//			ret = readWeightMatrix(pszBinary, sizeFile, option, vtOrigin, vtDistMatrix);
+//		}
+//
+//		if (pszBinary) {
+//			SAFE_DELETE_ARR(pszBinary);
+//		}
+//
+//		fclose(fp);
+//	} // fp
+//
+//	return ret;
+//}
+//
+//
+//int32_t CTMSManager::LoadWeightMatrixRouteLine(IN const char* szFileName, IN const size_t sizeFile, OUT vector<vector<FileIndex>>& vtPathMatrixIndex)
+//{
+//	int32_t ret = RESULT_FAILED;
+//
+//	if (szFileName == nullptr || strlen(szFileName) <=0 || sizeFile == 0) {
+//		return ret;
+//	}
+//
+//	FILE* fp = fopen(szFileName, "rb");
+//	if (fp) {
+//		size_t sizeRead = 0;
+//		fseek(fp, 0, SEEK_END);
+//		size_t szFile = ftell(fp);
+//		fseek(fp, 0, SEEK_SET);
+//
+//		if (szFile == sizeFile) {			
+//			ret = readWeightMatrixRouteLine(fp, sizeFile, vtPathMatrixIndex);
+//		}
+//
+//		fclose(fp);
+//	} // fp
+//
+//	return ret;
+//}
 
-	if (szFileName == nullptr) {
+
+int32_t CTMSManager::SaveWeightMatrix(IN const char* szFileName, IN const BaseOption* pOption, IN const int cntItem, IN const int sizeItem, IN const uint32_t crc, IN const vector<Origins>& vtOrigin, IN const vector<vector<stDistMatrix>>& vtDistMatrix)
+{
+	int32_t ret = RESULT_FAILED;
+
+	if ((szFileName == nullptr || strlen(szFileName) <= 0) || vtDistMatrix.empty()) {
 		return ret;
 	}
 
-	FILE* fp = fopen(szFileName, "rb");
-	if (fp) {
-		size_t sizeRead = 0;
-		fseek(fp, 0, SEEK_END);
-		size_t szFile = ftell(fp);
-		fseek(fp, 0, SEEK_SET);
-
-		if (szFile == sizeFile) {
-			
-			ret = readWeightMatrixRouteLine(fp, sizeFile, vtPathMatrixIndex);
-		}
-
-		fclose(fp);
-	} // fp
-
-	return ret;
-}
-
-uint32_t CTMSManager::SaveWeightMatrix(IN const char* szFileName, IN const BaseOption* pOption, IN const int cntItem, IN const int sizeItem, IN const uint32_t crc, IN const vector<Origins>& vtOrigin, IN const vector<vector<stDistMatrix>>& vtDistMatrix)
-{
-	uint32_t ret = RESULT_FAILED;
-
-	if (szFileName == nullptr || vtDistMatrix.empty()) {
-		return ret;
-	}
+	checkDirectory(szFileName);
 
 	FILE* fp = fopen(szFileName, "wb");
 	if (!fp) {
@@ -3503,13 +3923,19 @@ uint32_t CTMSManager::SaveWeightMatrix(IN const char* szFileName, IN const BaseO
 }
 
 
-uint32_t CTMSManager::SaveWeightMatrixRouteLine(IN const char* szFileName, IN const vector<vector<stPathMatrix>>& vtPathMatrix)
+int32_t CTMSManager::SaveWeightMatrixRouteLine(IN const char* szFileName, IN const vector<vector<stPathMatrix>>& vtPathMatrix)
 {
-	uint32_t ret = ROUTE_RESULT_SUCCESS;
+	int32_t ret = RESULT_FAILED;
+
+	if (szFileName == nullptr || strlen(szFileName) <= 0) {
+		return ret;
+	}
+
+	checkDirectory(szFileName);
 
 	FILE* fp = fopen(szFileName, "wb");
 	if (!fp) {
-		return -1;
+		return ret;
 	}
 
 	int nCount = vtPathMatrix.size();
@@ -3592,16 +4018,18 @@ uint32_t CTMSManager::SaveWeightMatrixRouteLine(IN const char* szFileName, IN co
 
 	fclose(fp);
 
+	ret = RESULT_OK;
+
 	return ret;
 }
 
 
 int32_t GetMatrixPathVertex(IN const stPathMatrix* pMatrix, IN CDataManager* pDataMgr, OUT vector<SPoint>& vtLines)
 {
-	int32_t ret = 0;
+	int32_t ret = RESULT_FAILED;
 
 	if (pMatrix == nullptr || pDataMgr == nullptr) {
-		return -1;
+		return ret;
 	}
 
 	if (!pMatrix->vtRoutePath.empty()) {
@@ -3676,3 +4104,4 @@ int32_t GetMatrixPathVertex(IN const stPathMatrix* pMatrix, IN CDataManager* pDa
 
 	return ret;
 }
+

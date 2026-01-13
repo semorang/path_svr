@@ -2228,14 +2228,17 @@ int32_t checkEntType(IN const double dwLng, IN const double dwLat, IN const stEn
 			stEntryPointInfo entInfo = { 0, };
 
 			entInfo.nAttribute = pEnt[ii].ent_code;
+			entInfo.nAngle = pEnt[ii].angle;
+			entInfo.linkLeft = pEnt[ii].link_left;
+			entInfo.dwDist = dwDist;
 			entInfo.x = pEnt[ii].x;
 			entInfo.y = pEnt[ii].y;
-			entInfo.dwDist = dwDist;
-			entInfo.nAngle = pEnt[ii].angle;
 
 			if (nEntType == TYPE_OPTIMAL_ENTRANCE_MOUNTAIN) {
 				entInfo.nID_1 = pEnt[ii].mnt.fnode_id;
 				entInfo.nID_2 = pEnt[ii].mnt.wnode_id;
+			} else {
+				entInfo.bylink.linkId = pEnt[ii].link_id;
 			}
 
 			vtEntInfo.emplace_back(entInfo);
@@ -2292,7 +2295,7 @@ stLinkInfo * CDataManager::GetNearRoadByPoint(IN const double lng, IN const doub
 	double retDist = INT_MAX;
 	int32_t idxLinkVtx = -1;
 	const SPoint reqPos = {lng, lat};
-	SPoint retPos = {0,};
+	SPoint retPos{};
 	int32_t nDir = 0;
 	
 	static const double LaneLowDist = 3.0; // 60 미만 차선 기본 거리 미터
@@ -2316,11 +2319,12 @@ stLinkInfo * CDataManager::GetNearRoadByPoint(IN const double lng, IN const doub
 		// 근접 링크 좌표에서 일정거리 띄워진 좌표
 		SPoint newRetPos = retPos;
 		
+		bool isLeft = false;
+
 		// 분리도로, 5:일방통행_정, 6 : 일방통행_역 
 		if ( (pLink->veh.link_type == 2) 
 			//&& ((pLink->veh.pass_code == 5) || (pLink->veh.pass_code == 6))
 			&& (idxLinkVtx >= 0 && idxLinkVtx < pLink->getVertexCount() - 1) ) {
-			bool isLeft = false;
 
 			nDir = (pLink->veh.pass_code == 5) ? 1 : 2;
 
@@ -2352,7 +2356,7 @@ stLinkInfo * CDataManager::GetNearRoadByPoint(IN const double lng, IN const doub
 				}
 			}
 		} else { // if (pLink->veh.link_type == 1) { // 비분리도로일경우 {
-			bool isLeft = isLeftSide(pLink->getVertex(idxLinkVtx), pLink->getVertex(idxLinkVtx + 1), &reqPos);
+			isLeft = isLeftSide(pLink->getVertex(idxLinkVtx), pLink->getVertex(idxLinkVtx + 1), &reqPos);
 			if (isLeft) { // 양방향 왼쪽이면 역
 				nDir = 2; 
 			} else { // 양방향 오른쪽이면 정
@@ -2384,6 +2388,8 @@ stLinkInfo * CDataManager::GetNearRoadByPoint(IN const double lng, IN const doub
 		}
 
 		entInfo.nAngle = getAngle(pLink, nDir, idxLinkVtx);
+		entInfo.linkLeft = isLeft;
+		entInfo.bylink.linkId = pLink->link_id;		
 
 		// 새로운 지점 주변에 원래의 도로 말고, 또다른 가까운 도로가 있다면 원래의 도로에서 도로너비만큼 띄우지 말고, 최소의 너비만 띄운 좌표로 사용하자
 		// 근접 링크 좌표에서 일정거리 띄워진 좌표
@@ -2436,13 +2442,13 @@ stLinkInfo * CDataManager::GetNearRoadByPoint(IN const double lng, IN const doub
 }
 
 
-int32_t CDataManager::GetOptimalPointDataByPoint(IN const double lng, IN const double lat, OUT stOptimalPointInfo* pOptInfo, IN const int32_t nEntType, IN const int32_t nReqCount, IN const int32_t nMatchType, IN const int32_t nLinkDataType, IN const int32_t nSubOption)
+int32_t CDataManager::GetOptimalPointDataByPoint(OUT stOptimalPointInfo* pOptInfo, IN const double lng, IN const double lat, IN const stReqOptimal& reqOpt, IN const int32_t nMatchType, IN const int32_t nLinkDataType)
 {
 	int32_t cntRet = 0;
-	stReqOptimal reqOpt;
-	reqOpt.x = lng;
-	reqOpt.y = lat;
-	reqOpt.typeAll = nEntType;
+	//stReqOptimal reqOpt;
+	//reqOpt.x = lng;
+	//reqOpt.y = lat;
+	//reqOpt.typeAll = nEntType;
 
 	if (pOptInfo != nullptr)
 	{
@@ -2495,22 +2501,21 @@ int32_t CDataManager::GetOptimalPointDataByPoint(IN const double lng, IN const d
 					// nEntType, 입구점 타입 // 0:알아서, 1: 차량 입구점, 2: 택시 승하차 지점(건물), 3: 택시 승하차 지점(건물군), 4: 택배 차량 하차 거점, 5: 보행자 입구점, 	6: 배달 하차점(차량, 오토바이), 7: 배달 하차점(자전거, 도보)
 					// 1st
 					if (reqOpt.type1st != 0) {
-						cntRet += checkEntType(lng, lat, pEnt, cntEnt, nMaxDist, reqOpt.type1st, 1, vtEntInfo);
+						cntRet += checkEntType(lng, lat, pEnt, cntEnt, nMaxDist, reqOpt.type1st, reqOpt.sortOption, vtEntInfo);
 					}
 					// 2nd
 					if (cntRet <= 0 && reqOpt.type2nd != 0) {
-						cntRet += checkEntType(lng, lat, pEnt, cntEnt, nMaxDist, reqOpt.type2nd, 1, vtEntInfo);
+						cntRet += checkEntType(lng, lat, pEnt, cntEnt, nMaxDist, reqOpt.type2nd, reqOpt.sortOption, vtEntInfo);
 					}
 					// 3rd
 					if (cntRet <= 0 && reqOpt.type3rd != 0) {
-						cntRet += checkEntType(lng, lat, pEnt, cntEnt, nMaxDist, reqOpt.type3rd, 1, vtEntInfo);
+						cntRet += checkEntType(lng, lat, pEnt, cntEnt, nMaxDist, reqOpt.type3rd, reqOpt.sortOption, vtEntInfo);
 					}
 					// 4th
 					if (cntRet <= 0 && reqOpt.type4th != 0) {
-						cntRet += checkEntType(lng, lat, pEnt, cntEnt, nMaxDist, reqOpt.type4th, 1, vtEntInfo);
+						cntRet += checkEntType(lng, lat, pEnt, cntEnt, nMaxDist, reqOpt.type4th, reqOpt.sortOption, vtEntInfo);
 					}
 				}
-
 
 				// // 일부 건물입구점이 도로가 아닌 건물 폴리곤에 접하는 경우, 인접 도로로 좌표 변경
 				if (cntRet == 1) {
@@ -2542,20 +2547,13 @@ int32_t CDataManager::GetOptimalPointDataByPoint(IN const double lng, IN const d
 				} else if (cntRet > 1) {
 					pOptInfo->nType = TYPE_ENT_BUILDING;
 				} else {
-					// 빌딩에서 아무것도 얻지 못하면, 단지에서 얻어보자(단, 단지 타입을 요청했을 경우)
-					if ((reqOpt.typeAll == 0) || (reqOpt.type1st == 3) || (reqOpt.type2nd == 3) || (reqOpt.type3rd == 3) || (reqOpt.type4th == 3)) {
-						if ((pPoly = GetPolygonDataByPoint(lng, lat, TYPE_ENT_COMPLEX)) != nullptr) {
-							// 폴리곤 정보 복사
-							pPolygon = pPoly->getAttributeVertex();
-							pEnt = pPoly->getAttributeEntrance();
-							pLinkKey = pPoly->getAttributeLink();
-
-							cntEnt = pPoly->getAttributeCount(TYPE_POLYGON_DATA_ATTR_ENT);
-							cntLinkKey = pPoly->getAttributeCount(TYPE_POLYGON_DATA_ATTR_LINK);
-
-							pOptInfo->id = pPoly->poly_id.llid;
-							pOptInfo->vtPolygon.assign(&pPolygon[0], &pPolygon[pPoly->getAttributeCount(TYPE_POLYGON_DATA_ATTR_VTX)]);
-						}
+					// 빌딩에서 아무것도 얻지 못하면, 다음 스텝에서 단지정보를 확인하자 (단, 빌딩 타입 이외 요청했을 경우)
+					if ((reqOpt.typeAll == 0) || 
+						(reqOpt.type1st != TYPE_OPTIMAL_ENTRANCE_BUILDING_TAXI) || 
+						(reqOpt.type2nd != TYPE_OPTIMAL_ENTRANCE_BUILDING_TAXI) ||
+						(reqOpt.type3rd != TYPE_OPTIMAL_ENTRANCE_BUILDING_TAXI) ||
+						(reqOpt.type4th != TYPE_OPTIMAL_ENTRANCE_BUILDING_TAXI)) {
+						pPoly = GetPolygonDataByPoint(lng, lat, TYPE_ENT_COMPLEX);
 					}
 				}
 			}
@@ -2583,25 +2581,27 @@ int32_t CDataManager::GetOptimalPointDataByPoint(IN const double lng, IN const d
 				}
 				else
 				{
+					// TMS에서 단지내 입구점을 가까운 순서대로 하면 링크 ID로 진행되는 그룹핑이 분산될 수 있으니 정렬은 옵션으로 제공 받아야 할 수도 있음. 2025-12-05
+
 					// 최대 4번의 스텝까지 허용
 					// nEntType, 차량 입구점 타입 // 0:알아서, 1: 차량 입구점, 2: 택시 승하차 지점(건물), 3: 택시 승하차 지점(건물군), 4: 택배 차량 하차 거점, 5: 보행자 입구점, 	6: 배달 하차점(차량, 오토바이), 7: 배달 하차점(자전거, 도보)
 					// nEntType, 숲길 입구점 타입 // 0:알아서, 1: 숲길 입구점
 
 					// 1st
 					if (reqOpt.type1st != 0) {
-						cntRet += checkEntType(lng, lat, pEnt, cntEnt, nMaxDist, reqOpt.type1st, 1, vtEntInfo);
-					}					
+						cntRet += checkEntType(lng, lat, pEnt, cntEnt, nMaxDist, reqOpt.type1st, reqOpt.sortOption, vtEntInfo);
+					}
 					// 2nd
 					if (cntRet <= 0 && reqOpt.type2nd != 0) {
-						cntRet += checkEntType(lng, lat, pEnt, cntEnt, nMaxDist, reqOpt.type2nd, 1, vtEntInfo);
+						cntRet += checkEntType(lng, lat, pEnt, cntEnt, nMaxDist, reqOpt.type2nd, reqOpt.sortOption, vtEntInfo);
 					}
 					// 3rd
 					if (cntRet <= 0 && reqOpt.type3rd != 0) {
-						cntRet += checkEntType(lng, lat, pEnt, cntEnt, nMaxDist, reqOpt.type3rd, 1, vtEntInfo);
+						cntRet += checkEntType(lng, lat, pEnt, cntEnt, nMaxDist, reqOpt.type3rd, reqOpt.sortOption, vtEntInfo);
 					}
 					// 4th
 					if (cntRet <= 0 && reqOpt.type4th != 0) {
-						cntRet += checkEntType(lng, lat, pEnt, cntEnt, nMaxDist, reqOpt.type4th, 1, vtEntInfo);
+						cntRet += checkEntType(lng, lat, pEnt, cntEnt, nMaxDist, reqOpt.type4th, reqOpt.sortOption, vtEntInfo);
 					}
 				}
 
@@ -2652,6 +2652,8 @@ int32_t CDataManager::GetOptimalPointDataByPoint(IN const double lng, IN const d
 								nDir = 1;
 							}
 							entInfo.nAngle = getAngle(pLink, nDir, idxVtx);
+							entInfo.linkLeft = isLeft;
+							entInfo.bylink.linkId = pLink->link_id;
 						}
 					}
 				} // for
@@ -2667,11 +2669,11 @@ int32_t CDataManager::GetOptimalPointDataByPoint(IN const double lng, IN const d
 			}
 		}
 		
-		// 지하철입구점, 
-		if (reqOpt.typeAll != TYPE_OPTIMAL_ENTRANCE_SUBWAY) {
+		// 주변 가까운 도로 정보
+		if (reqOpt.typeAll != TYPE_OPTIMAL_ENTRANCE_SUBWAY) { // 지하철입구점 요청이 아닐 때
 			stEntryPointInfo entInfo = { 0, };
 			stLinkInfo * pNearRoad = nullptr;
-			SPoint retPos = { 0.f, };
+			SPoint retPos{};
 			double retDist = 0.f;
 
 			// 도로 사이드에 위치시킬 최적 지점 이격 거리
@@ -2689,12 +2691,12 @@ int32_t CDataManager::GetOptimalPointDataByPoint(IN const double lng, IN const d
 			for (auto& ent : vtEntInfo) {
 				// 최적지점에 각도가 없으면 검색 후 서치
 				if (ent.nAngle == 0x1FF) {
-					pNearRoad = nullptr;
-
-					
+					pNearRoad = nullptr;					
 
 					if (pNearRoad != nullptr && entInfo.dwDist < INT_MAX) {
 						ent.nAngle = entInfo.nAngle;
+						ent.linkLeft = entInfo.linkLeft;
+						ent.bylink.linkId = entInfo.bylink.linkId;
 					}
 
 					LOG_TRACE(LOG_INFO, "additional search as no angle, reqX:%.6f, reqY:%.6f, polyId:%d, entY:%.6f, entY:%.6f", pOptInfo->x, pOptInfo->y, pOptInfo->id, ent.x, ent.y);
@@ -2703,7 +2705,7 @@ int32_t CDataManager::GetOptimalPointDataByPoint(IN const double lng, IN const d
 
 
 			// 입구점 정보가 없으면 주변 가까운 도로 검출
-			if (vtEntInfo.empty() || nSubOption == 1) {
+			if (vtEntInfo.empty() || reqOpt.subOption == 1) {
 				pNearRoad = nullptr;
 
 				// 도로 사이드에 위치시킬 최적 지점 이격 거리
@@ -2746,6 +2748,8 @@ int32_t CDataManager::GetOptimalPointDataByPoint(IN const double lng, IN const d
 
 					if (pNearRoad != nullptr && entInfo.dwDist < INT_MAX) {
 						ent.nAngle = entInfo.nAngle;
+						ent.linkLeft = entInfo.linkLeft;
+						ent.bylink.linkId = entInfo.bylink.linkId;						
 					}
 
 					LOG_TRACE(LOG_INFO, "additional search as no angle, reqX:%.6f, reqY:%.6f, polyId:%d, entY:%.6f, entY:%.6f", pOptInfo->x, pOptInfo->y, pOptInfo->id, ent.x, ent.y);
@@ -2754,7 +2758,7 @@ int32_t CDataManager::GetOptimalPointDataByPoint(IN const double lng, IN const d
 
 
 			// 입구점 정보가 없으면 주변 가까운 도로 검출
-			if (vtEntInfo.empty() || nSubOption == 1) {
+			if (vtEntInfo.empty() || reqOpt.subOption == 1) {
 				pNearRoad = nullptr;
 
 				// 도로 사이드에 위치시킬 최적 지점 이격 거리
@@ -2790,11 +2794,11 @@ int32_t CDataManager::GetOptimalPointDataByPoint(IN const double lng, IN const d
 			}
 
 			// 요청된 갯수만 적용
-			if (nReqCount <= 0 || cntRet <= nReqCount) {
+			if (reqOpt.reqCount <= 0 || cntRet <= reqOpt.reqCount) {
 				pOptInfo->vtEntryPoint.assign(vtEntInfo.begin(), vtEntInfo.end());
 			} else {
-				pOptInfo->vtEntryPoint.assign(vtEntInfo.begin(), vtEntInfo.begin() + nReqCount);
-				cntRet = nReqCount;
+				pOptInfo->vtEntryPoint.assign(vtEntInfo.begin(), vtEntInfo.begin() + reqOpt.reqCount);
+				cntRet = reqOpt.reqCount;
 			}
 
 			// 추가 속성 적용
@@ -2814,14 +2818,14 @@ int32_t CDataManager::GetOptimalPointDataByPoint(IN const double lng, IN const d
 }
 
 
-int32_t CDataManager::GetRequestMultiOptimalPoints(IN const char* szRequest, OUT vector<SPoint>& vtOrigins, OUT stReqOptimal& reqOpt)
+int32_t CDataManager::ParsingRequestMultiOptimalPoints(IN const char* szRequest, OUT vector<SPoint>& vtOrigins, OUT stReqOptimal& reqOpt)
 {
 	int32_t ret = ROUTE_RESULT_SUCCESS;
 
 #if defined(USE_CJSON)
 	cJSON* root = cJSON_Parse(szRequest);
-	int userId = 0;
 	if (root != NULL) {
+		int userId = 0;
 		cJSON* pValue = cJSON_GetObjectItem(root, "id");
 		if ((pValue != NULL) && cJSON_IsNumber(pValue)) {
 			userId = cJSON_GetNumberValue(pValue);
@@ -2883,7 +2887,7 @@ int32_t CDataManager::GetRequestMultiOptimalPoints(IN const char* szRequest, OUT
 }
 
 
-int32_t CDataManager::GetMultiOptimalPointDataByPoints(IN const vector<SPoint>& vtOrigins, OUT vector<stOptimalPointInfo>& vtOptInfos, IN const int32_t nEntType, IN const int32_t nReqCount, IN const int32_t nSubOption, IN const int32_t nMatchType, IN const int32_t nLinkDataType)
+int32_t CDataManager::GetMultiOptimalPointDataByPoints(OUT vector<stOptimalPointInfo>& vtOptInfos, IN const vector<SPoint>& vtOrigins, IN const stReqOptimal& reqOpt, IN const int32_t nMatchType, IN const int32_t nLinkDataType)
 {
 	int32_t ret = 0;
 
@@ -2898,7 +2902,7 @@ int32_t CDataManager::GetMultiOptimalPointDataByPoints(IN const vector<SPoint>& 
 #pragma omp parallel for
 #endif
 		for (int ii = 0; ii < cntPoints; ii++) {
-			if (GetOptimalPointDataByPoint(vtOrigins[ii].x, vtOrigins[ii].y, &vtOptInfos[ii], nEntType, nReqCount, nMatchType, nLinkDataType, nSubOption) >= 1) {
+			if (GetOptimalPointDataByPoint(&vtOptInfos[ii], vtOrigins[ii].x, vtOrigins[ii].y, reqOpt, nMatchType, nLinkDataType) >= 1) {
 				ret++;
 			}
 		}
@@ -3230,9 +3234,9 @@ const char* CDataManager::CDataManager::GetDataPath(void) const
 }
 
 
-int getRequestCost(IN const char* szRequest, IN const char* szType, OUT DataCost* pDataCost)
+int CDataManager::ParseRequestDataCost(IN const char* szReqJson, OUT DataCost& dataCost)
 {
-	if (szRequest == nullptr || szType == nullptr || pDataCost == nullptr) {
+	if (szReqJson == nullptr) {
 		return 0;
 	}
 
@@ -3240,15 +3244,14 @@ int getRequestCost(IN const char* szRequest, IN const char* szType, OUT DataCost
 	int cntValue = 0;
 
 #if defined(USE_CJSON)
-	cJSON* root = cJSON_Parse(szRequest);
+	cJSON* root = cJSON_Parse(szReqJson);
 	if (root != NULL) {
-		string strType;
 		cJSON* pData = cJSON_GetObjectItem(root, "type");
 		if (pData) {
-			strType = cJSON_GetStringValue(pData);
+			strcpy(dataCost.szType, cJSON_GetStringValue(pData));
 		}
 
-		if ((strcmp(szType, strType.c_str()) == 0) && (strcmp(szType, "pedestrian") == 0)) {
+		if ((strcmp(dataCost.szType, "pedestrian") == 0)) {
 			cJSON* pData = cJSON_GetObjectItem(root, "cost");
 			cJSON* pArray = nullptr;
 			cJSON* pItem = nullptr;
@@ -3266,7 +3269,7 @@ int getRequestCost(IN const char* szRequest, IN const char* szType, OUT DataCost
 						for (int ii = 0; ii < min(nSize, nMaxSize); ii++) {
 							pCost = cJSON_GetArrayItem(pArray, ii);
 							if (pCost != nullptr) {
-								pDataCost->pedestrian.cost_forest_base[ii] = cJSON_GetNumberValue(pCost);
+								dataCost.pedestrian.cost_forest_base[ii] = cJSON_GetNumberValue(pCost);
 								cntValue++;
 							}
 						}
@@ -3279,7 +3282,7 @@ int getRequestCost(IN const char* szRequest, IN const char* szType, OUT DataCost
 						for (int ii = 0; ii < min(nSize, nMaxSize); ii++) {
 							pCost = cJSON_GetArrayItem(pArray, ii);
 							if (pCost != nullptr) {
-								pDataCost->pedestrian.cost_forest_popular[ii] = cJSON_GetNumberValue(pCost);
+								dataCost.pedestrian.cost_forest_popular[ii] = cJSON_GetNumberValue(pCost);
 								cntValue++;
 							}
 						}
@@ -3292,7 +3295,7 @@ int getRequestCost(IN const char* szRequest, IN const char* szType, OUT DataCost
 						for (int ii = 0; ii < min(nSize, nMaxSize); ii++) {
 							pCost = cJSON_GetArrayItem(pArray, ii);
 							if (pCost != nullptr) {
-								pDataCost->pedestrian.cost_forest_course[ii] = cJSON_GetNumberValue(pCost);
+								dataCost.pedestrian.cost_forest_course[ii] = cJSON_GetNumberValue(pCost);
 								cntValue++;
 							}
 						}
@@ -3305,7 +3308,7 @@ int getRequestCost(IN const char* szRequest, IN const char* szType, OUT DataCost
 						for (int ii = 0; ii < min(nSize, nMaxSize); ii++) {
 							pCost = cJSON_GetArrayItem(pArray, ii);
 							if (pCost != nullptr) {
-								pDataCost->pedestrian.cost_forest_slop[ii] = cJSON_GetNumberValue(pCost);
+								dataCost.pedestrian.cost_forest_slop[ii] = cJSON_GetNumberValue(pCost);
 								cntValue++;
 							}
 						}
@@ -3322,7 +3325,7 @@ int getRequestCost(IN const char* szRequest, IN const char* szType, OUT DataCost
 						for (int ii = 0; ii < min(nSize, nMaxSize); ii++) {
 							pCost = cJSON_GetArrayItem(pArray, ii);
 							if (pCost != nullptr) {
-								pDataCost->pedestrian.cost_lane_walk[ii] = cJSON_GetNumberValue(pCost);
+								dataCost.pedestrian.cost_lane_walk[ii] = cJSON_GetNumberValue(pCost);
 								cntValue++;
 							}
 						}
@@ -3335,7 +3338,7 @@ int getRequestCost(IN const char* szRequest, IN const char* szType, OUT DataCost
 						for (int ii = 0; ii < min(nSize, nMaxSize); ii++) {
 							pCost = cJSON_GetArrayItem(pArray, ii);
 							if (pCost != nullptr) {
-								pDataCost->pedestrian.cost_lane_bike[ii] = cJSON_GetNumberValue(pCost);
+								dataCost.pedestrian.cost_lane_bike[ii] = cJSON_GetNumberValue(pCost);
 								cntValue++;
 							}
 						}
@@ -3353,7 +3356,7 @@ int getRequestCost(IN const char* szRequest, IN const char* szType, OUT DataCost
 						for (int ii = 0; ii < min(nSize, nMaxSize); ii++) {
 							pCost = cJSON_GetArrayItem(pArray, ii);
 							if (pCost != nullptr) {
-								pDataCost->pedestrian.cost_angle_walk[ii] = cJSON_GetNumberValue(pCost);
+								dataCost.pedestrian.cost_angle_walk[ii] = cJSON_GetNumberValue(pCost);
 								cntValue++;
 							}
 						}
@@ -3366,7 +3369,7 @@ int getRequestCost(IN const char* szRequest, IN const char* szType, OUT DataCost
 						for (int ii = 0; ii < min(nSize, nMaxSize); ii++) {
 							pCost = cJSON_GetArrayItem(pArray, ii);
 							if (pCost != nullptr) {
-								pDataCost->pedestrian.cost_angle_bike[ii] = cJSON_GetNumberValue(pCost);
+								dataCost.pedestrian.cost_angle_bike[ii] = cJSON_GetNumberValue(pCost);
 								cntValue++;
 							}
 						}
@@ -3383,7 +3386,7 @@ int getRequestCost(IN const char* szRequest, IN const char* szType, OUT DataCost
 						for (int ii = 0; ii < min(nSize, nMaxSize); ii++) {
 							pCost = cJSON_GetArrayItem(pArray, ii);
 							if (pCost != nullptr) {
-								pDataCost->pedestrian.cost_walk_side[ii] = cJSON_GetNumberValue(pCost);
+								dataCost.pedestrian.cost_walk_side[ii] = cJSON_GetNumberValue(pCost);
 								cntValue++;
 							}
 						}
@@ -3396,7 +3399,7 @@ int getRequestCost(IN const char* szRequest, IN const char* szType, OUT DataCost
 						for (int ii = 0; ii < min(nSize, nMaxSize); ii++) {
 							pCost = cJSON_GetArrayItem(pArray, ii);
 							if (pCost != nullptr) {
-								pDataCost->pedestrian.cost_walk_with[ii] = cJSON_GetNumberValue(pCost);
+								dataCost.pedestrian.cost_walk_with[ii] = cJSON_GetNumberValue(pCost);
 								cntValue++;
 							}
 						}
@@ -3409,7 +3412,7 @@ int getRequestCost(IN const char* szRequest, IN const char* szType, OUT DataCost
 						for (int ii = 0; ii < min(nSize, nMaxSize); ii++) {
 							pCost = cJSON_GetArrayItem(pArray, ii);
 							if (pCost != nullptr) {
-								pDataCost->pedestrian.cost_walk_bike[ii] = cJSON_GetNumberValue(pCost);
+								dataCost.pedestrian.cost_walk_bike[ii] = cJSON_GetNumberValue(pCost);
 								cntValue++;
 							}
 						}
@@ -3422,7 +3425,7 @@ int getRequestCost(IN const char* szRequest, IN const char* szType, OUT DataCost
 						for (int ii = 0; ii < min(nSize, nMaxSize); ii++) {
 							pCost = cJSON_GetArrayItem(pArray, ii);
 							if (pCost != nullptr) {
-								pDataCost->pedestrian.cost_walk_only[ii] = cJSON_GetNumberValue(pCost);
+								dataCost.pedestrian.cost_walk_only[ii] = cJSON_GetNumberValue(pCost);
 								cntValue++;
 							}
 						}
@@ -3435,7 +3438,7 @@ int getRequestCost(IN const char* szRequest, IN const char* szType, OUT DataCost
 						for (int ii = 0; ii < min(nSize, nMaxSize); ii++) {
 							pCost = cJSON_GetArrayItem(pArray, ii);
 							if (pCost != nullptr) {
-								pDataCost->pedestrian.cost_walk_line[ii] = cJSON_GetNumberValue(pCost);
+								dataCost.pedestrian.cost_walk_line[ii] = cJSON_GetNumberValue(pCost);
 								cntValue++;
 							}
 						}
@@ -3452,7 +3455,7 @@ int getRequestCost(IN const char* szRequest, IN const char* szType, OUT DataCost
 						for (int ii = 0; ii < min(nSize, nMaxSize); ii++) {
 							pCost = cJSON_GetArrayItem(pArray, ii);
 							if (pCost != nullptr) {
-								pDataCost->pedestrian.cost_bike_only[ii] = cJSON_GetNumberValue(pCost);
+								dataCost.pedestrian.cost_bike_only[ii] = cJSON_GetNumberValue(pCost);
 								cntValue++;
 							}
 						}
@@ -3465,7 +3468,7 @@ int getRequestCost(IN const char* szRequest, IN const char* szType, OUT DataCost
 						for (int ii = 0; ii < min(nSize, nMaxSize); ii++) {
 							pCost = cJSON_GetArrayItem(pArray, ii);
 							if (pCost != nullptr) {
-								pDataCost->pedestrian.cost_bike_with[ii] = cJSON_GetNumberValue(pCost);
+								dataCost.pedestrian.cost_bike_with[ii] = cJSON_GetNumberValue(pCost);
 								cntValue++;
 							}
 						}
@@ -3478,7 +3481,7 @@ int getRequestCost(IN const char* szRequest, IN const char* szType, OUT DataCost
 						for (int ii = 0; ii < min(nSize, nMaxSize); ii++) {
 							pCost = cJSON_GetArrayItem(pArray, ii);
 							if (pCost != nullptr) {
-								pDataCost->pedestrian.cost_bike_walk[ii] = cJSON_GetNumberValue(pCost);
+								dataCost.pedestrian.cost_bike_walk[ii] = cJSON_GetNumberValue(pCost);
 								cntValue++;
 							}
 						}
@@ -3510,7 +3513,7 @@ int getRequestCost(IN const char* szRequest, IN const char* szType, OUT DataCost
 							for (int jj = 0; jj < min(nSize, nMaxSize); jj++) {
 								pCost = cJSON_GetArrayItem(pArray, jj);
 								if (pCost != nullptr) {
-									pDataCost->pedestrian.cost_facility_walk[ii][jj] = cJSON_GetNumberValue(pCost);
+									dataCost.pedestrian.cost_facility_walk[ii][jj] = cJSON_GetNumberValue(pCost);
 									cntValue++;
 								}
 							} // for jj
@@ -3525,7 +3528,7 @@ int getRequestCost(IN const char* szRequest, IN const char* szType, OUT DataCost
 							for (int jj = 0; jj < min(nSize, nMaxSize); jj++) {
 								pCost = cJSON_GetArrayItem(pArray, jj);
 								if (pCost != nullptr) {
-									pDataCost->pedestrian.cost_facility_bike[ii][jj] = cJSON_GetNumberValue(pCost);
+									dataCost.pedestrian.cost_facility_bike[ii][jj] = cJSON_GetNumberValue(pCost);
 									cntValue++;
 								}
 							} // for jj
@@ -3558,7 +3561,7 @@ int getRequestCost(IN const char* szRequest, IN const char* szType, OUT DataCost
 							for (int jj = 0; jj < min(nSize, nMaxSize); jj++) {
 								pCost = cJSON_GetArrayItem(pArray, jj);
 								if (pCost != nullptr) {
-									pDataCost->pedestrian.cost_gate_walk[ii][jj] = cJSON_GetNumberValue(pCost);
+									dataCost.pedestrian.cost_gate_walk[ii][jj] = cJSON_GetNumberValue(pCost);
 									cntValue++;
 								}
 							} // for jj
@@ -3573,7 +3576,7 @@ int getRequestCost(IN const char* szRequest, IN const char* szType, OUT DataCost
 							for (int jj = 0; jj < min(nSize, nMaxSize); jj++) {
 								pCost = cJSON_GetArrayItem(pArray, jj);
 								if (pCost != nullptr) {
-									pDataCost->pedestrian.cost_gate_bike[ii][jj] = cJSON_GetNumberValue(pCost);
+									dataCost.pedestrian.cost_gate_bike[ii][jj] = cJSON_GetNumberValue(pCost);
 									cntValue++;
 								}
 							} // for jj
@@ -3583,14 +3586,14 @@ int getRequestCost(IN const char* szRequest, IN const char* szType, OUT DataCost
 
 			}
 		} // pedestrian
-		else if ((strcmp(szType, strType.c_str()) == 0)) {
+		else {
 			//&& ((strcmp(szType, "vehicle") == 0) || (strcmp(szType, "tms") == 0))) {
 			cJSON* pData = cJSON_GetObjectItem(root, "cost");
 			cJSON* pArray = nullptr;
 			cJSON* pItem = nullptr;
 			cJSON* pCost = nullptr;
 			const int nMaxSize = 10;
-
+			
 			if (pData) {
 				// level cost
 				pItem = cJSON_GetObjectItem(pData, "speed");
@@ -3602,7 +3605,7 @@ int getRequestCost(IN const char* szRequest, IN const char* szType, OUT DataCost
 						for (int ii = 0; ii < min(nSize, nMaxSize); ii++) {
 							pCost = cJSON_GetArrayItem(pArray, ii);
 							if (pCost != nullptr) {
-								pDataCost->vehicle.cost_speed_lv0[ii] = cJSON_GetNumberValue(pCost);
+								dataCost.vehicle.cost_speed_lv0[ii] = cJSON_GetNumberValue(pCost);
 								cntValue++;
 							}
 						}
@@ -3615,7 +3618,7 @@ int getRequestCost(IN const char* szRequest, IN const char* szType, OUT DataCost
 						for (int ii = 0; ii < min(nSize, nMaxSize); ii++) {
 							pCost = cJSON_GetArrayItem(pArray, ii);
 							if (pCost != nullptr) {
-								pDataCost->vehicle.cost_speed_lv1[ii] = cJSON_GetNumberValue(pCost);
+								dataCost.vehicle.cost_speed_lv1[ii] = cJSON_GetNumberValue(pCost);
 								cntValue++;
 							}
 						}
@@ -3628,7 +3631,7 @@ int getRequestCost(IN const char* szRequest, IN const char* szType, OUT DataCost
 						for (int ii = 0; ii < min(nSize, nMaxSize); ii++) {
 							pCost = cJSON_GetArrayItem(pArray, ii);
 							if (pCost != nullptr) {
-								pDataCost->vehicle.cost_speed_lv2[ii] = cJSON_GetNumberValue(pCost);
+								dataCost.vehicle.cost_speed_lv2[ii] = cJSON_GetNumberValue(pCost);
 								cntValue++;
 							}
 						}
@@ -3641,7 +3644,7 @@ int getRequestCost(IN const char* szRequest, IN const char* szType, OUT DataCost
 						for (int ii = 0; ii < min(nSize, nMaxSize); ii++) {
 							pCost = cJSON_GetArrayItem(pArray, ii);
 							if (pCost != nullptr) {
-								pDataCost->vehicle.cost_speed_lv3[ii] = cJSON_GetNumberValue(pCost);
+								dataCost.vehicle.cost_speed_lv3[ii] = cJSON_GetNumberValue(pCost);
 								cntValue++;
 							}
 						}
@@ -3654,7 +3657,7 @@ int getRequestCost(IN const char* szRequest, IN const char* szType, OUT DataCost
 						for (int ii = 0; ii < min(nSize, nMaxSize); ii++) {
 							pCost = cJSON_GetArrayItem(pArray, ii);
 							if (pCost != nullptr) {
-								pDataCost->vehicle.cost_speed_lv4[ii] = cJSON_GetNumberValue(pCost);
+								dataCost.vehicle.cost_speed_lv4[ii] = cJSON_GetNumberValue(pCost);
 								cntValue++;
 							}
 						}
@@ -3667,7 +3670,7 @@ int getRequestCost(IN const char* szRequest, IN const char* szType, OUT DataCost
 						for (int ii = 0; ii < min(nSize, nMaxSize); ii++) {
 							pCost = cJSON_GetArrayItem(pArray, ii);
 							if (pCost != nullptr) {
-								pDataCost->vehicle.cost_speed_lv5[ii] = cJSON_GetNumberValue(pCost);
+								dataCost.vehicle.cost_speed_lv5[ii] = cJSON_GetNumberValue(pCost);
 								cntValue++;
 							}
 						}
@@ -3680,7 +3683,7 @@ int getRequestCost(IN const char* szRequest, IN const char* szType, OUT DataCost
 						for (int ii = 0; ii < min(nSize, nMaxSize); ii++) {
 							pCost = cJSON_GetArrayItem(pArray, ii);
 							if (pCost != nullptr) {
-								pDataCost->vehicle.cost_speed_lv6[ii] = cJSON_GetNumberValue(pCost);
+								dataCost.vehicle.cost_speed_lv6[ii] = cJSON_GetNumberValue(pCost);
 								cntValue++;
 							}
 						}
@@ -3693,7 +3696,7 @@ int getRequestCost(IN const char* szRequest, IN const char* szType, OUT DataCost
 						for (int ii = 0; ii < min(nSize, nMaxSize); ii++) {
 							pCost = cJSON_GetArrayItem(pArray, ii);
 							if (pCost != nullptr) {
-								pDataCost->vehicle.cost_speed_lv7[ii] = cJSON_GetNumberValue(pCost);
+								dataCost.vehicle.cost_speed_lv7[ii] = cJSON_GetNumberValue(pCost);
 								cntValue++;
 							}
 						}
@@ -3706,7 +3709,7 @@ int getRequestCost(IN const char* szRequest, IN const char* szType, OUT DataCost
 						for (int ii = 0; ii < min(nSize, nMaxSize); ii++) {
 							pCost = cJSON_GetArrayItem(pArray, ii);
 							if (pCost != nullptr) {
-								pDataCost->vehicle.cost_speed_lv8[ii] = cJSON_GetNumberValue(pCost);
+								dataCost.vehicle.cost_speed_lv8[ii] = cJSON_GetNumberValue(pCost);
 								cntValue++;
 							}
 						}
@@ -3719,7 +3722,7 @@ int getRequestCost(IN const char* szRequest, IN const char* szType, OUT DataCost
 						for (int ii = 0; ii < min(nSize, nMaxSize); ii++) {
 							pCost = cJSON_GetArrayItem(pArray, ii);
 							if (pCost != nullptr) {
-								pDataCost->vehicle.cost_speed_lv9[ii] = cJSON_GetNumberValue(pCost);
+								dataCost.vehicle.cost_speed_lv9[ii] = cJSON_GetNumberValue(pCost);
 								cntValue++;
 							}
 						}
@@ -3736,7 +3739,7 @@ int getRequestCost(IN const char* szRequest, IN const char* szType, OUT DataCost
 						for (int ii = 0; ii < min(nSize, nMaxSize); ii++) {
 							pCost = cJSON_GetArrayItem(pArray, ii);
 							if (pCost != nullptr) {
-								pDataCost->vehicle.cost_time_ang0[ii] = cJSON_GetNumberValue(pCost);
+								dataCost.vehicle.cost_time_ang0[ii] = cJSON_GetNumberValue(pCost);
 								cntValue++;
 							}
 						}
@@ -3749,7 +3752,7 @@ int getRequestCost(IN const char* szRequest, IN const char* szType, OUT DataCost
 						for (int ii = 0; ii < min(nSize, nMaxSize); ii++) {
 							pCost = cJSON_GetArrayItem(pArray, ii);
 							if (pCost != nullptr) {
-								pDataCost->vehicle.cost_time_ang45[ii] = cJSON_GetNumberValue(pCost);
+								dataCost.vehicle.cost_time_ang45[ii] = cJSON_GetNumberValue(pCost);
 								cntValue++;
 							}
 						}
@@ -3761,7 +3764,7 @@ int getRequestCost(IN const char* szRequest, IN const char* szType, OUT DataCost
 						for (int ii = 0; ii < min(nSize, nMaxSize); ii++) {
 							pCost = cJSON_GetArrayItem(pArray, ii);
 							if (pCost != nullptr) {
-								pDataCost->vehicle.cost_time_ang90[ii] = cJSON_GetNumberValue(pCost);
+								dataCost.vehicle.cost_time_ang90[ii] = cJSON_GetNumberValue(pCost);
 								cntValue++;
 							}
 						}
@@ -3773,7 +3776,7 @@ int getRequestCost(IN const char* szRequest, IN const char* szType, OUT DataCost
 						for (int ii = 0; ii < min(nSize, nMaxSize); ii++) {
 							pCost = cJSON_GetArrayItem(pArray, ii);
 							if (pCost != nullptr) {
-								pDataCost->vehicle.cost_time_ang135[ii] = cJSON_GetNumberValue(pCost);
+								dataCost.vehicle.cost_time_ang135[ii] = cJSON_GetNumberValue(pCost);
 								cntValue++;
 							}
 						}
@@ -3785,7 +3788,7 @@ int getRequestCost(IN const char* szRequest, IN const char* szType, OUT DataCost
 						for (int ii = 0; ii < min(nSize, nMaxSize); ii++) {
 							pCost = cJSON_GetArrayItem(pArray, ii);
 							if (pCost != nullptr) {
-								pDataCost->vehicle.cost_time_ang180[ii] = cJSON_GetNumberValue(pCost);
+								dataCost.vehicle.cost_time_ang180[ii] = cJSON_GetNumberValue(pCost);
 								cntValue++;
 							}
 						}
@@ -3797,7 +3800,7 @@ int getRequestCost(IN const char* szRequest, IN const char* szType, OUT DataCost
 						for (int ii = 0; ii < min(nSize, nMaxSize); ii++) {
 							pCost = cJSON_GetArrayItem(pArray, ii);
 							if (pCost != nullptr) {
-								pDataCost->vehicle.cost_time_ang225[ii] = cJSON_GetNumberValue(pCost);
+								dataCost.vehicle.cost_time_ang225[ii] = cJSON_GetNumberValue(pCost);
 								cntValue++;
 							}
 						}
@@ -3809,7 +3812,7 @@ int getRequestCost(IN const char* szRequest, IN const char* szType, OUT DataCost
 						for (int ii = 0; ii < min(nSize, nMaxSize); ii++) {
 							pCost = cJSON_GetArrayItem(pArray, ii);
 							if (pCost != nullptr) {
-								pDataCost->vehicle.cost_time_ang270[ii] = cJSON_GetNumberValue(pCost);
+								dataCost.vehicle.cost_time_ang270[ii] = cJSON_GetNumberValue(pCost);
 								cntValue++;
 							}
 						}
@@ -3821,7 +3824,7 @@ int getRequestCost(IN const char* szRequest, IN const char* szType, OUT DataCost
 						for (int ii = 0; ii < min(nSize, nMaxSize); ii++) {
 							pCost = cJSON_GetArrayItem(pArray, ii);
 							if (pCost != nullptr) {
-								pDataCost->vehicle.cost_time_ang315[ii] = cJSON_GetNumberValue(pCost);
+								dataCost.vehicle.cost_time_ang315[ii] = cJSON_GetNumberValue(pCost);
 								cntValue++;
 							}
 						}
@@ -3838,34 +3841,29 @@ int getRequestCost(IN const char* szRequest, IN const char* szType, OUT DataCost
 }
 
 
-int CDataManager::GetDataCost(IN const uint32_t type, OUT DataCost& dataCost)
+int CDataManager::GetDataCost(IN const char* pszTarget, OUT DataCost& dataCost)
 {
 	int retCntCost = 0;
 
-	// cost data file
+		// cost data file
 	char szCostFile[FILENAME_MAX + 1];
 	char szTarget[FILENAME_MAX + 1] = { 0, };
-	if (type == TYPE_DATA_PEDESTRIAN) {
-		sprintf(szTarget, "pedestrian");
-	} else if (type == TYPE_DATA_TREKKING) {
-		sprintf(szTarget, "forest");
+	if (pszTarget != nullptr || strlen(pszTarget) > 0) {
+		strcpy(szTarget, pszTarget);
 	} else {
 #if defined(USE_TMS_API)
 #	if defined(DEMO_FOR_HANJIN)
-		sprintf(szTarget, "hanjin");
+		strcpy(szTarget, "hanjin");
 #	else
-		sprintf(szTarget, "tms");
+		strcpy(szTarget, "tms");
 #	endif
 #else
-		sprintf(szTarget, "vehicle");
+		strcpy(szTarget, "vehicle");
 #endif
 	}
 
-#if defined(_WIN32) && defined(_WINDOWS)
-	sprintf_s(szCostFile, FILENAME_MAX, "%s/usr/%s_cost.json", m_szDataPath, szTarget);
-#else
 	snprintf(szCostFile, FILENAME_MAX, "%s/usr/%s_cost.json", m_szDataPath, szTarget);
-#endif
+	
 	FILE* fp = fopen(szCostFile, "rb");
 	if (fp) {
 		static const int MAX_DATACOST_SIZE = 1024 * 128; //128 Kib
@@ -3878,17 +3876,13 @@ int CDataManager::GetDataCost(IN const uint32_t type, OUT DataCost& dataCost)
 			string strJson;
 			const size_t nBuff = 1024;
 			char szBuff[nBuff + 1] = { 0, };
-#if defined(_WIN32)
-			while (fread_s(szBuff, nBuff, nBuff, 1, fp) != 0) {
-#else
 			while (fread(szBuff, nBuff, 1, fp) != 0) {
-#endif
 				strJson.append(szBuff);
 				memset(szBuff, 0x00, nBuff);
 			}
 			strJson.append(szBuff);
 
-			retCntCost = getRequestCost(strJson.c_str(), szTarget, &dataCost);
+			retCntCost = ParseRequestDataCost(strJson.c_str(), dataCost);
 			//if (retCntCost > 0) {
 			//	m_pRouteMgr.SetRouteCost(type, &dataCost, cntCost);
 			//}

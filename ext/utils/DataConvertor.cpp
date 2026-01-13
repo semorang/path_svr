@@ -119,7 +119,7 @@ int32_t base64toBinary(IN const char* szBase64, IN const int numBytes, OUT unsig
 
 SPoint getCoordFromText(const char* pszCoord)
 {
-	SPoint ptLocation = { 0, };
+	SPoint ptLocation{};
 	int column = 0;
 	int len = 0;
 	char szCoord[128] = { 0, };

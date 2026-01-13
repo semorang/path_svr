@@ -585,6 +585,7 @@ typedef enum
 	TYPE_CLUSTER_DEVIDE_BY_COUNT, // 개수 분배
 	TYPE_CLUSTER_DEVIDE_BY_DIST, // 거리 분배
 	TYPE_CLUSTER_DEVIDE_BY_TIME, // 시간 분배
+	TYPE_CLUSTER_DEVIDE_BY_LINK, // 링크 단위 분배
 }TYPE_CLUSTER_DEVIDE;
 
 typedef enum

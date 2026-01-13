@@ -119,9 +119,10 @@ typedef struct tagRECT
 // 0.0.6 add candidate request option
 // 0.0.7 add to avoid continuous short turns
 // 0.0.8 add to avoid turn-right on HD type 3 road 
+// 0.0.9 ignore way point using bi-direction.
 #define ENGINE_VERSION_MAJOR	0
 #define ENGINE_VERSION_MINOR	0
-#define ENGINE_VERSION_PATCH	8
+#define ENGINE_VERSION_PATCH	9
 #define ENGINE_VERSION_BUILD	0
 #elif defined(USE_OPTIMAL_POINT_API)
 // 1.0.6 fix road param setting, and bycicle -> bicicle
@@ -194,9 +195,10 @@ typedef struct tagRECT
 // 0.1.3 출/도착지 정보의 분할 입력 가능하도록 적용, add destinations field in request json
 // 0.1.4 add to bestvrp api for or-tools
 // 0.1.5 add to motocycle in mobility option
+// 0.1.6 동일링크 출-도착지 역방향 거리 계산 수정(음수->양수)
 #define ENGINE_VERSION_MAJOR	0
 #define ENGINE_VERSION_MINOR	1
-#define ENGINE_VERSION_PATCH	5
+#define ENGINE_VERSION_PATCH	6
 #define ENGINE_VERSION_BUILD	0
 #		else // #		if defined(USE_TMS_API)
 // 0.0.6 add charging link attribute
@@ -544,7 +546,7 @@ typedef struct _tagstLinkVehicleInfo {
 	uint64_t height : 3; // 높이 제한 M(미터) 0~7
 	uint64_t bridge : 1; // 교량, 0:없음, 1:있음
 	uint64_t over_pass : 1; // 고가도로, 0:없음, 1:있음
-	uint64_t hd_flag : 2; // HD 링크 매핑, 0:없음, 1:전체, 2:부분
+	uint64_t hd_flag : 2; // HD 링크 매핑, 0:없음, 1:전체, 2:부분, 3:주정차밀집(우회전불가)
 	uint64_t veh_reserved : 1; // reserved 
 	//p2p에서는 angle 공유하지 말자
 #else
@@ -943,11 +945,12 @@ struct stEntranceInfo {
 		struct {
 			uint32_t poly_type : 2; //  폴리곤 타입, 0:미지정(TYPE_ENT_NONE), 1:빌딩(TYPE_POLYGON_BUILDING), 2:단지(TYPE_POLYGON_COMPLEX), 3:산바운더리(TYPE_POLYGON_MOUNTAIN)
 			uint32_t ent_code : 4; // 입구점 타입 // 1:차량 입구점, 2:택시 승하차 지점(건물), 3:택시 승하차 지점(건물군), 4:택배 차량 하차 거점, 5:보행자 입구점, 	6:배달 하차점(차량, 오토바이), 7:배달 하차점(자전거, 도보), 8:숲길 입구점
-			uint32_t angle : 9; // 최근접 링크의 진출 각도
-			uint32_t reserved : 17;
+			uint32_t angle : 9; // 최근접 매칭 링크의 진출 각도
+			uint32_t link_left : 1; // 매칭 링크의 좌/우 정보, 0:right, 1:left
+			uint32_t reserved : 16;
 			double x;
 			double y;
-			uint64_t vlink_id; // 최근접 링크 ID, 링크 정보를 넣으면 굳이 angle을 따로 안들고 다녀도 되긴 한데...
+			KeyID link_id; // 최근접 링크 ID, 링크 정보를 넣으면 굳이 angle을 따로 안들고 다녀도 되긴 한데...
 			uint64_t reserved2;
 		};
 		struct {
@@ -1472,7 +1475,7 @@ typedef struct _tagstDistrict
 	int32_t cargo; // 화물 수량
 	uint32_t etd; // 출발 예상 시각
 	uint32_t eta; // 도착 예상 시각
-	SPoint center; // 무게 중심
+	SPoint center; // 클러스터 중심 좌표
 
 	vector<int32_t> vtPois;
 	vector<SPoint> vtCoord;
@@ -1552,6 +1555,8 @@ typedef struct _tagBaseOption
 	//string userId; // 대입할때 주소복사 되지 않도록 주의할것
 	//string uri; // 데이터 경로, 기본적으로 timestamp 값을 준다.
 	char userId[128];
+	char route_mode[128]; // 탐색 모드, "driving", "tsp", "clustering" ...
+	char route_cost[128]; // 탐색 확장 코스트 파일
 	int32_t option; // 탐색 옵션,
 	int32_t avoid; // 회피 옵션,
 	int32_t traffic; // 교통 정보, 0:미사용, 1:실시간(REAL), 2:통계(STATIC), 3:실시간-통계(REAL-STATIC)
@@ -1571,13 +1576,15 @@ typedef struct _tagBaseOption
 		//userId = "";
 		//uri = "";
 		memset(userId, 0x00, sizeof(userId));
+		memset(route_mode, 0x00, sizeof(route_mode));
+		memset(route_cost, 0x00, sizeof(route_cost));
 		option = 0;
 		avoid = 0;
 		timestamp = 0;
 		traffic = 0;
 		free = 0;
 		fileCache = 0;
-		binary = 0;
+		binary = 0; // "0:NONE, 1:RDM, 2:ROUTE, 3:RDM-ROUTE",
 		mobility = TYPE_MOBILITY_VEHICLE;
 		distance_type = 1; // "0:NONE, 1:ROUTE",
 		compare_type = 0; // "0:NONE, 1:COST, 2:DIST, 3:TIME",
@@ -1587,6 +1594,8 @@ typedef struct _tagBaseOption
 	_tagBaseOption& operator=(const _tagBaseOption& rhs)
 	{
 		strcpy(this->userId, rhs.userId);
+		strcpy(this->route_mode, rhs.route_mode);
+		strcpy(this->route_cost, rhs.route_cost);
 		//this->userId = rhs.userId;
 		//this->uri = rhs.uri;
 		this->option = rhs.option;
@@ -1657,39 +1666,42 @@ typedef struct _tagClusteringOption
 	int32_t seed; // 랜덤 seed
 	int32_t compareType;
 
-	int32_t divisionType; // 분배 타입, 0:갯수균등, 1:거리균등, 2:시간균등
-	int32_t limitCluster; // 최대 배차(클러스터링) 차량 수
-	int32_t limitValue; // 차량당 최대 배송지수, 최대 거리(미터), 최대 시간(초)-분으로 입력받아 초로 변환
-	int32_t limitDeviation; // 차량당 최대 운행 정보 편차
-	int32_t max_spot; // 차량당 최대 운송 가능 개수
-	int32_t max_distance; // 차량당 최대 운행 가능 거리
-	int32_t max_time; // 차량당 최대 운행 가능 시간
-	int32_t max_cargo; // 차량당 최대 적재 가능 화물
-	int32_t reservation; // 예약 시각
-	int32_t reservationType; // 예약 타입, 0:미사용, 1:출발시간, 2:도착시간
-	int32_t endpointType; // 지점 고정, 0:미사용, 1:출발지 고정, 2:도착지 고정, 3:출발지-도착지 고정, 4:출발지 회귀
-	int32_t additionalType; // 추가 배당 타입, "0:미사용, 1:갯수, 2:무게(g), 3:사이즈(cm)",
-	int32_t additionalLimit; // 추가 배당 최대 한도
+	union
+	{
+		int32_t optionValues[20];
+		struct
+		{
+			int32_t divisionType; // 분배 타입, 0:갯수균등, 1:거리균등, 2:시간균등, 3:링크단위
+			int32_t limitCluster; // 최대 배차(클러스터링) 차량 수
+			int32_t limitValue; // 차량당 최대 배송지수, 최대 거리(미터), 최대 시간(초)-분으로 입력받아 초로 변환
+			int32_t limitDeviation; // 차량당 최대 운행 정보 편차
+			int32_t max_spot; // 차량당 최대 운송 가능 개수
+			int32_t max_distance; // 차량당 최대 운행 가능 거리
+			int32_t max_time; // 차량당 최대 운행 가능 시간
+			int32_t max_cargo; // 차량당 최대 적재 가능 화물
+			int32_t reservation; // 예약 시각
+			int32_t reservationType; // 예약 타입, 0:미사용, 1:출발시간, 2:도착시간
+			int32_t endpointType; // 지점 고정, 0:미사용, 1:출발지 고정, 2:도착지 고정, 3:출발지-도착지 고정, 4:출발지 회귀
+			int32_t additionalType; // 추가 배당 타입, "0:미사용, 1:갯수, 2:무게(g), 3:사이즈(cm)",
+			int32_t additionalLimit; // 추가 배당 최대 한도
+			int32_t reserved[7];
+		}; // default
+		struct
+		{
+			int32_t divisionType; // 분배 타입, 0:갯수균등, 1:거리균등, 2:시간균등, 3:링크단위
+			int32_t limitLength; // 링크 분배 길이, 0:전체사용, 100~N:최소 Nm => 최소 거리는 전체길이 / ((전체길이/Nm) + 1)
+			int32_t reserved[18];
+		}bylink;
+	};
+
 
 	_tagClusteringOption()
 	{
-		algorithm = TYPE_TSP_ALGORITHM_TSP;
+		algorithm = TYPE_TSP_ALGORITHM_GOOGLEOR;
 		seed = 10006;// 1000 + 49 * 2;
 		compareType = TYPE_TSP_VALUE_DIST;
 
-		divisionType = 0;
-		limitCluster = 0;
-		limitValue = 0;
-		limitDeviation = 0;
-		max_spot = 0;
-		max_distance = 0;
-		max_time = 0;
-		max_cargo = 0;
-		reservation = 0;
-		reservationType = 0;
-		endpointType = TYPE_TSP_ENDPOINT_NONE;
-		additionalType = 0;
-		additionalLimit = 0;
+		memset(optionValues, 0x00, sizeof(optionValues));
 	}
 
 	_tagClusteringOption& operator=(const _tagClusteringOption& rhs)
@@ -1700,19 +1712,7 @@ typedef struct _tagClusteringOption
 		this->seed = rhs.seed;
 		this->compareType = rhs.compareType;
 
-		this->divisionType = rhs.divisionType;
-		this->limitCluster = rhs.limitCluster;
-		this->limitValue = rhs.limitValue;
-		this->limitDeviation = rhs.limitDeviation;
-		this->max_spot = rhs.max_spot;
-		this->max_distance = rhs.max_distance;
-		this->max_time = rhs.max_time;
-		this->max_cargo = rhs.max_cargo;
-		this->reservation = rhs.reservation;
-		this->reservationType = rhs.reservationType;
-		this->endpointType = rhs.endpointType;
-		this->additionalType = rhs.additionalType;
-		this->additionalLimit = rhs.additionalLimit;
+		memcpy(this->optionValues, rhs.optionValues, sizeof(this->optionValues));
 
 		return *this;
 	}

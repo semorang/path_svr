@@ -1,4 +1,5 @@
 // tms module
+const addon = require(process.env.USER_MODULE);
 
 const common = require('./common.js');
 const route = require('./route');
@@ -9,137 +10,244 @@ const logout = require('./logs');
 const axios = common.reqNode('axios');
 
 
-exports.distancematrix = function (key, req) {
-    var ret;
+// common header 생성 함수
+function createHeader(isSuccessful, code, message) {
+    return {
+        isSuccessful,
+        resultCode: code,
+        resultMessage: message
+    };
+}
 
-    // 사용자 키 확인
+
+// ---------------- Distance Matrix ----------------
+exports.distancematrix = function (key, req) {
+    // check user key
     var user = auth.checkAuth(key);
-    if (user != null && user.length > 0) {
+    if (user && user.length > 0) {
         logout("client user:'" + user + "', mode=" + ((req.mode !== undefined) ? req.mode : "null") + ", cache=" + ((req.cache !== undefined) ? req.cache : "null") + ", cnt=" + ((req.origins !== undefined) ? req.origins.length : "null"));
 
-        ret = route.gettable(req);
-    } else {
-        var header = {
-            isSuccessful: false,
-            resultCode: codes.ERROR_CODES.RESULT_APPKEY_ERROR,
-            resultMessage: codes.getErrMsg(codes.ERROR_CODES.RESULT_APPKEY_ERROR)
-        };
+        const result = addon.getmatrix(JSON.stringify(req));
+        const res = JSON.parse(result);
+    
+        const header = createHeader(
+            res.result_code === codes.ERROR_CODES.ROUTE_RESULT_SUCCESS,
+            res.result_code,
+            codes.getErrMsg(res.result_code)
+        );
 
-        ret = {
-            header: header,
-            origins: req.origins,
-            destinations: req.destinations
+        return {
+            header,
+            mode: req.mode ?? "driving",
+            origins: req.origins ?? null,
+            destinations: req.destinations ?? null,
+            rows: res.result_code === codes.ERROR_CODES.ROUTE_RESULT_SUCCESS ? res.rows : null,
         };
-
-        logout("client req error : " + JSON.stringify(ret));
     }
+
+    const header = createHeader(
+        false,
+        codes.ERROR_CODES.RESULT_APPKEY_ERROR,
+        codes.getErrMsg(codes.ERROR_CODES.RESULT_APPKEY_ERROR)
+    );
+
+    const ret = {
+        header,
+        mode: req.mode ?? "driving",
+        origins: req.origins ?? null,
+        destinations: req.destinations ?? null,
+        rows: null,
+    };
+
+    logout("client req error : " + JSON.stringify(ret));
 
     return ret;
 }
 
 
-// exports.clustering = function(key, target, destinations, clusters, file, mode, option) {
+// ---------------- Clustering ----------------
 exports.clustering = function (key, req) {
-    var ret;
-
-    // 사용자 키 확인
-    var user = auth.checkAuth(key);
-    if (user != null && user.length > 0) {
+    // check user key
+    const user = auth.checkAuth(key);
+    if (user && user.length > 0) {
         logout("client user:'" + user + "', mode=" + ((req.mode !== undefined) ? req.mode : "null") + ", cache=" + ((req.cache !== undefined) ? req.cache : "null") + ", cnt=" + ((req.origins !== undefined) ? req.origins.length : "null"));
 
-        ret = route.getcluster(req);
-    } else {
-        var header = {
-            isSuccessful: false,
-            resultCode: codes.ERROR_CODES.RESULT_APPKEY_ERROR,
-            resultMessage: codes.getErrMsg(codes.ERROR_CODES.RESULT_APPKEY_ERROR)
-        };
+        if (!req.tsp) {
+            req.tsp = {
+                seed: 10000,
+                algorithm: 0,
+                compare_type: 1,
+            };
+        }
+        
+        // default clust 설정
+        if (!req.clust) {
+            req.clust = {
+                seed: 10006,
+                algorithm: 3,
+                compare_type : 1,
+            };
+        }
+        
+        const reqStr = JSON.stringify(req);
+        let result;
 
-        var origins;
-        var clusters;
-        if (req.origins) {
-            origins = req.origins
+        if (req.target === 'geoyoung') {
+            result = addon.getcluster_for_geoyoung(reqStr);
+        } else if (req.option.division_type === 3) {
+            result = addon.getgroup(reqStr);
+        } else {
+            result = addon.getcluster(reqStr);
+        }
+    
+        const ret = JSON.parse(result);
+    
+        const header = createHeader(
+            ret.result_code === codes.ERROR_CODES.ROUTE_RESULT_SUCCESS,
+            ret.result_code,
+            codes.getErrMsg(ret.result_code)
+        );
+
+        return {
+            header,
+            mode: req.mode ?? "clustering",
+            origins: req.origins ?? null,
+            summary: ret.summary ?? null,
+            clusters: ret.clusters ?? null,
         };
-        if (clusters) {
-            clusters = clusters
-        };
+    } 
+
+    const header = createHeader(
+        false,
+        codes.ERROR_CODES.RESULT_APPKEY_ERROR,
+        codes.getErrMsg(codes.ERROR_CODES.RESULT_APPKEY_ERROR)
+    );
+    
+    const ret = {
+        header,
+        origins: req.origins ?? null,
+        summary: null,
+        clusters: null,
+    };
+
+    logout("client req error : " + JSON.stringify(ret));
+
+    return ret;
+}
 
 
-        ret = {
-            header: header,
-            origins: origins,
-            clusters: clusters,
-        };
+// ---------------- Grouping ----------------
+exports.grouping = function (key, req) {
+    // 사용자 키 확인
+    var user = auth.checkAuth(key);
+    if (user && user.length > 0) {
+        logout("client user:'" + user + "', mode=" + ((req.mode !== undefined) ? req.mode : "null") + ", cache=" + ((req.cache !== undefined) ? req.cache : "null") + ", cnt=" + ((req.origins !== undefined) ? req.origins.length : "null"));
 
-        logout("client req error : " + JSON.stringify(ret));
-    }
+        // 그룹 결과 가져오기
+        const result = addon.getgroup(JSON.stringify(req));
+        const res = JSON.parse(result);
+    
+        const header = createHeader(
+            res.result_code === codes.ERROR_CODES.ROUTE_RESULT_SUCCESS,
+            res.result_code,
+            codes.getErrMsg(res.result_code)
+        );
+   
+        return { 
+            header, 
+            mode: req.mode ?? "clustering", 
+            origins: req.origins ?? null, 
+            summary: res.summary ?? null, 
+            clusters: res.clusters ?? null, 
+        };
+    } 
+    
+    const header = createHeader(
+        false,
+        codes.ERROR_CODES.RESULT_APPKEY_ERROR,
+        codes.getErrMsg(codes.ERROR_CODES.RESULT_APPKEY_ERROR)
+    );
+
+    const ret = {
+        header,
+        origins: req.origins ?? null,
+        summary: null,
+        clusters: null,
+    };
+
+    logout("client req error : " + JSON.stringify(ret));
 
     return ret;
 }
 
 
 exports.boundary = function (key, mode, target, destinations) {
-    var ret;
-
     // 사용자 키 확인
     var user = auth.checkAuth(key);
-    if (user != null && user.length > 0) {
-        if (mode !== undefined && destinations !== undefined) {
-            logout("client user:'" + user + "', req boundary: " + JSON.stringify(destinations));
+    if (user && user.length > 0) {
+        logout("client user:'" + user + "', req boundary: " + JSON.stringify(destinations));
 
-            ret = route.getboundary(mode, target, destinations);
-        }
-    } else {
-        var header = {
-            isSuccessful: false,
-            resultCode: codes.ERROR_CODES.RESULT_APPKEY_ERROR,
-            resultMessage: codes.getErrMsg(codes.ERROR_CODES.RESULT_APPKEY_ERROR)
+        const result = addon.getboundary(cntDestinations, destinations);
+        const res = JSON.parse(result);
+
+        const header = createHeader(
+            res.result_code === codes.ERROR_CODES.ROUTE_RESULT_SUCCESS,
+            res.result_code,
+            codes.getErrMsg(res.result_code)
+        );
+
+        return {
+            header,
+            origins: destinations ?? null,
+            boundary: res.result_code === codes.ERROR_CODES.ROUTE_RESULT_SUCCESS ? res.boundary : null,
         };
-
-        var origins;
-        var boundary;
-        if (destinations) {
-            origins = destinations
-        };
-
-        ret = {
-            header: header,
-            origins: origins,
-            boundary: boundary,
-        };
-
-        logout("client req error : " + JSON.stringify(ret));
     }
+
+    const header = createHeader(
+        false,
+        codes.ERROR_CODES.RESULT_APPKEY_ERROR,
+        codes.getErrMsg(codes.ERROR_CODES.RESULT_APPKEY_ERROR)
+    ); 
+
+    const ret = {
+        header,
+        origins: destinations ?? null,
+        boundary: null,
+    };
+
+    logout("client req error : " + JSON.stringify(ret));
 
     return ret;
 }
 
 
+// ---------------- Best Waypoints ----------------
 exports.bestwaypoints = function (key, req, callback) {
     // 사용자 키 확인
     const user = auth.checkAuth(key);
-    if (user != null && user.length > 0) {
+    if (user && user.length > 0) {
         logout(`client user:'${user}', mode=${req.mode ?? 'null'}, cache=${req.cache ?? 'null'}, cnt=${Array.isArray(req.origins) ? req.origins.length : 'null'}`);
 
         // vrp 모드면 bestvrp로 분기
         if (req.mode === 'vrp') {
-            exports.bestvrp(key, req, ret => callback(ret));
-        } else {
-            const ret = route.getbestways(req);
-            callback(ret);
-        }
-    } else {
-        const ret = {
-            header: {
-                isSuccessful: false,
-                resultCode: codes.ERROR_CODES.RESULT_APPKEY_ERROR,
-                resultMessage: codes.getErrMsg(codes.ERROR_CODES.RESULT_APPKEY_ERROR)
-            },
-            origins: req?.origins
-        };
-        logout(`client req error: ${JSON.stringify(ret)}`);
-        callback(ret);
-    }
+            return exports.bestvrp(key, req, callback);
+        } 
+        
+        const ret = exports.getbestways(req);
+        return callback(ret);
+    } 
+    
+    const ret = {
+        header: createHeader(
+            false,
+            codes.ERROR_CODES.RESULT_APPKEY_ERROR,
+            codes.getErrMsg(codes.ERROR_CODES.RESULT_APPKEY_ERROR)
+        ),
+        origins: req?.origins ?? [],
+    };
+
+    logout(`client req error: ${JSON.stringify(ret)}`);
+    callback(ret);
 }
 
 
@@ -168,8 +276,7 @@ async function requestVrp(req, endpoint = 0, compare) {
         matrix = req.matrix;
     } else {
         rdm = req.rdm;
-        const cnt = req.rdm.length;
-
+        let cnt = req.rdm.length;
         // "compare_type_desc": "0:COST, 1:DIST, 2:TIME"
         let compareType = "distance";
         if (compare == 2) {
@@ -179,6 +286,7 @@ async function requestVrp(req, endpoint = 0, compare) {
         for (let i = 0; i < cnt; i++) {
             const row = [];
             for (let j = 0; j < rdm[i].elements.length; j++) {
+            // for (let j = 0; j < cnt; j++) {
                 const element = rdm[i].elements[j];
                 if (element.status === 'OK') {
                     // if (element[compareType] === undefined || element[compareType].value == null || element[compareType].value === undefined) {
@@ -237,13 +345,50 @@ async function requestVrp(req, endpoint = 0, compare) {
             // 거리 및 시간 계산
             let totalDistance = 0;
             let totalTime = 0;
-            if (rdm && rdm.length > 0) {
-                for (let i = 0; i < routeIndices.length - 1; i++) {
-                    const from = routeIndices[i];
-                    const to = routeIndices[i + 1];
-                    totalDistance += rdm[from].elements[to].distance.value;
-                    totalTime += rdm[from].elements[to].duration.value;
+            let waypoints = [];
+
+            // prev -> curr 구간 dist/time 얻는 공통 함수
+            function getLegCost(prev, curr) {
+                // rdm이 있으면 rdm 기반으로 dist/time 분리
+                if (rdm && rdm.length > 0) {
+                    const element = rdm[prev]?.elements?.[curr];
+                    if (element?.status === 'OK') {
+                        const dist = element.distance?.value ?? 0;
+                        const time = element.duration?.value ?? 0;
+                        return { dist, time };
+                    }
+                    // status not OK면 0 처리(필요 시 null/예외로 바꿔도 됨)
+                    return { dist: 0, time: 0 };
                 }
+
+                // matrix만 있는 경우: time/distance 구분 없으므로 동일값 사용
+                const v = (matrix?.[prev]?.[curr] != null) ? matrix[prev][curr] : 0;
+                return { dist: v, time: v };
+            }
+
+            // routeIndices: 예) [0, 3, 2, 1, 0]
+            for (let i = 0; i < routeIndices.length; i++) {
+                const index = routeIndices[i];
+
+                let dist = 0;
+                let time = 0;
+
+                if (i > 0) {
+                    const prev = routeIndices[i - 1];
+                    const leg = getLegCost(prev, index);
+
+                    dist = leg.dist ?? 0;
+                    time = leg.time ?? 0;
+
+                    totalDistance += dist;
+                    totalTime += time;
+                }
+
+                waypoints.push({
+                    index,
+                    distance: dist,
+                    time: time,
+                });
             }
 
             // 최종 결과 구성
@@ -253,7 +398,7 @@ async function requestVrp(req, endpoint = 0, compare) {
                     distance: totalDistance,
                     time: totalTime
                 },
-                waypoints: routeIndices.map(index => ({ index })),
+                waypoints,
                 routes: routeIndices
             };
         } catch (error) {
@@ -288,7 +433,7 @@ exports.bestvrp = function (key, req, callback) {
             }
             // 3) 서버에서 테이블 생성
             else {
-                const table = route.gettable(req); // 동기라면 OK, 비동기면 await route.gettable(req)
+                const table = route.getmatrix(req); // 동기라면 OK, 비동기면 await route.getmatrix(req)
                 if (!table?.header?.isSuccessful || !Array.isArray(table.rows) || table.rows.length === 0) {
                     return callback({
                         header: {
@@ -344,4 +489,93 @@ exports.bestvrp = function (key, req, callback) {
             origins: req?.origins ?? []
         });
     }
+}
+
+
+// 클러스터링 영역
+exports.getbestways = function(req) {
+    let result = addon.getbestwaypoints(JSON.stringify(req));
+    let res = JSON.parse(result);
+
+    let header = {
+        isSuccessful: false,
+        resultCode: codes.ERROR_CODES.ROUTE_RESULT_FAILED,
+        resultMessage: ""
+    };
+
+    let ret = {
+        header: header,
+        mode: (req.mode != undefined) ? req.mode : "tsp",
+        origins: (req.origins != undefined) ? req.origins : null,
+        summary: null,
+        waypoints: null,
+    };
+
+    // let type_match = 4; //TYPE_LINK_MATCH_FOR_TABLE; // 최적지점 사용
+    // if (target === "samsung_heavy") {
+    //     type_match = 0; // TYPE_LINK_MATCH_NONE
+    // }
+
+    if (res.result_code === codes.ERROR_CODES.ROUTE_RESULT_SUCCESS) {
+        ret.header.isSuccessful = true;
+        ret.header.resultCode = res.result_code;
+        ret.header.resultMessage = codes.getErrMsg(ret.header.resultCode);
+
+        ret.summary = res.symmary;
+        ret.waypoints = res.waypoints;
+        ret.routes = res.routes ?? undefined;
+        
+        // add web route view url
+        if (res.url != undefined && res.url.length > 0) {
+            ret.url = res.url;
+        }
+    } else {
+        ret.header.isSuccessful = false;
+        ret.header.resultCode = res.result_code;
+        ret.header.resultMessage = codes.getErrMsg(ret.header.resultCode);
+    }
+
+    addon.releaseroute();
+
+    return ret;
+}
+
+
+exports.getboundary = function(mode, in_target, destinations) {
+    const target = (in_target === undefined) ? '' : req.query.target;
+
+    let header = {
+        isSuccessful: false,
+        resultCode: codes.ERROR_CODES.ROUTE_RESULT_FAILED,
+        resultMessage: ""
+    };
+
+    let boundary = {
+        boundary: new Array,
+    };
+
+    let ret = {
+        header: header,
+        origins: destinations,
+        boundary: boundary,
+    };
+
+    let cntDestinations = destinations.length;
+
+    let result = addon.getboundary(cntDestinations, destinations);
+    let res = JSON.parse(result);
+
+    if (res.result_code === codes.ERROR_CODES.ROUTE_RESULT_SUCCESS) {
+        ret.header.isSuccessful = true;
+        ret.header.resultCode = res.result_code;
+        ret.header.resultMessage = codes.getErrMsg(ret.header.resultCode);
+
+        ret.boundary = res.boundary;
+    } else {
+        ret.header.isSuccessful = false;
+        ret.header.resultCode = res.result_code;
+        ret.header.resultMessage = codes.getErrMsg(ret.header.resultCode);
+    }
+
+    return ret;
 }

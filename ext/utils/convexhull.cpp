@@ -77,7 +77,7 @@ void ConvexHull(IN vector<SPoint> &r, OUT vector<SPoint> &q)
 
 		// 동일 데이터 제거
 		vector<SPoint> vtTmp;
-		SPoint prevPt = { 0, };
+		SPoint prevPt{};
 		for (const auto & ptNow : p) {
 			if ((ptNow.x != prevPt.x) || (ptNow.y != prevPt.y)) {
 				vtTmp.emplace_back(ptNow);

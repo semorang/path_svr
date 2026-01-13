@@ -46,3 +46,8 @@ void releaseProj4();
 bool translateUTM52NtoWGS84(IN const double lng, IN const double lat, OUT double& x, OUT double& y);
 bool translateUTMKtoWGS84(IN const double lng, IN const double lat, OUT double& x, OUT double& y);
 #endif // #if defined(USE_PROJ4_LIB)
+
+// 텍스트에서 좌표 확인
+bool parseCoordinate(const string& strInfo, SPoint& coord);
+//bool getCoordinateEx(const std::string& strInfo, SPoint& coord, coordparser::ParseResult& outRet,
+//	const coordparser::ParseOptions& opt = coordparser::ParseOptions())

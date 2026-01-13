@@ -546,8 +546,8 @@ void TCross::makeCompleteSol( TIndi& tKid ){
 			if( tKid.fLink[ curr ][ 0 ] != pre ) next = tKid.fLink[ curr ][ 0 ];
 			else next = tKid.fLink[ curr ][ 1 ];
 			if( next == st ) break;
-			//if (fNumOfElementInCU >= fListOfCenterUnit.size()) break; // ¿À·ùÈ¸ÇÇÃ³¸® 2025-02-05
-			if (fNumOfElementInCU >= fListOfCenterUnit.size() - 2) break; // ¿À·ùÈ¸ÇÇÃ³¸® 2025-06-12
+			//if (fNumOfElementInCU >= fListOfCenterUnit.size()) break; // ì˜¤ë¥˜íšŒí”¼ì²˜ë¦¬ 2025-02-05
+			if (fNumOfElementInCU >= fListOfCenterUnit.size() - 2) break; // ì˜¤ë¥˜íšŒí”¼ì²˜ë¦¬ 2025-06-12
 		}
 		fListOfCenterUnit[ fNumOfElementInCU ] = fListOfCenterUnit[ 0 ];
 		fListOfCenterUnit[ fNumOfElementInCU+1 ] = fListOfCenterUnit[ 1 ];
@@ -702,7 +702,7 @@ bool TCross::makeUnit(){
 	for( int s = 0; s < fNumOfSeg; ++s ) fSegUnit[ s ] = -1;
 	fNumOfUnit = 0;
 
-	// ¹«ÇÑ ·çÇÁ ¿À·ù, ÀÓ½Ã Ã³¸®
+	// ë¬´í•œ ë£¨í”„ ì˜¤ë¥˜, ìž„ì‹œ ì²˜ë¦¬
 #if defined(_DEBUG)
 	static const uint32_t MAX_LOOP_COUNT = INT32_MAX / 100;// 100000000;
 #else
@@ -743,7 +743,7 @@ bool TCross::makeUnit(){
 			p1 = p_next;
 
 			if (cnt_loop++ > MAX_LOOP_COUNT) {
-				LOG_TRACE(LOG_WARNING, "cross::makeUnit(), exit loop"); // ¿À·ùÈ¸ÇÇÃ³¸® 2025-02-05
+				LOG_TRACE(LOG_WARNING, "cross::makeUnit(), exit loop"); // ì˜¤ë¥˜íšŒí”¼ì²˜ë¦¬ 2025-02-05
 				return false;
 			}
 		}
@@ -1044,7 +1044,7 @@ double TCross::calEntLoss(vector<vector<int>>& fEdgeFreq){
 	}
 	DLoss = -DLoss;
 
-	// ¸üÐÂ EdgeFreq
+	// ë«˜åŠ¤ EdgeFreq
 	for( int s = 0; s < fNumOfAppliedCycle; ++s ){
 		jnum = fAppliedCylce[ s ];
 

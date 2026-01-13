@@ -36,7 +36,7 @@ size_t TICK_COUNT();
 
 time_t LOG_PRINT(const char* szKey, const LOG_LEVEL lvl, const time_t tm, const char* fmt, va_list args, const char* func = nullptr, const int line = -1);
 
-bool checkDirectory(const char* szFileName);
+bool checkDirectory(const char* szFileName, bool force = false);
 size_t checkMemorySize(void);
 
 typedef struct _tagLOGTIME {

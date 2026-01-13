@@ -53,6 +53,7 @@ public:
 	int32_t GetMapsRouteResult(IN const RouteResultInfo* pResult, OUT string& strJson);
 	int32_t GetMapsMultiRouteResult(IN const vector<RouteResultInfo>& vtRouteResults, OUT string& strJson);
 	void GetClusteringResult(IN const Cluster& CLUST, IN const RouteDistMatrix& RDM, IN const char* pszFile, OUT string& strJson);
+	void GetGroupingResult(IN const Cluster& CLUST, OUT string& strJson);
 	void GetBoundaryResult(IN const vector<SPoint>& vtBoundary, OUT string& strJson);
 	void GetBestWaypointResult(IN const BestWaypoints& TSP, IN const RouteDistMatrix& RDM, IN const char* pszFile, OUT string& strJson);
 	void GetWeightMatrixResult(IN const RouteDistMatrix& RDM, OUT string& strJson);

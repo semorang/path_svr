@@ -25,6 +25,7 @@
 #include <omp.h>
 #include <map>
 #include <thread>
+#include <atomic>
 
 using namespace std;
 
@@ -124,9 +125,14 @@ typedef map<string, stLogInfo*> mapLogInfo;
 mapLogInfo g_mapLogInfo;
 
 thread g_TimeThread;
-LOGTIME g_current_time;
+//LOGTIME g_current_time;
 bool g_isTimeThreadRun = false;
 const char g_LogTimeThreadName[] = "Log time thread";
+
+// ★ 더블 버퍼 + atomic 인덱스
+static LOGTIME g_time_slots[2];                // [0], [1] 두 개의 날짜 버퍼
+static std::atomic<int> g_time_index{ 0 };       // 현재 사용중인 슬롯 인덱스 (0 또는 1)
+static std::atomic<bool> g_time_initialized{ false }; // 최초 초기화 여부
 
 #if defined(_WIN32)
 //static CRITICAL_SECTION g_mutex_log;
@@ -198,6 +204,69 @@ time_t getLogTime(LOGTIME& logTime, time_t tmCurrent)
 }
 
 
+// ★ 현재 로그용 날짜를 더블 버퍼에 기록하는 함수
+static void UpdateCurrentLogDate(const LOGTIME& src)
+{
+	int cur = g_time_index.load(std::memory_order_relaxed);
+	int nxt = 1 - cur;                 // 다른 슬롯 선택
+
+	g_time_slots[nxt] = src;           // 구조체 통째 복사
+
+									   // 날짜를 다 쓴 후에 인덱스와 초기화 플래그를 업데이트
+	g_time_index.store(nxt, std::memory_order_release);
+	g_time_initialized.store(true, std::memory_order_release);
+}
+
+// ★ 아직 한 번도 설정된 적이 없으면, 현재 시간을 한 번 구해서 기록
+static void EnsureCurrentLogDateInitialized()
+{
+	bool init = g_time_initialized.load(std::memory_order_acquire);
+	if (!init) {
+		LOGTIME now{};
+		getLogTime(now, 0);
+		UpdateCurrentLogDate(now);
+	}
+}
+
+// ★ 읽는 쪽에서 쓰는 “일관된 날짜 스냅샷” 반환
+static LOGTIME GetCurrentLogDateSnapshot()
+{
+	EnsureCurrentLogDateInitialized();
+	int idx = g_time_index.load(std::memory_order_acquire);
+	return g_time_slots[idx];          // 값 복사로 반환(로컬에 안전하게 담김)
+}
+
+
+// 공용 헤더에 한 번만 정의
+#if 1
+#if defined(_WIN32)
+//#if defined(_WIN32) && defined(_WINDOWS) && (_MSC_VER >= 1900)
+#define DEBUG_OUT(fmt, ...)                                        \
+        do {                                                       \
+            char _dbg_buf[1024];                                   \
+            _snprintf_s(_dbg_buf, sizeof(_dbg_buf), _TRUNCATE, fmt, __VA_ARGS__); \
+            OutputDebugStringA(_dbg_buf);                          \
+        } while (0)
+#else
+#define DEBUG_OUT(fmt, ...)  ((void)0)
+#endif
+#else
+inline void DebugOut(const char* fmt, ...)
+{
+#if defined(_WIN32) && defined(_WINDOWS) && (_MSC_VER >= 1900)
+	char buf[MAX_BUFF + 1];
+	va_list ap;
+	va_start(ap, fmt);
+	vsnprintf(buf, MAX_BUFF, fmt, ap);
+	va_end(ap);
+	OutputDebugStringA(buf);
+#else
+	(void)fmt;
+#endif
+}
+#endif
+
+
 void logtime_thread()
 {
 	// check every 1minute
@@ -205,16 +274,15 @@ void logtime_thread()
 		LOGTIME logNow;
 		time_t tEpochTime = getLogTime(logNow, 0);
 
-		if ((g_current_time.year != logNow.year) || (g_current_time.month != logNow.month) || (g_current_time.day != logNow.day)) {
-			char szChangeDateLog[PATH_MAX + 1] = { 0, };
-#if defined(_WIN32) && defined(_WINDOWS)
-			sprintf_s(szChangeDateLog, PATH_MAX, "Log file change: %04d-%02d-%02d => %04d-%02d-%02d", g_current_time.year, g_current_time.month, g_current_time.day, logNow.year, logNow.month, logNow.day);
-#else
-			snprintf(szChangeDateLog, PATH_MAX, "Log file change date: %04d-%02d-%02d => %04d-%02d-%02d", g_current_time.year, g_current_time.month, g_current_time.day, logNow.year, logNow.month, logNow.day);
-#endif
+		// ★ 현재 저장된 로그 날짜 스냅샷
+		LOGTIME curDate = GetCurrentLogDateSnapshot();
 
-			// update date
-			memcpy(&g_current_time, &logNow, sizeof(logNow));
+		if ((curDate.year != logNow.year) || (curDate.month != logNow.month) || (curDate.day != logNow.day)) {
+			char szChangeDateLog[PATH_MAX + 1] = { 0, };
+			snprintf(szChangeDateLog, PATH_MAX, "Log file change date: %04d-%02d-%02d => %04d-%02d-%02d", curDate.year, curDate.month, curDate.day, logNow.year, logNow.month, logNow.day);
+
+			// ★ 날짜 변경 반영 (더블 버퍼에 새 날짜 기록 + 인덱스 flip)
+			UpdateCurrentLogDate(logNow);
 
 			LOG_TRACE(LOG_DEBUG, szChangeDateLog);
 
@@ -247,18 +315,10 @@ void log_print_head(const char* szKey, FILE* fpLog, const int lvl, const LOGTIME
 		} else {
 			if (szKey && strlen(szKey) > 0) {
 				printf("[%04d-%02d-%02d %02d:%02d:%02d:%03d][%s]", logtime.year, logtime.month, logtime.day, logtime.hour, logtime.minute, logtime.second, logtime.millisecond, szKey);
-#if defined(_WIN32) && defined(_WINDOWS) && (_MSC_VER >= 1900)
-				char szMsg[MAX_BUFF + 1] = { 0, };
-				sprintf_s(szMsg, MAX_BUFF, "[%04d-%02d-%02d %02d:%02d:%02d:%03d][%s]", logtime.year, logtime.month, logtime.day, logtime.hour, logtime.minute, logtime.second, logtime.millisecond, szKey);
-				OutputDebugStringA(szMsg);
-#endif
+				DEBUG_OUT("[%04d-%02d-%02d %02d:%02d:%02d:%03d][%s]", logtime.year, logtime.month, logtime.day, logtime.hour, logtime.minute, logtime.second, logtime.millisecond, szKey);
 			} else {
 				printf("[%04d-%02d-%02d %02d:%02d:%02d:%03d]", logtime.year, logtime.month, logtime.day, logtime.hour, logtime.minute, logtime.second, logtime.millisecond);
-#if defined(_WIN32) && defined(_WINDOWS) && (_MSC_VER >= 1900)
-				char szMsg[MAX_BUFF + 1] = { 0, };
-				sprintf_s(szMsg, MAX_BUFF, "[%04d-%02d-%02d %02d:%02d:%02d:%03d]", logtime.year, logtime.month, logtime.day, logtime.hour, logtime.minute, logtime.second, logtime.millisecond);
-				OutputDebugStringA(szMsg);
-#endif
+				DEBUG_OUT("[%04d-%02d-%02d %02d:%02d:%02d:%03d]", logtime.year, logtime.month, logtime.day, logtime.hour, logtime.minute, logtime.second, logtime.millisecond);
 			}
 		}
 
@@ -268,11 +328,7 @@ void log_print_head(const char* szKey, FILE* fpLog, const int lvl, const LOGTIME
 				fprintf(fpLog, "[%d]", g_nId);
 			} else {
 				printf("[%d]", g_nId);
-#if defined(_WIN32) && defined(_WINDOWS) && (_MSC_VER >= 1900)
-				char szMsg[MAX_BUFF + 1] = { 0, };
-				sprintf_s(szMsg, MAX_BUFF, "[%d]", g_nId);
-				OutputDebugStringA(szMsg);
-#endif
+				DEBUG_OUT("[%d]", g_nId);
 			}
 		}
 
@@ -282,18 +338,14 @@ void log_print_head(const char* szKey, FILE* fpLog, const int lvl, const LOGTIME
 				fprintf(fpLog, " error: ");
 			} else {
 				printf(" error: ");
-#if defined(_WIN32) && defined(_WINDOWS) && (_MSC_VER >= 1900)
-				OutputDebugStringA(" error: ");
-#endif
+				DEBUG_OUT(" error: ");
 			}
 		} else if (lvl == LOG_WARNING) {
 			if (fpLog) {
 				fprintf(fpLog, " warning: ");
 			} else {
 				printf(" warning: ");
-#if defined(_WIN32) && defined(_WINDOWS) && (_MSC_VER >= 1900)
-				OutputDebugStringA(" warning: ");	
-#endif
+				DEBUG_OUT(" warning: ");
 			}
 		}
 	} // if (lvl != LOG_DEBUG_LINE)
@@ -326,14 +378,28 @@ void log_print_body(FILE* fpLog, const int lvl, const char* fmt, va_list args, c
 				printf("%s", func);
 			}
 		}
-		vprintf(fmt, args);
 #if defined(_WIN32) && defined(_WINDOWS) && (_MSC_VER >= 1900)
-		int len = _vscprintf(fmt, args) + 1;
-		char* pBuff = (char*)malloc(len * sizeof(char));
-		vsprintf_s(pBuff, len, fmt, args);
-		OutputDebugStringA(pBuff);
-		free(pBuff);
+		// 길이 계산
+		va_list args_len;
+		va_copy(args_len, args);
+		int len = _vscprintf(fmt, args_len);
+		va_end(args_len);
+		if (len < 0) return;
+		len += 1;
+
+		char* buf = (char*)malloc((size_t)len);
+		if (!buf) return;
+
+		va_list args_buf;
+		va_copy(args_buf, args);
+		vsprintf_s(buf, (size_t)len, fmt, args_buf);
+		va_end(args_buf);
+
+		OutputDebugStringA(buf);
+		free(buf);
 #endif
+
+		vprintf(fmt, args);
 	}
 	//va_end(args);
 
@@ -499,11 +565,7 @@ void log_print_tail(FILE* fpLog, const int lvl, const int time = 0)
 			} else {
 				printf(", t:%d\n", time);
 				fflush(stdout);
-#if defined(_WIN32) && defined(_WINDOWS) && (_MSC_VER >= 1900)
-				char szMsg[MAX_BUFF + 1] = { 0, };
-				sprintf_s(szMsg, MAX_BUFF, ", t:%d\n", time);
-				OutputDebugStringA(szMsg);		
-#endif
+				DEBUG_OUT(", t:%d\n", time);
 			}
 		} else {
 			if (fpLog) {
@@ -512,9 +574,7 @@ void log_print_tail(FILE* fpLog, const int lvl, const int time = 0)
 			} else {
 				printf("\n");
 				fflush(stdout);
-#if defined(_WIN32) && defined(_WINDOWS) && (_MSC_VER >= 1900)
-				OutputDebugStringA("\n");
-#endif			
+				DEBUG_OUT("\n");
 			}
 		}
 	}
@@ -623,16 +683,12 @@ void LOG_SET_FILEPATH(const char* szKey, const char* szFilePath, const char* szF
 
 	pLogInfo->lock();
 
-	if ((g_current_time.year <= 0)) {
-		getLogTime(g_current_time, 0);
-	}
+	// ★ 현재 로그 날짜를 보장 + 스냅샷 획득
+	EnsureCurrentLogDateInitialized();
+	LOGTIME curDate = GetCurrentLogDateSnapshot();
 
 	char szFilePathName[PATH_MAX + 1] = { 0, };
-#if defined(_WIN32) && defined(_WINDOWS)
-	sprintf_s(szFilePathName, PATH_MAX, "%s/%s_%04d-%02d-%02d.txt", szFilePath, szFileName, g_current_time.year, g_current_time.month, g_current_time.day);
-#else
-	snprintf(szFilePathName, PATH_MAX, "%s/%s_%04d-%02d-%02d.txt", szFilePath, szFileName, g_current_time.year, g_current_time.month, g_current_time.day);
-#endif
+	snprintf(szFilePathName, PATH_MAX, "%s/%s_%04d-%02d-%02d.txt", szFilePath, szFileName, curDate.year, curDate.month, curDate.day);
 
 	// file close
 	if (pLogInfo->fpLog) {
@@ -839,45 +895,119 @@ size_t TICK_COUNT()
 }
 
 
-bool checkDirectory(const char* szFileName)
+bool checkDirectory(const char* szFileName, bool recursive)
 {
+	bool isCreate = false;
+
+	if (szFileName == nullptr || strlen(szFileName) == 0) {
+		return isCreate;
+	}
+
+#if 1
+	const char* pTok = strrchr(szFileName, '/');
+#if defined(_WIN32)
+	if (!pTok) {
+		pTok = strrchr(szFileName, '\\'); // 윈도우 경로 구분자
+	}
+#endif
+
+	std::string dirPath;
+	if (pTok != nullptr) {
+		// 마지막 구분자 앞까지 디렉토리 경로
+		dirPath.assign(szFileName, pTok - szFileName);
+		// 만약 입력이 /home/test/ 처럼 끝에 /가 있으면 dirPath=/home/test
+		// 입력이 /home/test/this_is_dir 이면 dirPath=/home/test
+	} else {
+		// 구분자가 없으면 전체를 디렉토리로 간주
+		dirPath = szFileName;
+	}
+
+	if (dirPath.empty()) {
+		return false;
+	}
+
+	// 중첩 디렉토리 생성
+	if (recursive) {
+		size_t pos = 0;
+		while ((pos = dirPath.find_first_of("/\\", pos + 1)) != std::string::npos) {
+			std::string subPath = dirPath.substr(0, pos);
+			if (subPath.empty()) continue;
+
+#if defined(_WIN32)
+			if (_access_s(subPath.c_str(), 0) != 0) {
+				if (_mkdir(subPath.c_str()) != 0) {
+					return false;
+				}
+				isCreate = true;
+			}
+#else
+			if (access(subPath.c_str(), F_OK) != 0) {
+				if (mkdir(subPath.c_str(), S_IRWXU | S_IRWXG | S_IRWXO) == -1) {
+					return false;
+				}
+				isCreate = true;
+			}
+#endif
+		}
+	}
+
+	// 마지막 전체 경로도 체크
+#if defined(_WIN32)
+	if (_access_s(dirPath.c_str(), 0) != 0) {
+		if (_mkdir(dirPath.c_str()) != 0) {
+			return false;
+		}
+		isCreate = true;
+	}
+#else
+	if (access(dirPath.c_str(), F_OK) != 0) {
+		if (mkdir(dirPath.c_str(), S_IRWXU | S_IRWXG | S_IRWXO) == -1) {
+			return false;
+		}
+		isCreate = true;
+	}
+#endif
+
+#else
 	// path check
 	//char* pTok = strrchr((char*)szFileName, '/');
 	//if (pTok != nullptr) 
 	//{
 	//	char szPath[MAX_PATH] = { 0, };
 	//	strncpy(szPath, szFileName, (pTok - szFileName));
-	bool isCreate = false;
 #if defined(_WIN32)
-		// check directory created
-		if (_access_s(szFileName, 0) != 0) {
-			// LOG_TRACE(LOG_DEBUG, "directory was not created : %s", szPath);
+	// check directory created
+	if (_access_s(szFileName, 0) != 0) {
+		// LOG_TRACE(LOG_DEBUG, "directory was not created : %s", szPath);
 
-			if (_mkdir(szFileName) != 0) {
-				// LOG_TRACE(LOG_ERROR, "Error, Can't create directory : %s", szPath);
-				return false;
-			}
-			isCreate = true;
+		if (_mkdir(szFileName) != 0) {
+			// LOG_TRACE(LOG_ERROR, "Error, Can't create directory : %s", szPath);
+			return false;
 		}
+		isCreate = true;
+	}
 #else
-		// check directory created
-		if (access(szFileName, W_OK) != 0) {
-			// LOG_TRACE(LOG_DEBUG, "save directory was not created : %s", szPath);
+	// check directory created
+	if (access(szFileName, W_OK) != 0) {
+		// LOG_TRACE(LOG_DEBUG, "save directory was not created : %s", szPath);
 
-			if (mkdir(szFileName, S_IRWXU | S_IRWXG | S_IRWXO) == -1) {
-				// LOG_TRACE(LOG_ERROR, "Error, Can't create save directory : %s", szPath);
-				return false;
-			}
-			isCreate = true;
+		if (mkdir(szFileName, S_IRWXU | S_IRWXG | S_IRWXO) == -1) {
+			// LOG_TRACE(LOG_ERROR, "Error, Can't create save directory : %s", szPath);
+			return false;
+		}
+		isCreate = true;
 			
-		}
+	}
 #endif
-		if (isCreate) {
-			LOG_TRACE(LOG_DEBUG, "created directory: %s", szFileName);
-		}
-	//}
+//}
 
-		return true;
+#endif
+
+	if (isCreate) {
+		LOG_TRACE(LOG_DEBUG, "created directory: %s", dirPath.c_str());
+	}
+
+	return isCreate;
 }
 
 
@@ -890,7 +1020,7 @@ size_t checkMemorySize(void)
 		physMemUsed = memInfo.WorkingSetSize;
 	}
 #else
-	// 1) /proc/self/statm : 2��° �ʵ�(resident pages) �� ������ ũ��
+	// 1) /proc/self/statm : 2번째 필드(resident pages) × 페이지 크기
 	{
 		FILE* f = fopen("/proc/self/statm", "r");
 		if (f) {
@@ -905,7 +1035,7 @@ size_t checkMemorySize(void)
 		}
 	}
 
-	// 2) ���� ���: /proc/self/status �� "VmRSS:" (���� kB)
+	// 2) 보조 경로: /proc/self/status 의 "VmRSS:" (단위 kB)
 	if (physMemUsed == 0) {
 		FILE* f = fopen("/proc/self/status", "r");
 		if (f) {
@@ -913,7 +1043,7 @@ size_t checkMemorySize(void)
 			while (fgets(line, sizeof(line), f)) {
 				if (strncmp(line, "VmRSS:", 6) == 0) {
 					unsigned long kb = 0;
-					// ��: "VmRSS:   12345 kB"
+					// 예: "VmRSS:   12345 kB"
 					if (sscanf(line + 6, "%lu", &kb) == 1) {
 						physMemUsed = static_cast<size_t>(kb) * 1024u; // bytes
 						break;
@@ -924,7 +1054,7 @@ size_t checkMemorySize(void)
 		}
 	}
 
-	// 3) ���� ����: getrusage (Linux���� kB ������ "�ִ�" RSS, ���簪 �ƴ�)
+	// 3) 최후 수단: getrusage (Linux에선 kB 단위의 "최대" RSS, 현재값 아님)
 	if (physMemUsed == 0) {
 		struct rusage ru {};
 		if (getrusage(RUSAGE_SELF, &ru) == 0) {

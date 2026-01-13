@@ -75,70 +75,13 @@ std::string string_format( const std::string& format, Args ... args )
 }
 
 
-#if defined(_WIN32)
-void MultiByteToUnicode(const char* strMultibyte, wchar_t* strUnicode)
-{
-#ifdef _WINDOWS
-	int nLen = MultiByteToWideChar(CP_ACP, 0, strMultibyte, strlen(strMultibyte), NULL, NULL);
-	MultiByteToWideChar(CP_ACP, 0, strMultibyte, strlen(strMultibyte), strUnicode, nLen);
-#else
-	mbstowcs(strUnicode, strMultibyte, strlen(strMultibyte));
-#endif        
-}
-
-void UnicodeToUTF8(const wchar_t* strUnicode, char* strUTF8)
-{
-#ifdef _WINDOWS
-	int nLen = WideCharToMultiByte(CP_UTF8, 0, strUnicode, lstrlenW(strUnicode), NULL, 0, NULL, NULL);
-	WideCharToMultiByte(CP_UTF8, 0, strUnicode, lstrlenW(strUnicode), strUTF8, nLen, NULL, NULL);
-#else
-	wcstombs(strUnicode, strMultibyte, strlen(strMultibyte));
-#endif        
-}
-
-void MultiByteToUTF8(const char* strMultibyte, char* strUTF8)
-{
-   wchar_t wszUnicode[MAX_PATH] = {0,};
-   
-   MultiByteToUnicode(strMultibyte, wszUnicode);
-
-   UnicodeToUTF8(wszUnicode, strUTF8);
-}
-
-#else //#if defined(_WIN32)
-
-char * encoding(const char *text_input, char *source, char *target)
-{
-   iconv_t it;
-
-   int input_len = strlen(text_input) + 1;
-   int output_len = input_len*2;
-
-   size_t in_size = input_len;
-   size_t out_size = output_len;
-
-   char *output = (char *)malloc(output_len);
-
-   char *output_buf = output;
-   char *input_buf = const_cast<char*>(text_input);
-
-   it = iconv_open(target, source); 
-   int ret = iconv(it, &input_buf, &in_size, &output_buf, &out_size);
-
-
-   iconv_close(it);
-
-   return output;
-}
-#endif //#if defined(_WIN32)
-
-
 void LogOut(const FunctionCallbackInfo<Value>& args) {
    Isolate* isolate = args.GetIsolate();
 
-   // char test[] = "test node-gyp, hello node-gyp";
-   // args.GetReturnValue().Set(String::NewFromUtf8(isolate, test).ToLocalChecked());
-
+   if (args.Length() < 1 || !args[0]->IsString()) {
+      LOG_TRACE(LOG_DEBUG, "LogOut, called without string argument");
+      return;
+   }
 
    String::Utf8Value str(isolate, args[0]);
    std::string strInput (*str);
@@ -320,13 +263,15 @@ void SetDeparture(const FunctionCallbackInfo<Value>& args) {
    // double lng = To<double>(info[0]).FromJust();//->NumberValue();
    // double lng = info.GetReturnValue().Set(Number::New(isolate, info[0]));
 
-   if (args.Length() < 2) {
-      LOG_TRACE(LOG_DEBUG, "function call argument too short : %s", args);
+   int cnt = args.Length();
+
+   if (cnt < 2) {
+      auto msgText = string_format("SetDeparture, function call argument too short, cnt : %d", cnt);
+
+      LOG_TRACE(LOG_DEBUG, msgText.c_str());
+      // msg = String::NewFromUtf8(isolate, msgText.c_str()).ToLocalChecked();
    }
    else {
-      int cnt = args.Length();
-      // LOG_TRACE(LOG_DEBUG, "arg length : %d", cnt);
-
       double lng = args[0].As<Number>()->Value();
       double lat = args[1].As<Number>()->Value();
 
@@ -342,7 +287,8 @@ void SetDeparture(const FunctionCallbackInfo<Value>& args) {
 
       if (useOptimalPoint == true) {
          stOptimalPointInfo optInfo;
-         if (m_pDataMgr.GetOptimalPointDataByPoint(lng, lat, &optInfo) > 0) {
+         stReqOptimal reqOpt;
+         if (m_pDataMgr.GetOptimalPointDataByPoint(&optInfo, lng, lat, reqOpt, typeLinkMatch) > 0) {
             lng = optInfo.vtEntryPoint[0].x;
             lat = optInfo.vtEntryPoint[0].y;
 
@@ -366,13 +312,15 @@ void SetWaypoint(const FunctionCallbackInfo<Value>& args) {
    // double lng = To<double>(info[0]).FromJust();//->NumberValue();
    // double lng = info.GetReturnValue().Set(Number::New(isolate, info[0]));
 
-   if (args.Length() < 2) {
-      LOG_TRACE(LOG_DEBUG, "function call argument too short : %s", args);
+   int cnt = args.Length();
+
+   if (cnt < 2) {
+      auto msgText = string_format("SetWaypoint, function call argument too short, cnt : %d", cnt);
+
+      LOG_TRACE(LOG_DEBUG, msgText.c_str());
+      // msg = String::NewFromUtf8(isolate, msgText.c_str()).ToLocalChecked();
    }
    else {
-      int cnt = args.Length();
-      // LOG_TRACE(LOG_DEBUG, "arg length : %d", cnt);
-
       double lng = args[0].As<Number>()->Value();
       double lat = args[1].As<Number>()->Value();
 
@@ -388,7 +336,8 @@ void SetWaypoint(const FunctionCallbackInfo<Value>& args) {
 
       if (useOptimalPoint == true) {
          stOptimalPointInfo optInfo;
-         if (m_pDataMgr.GetOptimalPointDataByPoint(lng, lat, &optInfo) > 0) {
+         stReqOptimal reqOpt;
+         if (m_pDataMgr.GetOptimalPointDataByPoint(&optInfo, lng, lat, reqOpt, typeLinkMatch) > 0) {
             lng = optInfo.vtEntryPoint[0].x;
             lat = optInfo.vtEntryPoint[0].y;
 
@@ -412,13 +361,15 @@ void SetDestination(const FunctionCallbackInfo<Value>& args) {
    // double lng = To<double>(info[0]).FromJust();//->NumberValue();
    // double lng = info.GetReturnValue().Set(Number::New(isolate, info[0]));
 
-   if (args.Length() < 2) {
-      LOG_TRACE(LOG_DEBUG, "function call argument too short : %s", args);
+   int cnt = args.Length();
+
+   if (cnt < 2) {
+      auto msgText = string_format("SetDestination, function call argument too short, cnt : %d", cnt);
+
+      LOG_TRACE(LOG_DEBUG, msgText.c_str());
+      // msg = String::NewFromUtf8(isolate, msgText.c_str()).ToLocalChecked();
    }
    else {
-      int cnt = args.Length();
-      // LOG_TRACE(LOG_DEBUG, "arg length : %d", cnt);
-
       double lng = args[0].As<Number>()->Value();
       double lat = args[1].As<Number>()->Value();
       // int opt = args[2].As<Number>()->Value();
@@ -435,7 +386,8 @@ void SetDestination(const FunctionCallbackInfo<Value>& args) {
 
       if (useOptimalPoint == true) {
          stOptimalPointInfo optInfo;
-         if (m_pDataMgr.GetOptimalPointDataByPoint(lng, lat, &optInfo) > 0) {
+         stReqOptimal reqOpt;
+         if (m_pDataMgr.GetOptimalPointDataByPoint(&optInfo, lng, lat, reqOpt, typeLinkMatch) > 0) {
             lng = optInfo.vtEntryPoint[0].x;
             lat = optInfo.vtEntryPoint[0].y;
 
@@ -458,44 +410,35 @@ void SetDataCost(const FunctionCallbackInfo<Value>& args) {
    Isolate* isolate = args.GetIsolate();
    Local<Context> context = isolate->GetCurrentContext();
 
-   int type = 0;
-   int devide = 0;
-   int count = 0;
-   Local<Array> costList;
-
    Local<Object> obj = Object::New(isolate);
    v8::MaybeLocal<v8::String> msg;
 
+   string strReq = "";
    int ret = -1;
+   int cnt = args.Length();
 
-   if (args.Length() < 4) {
-      LOG_TRACE(LOG_DEBUG, "set data cost argument too short : %d", args.Length());
-      msg = String::NewFromUtf8(isolate, "set data cost argument too short : " + args.Length());
+   if (cnt < 1) {
+      auto msgText = string_format("SetDataCost, function call argument too short, cnt : %d", cnt);
+
+      LOG_TRACE(LOG_DEBUG, msgText.c_str());
+      msg = String::NewFromUtf8(isolate, msgText.c_str()).ToLocalChecked();
    }
    else {
-      type = args[0].As<Number>()->Value();
-      devide = args[1].As<Number>()->Value();
-      count = args[2].As<Number>()->Value();
-      costList = args[3].As<Array>();
+      String::Utf8Value pRequest(isolate, args[0]);
+      strReq = *pRequest;
 
-      DataCost cost;
-      if (count >= 128) {
-         LOG_TRACE(LOG_DEBUG, "set data cost count too big : %d", count);
-         msg = String::NewFromUtf8(isolate, "set data cost count too big : " + count);
+      DataCost dataCost;
+      int cntCost = m_pDataMgr.ParseRequestDataCost(strReq.c_str(), dataCost);
+      if (cntCost >= 128) {
+         auto msgText = string_format("SetDataCost, count too big, cnt : %d", cntCost);       
+
+         LOG_TRACE(LOG_DEBUG, msgText.c_str());
+         msg = String::NewFromUtf8(isolate, msgText.c_str()).ToLocalChecked();
       } else {
-         for (int ii=0; ii<count; ii++) {
-            Local<Value> costValue =  costList->Get(context, ii).ToLocalChecked();
-            cost.base[ii] = costValue.As<Number>()->Value();
-
-            if (devide > 0) {
-                cost.base[ii] /= devide;
-            }
-         }
-
-         m_pRouteMgr.SetRouteCost(type, &cost);
+         m_pRouteMgr.SetRouteCost(&dataCost, cntCost);
 
          ret = ROUTE_RESULT_SUCCESS;
-         msg = String::NewFromUtf8(isolate, "success");
+         msg = String::NewFromUtf8(isolate, "SetDataCost, success");
       }
    }
 
@@ -514,18 +457,17 @@ void SetRouteOption(const FunctionCallbackInfo<Value>& args) {
    v8::MaybeLocal<v8::String> msg;
 
    int ret = -1;
+   int cnt = args.Length();
 
    LOG_TRACE(LOG_DEBUG, "Set route option");
 
-   if (args.Length() < 1) {
-      LOG_TRACE(LOG_DEBUG, "function call argument too short : %s", args);
+   if (cnt < 3) {
+      auto msgText = string_format("function call argument too short, cnt : %d", cnt);
 
-      msg = String::NewFromUtf8(isolate, "function call argument too short : " + args.Length());
+      LOG_TRACE(LOG_DEBUG, msgText.c_str());
+      msg = String::NewFromUtf8(isolate, msgText.c_str()).ToLocalChecked();
    }
    else {
-      int cnt = args.Length();
-      // LOG_TRACE(LOG_DEBUG, "arg length : %d", cnt);
-
       // int opt = args[0].As<Number>()->Value();
       // int avoid = args[1].As<Number>()->Value();
       int mobility = args[2].As<Number>()->Value();
@@ -550,18 +492,17 @@ void AddRouteOption(const FunctionCallbackInfo<Value>& args) {
    v8::MaybeLocal<v8::String> msg;
 
    int ret = -1;
+   int cnt = args.Length();
 
-   LOG_TRACE(LOG_DEBUG, "Set route option");
+   LOG_TRACE(LOG_DEBUG, "Set add route option");
 
-   if (args.Length() < 3) {
-      LOG_TRACE(LOG_DEBUG, "function call argument too short : %s", args);
+   if (cnt < 3) {
+      auto msgText = string_format("function call argument too short, cnt : %d", cnt);
 
-      msg = String::NewFromUtf8(isolate, "function call argument too short : " + args.Length());
+      LOG_TRACE(LOG_DEBUG, msgText.c_str());
+      msg = String::NewFromUtf8(isolate, msgText.c_str()).ToLocalChecked();
    }
    else {
-      int cnt = args.Length();
-      // LOG_TRACE(LOG_DEBUG, "arg length : %d", cnt);
-
       int opt = args[0].As<Number>()->Value();
       int avoid = args[1].As<Number>()->Value();
       int mobility = args[2].As<Number>()->Value();
@@ -581,18 +522,17 @@ void SetRouteSubOption(const FunctionCallbackInfo<Value>& args) {
    v8::MaybeLocal<v8::String> msg;
 
    int ret = -1;
+   int cnt = args.Length();
 
    LOG_TRACE(LOG_DEBUG, "Set route sub option");
 
-   if (args.Length() < 2) {
-      LOG_TRACE(LOG_DEBUG, "function call argument too short : %s", args);
+   if (cnt < 2) {
+      auto msgText = string_format("function call argument too short, cnt : %d", cnt);
 
-      msg = String::NewFromUtf8(isolate, "function call argument too short : " + args.Length());
+      LOG_TRACE(LOG_DEBUG, msgText.c_str());
+      msg = String::NewFromUtf8(isolate, msgText.c_str()).ToLocalChecked();
    }
    else {
-      int cnt = args.Length();
-      // LOG_TRACE(LOG_DEBUG, "arg length : %d", cnt);
-
       stRouteSubOption subOpt;
       subOpt.mnt.course_type = args[0].As<Number>()->Value();
       subOpt.mnt.course_id = args[1].As<Number>()->Value();
@@ -611,17 +551,17 @@ void SetCandidateOption(const FunctionCallbackInfo<Value>& args) {
    Local<Object> obj = Object::New(isolate);
    v8::MaybeLocal<v8::String> msg;
 
+   int cnt = args.Length();
+
    LOG_TRACE(LOG_DEBUG, "Set candidate option");
 
-   if (args.Length() < 1) {
-      LOG_TRACE(LOG_DEBUG, "function call argument too short : %s", args);
+   if (cnt < 1) {
+      LOG_TRACE(LOG_DEBUG, "function call argument too short : %d", cnt);
 
-      msg = String::NewFromUtf8(isolate, "function call argument too short : " + args.Length());
+      LOG_TRACE(LOG_DEBUG, msgText.c_str());
+      msg = String::NewFromUtf8(isolate, msgText.c_str()).ToLocalChecked();
    }
    else {
-      int cnt = args.Length();
-      // LOG_TRACE(LOG_DEBUG, "arg length : %d", cnt);
-
       uint32_t candidate = 0;
       candidate = args[0].As<Number>()->Value();
 
@@ -640,13 +580,15 @@ void DoRoute(const FunctionCallbackInfo<Value>& args) {
    v8::MaybeLocal<v8::String> msg;
 
    int ret = -1;
+   int cnt = args.Length();
 
    LOG_TRACE(LOG_DEBUG, "Start routing.");
 
-   if (args.Length() < 3) {
-      LOG_TRACE(LOG_DEBUG, "function call argument too short : %s", args);
+   if (cnt < 3) {
+      auto msgText = string_format("function call argument too short, cnt : %d", cnt);
 
-      msg = String::NewFromUtf8(isolate, "function call argument too short : " + args.Length());
+      LOG_TRACE(LOG_DEBUG, msgText.c_str());
+      msg = String::NewFromUtf8(isolate, msgText.c_str()).ToLocalChecked();
    }
    else {
       // int cnt = args.Length();
@@ -661,22 +603,23 @@ void DoRoute(const FunctionCallbackInfo<Value>& args) {
       // m_pRouteMgr.SetRouteOption(opt, avoid, mobility);
    
       
- 	// set route cost
-	int type = TYPE_DATA_NONE;
+      // set route cost
+		string strTarget;
 #if defined(USE_FOREST_DATA)
-	type = TYPE_DATA_TREKKING;
+		strTarget = "forest"
 #elif defined(USE_PEDESTRIAN_DATA)
-	type = TYPE_DATA_PEDESTRIAN;
+		strTarget = "pedestrian"
 #elif defined(USE_P2P_DATA)
-	type = TYPE_DATA_VEHICLE;
+		strTarget = "vehicle"
 #else
-	type = TYPE_DATA_VEHICLE;
+		strTarget = "vehicle";
 #endif
-	DataCost dataCost;
-	int cntCost = m_pDataMgr.GetDataCost(type, dataCost);
-	if (cntCost > 0) {
-		m_pRouteMgr.SetRouteCost(type, &dataCost, cntCost);
-	}
+
+   DataCost dataCost;
+   int cntCost = m_pDataMgr.GetDataCost(strTarget.c_str(), dataCost);
+   if (cntCost > 0) {
+      m_pRouteMgr.SetRouteCost(&dataCost, cntCost);
+   }
 
 
    #if defined(USE_MOUNTAIN_DATA)
@@ -715,19 +658,18 @@ void DoMultiRoute(const FunctionCallbackInfo<Value>& args) {
    v8::MaybeLocal<v8::String> msg;
 
    int ret = -1;
+   int cnt = args.Length();
    int cntRoute = 0;
 
    LOG_TRACE(LOG_DEBUG, "Start MultiRouting.");
 
-   if (args.Length() < 1) {
-      LOG_TRACE(LOG_DEBUG, "function call argument too short : %s", args);
+   if (cnt < 1) {
+      auto msgText = string_format("function call argument too short, cnt : %d", cnt);
 
-      msg = String::NewFromUtf8(isolate, "function call argument too short : " + args.Length());
+      LOG_TRACE(LOG_DEBUG, msgText.c_str());
+      msg = String::NewFromUtf8(isolate, msgText.c_str()).ToLocalChecked();
    }
    else {
-      int cnt = args.Length();
-      // LOG_TRACE(LOG_DEBUG, "arg length : %d", cnt);
-
       cntRoute = args[0].As<Number>()->Value();
 
       LOG_TRACE(LOG_DEBUG, "MultiRoute count : %d", cntRoute);
@@ -736,21 +678,22 @@ void DoMultiRoute(const FunctionCallbackInfo<Value>& args) {
    }
 
 
-   // set route cost
-   int type = TYPE_DATA_NONE;
+      // set route cost
+		string strTarget;
 #if defined(USE_FOREST_DATA)
-   type = TYPE_DATA_TREKKING;
+		strTarget = "forest"
 #elif defined(USE_PEDESTRIAN_DATA)
-   type = TYPE_DATA_PEDESTRIAN;
+		strTarget = "pedestrian"
 #elif defined(USE_P2P_DATA)
-   type = TYPE_DATA_VEHICLE;
+		strTarget = "vehicle"
 #else
-   type = TYPE_DATA_VEHICLE;
+		strTarget = "vehicle";
 #endif
+
    DataCost dataCost;
-   int cntCost = m_pDataMgr.GetDataCost(type, dataCost);
+   int cntCost = m_pDataMgr.GetDataCost(strTarget.c_str(), dataCost);
    if (cntCost > 0) {
-      m_pRouteMgr.SetRouteCost(type, &dataCost, cntCost);
+      m_pRouteMgr.SetRouteCost(&dataCost, cntCost);
    }
 
 
@@ -946,48 +889,43 @@ void GetOptimalPosition(const FunctionCallbackInfo<Value>& args) {
    int cnt = args.Length();
 
    if (cnt < 2) {
-      LOG_TRACE(LOG_DEBUG, "Request Error, function call argument too short : %d, %s", args.Length(), args);
+      auto msgText = string_format("GetOptimalPosition, function call argument too short, cnt : %d", cnt);
+
+      LOG_TRACE(LOG_DEBUG, msgText.c_str());
+      // msg = String::NewFromUtf8(isolate, msgText.c_str()).ToLocalChecked();
 
       m_pRoutePkg.GetErrorResult(OPTIMAL_RESULT_FAILED_WRONG_PARAM, strJson);
    } else {      
-      double lng = args[0].As<Number>()->Value();
-      double lat = args[1].As<Number>()->Value();
+      stReqOptimal reqOpt;
+
+      reqOpt.x = args[0].As<Number>()->Value();
+      reqOpt.y = args[1].As<Number>()->Value();
       
-      int32_t entType = 0;
       // Ent Type
       if (cnt >= 3) {
-         entType = args[2].As<Number>()->Value();
+         reqOpt.typeAll = args[2].As<Number>()->Value();
       }
 
       // Result Count
-      int32_t retCount = 0;
       if (cnt >= 4) {
-         retCount = args[3].As<Number>()->Value();
+         reqOpt.reqCount = args[3].As<Number>()->Value();
       }
 
       // Expand Type
-      int32_t isExpand = 0;
       if (cnt >= 5) {
-         isExpand = args[4].As<Number>()->Value();
+         reqOpt.isExpand = args[4].As<Number>()->Value();
       }
 
       // NearRoad Type
-      int32_t nOption = 0;
       if (cnt >= 6) {
-         nOption = args[5].As<Number>()->Value();
+         reqOpt.subOption = args[5].As<Number>()->Value();
       }
 
-      LOG_TRACE(LOG_DEBUG, "Request, lng:%f, lat:%f, ent_type:%d, ret_cnt:%d, expand:%d, option:%d", lng, lat, entType, retCount, isExpand, nOption);
+      LOG_TRACE(LOG_DEBUG, "Request, lng:%f, lat:%f, ent_type:%d, ret_cnt:%d, expand:%d, option:%d", 
+         reqOpt.x, reqOpt.y, reqOpt.typeAll, reqOpt.reqCount, reqOpt.isExpand, reqOpt.subOption);
 
-      stReqOptimal reqOpt = {0, };
       stOptimalPointInfo optInfo = {0, };
-
-      reqOpt.x = lng;
-      reqOpt.y = lat;
-      reqOpt.isExpand = isExpand;
-      reqOpt.typeAll = entType;
-
-      uint32_t cntItems = m_pDataMgr.GetOptimalPointDataByPoint(lng, lat, &optInfo, entType, retCount, 1, 0, nOption);
+      uint32_t cntItems = m_pDataMgr.GetOptimalPointDataByPoint(&optInfo, reqOpt.x, reqOpt.y, reqOpt, TYPE_LINK_MATCH_CARSTOP, TYPE_LINK_DATA_NONE);
 
       m_pRoutePkg.GetOptimalPosition(&reqOpt, &optInfo, strJson);
 
@@ -1013,8 +951,13 @@ void GetMultiOptimalPosition(const FunctionCallbackInfo<Value>& args) {
    int ret;
    string strJson;
 
-   if (args.Length() < 1) {
-      LOG_TRACE(LOG_DEBUG, "Request Error, function call argument too short : %d, %s", args.Length(), args);
+   int cnt = args.Length();
+
+   if (cnt < 1) {
+      auto msgText = string_format("GetMultiOptimalPosition, function call argument too short, cnt : %d", cnt);
+
+      LOG_TRACE(LOG_DEBUG, msgText.c_str());
+      // msg = String::NewFromUtf8(isolate, msgText.c_str()).ToLocalChecked();
 
       m_pRoutePkg.GetErrorResult(ROUTE_RESULT_FAILED_WRONG_PARAM, strJson);
    }
@@ -1023,13 +966,13 @@ void GetMultiOptimalPosition(const FunctionCallbackInfo<Value>& args) {
       string strRequest = *pRequest;
 
       // request
-      stReqOptimal reqOpt = {0, };
+      stReqOptimal reqOpt;
       vector<SPoint> vtOrigins;
       vector<stOptimalPointInfo> vtOptInfo;
 
-      ret = m_pDataMgr.GetRequestMultiOptimalPoints(strRequest.c_str(), vtOrigins, reqOpt);
+      ret = m_pDataMgr.ParsingRequestMultiOptimalPoints(strRequest.c_str(), vtOrigins, reqOpt);
 
-      uint32_t cntItems = m_pDataMgr.GetMultiOptimalPointDataByPoints(vtOrigins, vtOptInfo, reqOpt.typeAll, reqOpt.reqCount);
+      uint32_t cntItems = m_pDataMgr.GetMultiOptimalPointDataByPoints(vtOptInfo, vtOrigins, reqOpt);
 
       m_pRoutePkg.GetMultiOptimalPosition(&vtOptInfo, strJson);
 
@@ -1044,15 +987,20 @@ void GetMultiOptimalPosition(const FunctionCallbackInfo<Value>& args) {
 }
 
 
-void GetTable(const FunctionCallbackInfo<Value>& args) {
+void GetMatrix(const FunctionCallbackInfo<Value>& args) {
    Isolate* isolate = args.GetIsolate();
    Local<Context> context = isolate->GetCurrentContext();
 
    int ret;
    string strJson;
 
-   if (args.Length() < 1) {
-      LOG_TRACE(LOG_DEBUG, "Request Error, function call argument too short : %d, %s", args.Length(), args);
+   int cnt = args.Length();
+
+   if (cnt < 1) {
+      auto msgText = string_format("GetMatrix, function call argument too short, cnt : %d", cnt);
+
+      LOG_TRACE(LOG_DEBUG, msgText.c_str());
+      // msg = String::NewFromUtf8(isolate, msgText.c_str()).ToLocalChecked();
 
       m_pRoutePkg.GetErrorResult(ROUTE_RESULT_FAILED_WRONG_PARAM, strJson);
    }
@@ -1064,17 +1012,18 @@ void GetTable(const FunctionCallbackInfo<Value>& args) {
       
       // get table
       BaseOption option;
-      RouteDistMatrix RDM;
+      RouteDistMatrix rdm;
 
-      ret = m_pRouteMgr.GetWeightMatrix(strRequest.c_str(), RDM, option);
-
+      ret = m_pRouteMgr.ParsingWeightMatrix(strRequest.c_str(), rdm, option);
+      if (!rdm.vtOrigin.empty() && ret == ROUTE_RESULT_SUCCESS) {
+         ret = m_pRouteMgr.GetWeightMatrix(rdm, option);
+      }
+            
       if (ret != ROUTE_RESULT_SUCCESS) {
          m_pRoutePkg.GetErrorResult(ret, strJson);
       } else {
-         m_pRoutePkg.GetWeightMatrixResult(RDM, strJson);
+         m_pRoutePkg.GetWeightMatrixResult(rdm, strJson);
       }
-
-      // result
    }
 
    /*
@@ -1104,8 +1053,13 @@ void GetCluster_for_geoyoung(const FunctionCallbackInfo<Value>& args) {
    int ret;
    string strJson;
 
-   if (args.Length() < 1) {
-      LOG_TRACE(LOG_WARNING, "GetCluster arg to short, length : %d", args.Length());
+   int cnt = args.Length();
+
+   if (cnt < 1) {
+      auto msgText = string_format("GetCluster_for_geoyoung, function call argument too short, cnt : %d", cnt);
+
+      LOG_TRACE(LOG_DEBUG, msgText.c_str());
+      // msg = String::NewFromUtf8(isolate, msgText.c_str()).ToLocalChecked();
 
       m_pRoutePkg.GetErrorResult(ROUTE_RESULT_FAILED_WRONG_PARAM, strJson);
    }
@@ -1145,8 +1099,13 @@ void GetCluster(const FunctionCallbackInfo<Value>& args) {
    int ret;
    string strJson;
 
-   if (args.Length() < 1) {
-      LOG_TRACE(LOG_WARNING, "GetCluster arg to short, length : %d", args.Length());
+   int cnt = args.Length();
+
+   if (cnt < 1) {
+      auto msgText = string_format("GetCluster, function call argument too short, cnt : %d", cnt);
+
+      LOG_TRACE(LOG_DEBUG, msgText.c_str());
+      // msg = String::NewFromUtf8(isolate, msgText.c_str()).ToLocalChecked();
 
       m_pRoutePkg.GetErrorResult(ROUTE_RESULT_FAILED_WRONG_PARAM, strJson);
    }
@@ -1155,10 +1114,10 @@ void GetCluster(const FunctionCallbackInfo<Value>& args) {
       string strRequest = *pRequest;
 
       // get cluster
-      RouteDistMatrix RDM;
-      Cluster CLUST;
+      RouteDistMatrix rdm;
+      Cluster clust;
 
-      ret = m_pRouteMgr.GetCluster(strRequest.c_str(), RDM, CLUST);
+      ret = m_pRouteMgr.GetCluster(strRequest.c_str(), rdm, clust);
       if (ret != ROUTE_RESULT_SUCCESS) {
          m_pRoutePkg.GetErrorResult(ret, strJson);
       } else {
@@ -1166,8 +1125,44 @@ void GetCluster(const FunctionCallbackInfo<Value>& args) {
          strUsrDirectory.append(m_pDataMgr.GetDataPath());
          strUsrDirectory.append("/usr/rdm/");
          checkDirectory(strUsrDirectory.c_str());
-         
-         m_pRoutePkg.GetClusteringResult(CLUST, RDM, strUsrDirectory.c_str(), strJson);
+
+         m_pRoutePkg.GetClusteringResult(clust, rdm, strUsrDirectory.c_str(), strJson);
+      }
+   }
+
+   args.GetReturnValue().Set(String::NewFromUtf8(isolate, strJson.c_str()).ToLocalChecked());
+}
+
+
+void GetGroup(const FunctionCallbackInfo<Value>& args) {
+   Isolate* isolate = args.GetIsolate();
+
+   int ret;
+   string strJson;
+
+   int cnt = args.Length();
+
+   if (cnt < 1) {
+      auto msgText = string_format("GetGroup, function call argument too short, cnt : %d", cnt);
+
+      LOG_TRACE(LOG_DEBUG, msgText.c_str());
+      // msg = String::NewFromUtf8(isolate, msgText.c_str()).ToLocalChecked();
+
+      m_pRoutePkg.GetErrorResult(ROUTE_RESULT_FAILED_WRONG_PARAM, strJson);
+   }
+   else {
+      String::Utf8Value pRequest(isolate, args[0]);
+      string strRequest = *pRequest;
+
+      // get cluster
+      Cluster clust;
+
+      ret = m_pRouteMgr.GetGroup(strRequest.c_str(), clust);
+
+      if (ret != ROUTE_RESULT_SUCCESS) {
+         m_pRoutePkg.GetErrorResult(ret, strJson);
+      } else {         
+         m_pRoutePkg.GetGroupingResult(clust, strJson);
       }
    }
 
@@ -1181,8 +1176,14 @@ void GetBoundary(const FunctionCallbackInfo<Value>& args) {
 
    string strJson;
 
-   if (args.Length() < 1) {
-      LOG_TRACE(LOG_WARNING, "GetBoundary arg to short, length : %d", args.Length());
+   int cnt = args.Length();
+
+   if (cnt < 2) {
+      auto msgText = string_format("GetBoundary, function call argument too short, cnt : %d", cnt);
+
+      LOG_TRACE(LOG_DEBUG, msgText.c_str());
+      // msg = String::NewFromUtf8(isolate, msgText.c_str()).ToLocalChecked();
+
       m_pRoutePkg.GetErrorResult(ROUTE_RESULT_FAILED_WRONG_PARAM, strJson);
    }
    else {
@@ -1218,15 +1219,20 @@ void GetBoundary(const FunctionCallbackInfo<Value>& args) {
 }
 
 
-void GetWaypoints(const FunctionCallbackInfo<Value>& args) {
+void GetBestWaypoints(const FunctionCallbackInfo<Value>& args) {
    Isolate* isolate = args.GetIsolate();
    Local<Context> context = isolate->GetCurrentContext();
 
    int ret;
    string strJson;
 
-   if (args.Length() < 1) {
-      LOG_TRACE(LOG_WARNING, "GetWaypoints arg to short, length : %d", args.Length());
+   int cnt = args.Length();
+
+   if (cnt < 1) {
+      auto msgText = string_format("GetBestWaypoints, function call argument too short, cnt : %d", cnt);
+
+      LOG_TRACE(LOG_DEBUG, msgText.c_str());
+      // msg = String::NewFromUtf8(isolate, msgText.c_str()).ToLocalChecked();
 
       m_pRoutePkg.GetErrorResult(ROUTE_RESULT_FAILED_WRONG_PARAM, strJson);
    }
@@ -1306,7 +1312,7 @@ void UpdateTraffic(const FunctionCallbackInfo<Value>& args) {
    int cnt = args.Length();
 
    if (cnt < 3) {
-      LOG_TRACE(LOG_KEY_TRAFFIC, LOG_WARNING, "function call argument too short : %s", args);
+      LOG_TRACE(LOG_KEY_TRAFFIC, LOG_WARNING, "function call argument too short : %d", cnt);
    } else {      
       String::Utf8Value strName(isolate, args[0]);
       String::Utf8Value strPath(isolate, args[1]);
@@ -1363,11 +1369,12 @@ void init(Local<Object> exports) {
    NODE_SET_METHOD(exports, "getmultiroute", GetMultiRouteResult);
    NODE_SET_METHOD(exports, "getmapsroute", GetMapsRouteResult);
    NODE_SET_METHOD(exports, "getmapsmultiroute", GetMapsMultiRouteResult);
-   NODE_SET_METHOD(exports, "gettable", GetTable);
+   NODE_SET_METHOD(exports, "getmatrix", GetMatrix);
    NODE_SET_METHOD(exports, "getcluster", GetCluster);
    NODE_SET_METHOD(exports, "getcluster_for_geoyoung", GetCluster_for_geoyoung);   
+   NODE_SET_METHOD(exports, "getgroup", GetGroup);
    NODE_SET_METHOD(exports, "getboundary", GetBoundary);
-   NODE_SET_METHOD(exports, "getwaypoints", GetWaypoints);
+   NODE_SET_METHOD(exports, "getbestwaypoints", GetBestWaypoints);
 // NODE_SET_METHOD(exports, "getresultstring", GetResultString);
    NODE_SET_METHOD(exports, "getoptimalposition", GetOptimalPosition);
    NODE_SET_METHOD(exports, "getmultioptimalposition", GetMultiOptimalPosition);

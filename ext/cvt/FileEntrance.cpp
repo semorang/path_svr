@@ -290,7 +290,8 @@ bool CFileEntrance::GenServiceData()
 
 			if (pLink != nullptr) {
 				entInfo.angle = entPointInfo.nAngle; // 최근접 링크 진출 각도
-				entInfo.vlink_id = pLink->link_id.llid; // 최근접 링크 ID
+				entInfo.link_id = pLink->link_id; // 최근접 링크 ID
+				entInfo.link_left = entPointInfo.linkLeft;
 			} else {
 #if defined(USE_MULTIPROCESS)
 #pragma omp atomic
