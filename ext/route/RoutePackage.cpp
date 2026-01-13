@@ -584,13 +584,18 @@ bool CRoutePackage::GetMapsRouteResultJson(IN const RouteResultInfo* pResult, IN
 		if (pLink != nullptr && link.link_id.llid != NULL_VALUE) {
 			// road_name
 			if (pLink->name_idx > 0) {
-#if defined(_WIN32)
-				char szUTF8[MAX_PATH] = { 0, };
-				MultiByteToUTF8(m_pDataMgr->GetNameDataByIdx(pLink->name_idx), szUTF8);
-				cJSON_AddStringToObject(path, "road_name", szUTF8);
-#else
-				cJSON_AddStringToObject(path, "road_name", encoding(m_pDataMgr->GetNameDataByIdx(pLink->name_idx), "euc-kr", "utf-8"));
-#endif // #if defined(_WIN32)
+				char szName[MAX_PATH] = { 0, };
+				uint32_t nameIdx = pLink->name_idx;
+				strcpy(szName, m_pDataMgr->GetNameDataByIdx(nameIdx));
+				if (strlen(szName) > 0) {
+					char szUTF8[MAX_PATH] = { 0, };
+					int written = encoding(szName, "euc-kr", "utf-8", szUTF8, sizeof(char) * MAX_PATH);
+					if (written > 0) {
+						cJSON_AddStringToObject(path, "road_name", szUTF8);
+					} else {
+						cJSON_AddStringToObject(path, "road_name", "");
+					}
+				}
 			}
 
 			// p2p 추가정보
