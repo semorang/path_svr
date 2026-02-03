@@ -5,8 +5,6 @@
 
 #include "../shp/shpio.h"
 
-using namespace std;
-
 // 이동체 구분
 typedef enum {
 	TYPE_MOBILITY_PEDESTRIAN, // 보행자
@@ -526,6 +524,10 @@ typedef enum {
 
 
 	TMS_RESULT_FAILED_EXCEEDS_COUNT = 11000,			//11000 제한 개수 초과 오류
+
+	// RDM 관련
+	TMS_FAILED_DATA_EXPIRED	= 12000,					//12000 데이터의 유효 기간이 만료됨
+
 	// 	resultCode	resultMessage	비고	설명
 	// 0		공통	성공
 	// 100	Result Not Found	검색 전용	결과 없음
@@ -579,22 +581,38 @@ typedef enum {
 	OPTIMAL_RESULT_FAILED_SERVER_ERROR = 102,	// 서버 오류
 }OPTIMAL_RESULT;
 
+typedef enum
+{
+	TYPE_WEIGHT_MATRIX_NONE, // 미정
+	TYPE_WEIGHT_MATRIX_COST, // 요금
+	TYPE_WEIGHT_MATRIX_DIST, // 거리
+	TYPE_WEIGHT_MATRIX_TIME, // 시간
+}TYPE_WEIGHT_MATRIX;
 
 typedef enum
 {
 	TYPE_CLUSTER_DEVIDE_BY_COUNT, // 개수 분배
 	TYPE_CLUSTER_DEVIDE_BY_DIST, // 거리 분배
 	TYPE_CLUSTER_DEVIDE_BY_TIME, // 시간 분배
+	TYPE_CLUSTER_DEVIDE_BY_CARGO, // 물량 분배
 	TYPE_CLUSTER_DEVIDE_BY_LINK, // 링크 단위 분배
 }TYPE_CLUSTER_DEVIDE;
 
 typedef enum
 {
-	TYPE_TSP_ENDPOINT_NONE, // 지점 고정 없음
+	CLUST_VALUE_TYPE_SPOT = TYPE_CLUSTER_DEVIDE_BY_COUNT, // 방문지
+	CLUST_VALUE_TYPE_DIST = TYPE_CLUSTER_DEVIDE_BY_DIST, // 거리
+	CLUST_VALUE_TYPE_TIME = TYPE_CLUSTER_DEVIDE_BY_TIME, // 시간
+	CLUST_VALUE_TYPE_CARGO, // 화물
+}CLUST_VALUE_TYPE;
+
+typedef enum
+{
+	TYPE_TSP_ENDPOINT_RECURSIVE, // 출발지 회귀
 	TYPE_TSP_ENDPOINT_START, // 출발지 고정
 	TYPE_TSP_ENDPOINT_END, // 도착지 고정
 	TYPE_TSP_ENDPOINT_START_END, // 출-도착지 고정
-	TYPE_TSP_ENDPOINT_RECURSIVE, // 출발지 회귀
+	TYPE_TSP_ENDPOINT_RANDOM, // 출-도착지 자동(지점 고정 없음, 랜덤)
 }TYPE_TSP_ENDPOINT;
 
 typedef enum

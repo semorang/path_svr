@@ -9,16 +9,15 @@
 #include <queue>
 #include <algorithm>
 #include <memory>
-#include <stdio.h>
-#include <stdexcept>
-#include <time.h>
+#include <cstdio>
+#include <ctime>
 #include <cstring>
+#include <cmath>
+#include <stdexcept>
 
 #include "types.h"
 #include "../shp/shpio.h" 
 #include "../tms/tms.h"
-
-using namespace std;
 
 
 #if !defined(_WIN32)
@@ -37,16 +36,31 @@ using namespace std;
 #define PROCESS_NUM 8
 #endif
 
+//#define DEMO_FOR_IPO // 상장 관련 데모 기능 지원
+//#define DEMO_FOR_HANJIN // 한진 TSP 데모
 
+// #define TEST_SPATIALINDEX // spatialindex 라이브러리 테스트 // 2025-07-25
+#ifdef TEST_SPATIALINDEX
+#define USE_SPATIALINDEX_BULK // bulk 방식 R-tree 생성 - 생성 속도 향상
+#include <spatialindex/SpatialIndex.h>
+using namespace SpatialIndex;
+#endif
+
+
+#if defined(DEMO_FOR_IPO) || defined(DEMO_FOR_HANJIN)
+#define USE_ROUTE_TABLE_LEVEL	9 // 7(1차선이상일반도로) 레벨보다 낮아지면 도로 확장이 어려워짐. 수도권 50 POI 수행 시간 : LV6/교통 == 약 13s/177s, LV7/교통 = 약 33s/244s
+#else
 #define USE_ROUTE_TABLE_LEVEL	7 // 7(1차선이상일반도로) 레벨보다 낮아지면 도로 확장이 어려워짐. 수도권 50 POI 수행 시간 : LV6/교통 == 약 13s/177s, LV7/교통 = 약 33s/244s
+#endif
 //#define __USE_TEMPLETE // 템플릿 사용
 
 //#define TARGET_FOR_KAKAO_VX // 카카오VX제공
+//#define TARGET_FOR_ORDA_AI // 오르다AI제공
 
-//#define USE_OPTIMAL_POINT_API // 최적 지점 API
+// #define USE_OPTIMAL_POINT_API // 최적 지점 API
 #define USE_ROUTING_POINT_API // 경로 탐색 API
-//#define USE_TMS_API // 특수목적 경로탐색 
-//#define USE_PM_API // 보행/자전거/킥보드 전용 경로탐색
+// #define USE_TMS_API // 특수목적 경로탐색 
+// #define USE_PM_API // 보행/자전거/킥보드 전용 경로탐색
 
 #if defined(TARGET_FOR_KAKAO_VX)
 #	define USE_FOREST_DATA // 카카오숲길
@@ -54,9 +68,9 @@ using namespace std;
 #	define USE_PEDESTRIAN_DATA // 보행자/자전거 데이터
 #elif defined(USE_OPTIMAL_POINT_API)
 //#define USE_PEDESTRIAN_DATA // 보행자/자전거 데이터
-#define USE_VEHICLE_DATA // 차량 데이터
-#define USE_BUILDING_DATA // 건물 데이터
-#define USE_COMPLEX_DATA // 단지 데이터
+#	define USE_VEHICLE_DATA // 차량 데이터
+#	define USE_BUILDING_DATA // 건물 데이터
+#	define USE_COMPLEX_DATA // 단지 데이터
 #elif defined(USE_ROUTING_POINT_API)
 #	if defined(USE_TMS_API)
 #	define USE_VEHICLE_DATA // 차량 데이터
@@ -196,9 +210,11 @@ typedef struct tagRECT
 // 0.1.4 add to bestvrp api for or-tools
 // 0.1.5 add to motocycle in mobility option
 // 0.1.6 동일링크 출-도착지 역방향 거리 계산 수정(음수->양수)
+// 0.1.7 goole-or tools 소스 코드 추가 반영
+// 0.1.8 add weight matrix path API
 #define ENGINE_VERSION_MAJOR	0
 #define ENGINE_VERSION_MINOR	1
-#define ENGINE_VERSION_PATCH	6
+#define ENGINE_VERSION_PATCH	8
 #define ENGINE_VERSION_BUILD	0
 #		else // #		if defined(USE_TMS_API)
 // 0.0.6 add charging link attribute
@@ -277,7 +293,7 @@ struct stNameInfo {
 	uint32_t name_id;
 	//uint32_t name_size;
 	//char* name;
-	string name;
+	std::string name;
 };
 
 
@@ -290,8 +306,8 @@ struct stMeshInfo {
 	void* flinkStorage; // IStorageManager
 	void* flinkTree; // IStorageManager
 #else
-	vector<KeyID> nodes;
-	vector<KeyID> links;
+	std::vector<KeyID> nodes;
+	std::vector<KeyID> links;
 #endif
 #endif
 #if defined(USE_PEDESTRIAN_DATA)
@@ -299,8 +315,8 @@ struct stMeshInfo {
 	void* wlinkStorage; // IStorageManager
 	void* wlinkTree; // IStorageManager
 #else
-	vector<KeyID> wnodes;
-	vector<KeyID> wlinks;
+	std::vector<KeyID> wnodes;
+	std::vector<KeyID> wlinks;
 #endif
 #endif
 #if defined(USE_VEHICLE_DATA)
@@ -308,8 +324,8 @@ struct stMeshInfo {
 	void* vlinkStorage; // IStorageManager
 	void* vlinkTree; // IStorageManager
 #else
-	vector<KeyID> vnodes;
-	vector<KeyID> vlinks;
+	std::vector<KeyID> vnodes;
+	std::vector<KeyID> vlinks;
 #endif
 #endif
 #if defined(USE_OPTIMAL_POINT_API) || defined(USE_FOREST_DATA)
@@ -319,27 +335,27 @@ struct stMeshInfo {
 	void* complexStorage; // IStorageManager
 	void* complexTree; // IStorageManager
 #else
-	vector<KeyID> buildings;
-	vector<KeyID> complexs;
+	std::vector<KeyID> buildings;
+	std::vector<KeyID> complexs;
 #endif
 #endif
-	unordered_set<uint32_t> neighbors;
+	std::unordered_set<uint32_t> neighbors;
 
 #if defined(USE_FOREST_DATA)
-	set<KeyID> setFNodeDuplicateCheck;
-	set<KeyID> setFLinkDuplicateCheck;
+	std::set<KeyID> setFNodeDuplicateCheck;
+	std::set<KeyID> setFLinkDuplicateCheck;
 #endif
 #if defined(USE_PEDESTRIAN_DATA)
-	set<KeyID> setWNodeDuplicateCheck;
-	set<KeyID> setWLinkDuplicateCheck;
+	std::set<KeyID> setWNodeDuplicateCheck;
+	std::set<KeyID> setWLinkDuplicateCheck;
 #endif
 #if defined(USE_VEHICLE_DATA)
-	set<KeyID> setVNodeDuplicateCheck;
-	set<KeyID> setVLinkDuplicateCheck;
+	std::set<KeyID> setVNodeDuplicateCheck;
+	std::set<KeyID> setVLinkDuplicateCheck;
 #endif
 #if defined(USE_OPTIMAL_POINT_API) || defined(USE_MOUNTAIN_DATA)
-	set<KeyID> setBldDuplicateCheck;
-	set<KeyID> setCpxDuplicateCheck;
+	std::set<KeyID> setBldDuplicateCheck;
+	std::set<KeyID> setCpxDuplicateCheck;
 #endif
 
 	stMeshInfo() {
@@ -375,8 +391,8 @@ struct stMeshInfo {
 		if (flinkStorage) { SAFE_DELETE(flinkStorage); }
 		if (flinkTree) { SAFE_DELETE(flinkTree); }
 #else
-		if (!nodes.empty()) { nodes.clear(); vector<KeyID>().swap(nodes); }
-		if (!links.empty()) { links.clear(); vector<KeyID>().swap(links); }
+		if (!nodes.empty()) { nodes.clear(); std::vector<KeyID>().swap(nodes); }
+		if (!links.empty()) { links.clear(); std::vector<KeyID>().swap(links); }
 #endif
 #endif
 #if defined(USE_PEDESTRIAN_DATA)
@@ -384,8 +400,8 @@ struct stMeshInfo {
 		if (wlinkStorage) { SAFE_DELETE(wlinkStorage); }
 		if (wlinkTree) { SAFE_DELETE(wlinkTree); }
 #else
-		if (!wnodes.empty()) { wnodes.clear(); vector<KeyID>().swap(wnodes); }
-		if (!wlinks.empty()) { wlinks.clear(); vector<KeyID>().swap(wlinks); }
+		if (!wnodes.empty()) { wnodes.clear(); std::vector<KeyID>().swap(wnodes); }
+		if (!wlinks.empty()) { wlinks.clear(); std::vector<KeyID>().swap(wlinks); }
 #endif
 #endif
 #if defined(USE_VEHICLE_DATA)
@@ -393,8 +409,8 @@ struct stMeshInfo {
 		if (vlinkStorage) { SAFE_DELETE(vlinkStorage); }
 		if (vlinkTree) { SAFE_DELETE(vlinkTree); }
 #else
-		if (!vnodes.empty()) { vnodes.clear(); vector<KeyID>().swap(vnodes); }
-		if (!vlinks.empty()) { vlinks.clear(); vector<KeyID>().swap(vlinks); }
+		if (!vnodes.empty()) { vnodes.clear(); std::vector<KeyID>().swap(vnodes); }
+		if (!vlinks.empty()) { vlinks.clear(); std::vector<KeyID>().swap(vlinks); }
 #endif
 #endif
 #if defined(USE_OPTIMAL_POINT_API) || defined(USE_MOUNTAIN_DATA)
@@ -404,27 +420,27 @@ struct stMeshInfo {
 		if (complexStorage) { SAFE_DELETE(complexStorage); }
 		if (complexTree) { SAFE_DELETE(complexTree); }
 #else
-		if (!buildings.empty()) { buildings.clear(); vector<KeyID>().swap(buildings); }
-		if (!complexs.empty()) { complexs.clear(); vector<KeyID>().swap(complexs); }
+		if (!buildings.empty()) { buildings.clear(); std::vector<KeyID>().swap(buildings); }
+		if (!complexs.empty()) { complexs.clear(); std::vector<KeyID>().swap(complexs); }
 #endif
 #endif
-		if (!neighbors.empty()) { neighbors.clear(); unordered_set<uint32_t>().swap(neighbors); }
+		if (!neighbors.empty()) { neighbors.clear(); std::unordered_set<uint32_t>().swap(neighbors); }
 
 #if defined(USE_FOREST_DATA)
-		if (!setFNodeDuplicateCheck.empty()) { setFNodeDuplicateCheck.clear(); set<KeyID>().swap(setFNodeDuplicateCheck); }
-		if (!setFLinkDuplicateCheck.empty()) { setFLinkDuplicateCheck.clear(); set<KeyID>().swap(setFLinkDuplicateCheck); }
+		if (!setFNodeDuplicateCheck.empty()) { setFNodeDuplicateCheck.clear(); std::set<KeyID>().swap(setFNodeDuplicateCheck); }
+		if (!setFLinkDuplicateCheck.empty()) { setFLinkDuplicateCheck.clear(); std::set<KeyID>().swap(setFLinkDuplicateCheck); }
 #endif
 #if defined(USE_PEDESTRIAN_DATA)
-		if (!setWNodeDuplicateCheck.empty()) { setWNodeDuplicateCheck.clear(); set<KeyID>().swap(setWNodeDuplicateCheck); }
-		if (!setWLinkDuplicateCheck.empty()) { setWLinkDuplicateCheck.clear(); set<KeyID>().swap(setWLinkDuplicateCheck); }
+		if (!setWNodeDuplicateCheck.empty()) { setWNodeDuplicateCheck.clear(); std::set<KeyID>().swap(setWNodeDuplicateCheck); }
+		if (!setWLinkDuplicateCheck.empty()) { setWLinkDuplicateCheck.clear(); std::set<KeyID>().swap(setWLinkDuplicateCheck); }
 #endif
 #if defined(USE_VEHICLE_DATA)
-		if (!setVNodeDuplicateCheck.empty()) { setVNodeDuplicateCheck.clear(); set<KeyID>().swap(setVNodeDuplicateCheck); }
-		if (!setVLinkDuplicateCheck.empty()) { setVLinkDuplicateCheck.clear(); set<KeyID>().swap(setVLinkDuplicateCheck); }
+		if (!setVNodeDuplicateCheck.empty()) { setVNodeDuplicateCheck.clear(); std::set<KeyID>().swap(setVNodeDuplicateCheck); }
+		if (!setVLinkDuplicateCheck.empty()) { setVLinkDuplicateCheck.clear(); std::set<KeyID>().swap(setVLinkDuplicateCheck); }
 #endif
 #if defined(USE_OPTIMAL_POINT_API) || defined(USE_MOUNTAIN_DATA)
-		if (!setBldDuplicateCheck.empty()) { setBldDuplicateCheck.clear(); set<KeyID>().swap(setBldDuplicateCheck); }
-		if (!setCpxDuplicateCheck.empty()) { setCpxDuplicateCheck.clear(); set<KeyID>().swap(setCpxDuplicateCheck); }
+		if (!setBldDuplicateCheck.empty()) { setBldDuplicateCheck.clear(); std::set<KeyID>().swap(setBldDuplicateCheck); }
+		if (!setCpxDuplicateCheck.empty()) { setCpxDuplicateCheck.clear(); std::set<KeyID>().swap(setCpxDuplicateCheck); }
 #endif
 	}
 };
@@ -857,8 +873,8 @@ struct stExtendInfo
 {
 	KeyID keyId;
 	uint8_t cntData; // max 255
-	vector<uint8_t> vtType; // 확장 타입
-	vector<double> vtValue; // 확장 데이터
+	std::vector<uint8_t> vtType; // 확장 타입
+	std::vector<double> vtValue; // 확장 데이터
 
 	size_t read(IN FILE* fp)
 	{
@@ -975,7 +991,7 @@ struct stTrafficInfoKS
 	uint8_t speed; // 도로 주행 속도 0~255, 255일 경우는 통제, 주행불가
 
 	// link_id = mesh + link + dir
-	unordered_set<uint64_t> setLinks; // ks 링크에 매칭되는 link_id -> 나중에는 메모리 관리를 위해 포인터로 관리하자!!
+	std::unordered_set<uint64_t> setLinks; // ks 링크에 매칭되는 link_id -> 나중에는 메모리 관리를 위해 포인터로 관리하자!!
 	
 	stTrafficInfoKS() {
 		ks_id = 0;
@@ -1465,255 +1481,3 @@ struct stLinkContent {
 	char Mountain_NM[12];
 	std::vector<_VEG> vVEG;
 };
-
-
-typedef struct _tagstDistrict
-{
-	int32_t id; // 클러스터 ID
-	double dist; // 예상 거리
-	int32_t time; // 예상 시간
-	int32_t cargo; // 화물 수량
-	uint32_t etd; // 출발 예상 시각
-	uint32_t eta; // 도착 예상 시각
-	SPoint center; // 클러스터 중심 좌표
-
-	vector<int32_t> vtPois;
-	vector<SPoint> vtCoord;
-	vector<SPoint> vtBorder;
-	vector<int32_t> vtTimes;
-	vector<int32_t> vtLayoverTimes;
-	vector<int32_t> vtCargoVolume;
-	vector<int32_t> vtDistances;
-
-	_tagstDistrict()
-	{
-		id = 0;
-		dist = 0.f;
-		time = 0.f;
-		cargo = 0;
-		etd = 0;
-		eta = 0;
-	}
-
-	void init()
-	{
-		id = 0;
-		dist = 0.f;
-		time = 0.f;
-		cargo = 0;
-		etd = 0;
-		eta = 0;
-		center = { 0, 0 };
-
-		vtPois.clear();
-		vtCoord.clear();
-		vtBorder.clear();
-		vtTimes.clear();
-		vtLayoverTimes.clear();
-		vtCargoVolume.clear();
-		vtDistances.clear();
-	}
-}stDistrict;
-
-
-struct Origins
-{
-	SPoint position; // 좌표(WGS84)
-	int32_t layoverTime = 0; // 소요시간(초)
-	int32_t cargoVolume = 0; // 화물수량
-
-	// 각 지점별 추가 할당 리소스 정보
-	int32_t weight = 0; // 추가무게(kg)
-	int32_t count = 0; // 추가개수
-	int32_t size = 0; // 추가사이즈(cm, 가로+세로+높이)
-
-	//_tagOrigins()
-	//{
-	//	time = 0;
-	//	weight = 0;
-	//	count = 0;
-	//	size = 0;
-	//}
-};
-
-
-struct TruckOption
-{
-	int32_t height = 0; // 트럭 높이(cm), 제한
-	int32_t weight = 0; // 트럭 중량(kg), 제한
-	int32_t length = 0; // 트럭 길이(cm), 제한
-	int32_t width = 0; // 트럭 너비(cm), 제한
-	int32_t hazardous = 0; // 위험 수하물, 0://일발, 1:위험물, 상수원보호구역진입 제한
-
-	bool isEnableTruckOption() const {
-		return (height || weight || length || width || hazardous) ? true : false;
-	}
-};
-
-typedef struct _tagBaseOption
-{
-	//string userId; // 대입할때 주소복사 되지 않도록 주의할것
-	//string uri; // 데이터 경로, 기본적으로 timestamp 값을 준다.
-	char userId[128];
-	char route_mode[128]; // 탐색 모드, "driving", "tsp", "clustering" ...
-	char route_cost[128]; // 탐색 확장 코스트 파일
-	int32_t option; // 탐색 옵션,
-	int32_t avoid; // 회피 옵션,
-	int32_t traffic; // 교통 정보, 0:미사용, 1:실시간(REAL), 2:통계(STATIC), 3:실시간-통계(REAL-STATIC)
-	int32_t free; // 무료 적용, 0:미사용, 1:무료
-	int32_t timestamp;
-	int32_t fileCache;
-	int32_t binary;
-	int32_t mobility;
-	int32_t distance_type; // RDM 생성 타입, 0:미사용(직선거리) 1:경로
-	int32_t compare_type; // RDM 비교 타입, 0:미사용(기본) 1:코스트, 2:거리, 3:시간
-	int32_t expand_method; // RDM 확장 방식, 0:기본, 1:레벨 단계화	
-
-	TruckOption truck; // 트럭옵션
-
-	_tagBaseOption()
-	{
-		//userId = "";
-		//uri = "";
-		memset(userId, 0x00, sizeof(userId));
-		memset(route_mode, 0x00, sizeof(route_mode));
-		memset(route_cost, 0x00, sizeof(route_cost));
-		option = 0;
-		avoid = 0;
-		timestamp = 0;
-		traffic = 0;
-		free = 0;
-		fileCache = 0;
-		binary = 0; // "0:NONE, 1:RDM, 2:ROUTE, 3:RDM-ROUTE",
-		mobility = TYPE_MOBILITY_VEHICLE;
-		distance_type = 1; // "0:NONE, 1:ROUTE",
-		compare_type = 0; // "0:NONE, 1:COST, 2:DIST, 3:TIME",
-		expand_method = 1; // "0:NONE, 1:LEVEL_PROPAGATION", // 2025-08-20 기본 레벨확장방식 사용
-	}
-
-	_tagBaseOption& operator=(const _tagBaseOption& rhs)
-	{
-		strcpy(this->userId, rhs.userId);
-		strcpy(this->route_mode, rhs.route_mode);
-		strcpy(this->route_cost, rhs.route_cost);
-		//this->userId = rhs.userId;
-		//this->uri = rhs.uri;
-		this->option = rhs.option;
-		this->avoid = rhs.avoid;
-		this->traffic = rhs.traffic;
-		this->timestamp = rhs.timestamp;
-		this->free = rhs.free;
-		this->fileCache = rhs.fileCache;
-		this->binary = rhs.binary;
-		this->mobility = rhs.mobility;
-
-		this->distance_type = rhs.distance_type;
-		this->compare_type = rhs.compare_type;
-		this->expand_method = rhs.expand_method;
-
-		memcpy(&this->truck, &rhs.truck, sizeof(this->truck));
-
-		return *this;
-	}
-}BaseOption;
-
-
-typedef struct _tagTspOption
-{
-	BaseOption baseOption;
-
-	int32_t algorithm;
-	int32_t geneSize;
-	int32_t individualSize;
-	int32_t loopCount;
-	int32_t seed; // 랜덤 seed
-	int32_t compareType;
-	int32_t endpointType; // 지점 고정, 0:미사용, 1:출발지 고정, 2:도착지 고정, 3:출발지-도착지 고정, 4:출발지 회귀
-
-	_tagTspOption()
-	{
-		algorithm = TYPE_TSP_ALGORITHM_TSP_GA;
-		geneSize = 0;
-		individualSize = 100;
-		loopCount = 1000;
-		seed = 10000;// 1000 + 49 * 2;
-		compareType = TYPE_TSP_VALUE_DIST;
-		endpointType = TYPE_TSP_ENDPOINT_NONE;
-	}
-
-	_tagTspOption& operator=(const _tagTspOption& rhs)
-	{
-		this->baseOption = rhs.baseOption;
-
-		this->algorithm = rhs.algorithm;
-		this->geneSize = rhs.geneSize;
-		this->individualSize = rhs.individualSize;
-		this->loopCount = rhs.loopCount;
-		this->seed = rhs.seed;
-		this->compareType = rhs.compareType;
-		this->endpointType = rhs.endpointType;
-
-		return *this;
-	}
-}TspOption;
-
-
-typedef struct _tagClusteringOption
-{
-	TspOption tspOption;
-	
-	int32_t algorithm;
-	int32_t seed; // 랜덤 seed
-	int32_t compareType;
-
-	union
-	{
-		int32_t optionValues[20];
-		struct
-		{
-			int32_t divisionType; // 분배 타입, 0:갯수균등, 1:거리균등, 2:시간균등, 3:링크단위
-			int32_t limitCluster; // 최대 배차(클러스터링) 차량 수
-			int32_t limitValue; // 차량당 최대 배송지수, 최대 거리(미터), 최대 시간(초)-분으로 입력받아 초로 변환
-			int32_t limitDeviation; // 차량당 최대 운행 정보 편차
-			int32_t max_spot; // 차량당 최대 운송 가능 개수
-			int32_t max_distance; // 차량당 최대 운행 가능 거리
-			int32_t max_time; // 차량당 최대 운행 가능 시간
-			int32_t max_cargo; // 차량당 최대 적재 가능 화물
-			int32_t reservation; // 예약 시각
-			int32_t reservationType; // 예약 타입, 0:미사용, 1:출발시간, 2:도착시간
-			int32_t endpointType; // 지점 고정, 0:미사용, 1:출발지 고정, 2:도착지 고정, 3:출발지-도착지 고정, 4:출발지 회귀
-			int32_t additionalType; // 추가 배당 타입, "0:미사용, 1:갯수, 2:무게(g), 3:사이즈(cm)",
-			int32_t additionalLimit; // 추가 배당 최대 한도
-			int32_t reserved[7];
-		}; // default
-		struct
-		{
-			int32_t divisionType; // 분배 타입, 0:갯수균등, 1:거리균등, 2:시간균등, 3:링크단위
-			int32_t limitLength; // 링크 분배 길이, 0:전체사용, 100~N:최소 Nm => 최소 거리는 전체길이 / ((전체길이/Nm) + 1)
-			int32_t reserved[18];
-		}bylink;
-	};
-
-
-	_tagClusteringOption()
-	{
-		algorithm = TYPE_TSP_ALGORITHM_GOOGLEOR;
-		seed = 10006;// 1000 + 49 * 2;
-		compareType = TYPE_TSP_VALUE_DIST;
-
-		memset(optionValues, 0x00, sizeof(optionValues));
-	}
-
-	_tagClusteringOption& operator=(const _tagClusteringOption& rhs)
-	{
-		this->tspOption = rhs.tspOption;
-
-		this->algorithm = rhs.algorithm;
-		this->seed = rhs.seed;
-		this->compareType = rhs.compareType;
-
-		memcpy(this->optionValues, rhs.optionValues, sizeof(this->optionValues));
-
-		return *this;
-	}
-}ClusteringOption;
