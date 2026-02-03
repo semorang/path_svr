@@ -1,7 +1,12 @@
 {
     "targets":[
         {
-            "target_name":"path_svr", 
+            # "target_name":"optimal_svr", 
+            # "target_name":"trekking_svr",
+            # "target_name":"pedestrian_svr",
+            # "target_name":"vehicle_svr",
+            # "target_name":"tms_svr",
+            "target_name":"path_svr",
             "sources":[
                 "../src/apis.cc", 
 
@@ -118,8 +123,8 @@
                             # 'AdditionalOptions': ['/openmp', '/EHsc', '/wd9002', '/showIncludes'],
                             'AdditionalOptions': ['/openmp', '/EHsc', '/wd9002'],
                             'DisableSpecificWarnings' : ['4819', '4018'], 
-                            #C4018 ¹«½Ã #C949 ÄÚµåÆäÀÌÁö °æ°í
-                            # C4018: '<': signed ¶Ç´Â unsigned ºÒÀÏÄ¡ °æ°í           
+                            #C4018 ë¬´ì‹œ #C949 ì½”ë“œíŽ˜ì´ì§€ ê²½ê³ 
+                            # C4018: '<': signed ë˜ëŠ” unsigned ë¶ˆì¼ì¹˜ ê²½ê³            
                         },
                     },
                     'include_dirs': ['C:/__Work/Trekking/Trekking/libs/libspatialindex',],
@@ -148,6 +153,9 @@
                         # "USE_PEDESTRIAN_DATA",
                         "WIN32", "STL_USE_MFC",
                     ],
+                    "cflags": [ "-finput-charset=UTF-8", "-fexec-charset=UTF-8" ],
+                    "cflags_cc": [ "-finput-charset=UTF-8", "-fexec-charset=UTF-8" ]
+
                 }],
             ],
             # "defines":[
