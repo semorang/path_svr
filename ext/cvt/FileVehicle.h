@@ -93,7 +93,7 @@ struct stVehicleLink
 	uint32_t HdFlag; // HD 링크 매핑, 0:없읍, 1:전체, 2:부분
 #endif
 
-	vector<SPoint> LinkVertex;
+	std::vector<SPoint> LinkVertex;
 };
 
 
@@ -117,7 +117,7 @@ private:
 	bool SetData_Link(int idx, stVehicleLink &getLink_Dbf, char* colData);
 
 private:
-	unordered_map<uint64_t, stTructRestriction> m_umapTructRestriction;
+	std::unordered_map<uint64_t, stTructRestriction> m_umapTructRestriction;
 };
 
 

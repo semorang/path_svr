@@ -18,7 +18,7 @@ typedef struct _tagTravel{
 	double cost;
 	int32_t idx;
 	uint64_t visited;
-	vector<int32_t> path;
+	std::vector<int32_t> path;
 
 	bool operator() (_tagTravel lhs, _tagTravel rhs) {
 		return lhs.cost < rhs.cost; // greater
@@ -29,12 +29,12 @@ typedef struct _tagTravel{
 		idx = 0;
 		visited = 0;
 		path.clear();
-		vector<int32_t>().swap(path);
+		std::vector<int32_t>().swap(path);
 	}
 }Travel;
 
-Travel mst_manhattan_branch_and_bound2(IN const vector<vector<stDistMatrix>>& vtDistMatrix, IN const int count, int start);
-Travel mst_manhattan_branch_and_bound(IN const vector<vector<stDistMatrix>>& vtDistMatrix, IN const int count, int start);
-pair<int, vector<int>> tsp_euclidean_branch_and_bound(IN const vector<vector<stDistMatrix>>& vtDistMatrix, IN const int count, int start);
+Travel mst_manhattan_branch_and_bound2(IN const std::vector<std::vector<stDistMatrix>>& vtDistMatrix, IN const int count, int start);
+Travel mst_manhattan_branch_and_bound(IN const std::vector<std::vector<stDistMatrix>>& vtDistMatrix, IN const int count, int start);
+std::pair<int, std::vector<int>> tsp_euclidean_branch_and_bound(IN const std::vector<std::vector<stDistMatrix>>& vtDistMatrix, IN const int count, int start);
 
 #endif // __SHORTEST__

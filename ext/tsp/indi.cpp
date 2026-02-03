@@ -10,6 +10,8 @@
 #include "indi.h"
 #endif
 
+using namespace std;
+
 TIndi::TIndi(){
 	fN = 0;
 	fLink = NULL;

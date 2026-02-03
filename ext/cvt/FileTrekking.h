@@ -44,7 +44,7 @@ struct stTrekkingLink
 	BYTE VegType[2]; // 식생정보
 	BYTE VegRate[2]; // 식생비율
 	double LinkLen; // 링크 길이
-	vector<SPoint> LinkVertex;
+	std::vector<SPoint> LinkVertex;
 };
 
 

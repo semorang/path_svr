@@ -9,6 +9,8 @@
 #include "sort.h"
 #endif
 
+using namespace std;
+
 TSort* tSort = NULL;
 
 void InitSort(){

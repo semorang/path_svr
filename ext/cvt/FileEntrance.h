@@ -40,12 +40,12 @@ public:
 
 protected:
 	uint32_t m_nEntIdx;
-	vector<stEntrance> m_vtEntrance;
+	std::vector<stEntrance> m_vtEntrance;
 
 private:	
 	int32_t m_nEntType; // 입구점 타입, 0:건물 입구점, 1:단지 입구점
 
-	map<string, uint32_t>m_mapStringId;
+	std::map<std::string, uint32_t>m_mapStringId;
 
 	CFileComplex* m_pFileCpx;
 	CFileBuilding* m_pFileBld;

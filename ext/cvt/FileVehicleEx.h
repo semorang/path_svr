@@ -34,7 +34,7 @@ public:
 	~CFileVehicleEx();
 
 protected:
-	vector<stVehicleEx> m_vtVehicleEx;
+	std::vector<stVehicleEx> m_vtVehicleEx;
 
 private:
 

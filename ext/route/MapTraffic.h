@@ -71,11 +71,11 @@ struct stTrafficMesh {
 	uint32_t meshId;
 
 	// link로 traffic 정보 찾기
-	unordered_map<uint32_t, stKSLinkLink> mapLinkToKS; // link id를 통한 ks 매칭
-	unordered_map<uint32_t, stTTLinLink> mapLinkToTTL; // link id를 통한 ttl 매칭
+	std::unordered_map<uint32_t, stKSLinkLink> mapLinkToKS; // link id를 통한 ks 매칭
+	std::unordered_map<uint32_t, stTTLinLink> mapLinkToTTL; // link id를 통한 ttl 매칭
 
 	// id로 traffic 정보 찾기, ttl 만 (ks는 메쉬 단위로 나뉘지 않음)
-	unordered_map<uint32_t, stTrafficInfoTTL*> mapTrafficTTL; // ttl id를 통한 traffic info 검색
+	std::unordered_map<uint32_t, stTrafficInfoTTL*> mapTrafficTTL; // ttl id를 통한 traffic info 검색
 };
 
 class MapTraffic : public MapBase
@@ -91,7 +91,7 @@ public:
 
 
 	// Traffic
-	const unordered_map<uint32_t, stTrafficMesh*>* GetTrafficMeshData(void) const;
+	const std::unordered_map<uint32_t, stTrafficMesh*>* GetTrafficMeshData(void) const;
 	const uint8_t GetSpeed(IN const KeyID link_key, IN const uint8_t dir, IN OUT uint8_t& type);
 	const uint64_t GetTrafficId(IN const KeyID link, IN const uint8_t dir, IN const uint8_t type);
 
@@ -100,18 +100,18 @@ public:
 	bool UpdateKSData(IN const uint32_t ksId, IN const uint8_t speed, uint32_t timestamp);
 	bool CheckAliveKSData(IN const uint32_t timestamp);
 	const stTrafficInfoKS* GetTrafficInfoKS(IN const uint32_t ks_id);
-	const unordered_map<uint32_t, stTrafficInfoKS*>* GetTrafficKSMapData(void) const;
+	const std::unordered_map<uint32_t, stTrafficInfoKS*>* GetTrafficKSMapData(void) const;
 
 	// TTL
 	bool AddTTLData(IN const uint32_t ttl_nid, IN const uint8_t ttl_dir, IN const uint32_t tile_nid, IN const uint32_t link_nid, IN const uint8_t link_dir);
 	bool UpdateTTLData(IN const uint64_t ttlId, IN const uint8_t speed, uint32_t timestamp, OUT uint8_t& dir, OUT KeyID& link);
-	bool CheckAliveTTLData(IN const uint32_t timestamp, OUT vector<stTrafficInfoTTL>& vtCheckedResetLink);
+	bool CheckAliveTTLData(IN const uint32_t timestamp, OUT std::vector<stTrafficInfoTTL>& vtCheckedResetLink);
 	const stTrafficInfoTTL* GetTrafficInfoTTL(IN const uint64_t ttl_id);
-	const unordered_map<uint32_t, stTrafficInfoTTL*>* GetTrafficTTLMapData(IN const uint32_t meshId);
+	const std::unordered_map<uint32_t, stTrafficInfoTTL*>* GetTrafficTTLMapData(IN const uint32_t meshId);
 	
 private:
-	unordered_map<uint32_t, stTrafficMesh*> mapTrafficMeshData;
-	unordered_map<uint32_t, stTrafficInfoKS*> mapTrafficInfoKS;  // id로 traffic 정보 찾기, ks는 메쉬 단위로 나뉘지 않아 따로 관리
+	std::unordered_map<uint32_t, stTrafficMesh*> mapTrafficMeshData;
+	std::unordered_map<uint32_t, stTrafficInfoKS*> mapTrafficInfoKS;  // id로 traffic 정보 찾기, ks는 메쉬 단위로 나뉘지 않아 따로 관리
 };
 
-const int32_t getTrafficColor(IN const BYTE speed, IN const uint32_t level, OUT string* pstrColor = nullptr);
+const int32_t getTrafficColor(IN const BYTE speed, IN const uint32_t level, OUT std::string* pstrColor = nullptr);

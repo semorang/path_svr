@@ -18,6 +18,7 @@
 static char THIS_FILE[] = __FILE__;
 #endif
 
+using namespace std;
 
 CRouteManager::CRouteManager()
 {
@@ -431,28 +432,25 @@ int CRouteManager::GetBestWaypointResult(IN const RouteDistMatrix& RDM, IN OUT B
 {
 	int ret = -1;
 
-	vector<stWaypoints> vtRawData;
-	stWaypoints newWay;
+	vector<stWaypoint> vtRawData;
+	stWaypoint newWay;
 	int32_t idx = 0;
 
 	if (m_linkDeparture.Coord.has()) {
-		newWay.nId = idx++;
-		newWay.x = m_linkDeparture.Coord.x;
-		newWay.y = m_linkDeparture.Coord.y;
+		newWay.id = idx++;
+		newWay.position = m_linkDeparture.Coord;
 		vtRawData.push_back(newWay);
 	}
 
 	for (const auto& way : m_linkWaypoints) {
-		newWay.nId = idx++;
-		newWay.x = way.Coord.x;
-		newWay.y = way.Coord.y;
+		newWay.id = idx++;
+		newWay.position = way.Coord;
 		vtRawData.push_back(newWay);
 	}
 
 	if (m_linkDestination.Coord.has()) {
-		newWay.nId = idx++;
-		newWay.x = m_linkDestination.Coord.x;
-		newWay.y = m_linkDestination.Coord.y;
+		newWay.id = idx++;
+		newWay.position = m_linkDestination.Coord;
 		vtRawData.push_back(newWay);
 	}
 
@@ -575,7 +573,7 @@ int CRouteManager::GetBestWaypointResult(IN const RouteDistMatrix& RDM, IN OUT B
 	LOG_TRACE(LOG_DEBUG_LINE, "result :");
 	for (const auto& item : vtBestWays)
 	{
-		LOG_TRACE(LOG_DEBUG_CONTINUE, "%3d>", item); //→
+		LOG_TRACE(LOG_DEBUG_CONTINUE, "%3d\u2192", item); // →
 		
 		if (idx >= 1) {
 			totalDist += ppResultTables[idxPrev][item].nTotalDist;
@@ -610,24 +608,24 @@ int CRouteManager::GetBestWaypointResult(IN const RouteDistMatrix& RDM, IN OUT B
 		if (oldIdx == 0) {
 			// 첫번째값을 출발지로 변경
 			LOG_TRACE(LOG_DEBUG, "departure will change, idx(%d) %.5f, %.5f -> idx(%d) %.5f, %.5f",
-				oldIdx, vtRawData[oldIdx].x, vtRawData[oldIdx].y,
-				newIdx, vtRawData[newIdx].x, vtRawData[newIdx].y);
+				oldIdx, vtRawData[oldIdx].position.x, vtRawData[oldIdx].position.y,
+				newIdx, vtRawData[newIdx].position.x, vtRawData[newIdx].position.y);
 
-			SetDeparture(vtRawData[newIdx].x, vtRawData[newIdx].y);
+			SetDeparture(vtRawData[newIdx].position.x, vtRawData[newIdx].position.y);
 		} else if (oldIdx == vtRawData.size() - 1) {
 			// 마지막값을 목적지로 변경
 			LOG_TRACE(LOG_DEBUG, "destination will change, idx(%d) %.5f, %.5f -> idx(%d) %.5f, %.5f",
-				oldIdx, vtRawData[oldIdx].x, vtRawData[oldIdx].y,
-				newIdx, vtRawData[newIdx].x, vtRawData[newIdx].y);
+				oldIdx, vtRawData[oldIdx].position.x, vtRawData[oldIdx].position.y,
+				newIdx, vtRawData[newIdx].position.x, vtRawData[newIdx].position.y);
 
-			SetDestination(vtRawData[newIdx].x, vtRawData[newIdx].y);
+			SetDestination(vtRawData[newIdx].position.x, vtRawData[newIdx].position.y);
 		} else {
 			// 경유지 변경
 			LOG_TRACE(LOG_DEBUG, "waypoint will change, idx(%d) %.5f, %.5f -> idx(%d) %.5f, %.5f",
-				oldIdx, vtRawData[oldIdx].x, vtRawData[oldIdx].y,
-				newIdx, vtRawData[newIdx].x, vtRawData[newIdx].y);
+				oldIdx, vtRawData[oldIdx].position.x, vtRawData[oldIdx].position.y,
+				newIdx, vtRawData[newIdx].position.x, vtRawData[newIdx].position.y);
 
-			SetWaypoint(vtRawData[newIdx].x, vtRawData[newIdx].y);
+			SetWaypoint(vtRawData[newIdx].position.x, vtRawData[newIdx].position.y);
 		}
 	}
 
@@ -1915,7 +1913,7 @@ int CRouteManager::ParsingBaseOption(IN const char* szRequest, OUT BaseOption& o
 }
 
 
-int32_t CRouteManager::ParsingRequestRoute(IN const char* szRequest, OUT BaseOption& baseOpt, OUT vector<Origins>& vtOrigin)
+int32_t CRouteManager::ParsingRequestRoute(IN const char* szRequest, OUT BaseOption& baseOpt, OUT vector<stWaypoint>& vtOrigin)
 {
 	int ret = RESULT_FAILED;
 
@@ -1964,7 +1962,10 @@ int CRouteManager::GetWeightMatrix(IN OUT RouteDistMatrix& RDM, const IN BaseOpt
 	static const int32_t MAX_TMS_LIMIT_POINT_COUNT = 1000; // 현재(2025-10-21) 기준 최대 1000개 이하만 처리하자 
 	const int32_t nMaxExceedCount = GetLimitPointCount();
 
-	if ((cntOrigins > MAX_TMS_LIMIT_POINT_COUNT) || (cntDestinations > MAX_TMS_LIMIT_POINT_COUNT)) {
+	if (cntOrigins <= 0) {
+		ret = ROUTE_RESULT_FAILED_WRONG_PARAM;
+		return ret;
+	} else if ((cntOrigins > MAX_TMS_LIMIT_POINT_COUNT) || (cntDestinations > MAX_TMS_LIMIT_POINT_COUNT)) {
 		ret = TMS_RESULT_FAILED_EXCEEDS_COUNT;
 		return ret;
 	} else 	if (nMaxExceedCount > 0) {
@@ -1981,9 +1982,6 @@ int CRouteManager::GetWeightMatrix(IN OUT RouteDistMatrix& RDM, const IN BaseOpt
 
 
 	// get table
-	const int MAX_RDM_BUFF = 1024;
-	char szFileName[MAX_RDM_BUFF] = { 0, };
-	char szFilePath[MAX_RDM_BUFF] = { 0, };
 	LOGTIME timeNow;
 	time_t tmNow = LOG_TIME(timeNow, RDM.tmCreate);
 
@@ -2016,10 +2014,10 @@ int CRouteManager::GetWeightMatrix(IN OUT RouteDistMatrix& RDM, const IN BaseOpt
 		ret = RESULT_OK;
 	} else if (option.distance_type == 0) {
 		// 직선거리 테이블 생성
-		ret = DoDistanceTabulate(RDM);
+		ret = DoDistanceMatrix(RDM);
 	} else if (cntDestinations != 0) {
 		// 출/도착지 정보가 각기 존재하면 NxN이 아닌 NxM으로 처리하고, 캐시 정보를 사용하지 않는다.
-		ret = DoTabulate(RDM, reqInfo);
+		ret = DoWeightMatrix(RDM, reqInfo);
 	} else {
 		//if (RDM.vtDistMatrix.empty() && (option.fileCache == 1 || option.fileCache == 3)) { // read, read-write
 		//	BaseOption optionFile;
@@ -2034,25 +2032,47 @@ int CRouteManager::GetWeightMatrix(IN OUT RouteDistMatrix& RDM, const IN BaseOpt
 
 		// 캐쉬된 WM이 없으면 새로 생성
 		if (RDM.vtDistMatrix.empty() && !isRead) {
-			ret = DoTabulate(RDM, reqInfo);
+			ret = DoWeightMatrix(RDM, reqInfo);
+
+			const int MAX_RDM_BUFF = 1024;
+			char szDirName[MAX_RDM_BUFF] = { 0, };
+			char szFileName[MAX_RDM_BUFF] = { 0, };
+			char szFilePath[MAX_RDM_BUFF] = { 0, };
+
+			// make epoch time
+			int64_t epochtime = static_cast<int64_t>(tmNow) / 1000; // 밀리초라면 /1000, 초라면 그대로
+
+			// make dir usr/rdm/yyyy/mm/dd
+			sprintf(szDirName, "%s/usr/rdm/%04d/%02d/%02d", m_pDataMgr->GetDataPath(), timeNow.year, timeNow.month, timeNow.day);
+			checkDirectory(szDirName, true);
 
 			// 테이블 데이터 미리 읽어 저장하면서 사용하자
-			sprintf(szFileName, "result_rdm_u%s_t%04d%02d%02d%02d%02d%02d", RDM.strUser.c_str(), timeNow.year, timeNow.month, timeNow.day, timeNow.hour, timeNow.minute, timeNow.second);
-			sprintf(szFilePath, "%s/usr/rdm/%s.rdm", m_pDataMgr->GetDataPath(), szFileName);
-
-			if ((ret == RESULT_OK) && (option.fileCache == 2 || option.fileCache == 3 || option.binary == 1 || option.binary == 3)) { // write, read-write)) {
-				ret = m_pTmsMgr->SaveWeightMatrix(szFilePath, &option, cntOrigins, sizeItem, crc, RDM.vtOrigin, RDM.vtDistMatrix);
-				if (ret == RESULT_OK) {
+			if ((ret == RESULT_OK) && (option.artifact == 1 || option.artifact == 3)) { // write, read-write)) {
+				sprintf(szFileName, "_t%010lld_d%04d%02d%02d%02d%02d%02d_u%s.rdm", epochtime, timeNow.year, timeNow.month, timeNow.day, timeNow.hour, timeNow.minute, timeNow.second, RDM.strUser.c_str());
+				sprintf(szFilePath, "%s/%s", szDirName, szFileName);
+				int32_t retSize = m_pTmsMgr->SaveWeightMatrix(szFilePath, &option, cntOrigins, sizeItem, crc, RDM.vtOrigin, RDM.vtDistMatrix);
+				if (retSize > 0) {
 					isWritten = true;
+					RDM.infoRouteMatrix.type = "file";
+					RDM.infoRouteMatrix.form = "bin";
+					RDM.infoRouteMatrix.data = szFileName;
+					RDM.infoRouteMatrix.size = retSize;
+					RDM.infoRouteMatrix.created = epochtime;
 				}
 			}
 
 			// 테이블 데이터 미리 읽어 저장하면서 사용하자
-			if ((ret == RESULT_OK) && (option.binary == 2 || option.binary == 3)) { // Route line)) {
-				sprintf(szFilePath, "%s/usr/rdm/%s.rln", m_pDataMgr->GetDataPath(), szFileName);
-				ret = m_pTmsMgr->SaveWeightMatrixRouteLine(szFilePath, RDM.vtPathMatrix);
-				if (ret == RESULT_OK) {
+			if ((ret == RESULT_OK) && (option.artifact == 2 || option.artifact == 3)) { // Route line)) {
+				sprintf(szFileName, "_t%010lld_d%04d%02d%02d%02d%02d%02d_u%s.rpm", epochtime, timeNow.year, timeNow.month, timeNow.day, timeNow.hour, timeNow.minute, timeNow.second, RDM.strUser.c_str());
+				sprintf(szFilePath, "%s/%s", szDirName, szFileName);
+				int32_t retSize = m_pTmsMgr->SaveWeightMatrixRouteLine(szFilePath, RDM.vtPathMatrix);
+				if (retSize > 0) {
 					isWritten = true;
+					RDM.infoPathMatrix.type = "file";
+					RDM.infoPathMatrix.form = "bin";
+					RDM.infoPathMatrix.data = szFileName;
+					RDM.infoPathMatrix.size = retSize;
+					RDM.infoPathMatrix.created = epochtime;
 				}
 			}
 		} else {
@@ -2060,7 +2080,7 @@ int CRouteManager::GetWeightMatrix(IN OUT RouteDistMatrix& RDM, const IN BaseOpt
 		}
 	}
 
-	LOG_TRACE(LOG_DEBUG, timeStart, "ParsingWeightMatrix, result: %d", ret);
+	LOG_TRACE(LOG_DEBUG, timeStart, "GetWeightMatrix, result: %d", ret);
 
 	return ret;
 }
@@ -2085,26 +2105,45 @@ int CRouteManager::ParsingWeightMatrixRoute(IN const char* szRequest, OUT RouteD
 }
 
 
-int CRouteManager::ParsingWeightMatrixRouteLine(IN const char* szRequest, OUT RouteDistMatrixLine& RLN)
+int CRouteManager::ParsingWeightMatrixRoutePathIndex(IN const char* szRequest, OUT RoutePathMatrixIndex& RPI)
 {
 	int ret = RESULT_FAILED;
 
 	if (szRequest == nullptr || strlen(szRequest) <= 0) {
-		LOG_TRACE(LOG_WARNING, "ParsingWeightMatrixRouteLine request failed, request string is null or zero size");
+		LOG_TRACE(LOG_WARNING, "ParsingWeightMatrixRoutePathIndex request failed, request string is null or zero size");
 		return ret;
 	}
 
-	time_t timeStart = LOG_TRACE(LOG_DEBUG, "ParsingWeightMatrixRouteLine request, lenth: %d", strlen(szRequest));
+	time_t timeStart = LOG_TRACE(LOG_DEBUG, "ParsingWeightMatrixRoutePathIndex request, lenth: %d", strlen(szRequest));
 
-	ret = m_pTmsMgr->ParsingRequestWeightMatrixRouteLine(szRequest, RLN.strFileName, RLN.sizeFile, RLN.vtPathFileIndex);
+	ret = m_pTmsMgr->ParsingRequestWeightMatrixRoutePathIndex(szRequest, RPI.strFileName, RPI.sizeFile, RPI.vtPathFileIndex);
 
-	LOG_TRACE(LOG_DEBUG, timeStart, "ParsingWeightMatrixRouteLine, result: %d", ret);
+	LOG_TRACE(LOG_DEBUG, timeStart, "ParsingWeightMatrixRoutePathIndex, result: %d", ret);
 
 	return ret;
 }
 
 
-int CRouteManager::GetCluster_for_geoyoung(IN const int32_t cntCluster, OUT vector<stDistrict>& vtCluster)
+int CRouteManager::ParsingWeightMatrixRoutePathData(IN const char* szRequest, OUT vector<WeightMatrixPath>& vtPathMatrixData)
+{
+	int ret = RESULT_FAILED;
+
+	if (szRequest == nullptr || strlen(szRequest) <= 0) {
+		LOG_TRACE(LOG_WARNING, "ParsingWeightMatrixRoutePathData request failed, request string is null or zero size");
+		return ret;
+	}
+
+	time_t timeStart = LOG_TRACE(LOG_DEBUG, "ParsingWeightMatrixRoutePathData request, lenth: %d", strlen(szRequest));
+
+	ret = m_pTmsMgr->ParsingRequestWeightMatrixRoutePathData(szRequest, vtPathMatrixData);
+
+	LOG_TRACE(LOG_DEBUG, timeStart, "ParsingWeightMatrixRoutePathData, result: %d", ret);
+
+	return ret;
+}
+
+
+int CRouteManager::GetCluster_for_geoyoung(IN const int32_t cntCluster, OUT vector<stCluster>& vtCluster)
 {
 	int ret = -1;
 
@@ -2147,7 +2186,7 @@ int CRouteManager::GetCluster_for_geoyoung(IN const int32_t cntCluster, OUT vect
 	// geoyoung cluster
 	int idCluster = 0;
 	for (const auto& items : arrClusterCnt) {
-		stDistrict cluster;
+		stCluster cluster;
 		cluster.id = idCluster++;
 
 		LOG_TRACE(LOG_DEBUG, "GetCluster_for_geoyoung, cluster id : %d", items);
@@ -2183,9 +2222,9 @@ int CRouteManager::GetCluster(IN const char* szRequest, IN RouteDistMatrix& RDM,
 
 	time_t timeStart = LOG_TRACE(LOG_DEBUG, "GetCluster request : %s", szRequest);
 
-	if (!CLUST.vtDistrict.empty()) {
-		CLUST.vtDistrict.clear();
-		vector<stDistrict>().swap(CLUST.vtDistrict);
+	if (!CLUST.vtCluster.empty()) {
+		CLUST.vtCluster.clear();
+		vector<stCluster>().swap(CLUST.vtCluster);
 	}
 
 	// get table
@@ -2434,7 +2473,7 @@ int CRouteManager::GetCluster(IN const char* szRequest, IN RouteDistMatrix& RDM,
 		SAFE_DELETE_ARR(ppWeightMatrix);
 
 #else // #define USE_KMEANS_ALORITHM // k-means 알고리즘 사용
-	ret = m_pTmsMgr->GetCluster(&CLUST.option, RDM.vtDistMatrix, RDM.vtOrigin, CLUST.vtDistrict, CLUST.vtEndPoint);
+	ret = m_pTmsMgr->GetCluster(&CLUST.option, RDM.vtDistMatrix, RDM.vtOrigin, CLUST.vtCluster, CLUST.vtEndPoint);
 #endif // #define USE_KMEANS_ALORITHM // k-means 알고리즘 사용
 
 
@@ -2460,15 +2499,15 @@ int CRouteManager::GetGroup(IN const char* szRequest, IN OUT Cluster& CLUST)
 
 	time_t timeStart = LOG_TRACE(LOG_DEBUG, "GetGroup request : %s", szRequest);
 
-	uint32_t crc = m_pTmsMgr->ParsingRequestGroup(szRequest, CLUST.option, CLUST.vtOrigins);
-	const int cntOrigins = CLUST.vtOrigins.size();
+	uint32_t crc = m_pTmsMgr->ParsingRequestGroup(szRequest, CLUST.option, CLUST.vtDistrict);
+	const int cntOrigins = CLUST.vtDistrict.size();
 
 	if (cntOrigins <= 0) {
 		return ROUTE_RESULT_FAILED_WRONG_PARAM;
 	}
 
 	// get cluster
-	ret = m_pTmsMgr->GetGroup(&CLUST.option, CLUST.vtOrigins, CLUST.vtDistrict);
+	ret = m_pTmsMgr->GetGroup(&CLUST.option, CLUST.vtDistrict, CLUST.vtCluster);
 
 	LOG_TRACE(LOG_DEBUG, timeStart, "GetGroup, result: %d", ret);
 
@@ -2479,43 +2518,58 @@ int CRouteManager::GetGroup(IN const char* szRequest, IN OUT Cluster& CLUST)
 int CRouteManager::GetBestway(IN const char* szRequest, IN RouteDistMatrix& RDM, OUT BestWaypoints& TSP)
 {
 	int ret = RESULT_FAILED;
-	time_t timeStart = TICK_COUNT();
 
-	if (szRequest != nullptr && strlen(szRequest) > 0) {
-		time_t timeStart = LOG_TRACE(LOG_DEBUG, "GetBestway, request: %s", szRequest);
+	if (szRequest == nullptr || strlen(szRequest) <= 0) {
+		LOG_TRACE(LOG_WARNING, "GetBestway request failed, request string is null or zero size");
+		return ret;
+	}
 
-		// get table	
+	time_t timeStart = LOG_TRACE(LOG_DEBUG, "GetBestway, request: %s", szRequest);
+
+	// 사용자 RDM 정보가 있으면 우선 사용
+	if (!RDM.vtOrigin.empty() && !RDM.vtDistMatrix.empty()) {
+		ret = RESULT_OK;
+	} else {
+		ret = m_pTmsMgr->ParsingRequestBestway(szRequest, TSP.option, RDM.vtOrigin, RDM.vtDistMatrix);
+	}
+
+	if (RDM.vtDistMatrix.empty()) {
+		// get table
 		ret = ParsingWeightMatrix(szRequest, RDM, TSP.option.baseOption);
 		if (RDM.vtDistMatrix.empty()) {
 			ret = GetWeightMatrix(RDM, TSP.option.baseOption);
 		}
-
-		uint32_t crc = m_pTmsMgr->ParsingRequestBestway(szRequest, TSP.option, RDM.vtOrigin);
-	} else {
-		LOG_TRACE(LOG_DEBUG, "GetBestway request null, using rdm struct info, origin:%d, destination:%d", RDM.vtOrigin.size(), RDM.vtDestination.size());
-		ret = RESULT_OK;
-	}	
-
-	
-	const int cntOrigins = RDM.vtOrigin.size();	
-	if (cntOrigins <= 0) {
-		return ROUTE_RESULT_FAILED_WRONG_PARAM;
 	}
-
+	
 	if (ret == RESULT_OK) {
-
-		stWaypoints waypoint;
+		stWaypoint waypoint;
 		int idx = 0;
 		for (const auto& pt : RDM.vtOrigin) {
-			waypoint.nId = idx++;
-			waypoint.x = pt.position.x;
-			waypoint.y = pt.position.y;
-			waypoint.nLayoverTime = pt.layoverTime;
+			waypoint.id = idx++;
+			waypoint.position = pt.position;
+			waypoint.layoverTime = pt.layoverTime;
 
 			TSP.vtWaypoints.emplace_back(waypoint);
 		}
 		
 		ret = m_pTmsMgr->GetBestway(&TSP.option, RDM.vtDistMatrix, TSP.vtWaypoints, TSP.vtBestWays, TSP.totalDist, TSP.totalTime);
+		if (ret == RESULT_OK) {
+			const int cntBestWays = TSP.vtBestWays.size();
+			TSP.vtBestDist.clear(); TSP.vtBestDist.reserve(cntBestWays);
+			TSP.vtBestTime.clear(); TSP.vtBestTime.reserve(cntBestWays);
+			
+			for (int curr = 0; curr < TSP.vtBestWays.size(); curr++) {
+				if (curr <= 0) {
+					TSP.vtBestDist.push_back(0);
+					TSP.vtBestTime.push_back(0);
+				} else {
+					int prev = TSP.vtBestWays[curr - 1];
+					int next = TSP.vtBestWays[curr];
+					TSP.vtBestDist.push_back(RDM.vtDistMatrix[prev][next].nTotalDist);
+					TSP.vtBestTime.push_back(RDM.vtDistMatrix[prev][next].nTotalTime);
+				}
+			}
+		}
 	}
 
 	LOG_TRACE(LOG_DEBUG, timeStart, "GetBestway, result: %d, dist:%.2f, time:%d", ret, TSP.totalDist, TSP.totalTime);
@@ -2710,24 +2764,24 @@ int CRouteManager::DoCourse(/*Packet*/)
 }
 
 
-int CRouteManager::DoTabulate(IN OUT RouteDistMatrix& RDM, OUT RequestRouteInfo& reqInfo)
+int CRouteManager::DoWeightMatrix(IN OUT RouteDistMatrix& RDM, OUT RequestRouteInfo& reqInfo)
 {
 	int ret = -1;
 
 	// 좌표 설정
 	KeyID sID, eID;//, wID;
 
-	const vector<Origins>* pvtOrigin = &RDM.vtOrigin;
+	const vector<stWaypoint>* pvtOrigin = &RDM.vtOrigin;
 	if (pvtOrigin == nullptr) {
 		return ret;
 	}
 
-	const vector<Origins>* pvtDestination = &RDM.vtDestination;
+	const vector<stWaypoint>* pvtDestination = &RDM.vtDestination;
 
 	int cntOrigin = pvtOrigin->size();
 	int cntDestination = pvtDestination->size();
 
-	time_t timeStart = LOG_TRACE(LOG_DEBUG, "DoDistanceTabulate, requst origins: %d, destinations: %d", cntOrigin, cntDestination);
+	time_t timeStart = LOG_TRACE(LOG_DEBUG, "DoWeightMatrix, requst origins: %d, destinations: %d", cntOrigin, cntDestination);
 
 	// 목적지 정보가 없으면 출발지 정보를 목적지 정보로 사용한다.
 	if (pvtDestination->empty()) {
@@ -2920,7 +2974,7 @@ int CRouteManager::DoTabulate(IN OUT RouteDistMatrix& RDM, OUT RequestRouteInfo&
 		}
 	}
 
-	ret = m_pRoutePlan->DoTabulate(&reqInfo, vtOriginLinkInfos, vtDestLinkInfos, RDM);
+	ret = m_pRoutePlan->DoWeightMatrix(&reqInfo, vtOriginLinkInfos, vtDestLinkInfos, RDM);
 	if (ret != ROUTE_RESULT_SUCCESS) {
 		LOG_TRACE(LOG_WARNING, "failed, get weight matrix");
 	}
@@ -2928,27 +2982,27 @@ int CRouteManager::DoTabulate(IN OUT RouteDistMatrix& RDM, OUT RequestRouteInfo&
 	// release
 	Release();
 
-	LOG_TRACE(LOG_DEBUG, timeStart, "DoTabulate, result: %d", ret);
+	LOG_TRACE(LOG_DEBUG, timeStart, "DoWeightMatrix, result: %d", ret);
 
 	return ret;
 }
 
 
-int CRouteManager::DoDistanceTabulate(IN OUT RouteDistMatrix& RDM)
+int CRouteManager::DoDistanceMatrix(IN OUT RouteDistMatrix& RDM)
 {
 	int ret = ROUTE_RESULT_SUCCESS;
 
-	const vector<Origins>* pvtOrigins = &RDM.vtOrigin;
+	const vector<stWaypoint>* pvtOrigins = &RDM.vtOrigin;
 	if (pvtOrigins == nullptr) {
 		return ret;
 	}
 
-	const vector<Origins>* pvtDestination = &RDM.vtDestination;
+	const vector<stWaypoint>* pvtDestination = &RDM.vtDestination;
 
 	int cntOrigin = pvtOrigins->size();
 	int cntDestination = pvtDestination->size();
 
-	time_t timeStart = LOG_TRACE(LOG_DEBUG, "DoDistanceTabulate, requst origins: %d, destinations: %d", cntOrigin, cntDestination);
+	time_t timeStart = LOG_TRACE(LOG_DEBUG, "DoDistanceMatrix, requst origins: %d, destinations: %d", cntOrigin, cntDestination);
 
 	// 목적지 정보가 없으면 출발지 정보를 목적지 정보로 사용한다.
 	if (pvtDestination->empty()) {
@@ -2978,7 +3032,7 @@ int CRouteManager::DoDistanceTabulate(IN OUT RouteDistMatrix& RDM)
 		}
 
 		if (matchID.llid == NULL_VALUE) {
-			LOG_TRACE(LOG_DEBUG, "failed, set DoDistanceTabulate projection, %.6f, %.6f", coord.x, coord.y);
+			LOG_TRACE(LOG_DEBUG, "failed, set DoDistanceMatrix projection, %.6f, %.6f", coord.x, coord.y);
 		}
 
 		vector<stDistMatrix> vtRowsMatrix;
@@ -2995,7 +3049,7 @@ int CRouteManager::DoDistanceTabulate(IN OUT RouteDistMatrix& RDM)
 		RDM.vtDistMatrix.emplace_back(vtRowsMatrix);
 	} // for
 
-	LOG_TRACE(LOG_DEBUG, timeStart, "DoDistanceTabulate, result: %d", ret);
+	LOG_TRACE(LOG_DEBUG, timeStart, "DoDistanceMatrix, result: %d", ret);
 
 	return ret;
 }

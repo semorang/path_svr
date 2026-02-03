@@ -3,6 +3,7 @@
 #include <math.h>
 #include <vector>
 #include "GnType.h"
+
 using namespace std;
 
 
@@ -118,9 +119,9 @@ public:
 	bool ScreenToWorld(int inX, int inY, double& outX, double& outY, int nZoomLevel=-1);
 	bool ScreenToWorld(const PointN& _ScrPoint, PointF& _WorldPoint, int nZoomLevel=-1);
 
-	bool WorldToScreen(double inX, double inY, int& outX, int& outY, int nZoomLevel=-1);
+	bool WorldToScreen(IN const double inX, IN const double inY, OUT int& outX, OUT int& outY, IN int nZoomLevel=-1);
 	bool WorldToScreen(const PointF& _WorldPoint, PointN& _ScrPoint, int nZoomLevel=-1);
-	bool WorldToScreen(const int nPoint, PointF* _pWorldPoints, PointN* _pScrPoints, int nZoomLevel=-1);
+	bool WorldToScreen(const int nPoint, const PointF* _pWorldPoints, PointN* _pScrPoints, int nZoomLevel=-1);
 
 	//==============================================================================
 	// Map 영역계산용

@@ -11,16 +11,16 @@ struct stMntBoundary
 	uint32_t ID; // ID
 	uint32_t MeshID; // 메시 매칭 ID
 	uint32_t FNameIdx;// 산바운더리명칭 인덱스
-	string Category; // 국립,도
+	std::string Category; // 국립,도
 	uint32_t Code; // 산코드
 	uint32_t BeajiBal; // 배지 발
-	string MName; // 산명칭
+	std::string MName; // 산명칭
 	uint32_t Task; // task
 	SBox Box; 
-	vector<uint16_t> vtParts; // 파트 인덱스
-	vector<SPoint> vtVertex; // 버텍스
-	vector<stEntranceInfo> vtEntrance; // 입구점
-	vector<uint32_t> vtJoinedMesh; // 중첩 메쉬 ID
+	std::vector<uint16_t> vtParts; // 파트 인덱스
+	std::vector<SPoint> vtVertex; // 버텍스
+	std::vector<stEntranceInfo> vtEntrance; // 입구점
+	std::vector<uint32_t> vtJoinedMesh; // 중첩 메쉬 ID
 	KeyID keyMnt;
 
 	stMntBoundary() {
@@ -42,7 +42,7 @@ struct stMntEntrance
 	uint64_t F_NODE_ID; // 숲길 노드 ID
 	uint64_t W_NODE_ID; // 보행자 노드 ID
 	uint32_t ENT_TYP; // 입구점 타입, 1: 교차점등산로 종점의 입구, 2: 등산로와 도보가 만나는 입구, 3: 등산로제외 링크와 도보가 만나는 입구
-	string ENT_NAME; // 입구점 명칭
+	std::string ENT_NAME; // 입구점 명칭
 	uint32_t MNT_CD; // 산코드
 	uint32_t DP; // DP
 	uint32_t G_ID; // 그룹ID
@@ -72,15 +72,15 @@ public:
 
 protected:
 	uint32_t m_nMntIdx;
-	unordered_map<uint64_t, stMntBoundary> m_mapBoundary;
-	unordered_map<uint64_t, stMntEntrance> m_mapEntrance;
-	unordered_map<uint32_t, unordered_set<uint32_t>> m_mapMntGidMcd; // g_id에 속하는 mnt_cd 관리
+	std::unordered_map<uint64_t, stMntBoundary> m_mapBoundary;
+	std::unordered_map<uint64_t, stMntEntrance> m_mapEntrance;
+	std::unordered_map<uint32_t, std::unordered_set<uint32_t>> m_mapMntGidMcd; // g_id에 속하는 mnt_cd 관리
 
 private:
 	bool SetData_Boundary(int idx, stMntBoundary &getMnt_Dbf, char* colData);
 	bool SetData_Entrance(int idx, stMntEntrance &getMnt_Dbf, char* colData);
 	
-	unordered_map<string, KeyID>m_mapStringId;
+	std::unordered_map<std::string, KeyID>m_mapStringId;
 	//unordered_map<uint32_t, stMntBoundaryShare>m_mapCpxShare;
 
 public:

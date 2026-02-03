@@ -45,7 +45,7 @@ struct tableItem
 struct tableItemNearlest
 {
 	uint32_t idx; // 테이블 요소 인덱스
-	vector<tableItem> nearlest; // 가까운 테이블 인덱스
+	std::vector<tableItem> nearlest; // 가까운 테이블 인덱스
 };
 
 
@@ -78,14 +78,14 @@ public:
 	void SetGeneSize(IN const int32_t size);
 	int32_t GetGeneSize(bool isEnable = true);
 
-	double CalculateCost(IN const vector<vector<stDistMatrix>>& vtDistMatrix, IN const int count, IN const double average);
+	double CalculateCost(IN const std::vector<std::vector<stDistMatrix>>& vtDistMatrix, IN const int count, IN const double average);
 	double GetCost(void) const;
 	uint32_t GetDist(void) const;
 	uint32_t GetTime(void) const;
 	double GetFitness(void) const;
 	double GetFValue(void) const;
 	uint32_t GetChromosomeSize(void) const;
-	vector<Gene>* GetChromosome(void);
+	std::vector<Gene>* GetChromosome(void);
 	uint32_t GetMutate(void);
 	int32_t GetStart(void) const;
 	int32_t GetFinish(void) const;
@@ -96,7 +96,7 @@ public:
 	void SetMutate(IN const uint32_t state);
 	void SetStartFinish(IN const int32_t nStart, IN const int32_t nFinish);
 
-	bool Create(IN const vector<tableItemNearlest>* pNearlest, IN const int32_t start = 0, IN const int32_t finish = -1, IN const uint32_t idx = 0); // ??u ??? ????
+	bool Create(IN const std::vector<tableItemNearlest>* pNearlest, IN const int32_t start = 0, IN const int32_t finish = -1, IN const uint32_t idx = 0); // ??u ??? ????
 
 
 #if defined(SHOW_STATUS)
@@ -104,7 +104,7 @@ public:
 #endif
 
 private:
-	bool Propagation(IN const vector<tableItemNearlest>* pNearlest, IN const int32_t start, IN const int32_t finish, IN const uint32_t maxLoop, OUT vector<uint32_t>& vtBestWay);
+	bool Propagation(IN const std::vector<tableItemNearlest>* pNearlest, IN const int32_t start, IN const int32_t finish, IN const uint32_t maxLoop, OUT std::vector<uint32_t>& vtBestWay);
 
 	int32_t geneSize; // 전체 유전자 수
 	int32_t enableGeneSize; // 사용 가능한 유전자 수, 도착지 고정값을 뺀 수
@@ -117,7 +117,7 @@ private:
 	double fvalue;
 	double fitness; // 적합도
 
-	vector<Gene> chromosome; // 염색체, 유전자 다발
+	std::vector<Gene> chromosome; // 염색체, 유전자 다발
 
 	uint32_t parent1;
 	uint32_t parent2;
@@ -144,7 +144,7 @@ public:
 
 	void SetOption(IN const TspOption* pOpt);
 
-	bool SetCostTable(IN const vector<vector<stDistMatrix>>& vtDistMatrix, IN const int count);
+	bool SetCostTable(IN const std::vector<std::vector<stDistMatrix>>& vtDistMatrix, IN const int count);
 
 	// 생성
 	void Genesis(IN const uint32_t maxGene, IN const uint32_t maxPopulation); // 최초 생성
@@ -153,18 +153,18 @@ public:
 	const double Evaluation(void); // 평가 - return : top value 
 
 	// 선택
-	void Selection(OUT vector<Parents>& pairs);
+	void Selection(OUT std::vector<Parents>& pairs);
 
 	// 교차
 	//bool Crossover(IN const Individual* pParentL, IN const Individual* pParentR, OUT Individual& pChild); // 교배
-	bool Crossover(IN vector<Parents>& pairs);
+	bool Crossover(IN std::vector<Parents>& pairs);
 	bool CrossBySelf(IN Individual* pSelf, IN const int32_t pos = -1, IN const int32_t size = -1, IN const int32_t off = 1);
 
 	// 변이
 	bool Mutation(IN Individual* pIndividual, IN const int32_t mutationRate);
 	bool MutationReverse(IN Individual* pIndividual, IN const int32_t idxStart, IN const int32_t idxEnd, IN const int32_t state);
 
-	void GetBest(vector<int>& result);
+	void GetBest(std::vector<int>& result);
 	const double GetBestCost(void);
 	const uint32_t GetBestDist(void);
 	const uint32_t GetBestTime(void);
@@ -177,13 +177,13 @@ public:
 
 private:
 	int nMaxPopulation; // 최대 개체수
-	vector<Individual> population;
+	std::vector<Individual> population;
 	uint32_t generation; // 세대
 
-	vector<vector<stDistMatrix>>* ppTables;
+	std::vector<std::vector<stDistMatrix>>* ppTables;
 	uint32_t tableCount;
 
-	vector<tableItemNearlest> genePriority;
+	std::vector<tableItemNearlest> genePriority;
 
 	TspOption tspOption;
 

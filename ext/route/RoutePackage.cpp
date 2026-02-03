@@ -3,7 +3,7 @@
 #include "RoutePackage.h"
 
 #if defined(USE_CJSON)
-#include "../libjson/cjson/cJSON.h"
+#include "../libjson/cjson/cJSONHelper.h"
 #endif
 
 #include "../thlib/ZLIB.H"
@@ -14,6 +14,7 @@
 #include "../utils/DataConvertor.h"
 #include "../tms/TMSManager.h"
 
+using namespace std;
 
 template<typename ... Args>
 std::string string_format(const std::string& format, Args ... args)
@@ -1352,7 +1353,7 @@ int32_t CRoutePackage::GetMapsMultiRouteResult(IN const vector<RouteResultInfo>&
 }
 
 
-int appendRawDatatoJson(IN const char* pszFilePath, IN const char* pszFieldName, IN OUT cJSON* pJson)
+int appendRawDatatoJson(IN const char* pszFilePath, IN const char* pszFieldName, IN const time_t epochTime, IN OUT cJSON* pJson)
 {
 	int ret = RESULT_FAILED;
 
@@ -1389,10 +1390,12 @@ int appendRawDatatoJson(IN const char* pszFilePath, IN const char* pszFieldName,
 					sizeBase64 = base64fromBinary(reinterpret_cast<char*>(pszCompress), sizeCommpress, &pszBase64);
 
 					cJSON* pRdm = cJSON_CreateObject();
-					cJSON_AddStringToObject(pRdm, "type", "zip");
-					cJSON_AddStringToObject(pRdm, "form", "json");
+					cJSON_AddStringToObject(pRdm, "type", "base64");
+					cJSON_AddStringToObject(pRdm, "form", "zip");
 					cJSON_AddNumberToObject(pRdm, "size", sizeFile);
 					cJSON_AddStringToObject(pRdm, "data", pszBase64);
+					cJSON_AddNumberToObject(pRdm, "created", epochTime);
+
 					cJSON_AddItemToObject(pJson, pszFieldName, pRdm);
 
 					if (pszBase64) {
@@ -1421,7 +1424,7 @@ int appendRawDatatoJson(IN const char* pszFilePath, IN const char* pszFieldName,
 }
 
 
-int appendRawDatatoJson(IN const char* pszFilePath, IN const char* pszFieldName, IN OUT string& strBuff)
+int appendRawDatatoJson(IN const char* pszFilePath, IN const char* pszFieldName, IN const time_t epochTime, IN OUT string& strBuff)
 {
 	int ret = RESULT_FAILED;
 
@@ -1460,12 +1463,14 @@ int appendRawDatatoJson(IN const char* pszFilePath, IN const char* pszFieldName,
 					strBuff.append(",\"");
 					strBuff.append(pszFieldName);
 					strBuff.append("\":{");
-					strBuff.append("\"type\":\"zip\"");
-					strBuff.append(",\"form\":\"bin\"");
+					strBuff.append("\"type\":\"base64\"");
+					strBuff.append(",\"form\":\"zip\"");
 					strBuff.append(",\"size\":");
 					strBuff.append(to_string(sizeFile));
 					strBuff.append(",\"data\":\"");
 					strBuff.append(pszBase64);
+					strBuff.append(",\"created\":");
+					strBuff.append(to_string(epochTime));
 					strBuff.append("\"}");
 
 					if (pszBase64) {
@@ -1494,10 +1499,10 @@ int appendRawDatatoJson(IN const char* pszFilePath, IN const char* pszFieldName,
 }
 
 
-void CRoutePackage::GetClusteringResult(IN const Cluster& CLUST, IN const RouteDistMatrix& RDM, IN const char* pszFile, OUT string& strJson)
+void CRoutePackage::GetClusteringResult(IN const Cluster& CLUST, IN const RouteDistMatrix& RDM, OUT string& strJson)
 {
 	//string strJson;
-	int cntClusters = CLUST.vtDistrict.size();
+	int cntClusters = CLUST.vtCluster.size();
 
 	int result_code = ROUTE_RESULT_FAILED;
 
@@ -1507,7 +1512,7 @@ void CRoutePackage::GetClusteringResult(IN const Cluster& CLUST, IN const RouteD
 	else {
 		result_code = ROUTE_RESULT_SUCCESS;
 
-		const int cntCluster = CLUST.vtDistrict.size();
+		const int cntCluster = CLUST.vtCluster.size();
 
 #if defined(USE_CJSON)
 		cJSON* root = cJSON_CreateObject();
@@ -1518,7 +1523,7 @@ void CRoutePackage::GetClusteringResult(IN const Cluster& CLUST, IN const RouteD
 		int totDist = 0;
 		int totCount = 0;
 
-		for (const auto& cluster : CLUST.vtDistrict) {
+		for (const auto& cluster : CLUST.vtCluster) {
 			cJSON* group = cJSON_CreateObject();
 
 			// id
@@ -1610,26 +1615,31 @@ void CRoutePackage::GetClusteringResult(IN const Cluster& CLUST, IN const RouteD
 		}
 		cJSON_AddItemToObject(root, "summary", summary);
 
-		if ((pszFile != nullptr) && (RDM.typeCreate != 2) && // 사용자 데이터가 아닌 경우
-			((CLUST.option.tspOption.baseOption.binary == 1) || (CLUST.option.tspOption.baseOption.binary == 3))) { 
-			const int MAX_RDM_BUFF = 1024;
-			char szFileName[MAX_RDM_BUFF] = { 0, };
-			char szFilePath[MAX_RDM_BUFF] = { 0, };
-			char szBuff[MAX_RDM_BUFF] = { 0, };
-			string strBuff;
-			LOGTIME timeNow;
-			time_t tmNow = LOG_TIME(timeNow, RDM.tmCreate);
-
-			sprintf(szFileName, "result_rdm_u%s_t%04d%02d%02d%02d%02d%02d", RDM.strUser.c_str(), timeNow.year, timeNow.month, timeNow.day, timeNow.hour, timeNow.minute, timeNow.second);
-
-			/////////////
-			// for binary
-			sprintf(szFilePath, "%s/%s.rdm", pszFile, szFileName);
-
-			if (appendRawDatatoJson(szFilePath, "rdm", root) != RESULT_OK) {
-				LOG_TRACE(LOG_DEBUG, "failed, append rdm raw data to json, file:sd", szFilePath);
+		// rdm, rpm
+		if (RDM.typeCreate != 2) { // 사용자 데이터가 아닌 경우
+			// rdm
+			if (((CLUST.option.tspOption.baseOption.artifact == 1) || (CLUST.option.tspOption.baseOption.artifact == 3)) &&
+				!RDM.infoRouteMatrix.type.empty()) {
+				cJSON* rdm = cJSON_CreateObject();
+				cJSON_AddStringToObject(rdm, "type", RDM.infoRouteMatrix.type.c_str());
+				cJSON_AddStringToObject(rdm, "form", RDM.infoRouteMatrix.form.c_str());
+				cJSON_AddStringToObject(rdm, "data", RDM.infoRouteMatrix.data.c_str());
+				cJSON_AddNumberToObject(rdm, "size", RDM.infoRouteMatrix.size);
+				cJSON_AddNumberToObject(rdm, "created", RDM.infoRouteMatrix.created);
+				cJSON_AddItemToObject(root, "rdm", rdm);
 			}
-			// ~binary
+
+			// rpm
+			if (((CLUST.option.tspOption.baseOption.artifact == 1) || (CLUST.option.tspOption.baseOption.artifact == 3)) && 
+				!RDM.infoPathMatrix.type.empty()) {
+				cJSON* rpm = cJSON_CreateObject();
+				cJSON_AddStringToObject(rpm, "type", RDM.infoPathMatrix.type.c_str());
+				cJSON_AddStringToObject(rpm, "form", RDM.infoPathMatrix.form.c_str());
+				cJSON_AddStringToObject(rpm, "data", RDM.infoPathMatrix.data.c_str());
+				cJSON_AddNumberToObject(rpm, "size", RDM.infoPathMatrix.size);
+				cJSON_AddNumberToObject(rpm, "created", RDM.infoPathMatrix.created);
+				cJSON_AddItemToObject(root, "rpm", rpm);
+			}
 		}
 
 		// result
@@ -1657,7 +1667,7 @@ void CRoutePackage::GetClusteringResult(IN const Cluster& CLUST, IN const RouteD
 void CRoutePackage::GetGroupingResult(IN const Cluster& CLUST, OUT string& strJson)
 {
 	//string strJson;
-	int cntClusters = CLUST.vtDistrict.size();
+	int cntClusters = CLUST.vtCluster.size();
 
 	int result_code = ROUTE_RESULT_FAILED;
 
@@ -1667,7 +1677,7 @@ void CRoutePackage::GetGroupingResult(IN const Cluster& CLUST, OUT string& strJs
 	else {
 		result_code = ROUTE_RESULT_SUCCESS;
 
-		const int cntCluster = CLUST.vtDistrict.size();
+		const int cntCluster = CLUST.vtCluster.size();
 
 #if defined(USE_CJSON)
 		cJSON* root = cJSON_CreateObject();
@@ -1678,7 +1688,7 @@ void CRoutePackage::GetGroupingResult(IN const Cluster& CLUST, OUT string& strJs
 		int totDist = 0;
 		int totCount = 0;
 
-		for (const auto& cluster : CLUST.vtDistrict) {
+		for (const auto& cluster : CLUST.vtCluster) {
 			cJSON* group = cJSON_CreateObject();
 
 			// id
@@ -1769,6 +1779,7 @@ void CRoutePackage::GetGroupingResult(IN const Cluster& CLUST, OUT string& strJs
 			}
 		}
 		cJSON_AddItemToObject(root, "summary", summary);
+
 
 		// result
 		cJSON_AddStringToObject(root, "status", "OK");
@@ -1868,7 +1879,7 @@ void CRoutePackage::GetBestWaypointResult(IN const BestWaypoints& TSP, IN const 
 				}
 				cJSON_AddNumberToObject(info, "distance", dist);
 				cJSON_AddNumberToObject(info, "time", time);
-				double arrLoc[2] = { TSP.vtWaypoints[TSP.vtBestWays[ii]].x, TSP.vtWaypoints[TSP.vtBestWays[ii]].y };
+				double arrLoc[2] = { TSP.vtWaypoints[TSP.vtBestWays[ii]].position.x, TSP.vtWaypoints[TSP.vtBestWays[ii]].position.y };
 				cJSON* coord = cJSON_CreateDoubleArray(arrLoc, 2);
 				cJSON_AddItemToObject(info, "coord", coord);
 				cJSON_AddItemToArray(waypoints, info);
@@ -1884,26 +1895,33 @@ void CRoutePackage::GetBestWaypointResult(IN const BestWaypoints& TSP, IN const 
 			cJSON_AddNumberToObject(summary, "distance", static_cast<int>(TSP.totalDist));
 			cJSON_AddItemToObject(root, "summary", summary);
 
-			if (((TSP.option.baseOption.binary == 1) || (TSP.option.baseOption.binary == 3)) && (RDM.typeCreate != 2)) { // 사용자 데이터가 아니고, rdm 요청한 경우
-				const int MAX_RDM_BUFF = 1024;
-				char szFileName[MAX_RDM_BUFF] = { 0, };
-				char szFilePath[MAX_RDM_BUFF] = { 0, };
-				char szBuff[MAX_RDM_BUFF] = { 0, };
-				string strBuff;
-				LOGTIME timeNow;
-				time_t tmNow = LOG_TIME(timeNow, RDM.tmCreate);
-
-				sprintf(szFileName, "result_rdm_u%s_t%04d%02d%02d%02d%02d%02d", RDM.strUser.c_str(), timeNow.year, timeNow.month, timeNow.day, timeNow.hour, timeNow.minute, timeNow.second);
-
-				/////////////
-				// for binary
-				sprintf(szFilePath, "%s/%s.rdm", pszFile, szFileName);
-
-				if (appendRawDatatoJson(szFilePath, "rdm", root) != RESULT_OK) {
-					LOG_TRACE(LOG_DEBUG, "failed, append rdm raw data to json, file:sd", szFilePath);
+			// rdm, rpm
+			if (RDM.typeCreate != 2) { // 사용자 데이터가 아닌 경우
+				// rdm
+				if (((TSP.option.baseOption.artifact == 1) || (TSP.option.baseOption.artifact == 3)) &&
+					!RDM.infoRouteMatrix.type.empty()) {
+					cJSON* rdm = cJSON_CreateObject();
+					cJSON_AddStringToObject(rdm, "type", RDM.infoRouteMatrix.type.c_str());
+					cJSON_AddStringToObject(rdm, "form", RDM.infoRouteMatrix.form.c_str());
+					cJSON_AddStringToObject(rdm, "data", RDM.infoRouteMatrix.data.c_str());
+					cJSON_AddNumberToObject(rdm, "size", RDM.infoRouteMatrix.size);
+					cJSON_AddNumberToObject(rdm, "created", RDM.infoRouteMatrix.created);
+					cJSON_AddItemToObject(root, "rdm", rdm);
 				}
-				// ~binary
+
+				// rpm
+				if (((TSP.option.baseOption.artifact == 2) || (TSP.option.baseOption.artifact == 3)) &&
+					!RDM.infoPathMatrix.type.empty()) {
+					cJSON* rpm = cJSON_CreateObject();
+					cJSON_AddStringToObject(rpm, "type", RDM.infoPathMatrix.type.c_str());
+					cJSON_AddStringToObject(rpm, "form", RDM.infoPathMatrix.form.c_str());
+					cJSON_AddStringToObject(rpm, "data", RDM.infoPathMatrix.data.c_str());
+					cJSON_AddNumberToObject(rpm, "size", RDM.infoPathMatrix.size);
+					cJSON_AddNumberToObject(rpm, "created", RDM.infoPathMatrix.created);
+					cJSON_AddItemToObject(root, "rpm", rpm);
+				}
 			}
+
 
 			// result
 			cJSON_AddStringToObject(root, "status", "OK");
@@ -1979,6 +1997,41 @@ void CRoutePackage::GetWeightMatrixResult(IN const RouteDistMatrix& RDM, OUT str
 		   } // for
 		   cJSON_AddItemToObject(root, "rows", rows);
 
+		   // matrix 추가
+		   if (0) {
+			   cJSON* matrix = cJSON_CreateArray();
+
+			   for (;;) {
+
+			   }
+
+			   cJSON_AddItemToObject(root, "martix", matrix);
+		   }
+
+		   // rdm
+		   if (RDM.typeCreate != 2) { // 사용자 데이터가 아닌 경우
+			   if (!RDM.infoRouteMatrix.type.empty()) {
+				   cJSON* rdm = cJSON_CreateObject();
+				   cJSON_AddStringToObject(rdm, "type", RDM.infoRouteMatrix.type.c_str());
+				   cJSON_AddStringToObject(rdm, "form", RDM.infoRouteMatrix.form.c_str());
+				   cJSON_AddStringToObject(rdm, "data", RDM.infoRouteMatrix.data.c_str());
+				   cJSON_AddNumberToObject(rdm, "size", RDM.infoRouteMatrix.size);
+				   cJSON_AddNumberToObject(rdm, "created", RDM.infoRouteMatrix.created);
+				   cJSON_AddItemToObject(root, "rdm", rdm);
+			   }
+
+			   // rpm
+			   if (!RDM.infoPathMatrix.type.empty()) {
+				   cJSON* rpm = cJSON_CreateObject();
+				   cJSON_AddStringToObject(rpm, "type", RDM.infoPathMatrix.type.c_str());
+				   cJSON_AddStringToObject(rpm, "form", RDM.infoPathMatrix.form.c_str());
+				   cJSON_AddStringToObject(rpm, "data", RDM.infoPathMatrix.data.c_str());
+				   cJSON_AddNumberToObject(rpm, "size", RDM.infoPathMatrix.size);
+				   cJSON_AddNumberToObject(rpm, "created", RDM.infoPathMatrix.created);
+				   cJSON_AddItemToObject(root, "rpm", rpm);
+			   }
+		   }
+
 		   cJSON_AddStringToObject(root, "status", "OK");
 		   cJSON_AddNumberToObject(root, "result_code", ROUTE_RESULT_SUCCESS);
 		   cJSON_AddStringToObject(root, "msg", "success");
@@ -2017,93 +2070,53 @@ void CRoutePackage::GetWeightMatrixResult(IN const RouteDistMatrix& RDM, OUT str
 }
 
 
-void CRoutePackage::GetWeightMatrixRouteLineResult(IN const RouteDistMatrix& RDM, OUT string& strJson)
+void CRoutePackage::GetWeightMatrixPathResult(IN const vector<WeightMatrixPath>& vtRoutes, OUT string& strJson)
 {
 #if defined(USE_CJSON)
 	cJSON* root = cJSON_CreateObject();
-	if (root != NULL) {
-		if (!RDM.vtDistMatrix.empty()) {
-			// for route line info table
-			cJSON* lines = cJSON_CreateArray();
+	if (root && !vtRoutes.empty()) {
+		cJSON* routes = cJSON_CreateArray();
 
-			int cntOrigin = RDM.vtDistMatrix.size();
-			for (int ii = 0; ii < cntOrigin; ii++) {
-				cJSON* line = cJSON_CreateArray();
+		for (const auto item : vtRoutes) {
+			// index
+			cJSON* index = cJSON_CreateArray();
+			cJSON_AddItemToArray(index, cJSON_CreateNumber(item.startIndex));
+			cJSON_AddItemToArray(index, cJSON_CreateNumber(item.endIndex));
+			
+			// path
+			cJSON* vertices = JsonBuildOriginsArrayObject(item.path);
 
-				int cntDestination = RDM.vtDistMatrix[ii].size();
-				for (int jj = 0; jj < cntDestination; jj++) {
-					cJSON* vertex = cJSON_CreateArray();
-					const stPathMatrix* pMatrix = &RDM.vtPathMatrix[ii][jj];
-					if (!pMatrix->vtRoutePath.empty()) {
-						vector<SPoint> vtLines;
-						if (GetMatrixPathVertex(pMatrix, m_pDataMgr, vtLines) < 0) {
-							LOG_TRACE(LOG_DEBUG, "matrix path merge missing, row:%d, col:%d", ii, jj);
-						}
+			cJSON* route = cJSON_CreateObject();
+			cJSON_AddItemToObject(route, "index", index);
+			cJSON_AddItemToObject(route, "vertices", vertices);
 
-						for (const auto& point : vtLines) {
-							cJSON* coord = cJSON_CreateArray();
-							cJSON_AddItemToArray(coord, cJSON_CreateNumber(point.x));
-							cJSON_AddItemToArray(coord, cJSON_CreateNumber(point.y));
-
-							cJSON_AddItemToArray(vertex, coord);
-						}
-					}
-
-					cJSON* lineItem = cJSON_CreateObject();
-					char szMatrix[32] = { 0, };
-					sprintf(szMatrix, "%dx%d", ii, jj);
-					cJSON_AddItemToObject(lineItem, "info", cJSON_CreateString(szMatrix));
-					cJSON_AddItemToObject(lineItem, "lines", vertex);
-					//cJSON_AddItemToObject(lineItem, "speed", speed);
-					//cJSON_AddItemToObject(lineItem, "speed_type", type);
-
-					cJSON_AddItemToArray(line, lineItem);
-				} // for
-
-				cJSON_AddItemToArray(lines, line);
-			} // for
-
-			cJSON_AddStringToObject(root, "status", "OK");
-			cJSON_AddNumberToObject(root, "result_code", ROUTE_RESULT_SUCCESS);
-			cJSON_AddStringToObject(root, "msg", "success");
-
-			cJSON_AddItemToObject(root, "matrix", lines);
-		} else {
-			cJSON_AddStringToObject(root, "status", "UNKNOWN_ERROR ");
-			cJSON_AddNumberToObject(root, "result_code", ROUTE_RESULT_FAILED);
-			cJSON_AddStringToObject(root, "msg", "failed");
+			cJSON_AddItemToArray(routes, route);
 		}
 
-		/*
-		https://developers.google.com/maps/documentation/distance-matrix/distance-matrix?hl=ko
+		cJSON_AddStringToObject(root, "status", "OK");
+		cJSON_AddNumberToObject(root, "result_code", ROUTE_RESULT_SUCCESS);
+		cJSON_AddStringToObject(root, "msg", "success");
 
-		OK indicates the response contains a valid result.
-		INVALID_REQUEST indicates that the provided request was invalid.
-		MAX_ELEMENTS_EXCEEDED indicates that the product of origins and destinations exceeds the per-query limit.
-		MAX_DIMENSIONS_EXCEEDED indicates that the number of origins or destinations exceeds the per-query limit.
-		OVER_DAILY_LIMIT indicates any of the following:
-		The API key is missing or invalid.
-		Billing has not been enabled on your account.
-		A self-imposed usage cap has been exceeded.
-		The provided method of payment is no longer valid (for example, a credit card has expired).
-		OVER_QUERY_LIMIT indicates the service has received too many requests from your application within the allowed time period.
-		REQUEST_DENIED indicates that the service denied use of the Distance Matrix service by your application.
-		UNKNOWN_ERROR indicates a Distance Matrix request could not be processed due to a server error. The request may succeed if you try again.
-		*/
-
-		char* pJson = cJSON_Print(root);
-		if (pJson != NULL) {
-			strJson.append(pJson);
-			cJSON_free(pJson);
-		}
-
-		cJSON_Delete(root);
+		cJSON_AddItemToObject(root, "routes", routes);
+	} else {
+		cJSON_AddStringToObject(root, "status", "UNKNOWN_ERROR ");
+		cJSON_AddNumberToObject(root, "result_code", ROUTE_RESULT_FAILED);
+		cJSON_AddStringToObject(root, "msg", "failed");
 	}
+
+
+	char* pJson = cJSON_Print(root);
+	if (pJson != NULL) {
+		strJson.append(pJson);
+		cJSON_free(pJson);
+	}
+
+	cJSON_Delete(root);
 #endif // #if defined(USE_CJSON)
 }
 
 
-int32_t CRoutePackage::GetWeightMatrixResultFile(IN const RouteDistMatrix& RDM, IN const bool includeRDM, IN const char* pszFile)
+int32_t CRoutePackage::SaveWeightMatrixResultFile(IN const RouteDistMatrix& RDM, IN const bool artiface)
 {
 	int retCount = 0;
 
@@ -2115,9 +2128,19 @@ int32_t CRoutePackage::GetWeightMatrixResultFile(IN const RouteDistMatrix& RDM, 
 	LOGTIME timeNow;
 	time_t tmNow = LOG_TIME(timeNow, RDM.tmCreate);
 
-	sprintf(szFileName, "result_rdm_u%s_t%04d%02d%02d%02d%02d%02d", RDM.strUser.c_str(), timeNow.year, timeNow.month, timeNow.day, timeNow.hour, timeNow.minute, timeNow.second);
+	// make epoch time
+	int64_t epochtime = static_cast<int64_t>(tmNow) / 1000; // 밀리초라면 /1000, 초라면 그대로
 
-	sprintf(szFilePath, "%s/%s.json", pszFile, szFileName);
+	// make dir usr/rdm/yyyy/mm/dd
+	char szDirName[MAX_PATH] = {};
+	sprintf(szDirName, "%s/usr/rdm/%04d/%02d/%02d", m_pDataMgr->GetDataPath(), timeNow.year, timeNow.month, timeNow.day);
+	checkDirectory(szDirName, true);
+
+	//if ((option.artifact == 1 || option.artifact == 3)) { // write, read-write)) {
+	sprintf(szFileName, "rdm_t%010lld_d%04d%02d%02d%02d%02d%02d_u%s", epochtime, timeNow.year, timeNow.month, timeNow.day, timeNow.hour, timeNow.minute, timeNow.second, RDM.strUser.c_str());
+
+	sprintf(szFilePath, "%s/%s.json", szDirName, szFileName);
+	
 	FILE* fp = fopen(szFilePath, "wt");
 	if (!fp) {
 		return retCount;
@@ -2227,15 +2250,20 @@ int32_t CRoutePackage::GetWeightMatrixResultFile(IN const RouteDistMatrix& RDM, 
 		// ~rows
 
 
-		if (includeRDM) {
-			/////////////
-			// for binary
-			sprintf(szFilePath, "%s/%s.rdm", pszFile, szFileName);
-
-			if (appendRawDatatoJson(szFilePath, "rdm", strBuff) != RESULT_OK) {
+		// save rdm
+		if (artiface && !RDM.infoRouteMatrix.data.empty() && RDM.infoRouteMatrix.size) {
+			sprintf(szFilePath, "%s/%s", szDirName, RDM.infoRouteMatrix.data);
+			if (appendRawDatatoJson(szFilePath, "rdm", tmNow, strBuff) != RESULT_OK) {
 				LOG_TRACE(LOG_DEBUG, "failed, append rdm raw data to json, file:sd", szFilePath);
-			}			
-			// ~binary
+			}
+		}
+
+		// save rpm
+		if (artiface && !RDM.infoPathMatrix.data.empty() && RDM.infoPathMatrix.size) {
+			sprintf(szFilePath, "%s/%s", szDirName, RDM.infoPathMatrix.data);
+			if (appendRawDatatoJson(szFilePath, "rpm", tmNow, strBuff) != RESULT_OK) {
+				LOG_TRACE(LOG_DEBUG, "failed, append rpm raw data to json, file:sd", szFilePath);
+			}
 		}
 	} else {
 		// header			
@@ -2249,13 +2277,13 @@ int32_t CRoutePackage::GetWeightMatrixResultFile(IN const RouteDistMatrix& RDM, 
 	fwrite(strBuff.c_str(), 1, strBuff.length(), fp);
 	retCount += strBuff.length();
 
-	fclose(fp);	
+	fclose(fp);
 
 	return retCount;
 }
 
 
-int32_t CRoutePackage::GetWeightMatrixRouteLineResultFile(IN const RouteDistMatrix& RDM, IN const char* pszFile, IN const bool includeBinary)
+int32_t CRoutePackage::SaveWeightMatrixPathResultFile(IN const vector<WeightMatrixPath>& vtRoutes, IN const bool artiface, IN const time_t tmCreated, IN const char* pszUser)
 {
 	int retCount = 0;
 
@@ -2265,11 +2293,20 @@ int32_t CRoutePackage::GetWeightMatrixRouteLineResultFile(IN const RouteDistMatr
 	char szBuff[MAX_RDM_BUFF] = { 0, };
 	string strBuff;
 	LOGTIME timeNow;
-	time_t tmNow = LOG_TIME(timeNow, RDM.tmCreate);
+	time_t tmNow = LOG_TIME(timeNow, tmCreated);
 
-	sprintf(szFileName, "result_rdm_line_u%s_t%04d%02d%02d%02d%02d%02d", RDM.strUser.c_str(), timeNow.year, timeNow.month, timeNow.day, timeNow.hour, timeNow.minute, timeNow.second);
+	// make epoch time
+	int64_t epochtime = static_cast<int64_t>(tmNow) / 1000; // 밀리초라면 /1000, 초라면 그대로
 
-	sprintf(szFilePath, "%s/%s.json", pszFile, szFileName);
+	// make dir usr/rdm/yyyy/mm/dd
+	char szDirName[MAX_PATH] = {};
+	sprintf(szDirName, "%s/usr/rdm/%04d/%02d/%02d", m_pDataMgr->GetDataPath(), timeNow.year, timeNow.month, timeNow.day);
+	checkDirectory(szDirName, true);
+
+	//if ((option.artifact == 1 || option.artifact == 3)) { // write, read-write)) {
+	sprintf(szFileName, "rpm_t%010lld_d%04d%02d%02d%02d%02d%02d_u%s", epochtime, timeNow.year, timeNow.month, timeNow.day, timeNow.hour, timeNow.minute, timeNow.second, pszUser);
+
+	sprintf(szFilePath, "%s/%s.json", szDirName, szFileName);
 
 	FILE* fp = fopen(szFilePath, "wt");
 	if (!fp) {
@@ -2281,122 +2318,51 @@ int32_t CRoutePackage::GetWeightMatrixRouteLineResultFile(IN const RouteDistMatr
 	// open root
 	strBuff.append("{");
 
-	if (!RDM.vtPathMatrix.empty()) {
+	if (!vtRoutes.empty()) {
 		// header
 		sprintf(szBuff, "\"status\":\"OK\",\"result_code\":%d,\"msg\":\"success\"", ROUTE_RESULT_SUCCESS);
 		strBuff.append(szBuff);
 
-		// origins
-		strBuff.append(",\"origins\":[");
-		for (int idx = 0; idx < RDM.vtOrigin.size(); idx++) {
-			if (idx != 0) {
+		// routes
+		strBuff.append(",\"\":[");
+
+		int cnt = 0;
+		for (const auto item : vtRoutes) {
+			if (cnt != 0) {
 				strBuff.append(",");
 			}
+			strBuff.append("{");
+
+			// index
 			strBuff.append("[");
-			strBuff.append(to_string(RDM.vtOrigin[idx].position.x));
+			strBuff.append(to_string(item.startIndex));
 			strBuff.append(",");
-			strBuff.append(to_string(RDM.vtOrigin[idx].position.y));
+			strBuff.append(to_string(item.endIndex));
+			strBuff.append("],");
+
+			// vertices
+			strBuff.append("[");
+			for (const auto point : item.path) {
+				if (cnt != 0) {
+					strBuff.append(",");
+				}
+				strBuff.append("[");
+				strBuff.append(to_string(point.x));
+				strBuff.append(",");
+				strBuff.append(to_string(point.y));
+				strBuff.append("]");
+			}
 			strBuff.append("]");
+
+			strBuff.append("}");
+			cnt++;
 		}
 		strBuff.append("]");
 
 		fwrite(strBuff.c_str(), 1, strBuff.length(), fp);
 		retCount += strBuff.length();
 		strBuff.clear();
-		// ~origiins
-
-		// destinations
-		if (!RDM.vtDestination.empty()) {
-			strBuff.append(",\"destinations\":[");
-			for (int idx = 0; idx < RDM.vtDestination.size(); idx++) {
-				if (idx != 0) {
-					strBuff.append(",");
-				}
-				strBuff.append("[");
-				strBuff.append(to_string(RDM.vtDestination[idx].position.x));
-				strBuff.append(",");
-				strBuff.append(to_string(RDM.vtDestination[idx].position.y));
-				strBuff.append("]");
-			}
-			strBuff.append("]");
-
-			fwrite(strBuff.c_str(), 1, strBuff.length(), fp);
-			retCount += strBuff.length();
-			strBuff.clear();
-			// ~destinations
-		}
-
-		// row
-		strBuff.append(",\"table\":[");
-
-		// for route line info table
-		vector<SPoint> vtLines;
-		int cntOrigin = RDM.vtPathMatrix.size();
-		for (int row = 0; row < cntOrigin; row++) {
-			// col
-			if (row != 0) {
-				strBuff.append(",");
-			} 
-			strBuff.append("[");
-			int cntDestination = RDM.vtPathMatrix[row].size();
-			for (int col = 0; col < cntDestination; col++) {
-				// matrix {"info": "1x3"
-				if (col != 0) {
-					strBuff.append(",");
-				}
-				sprintf(szBuff, "{\"info\":\"%dx%d\"", row, col);
-				strBuff.append(szBuff);
-
-				// line 
-				strBuff.append(",\"lines\":[");
-
-				const stPathMatrix* pMatrix = &RDM.vtPathMatrix[row][col];
-				if (!pMatrix->vtRoutePath.empty()) {
-					vector<SPoint> vtLines;
-					if (GetMatrixPathVertex(pMatrix, m_pDataMgr, vtLines) < 0) {
-						LOG_TRACE(LOG_DEBUG, "matrix path merge missing, row:%d, col:%d", row, col);
-					}
-
-					for (int vtx = 0; vtx < vtLines.size(); vtx++) {
-						// vertex, [127.0416278,37.51673611]
-						if (vtx != 0) {
-							strBuff.append(",");
-						}
-						strBuff.append("[");
-						strBuff.append(to_string(vtLines[vtx].x));
-						strBuff.append(",");
-						strBuff.append(to_string(vtLines[vtx].y));
-						strBuff.append("]");
-						// ~vertex
-					}
-				}
-				strBuff.append("]}");
-
-				fwrite(strBuff.c_str(), 1, strBuff.length(), fp);
-				retCount += strBuff.length();
-				strBuff.clear();
-				// ~line
-				// ~matrix
-			} // for
-
-			// col
-			strBuff.append("]");
-		} // for
-
-		strBuff.append("]");
-		// ~table
-
-
-		if (includeBinary) {
-			/////////////
-			// for binary		
-			sprintf(szFilePath, "%s/%s.rln", pszFile, szFileName);
-
-			if (appendRawDatatoJson(szFilePath, "rln", strBuff) != RESULT_OK) {
-				LOG_TRACE(LOG_DEBUG, "failed, append rdm line raw data to json, file:sd", szFilePath);
-			}
-			// ~binary
-		}
+		// ~routes
 	} else {
 		// header
 		sprintf(szBuff, "\"status\":\"UNKNOWN_ERROR\",\"result_code\":%d,\"msg\":\"failed\"", ROUTE_RESULT_FAILED);

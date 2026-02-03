@@ -33,7 +33,7 @@ class TCross{
 public:
 	TCross( int N );
 	~TCross();
-	bool doIt( TIndi& tKid, TIndi& tPa2, int numOfKids, int flagP, int flagC[ 10 ], vector<vector<int>>& fEdgeFreq ); // EAX entry point
+	bool doIt( TIndi& tKid, TIndi& tPa2, int numOfKids, int flagP, int flagC[ 10 ], std::vector<std::vector<int>>& fEdgeFreq ); // EAX entry point
 	void setParents( const TIndi& tPa1, const TIndi& tPa2, int flagC[ 10 ], int numOfKids ); // sets parents
 	void setABcycle( const TIndi& parent1, const TIndi& parent2, int flagC[ 10 ], int numOfKids ); // sets ab cycle
 
@@ -46,9 +46,9 @@ public:
 	void backToPa1( TIndi& tKid ); // rolls back p_a
 	void goToBest( TIndi& tKid ); // sets tKid to the best solutions of child generation
 
-	void incrementEdgeFreq(vector<vector<int>>& fEdgeFreq); // increates fEdgeFreq[][]
-	int calAdpLoss(vector<vector<int>>& fEdgeFreq); // calculates the average road distance from fEdgeFreq[][]
-	double calEntLoss(vector<vector<int>>& fEdgeFreq); // calculates the difference of edge entropy from fEdgeFreq[][]
+	void incrementEdgeFreq(std::vector<std::vector<int>>& fEdgeFreq); // increates fEdgeFreq[][]
+	int calAdpLoss(std::vector<std::vector<int>>& fEdgeFreq); // calculates the average road distance from fEdgeFreq[][]
+	double calEntLoss(std::vector<std::vector<int>>& fEdgeFreq); // calculates the difference of edge entropy from fEdgeFreq[][]
 
 	void setWeight( const TIndi& parent1, const TIndi& parent2 );	// Block2
 	int	calCNaive();
@@ -85,20 +85,20 @@ private:
 	int fPosiCurr;
 	int fMaxNumOfABcycle;
 
-	vector<int> koritsu;
-	vector<int> bunki;
-	vector<int> koriInv;
-	vector<int> bunInv;
-	vector<int> checkKoritsu;
-	vector<int> fRoute;
-	vector<int> fPermu;
-	vector<int> fC;
-	vector<int> fJun;
-	vector<int> fOrd1;
-	vector<int> fOrd2;
+	std::vector<int> koritsu;
+	std::vector<int> bunki;
+	std::vector<int> koriInv;
+	std::vector<int> bunInv;
+	std::vector<int> checkKoritsu;
+	std::vector<int> fRoute;
+	std::vector<int> fPermu;
+	std::vector<int> fC;
+	std::vector<int> fJun;
+	std::vector<int> fOrd1;
+	std::vector<int> fOrd2;
 
-	vector<vector<int>> nearData;
-	vector<vector<int>> fABcycle;
+	std::vector<std::vector<int>> nearData;
+	std::vector<std::vector<int>> fABcycle;
 
 	// speeds up start
 	int fNumOfUnit;
@@ -112,24 +112,24 @@ private:
 	int fNumOfAppliedCycle;
 	int fNumOfBestAppliedCycle;
 
-	vector<int> fOrder;
-	vector<int> fInv;
-	vector<int> fSegUnit;
-	vector<int> fSegPosiList;
-	vector<int> LinkAPosi;
-	vector<int> fPosiSeg;
-	vector<int> fNumOfElementInUnit;
-	vector<int> fCenterUnit;
-	vector<int> fListOfCenterUnit;
-	vector<int> fSegForCenter;
-	vector<int> fGainAB;
-	vector<int> fAppliedCylce;
-	vector<int> fBestAppliedCylce;
+	std::vector<int> fOrder;
+	std::vector<int> fInv;
+	std::vector<int> fSegUnit;
+	std::vector<int> fSegPosiList;
+	std::vector<int> LinkAPosi;
+	std::vector<int> fPosiSeg;
+	std::vector<int> fNumOfElementInUnit;
+	std::vector<int> fCenterUnit;
+	std::vector<int> fListOfCenterUnit;
+	std::vector<int> fSegForCenter;
+	std::vector<int> fGainAB;
+	std::vector<int> fAppliedCylce;
+	std::vector<int> fBestAppliedCylce;
 
-	vector<vector<int>> fSegment;
-	vector<vector<int>> LinkBPosi;
-	vector<vector<int>> fModiEdge;
-	vector<vector<int>> fBestModiEdge;
+	std::vector<std::vector<int>> fSegment;
+	std::vector<std::vector<int>> LinkBPosi;
+	std::vector<std::vector<int>> fModiEdge;
+	std::vector<std::vector<int>> fBestModiEdge;
 	// speeds up end
 
 	// block2
@@ -143,15 +143,15 @@ private:
 	int fBestNumC;
 	int fBestNumE;
 
-	vector<int> fNumOfElementINAB;
-	vector<int> fWeightSR;
-	vector<int> fWeightC;
-	vector<int> fUsedAB;
-	vector<int> fMovedAB;
-	vector<int> fABcycleInEset;
+	std::vector<int> fNumOfElementINAB;
+	std::vector<int> fWeightSR;
+	std::vector<int> fWeightC;
+	std::vector<int> fUsedAB;
+	std::vector<int> fMovedAB;
+	std::vector<int> fABcycleInEset;
 
-	vector<vector<int>> fInEffectNode;
-	vector<vector<int>> fWeightRR;
+	std::vector<std::vector<int>> fInEffectNode;
+	std::vector<std::vector<int>> fWeightRR;
 };
 
 #endif

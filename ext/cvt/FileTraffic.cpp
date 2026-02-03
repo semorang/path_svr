@@ -17,6 +17,8 @@
 static char THIS_FILE[] = __FILE__;
 #endif
 
+using namespace std;
+
 #pragma pack (push, 1)
 typedef struct _ttlFileBlock
 {

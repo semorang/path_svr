@@ -4,6 +4,8 @@
 #include <sstream>
 #endif
 
+using namespace std;
+
 CVector2D::CVector2D()
 : x(0)
 , y(0)

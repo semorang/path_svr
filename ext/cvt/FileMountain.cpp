@@ -22,6 +22,8 @@ static char THIS_FILE[] = __FILE__;
 
 #define MAX_ENT_VALUE	67108863 // 26bit
 
+using namespace std;
+
 CFileMountain::CFileMountain()
 {
 	m_nDataType = TYPE_DATA_MOUNTAIN;

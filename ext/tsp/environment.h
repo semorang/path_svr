@@ -41,7 +41,7 @@ public:
 	TEnvironment();
 	~TEnvironment();
 
-	void define(const vector<stWaypoints>& vt_cities, const vector<vector<stDistMatrix>>& vtDistMatrix, const int compareType); // global initialization
+	void define(const std::vector<stWaypoint>& vt_cities, const std::vector<std::vector<stDistMatrix>>& vtDistMatrix, const int compareType); // global initialization
 	void doIt(); // entry point of genetic algorithm
 	void init(); // initializes genetic algorithm
 	bool terminationCondition(); // condition to termination the genetic algorithm
@@ -54,7 +54,7 @@ public:
 
 	void printOn( int n ); // logs out results
 	void writeBest(); // logs out the best TSP solution
-	void getBest(vector<int>& result); //Get Result to array.. by GiJOE
+	void getBest(std::vector<int>& result); //Get Result to array.. by GiJOE
 
 	TEvaluator* fEvaluator; // distance of each edge
 	TCross* tCross; // intersection of edge sets
@@ -69,12 +69,12 @@ public:
 
 	int fBestNumOfGen; // the number of generations that generates the current best solution
 	long int fBestAccumeratedNumCh; // accumulated number of generations of the current best solution
-	vector<vector<int>> fEdgeFreq; // edge frequency of a population
+	std::vector<std::vector<int>> fEdgeFreq; // edge frequency of a population
 	double fAverageValue; // average road length of TSP in a population
 	int fBestValue; // road length of the best solution in a population
 	int fBestIndex;	// index of the best solution in a population
 
-	vector<int> fIndexForMating; // list for edge cross operation
+	std::vector<int> fIndexForMating; // list for edge cross operation
 	int fStagBest; // accumulated number of generations that doesn't generate a better solution compared to previous generation
 	int fFlagC[ 10 ]; // EAX method and selection strategy
 	int fStage; // the current step of genetic algorithm

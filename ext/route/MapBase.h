@@ -18,7 +18,7 @@ public:
 	uint32_t GetDataCount(void);
 
 private:
-	map<uint64_t, T*> mapData;
+	std::map<uint64_t, T*> mapData;
 };
 
 

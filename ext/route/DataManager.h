@@ -59,9 +59,9 @@ struct stOptimalPointInfo {
 	// 숲길 매칭 타입, 0:일반도로(미매칭), 1:숲길입구점
 	int32_t nType;
 	uint64_t id; // 매칭된 오브젝트 ID, 단지/빌딩/도로/산코드
-	string name;
-	vector<stEntryPointInfo> vtEntryPoint;
-	vector<SPoint> vtPolygon;
+	std::string name;
+	std::vector<stEntryPointInfo> vtEntryPoint;
+	std::vector<SPoint> vtPolygon;
 };
 
 // 최적지점 요청
@@ -238,7 +238,7 @@ private:
 	std::map<int, SBox> m_vtMeshRaw;
 
 
-	string m_strMsg;
+	std::string m_strMsg;
 
 	// cache
 	uint32_t m_cntMaxCache;
@@ -278,7 +278,7 @@ protected:
 private:
 	// cache
 	int RemoveCacheItem(IN const int cntItem = -1);
-	int CalculateCache(unordered_map<uint32_t, FileIndex>& mapNeedMatch);
+	int CalculateCache(std::unordered_map<uint32_t, FileIndex>& mapNeedMatch);
 
 public:
 	bool Initialize(void);
@@ -334,12 +334,12 @@ public:
 	// ks
 	bool AddTrafficKSData(IN const uint32_t ks_id, IN const uint32_t tile_nid, IN const uint32_t link_nid, IN const uint8_t dir);
 	bool UpdateTrafficKSData(IN const uint32_t ksId, IN const uint8_t speed, uint32_t timestamp);
-	const unordered_map<uint32_t, stTrafficInfoKS*>* GetTrafficKSMapData(void) const;
+	const std::unordered_map<uint32_t, stTrafficInfoKS*>* GetTrafficKSMapData(void) const;
 
 	// ttl
 	bool AddTrafficTTLData(IN const uint32_t ttl_nid, IN const uint8_t ttl_dir, IN const uint32_t tile_nid, IN const uint32_t link_nid, IN const uint8_t link_dir);
 	bool UpdateTrafficTTLData(IN const uint64_t ttlId, IN const uint8_t speed, uint32_t timestamp);
-	const unordered_map<uint32_t, stTrafficMesh*>* GetTrafficMeshData(void);
+	const std::unordered_map<uint32_t, stTrafficMesh*>* GetTrafficMeshData(void);
 
 	// static
 	uint8_t GetTrafficStaticSpeed(IN const KeyID link, IN const uint8_t dir, IN const uint32_t timestamp, IN OUT uint8_t& type);
@@ -366,8 +366,8 @@ public:
 	stExtendInfo * GetExtendInfoById(IN const KeyID keyId, IN const int32_t keyType);
 	double GetExtendDataById(IN const KeyID keyId, IN const int8_t type, IN const int32_t keyType);
 
-	set<uint32_t>* GetCourseByLink(IN const uint64_t linkId);
-	set<uint64_t>* GetLinkByCourse(IN const uint32_t courseId);
+	std::set<uint32_t>* GetCourseByLink(IN const uint64_t linkId);
+	std::set<uint64_t>* GetLinkByCourse(IN const uint32_t courseId);
 
 
 	const int32_t GetVLinkDataCount(void);
@@ -397,6 +397,7 @@ public:
 	void SetVersion(IN const uint32_t nDataType, IN const uint32_t nMajor, IN const uint32_t nMinor, IN const uint32_t nPatch, IN const uint32_t nBuild);
 	const char* GetVersionString(IN const uint32_t nDataType);
 
+
 	// nMatchType : 차량 출/도착지 매칭 옵션(고속도로/터널/지하차도 등은 매칭 안되도록), 이미 매칭되어 들어오는 좌표일 경우에는 사용 안함으로
 	stLinkInfo * GetLinkDataByPointAround(IN const double lng, IN const double lat, IN const int32_t nMaxDist, OUT double& retLng, OUT double& retLat, OUT double& retDist, IN const int32_t nMatchType = TYPE_LINK_MATCH_CARSTOP, IN const int32_t nLinkDataType = TYPE_LINK_DATA_NONE, IN const int32_t nLinkLimitLevel = -1, IN const TruckOption* pTruckOption = nullptr, OUT int32_t* pMatchVtxIdx = nullptr);
 	int32_t GetLinkVertexDataByPoint(IN const double lng, IN const double lat, IN const int32_t nMaxDist, IN const KeyID linkId, OUT double& retLng, OUT double& retLat, OUT double& retDist);
@@ -404,10 +405,10 @@ public:
 	stLinkInfo * GetNearRoadByPoint(IN const double lng, IN const double lat, IN const int32_t maxDist, IN const int32_t nMatchType, IN const int32_t nLinkDataType, IN const int32_t nLinkLimitLevel, OUT stEntryPointInfo& entInfo);
 	int32_t GetOptimalPointDataByPoint(OUT stOptimalPointInfo* pOptInfo, IN const double lng, IN const double lat, IN const stReqOptimal& reqOpt, IN const int32_t nMatchType = TYPE_LINK_MATCH_CARSTOP, IN const int32_t nLinkDataType = TYPE_LINK_DATA_NONE);
 	// nPolyType, 폴리곤 타입 // 0:알아서, 1:빌딩만, 2:단지만	
-	int32_t GetMultiOptimalPointDataByPoints(OUT vector<stOptimalPointInfo>& vtOptInfos, IN const vector<SPoint>& vtOrigins, IN const stReqOptimal& reqOpt, IN const int32_t nMatchType = TYPE_LINK_MATCH_CARSTOP, IN const int32_t nLinkDataType = TYPE_LINK_DATA_NONE);
+	int32_t GetMultiOptimalPointDataByPoints(OUT std::vector<stOptimalPointInfo>& vtOptInfos, IN const std::vector<SPoint>& vtOrigins, IN const stReqOptimal& reqOpt, IN const int32_t nMatchType = TYPE_LINK_MATCH_CARSTOP, IN const int32_t nLinkDataType = TYPE_LINK_DATA_NONE);
 	stLinkInfo * GetNearLinkDataByCourseId(IN const int32_t courseId, IN const double lng, IN const double lat, IN const int32_t nMaxDist, OUT double& retLng, OUT double& retLat, OUT double& retDist);
 
-	int32_t ParsingRequestMultiOptimalPoints(IN const char* szRequest, OUT vector<SPoint>& vtOrigins, OUT stReqOptimal& reqOpt);
+	int32_t ParsingRequestMultiOptimalPoints(IN const char* szRequest, OUT std::vector<SPoint>& vtOrigins, OUT stReqOptimal& reqOpt);
 	// nEntType, 입구점 타입 // 0:알아서, 1: 차량 입구점, 2: 택시 승하차 지점(건물), 3: 택시 승하차 지점(건물군), 4: 택배 차량 하차 거점, 5: 보행자 입구점, 	6: 배달 하차점(차량, 오토바이), 7: 배달 하차점(자전거, 도보)
 	// nOption, 0: 없음, 1: 주변 가까운 도로 무조건 추가
 	///////////////////////////////////////////////////////////////////////////

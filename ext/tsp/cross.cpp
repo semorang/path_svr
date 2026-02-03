@@ -13,6 +13,9 @@
 
 #include "../utils/UserLog.h"
 
+using namespace std;
+
+
 TCross::TCross( int N ){
 	fMaxNumOfABcycle = 2000; // sets the maximum number of ab cycle
 	fN = N;

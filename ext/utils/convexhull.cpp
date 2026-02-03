@@ -2,6 +2,7 @@
 #include "CatmullRom.h"
 #include <math.h>
 
+using namespace std;
 
 int SPointCompare(const void* Q1, const void* Q2)
 {

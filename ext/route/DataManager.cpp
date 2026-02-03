@@ -26,7 +26,7 @@
 static char THIS_FILE[] = __FILE__;
 #endif
 
-
+using namespace std;
 
 CDataManager::CDataManager()
 {
@@ -2445,10 +2445,6 @@ stLinkInfo * CDataManager::GetNearRoadByPoint(IN const double lng, IN const doub
 int32_t CDataManager::GetOptimalPointDataByPoint(OUT stOptimalPointInfo* pOptInfo, IN const double lng, IN const double lat, IN const stReqOptimal& reqOpt, IN const int32_t nMatchType, IN const int32_t nLinkDataType)
 {
 	int32_t cntRet = 0;
-	//stReqOptimal reqOpt;
-	//reqOpt.x = lng;
-	//reqOpt.y = lat;
-	//reqOpt.typeAll = nEntType;
 
 	if (pOptInfo != nullptr)
 	{

@@ -95,12 +95,13 @@
                     "cflags_cc":['-fexceptions',
                         '-unused-result',
                         '-fopenmp',
+                        '-frtti'
                     ],
                     "ldflags": [
 #                      '-fopenmp',
                    ],
                    "libraries": [
-                        '-fopenmp',
+                        '-fopenmp', '-lspatialindex',
                    ],
 
                 }],
@@ -109,15 +110,26 @@
                         'VCLinkerTool': {
                             'AdditionalOptions': [ '/NODEFAULTLIB:library' ],
                             'IgnoreDefaultLibraryNames': [
-                                'nafxcw.lib', 'libcmtd.lib'
+                                'nafxcw.lib', 'libcmtd.lib', 'LIBCMT', 'MSVCRT'
                         ]},
                         'VCCLCompilerTool': {
-                            'AdditionalOptions': ['/MT', '/openmp'],
+                            # 'AdditionalOptions': ['/MT', '/openmp'],
+                            'RuntimeLibrary': 2,  # 2 = Multi-threaded DLL (/MD)
+                            # 'AdditionalOptions': ['/openmp', '/EHsc', '/wd9002', '/showIncludes'],
+                            'AdditionalOptions': ['/openmp', '/EHsc', '/wd9002'],
+                            'DisableSpecificWarnings' : ['4819', '4018'], 
+                            #C4018 무시 #C949 코드페이지 경고
+                            # C4018: '<': signed 또는 unsigned 불일치 경고           
                         },
                     },
-                    # 'include_dirs': ["../ext/libjson/include"],
+                    'include_dirs': ['C:/__Work/Trekking/Trekking/libs/libspatialindex',],
+                    'library_dirs': ['C:/__Work/Trekking/Trekking/libs/libz/lib', 
+                                     'C:/__Work/Trekking/Trekking/libs/libspatialindex/lib/Release'],
                     'libraries': [
-                        '-lnafxcw.lib', '-llibcmtd.lib', '-lC:/__Work/Trekking/Trekking/libs/libz/lib/zlib.lib', '-lC:/__Work/Trekking/Trekking/libs/libz/lib/zlib_x64.lib', '-LC:/__Work/Trekking/Trekking/libs/libz/lib',
+                        'nafxcw.lib', 'libcmtd.lib',
+                        'zlib.lib', 'zlib_x64.lib', 
+                        'spatialindex_c-64.lib',
+                        # 'C:/__Work/Trekking/Trekking/libs/libspatialindex/lib/Release/spatialindex_c-64.lib'
                         # '-L<some library directory>'
                     ],
                     # "include_dirs": [

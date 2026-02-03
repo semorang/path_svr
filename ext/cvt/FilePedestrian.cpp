@@ -17,6 +17,7 @@
 static char THIS_FILE[] = __FILE__;
 #endif
 
+using namespace std;
 
 CFilePedestrian::CFilePedestrian()
 {

@@ -40,8 +40,8 @@ bool getPolylineCenterWithOffset(const SPoint* pptPolyline, const int32_t nPolyl
 // POLYGON
 bool isPointInPolygon(const double x, const double y, const SPoint *pptPolygon, const int32_t nPolygon);
 bool isPointInPolygon(const SPoint *ppt, const SPoint *pptPolygon, const int32_t nPolygon);
-SPoint getPolygonCenter(IN const vector<SPoint>& points);
-double getPolygonArea(IN const vector<SPoint>& points);
+SPoint getPolygonCenter(IN const std::vector<SPoint>& points);
+double getPolygonArea(IN const std::vector<SPoint>& points);
 
 
 
@@ -54,6 +54,6 @@ bool translateUTMKtoWGS84(IN const double lng, IN const double lat, OUT double& 
 #endif // #if defined(USE_PROJ4_LIB)
 
 // 텍스트에서 좌표 확인
-bool parseCoordinate(const string& strInfo, SPoint& coord);
+bool parseCoordinate(const std::string& strInfo, SPoint& coord);
 //bool getCoordinateEx(const std::string& strInfo, SPoint& coord, coordparser::ParseResult& outRet,
 //	const coordparser::ParseOptions& opt = coordparser::ParseOptions())

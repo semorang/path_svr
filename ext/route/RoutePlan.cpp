@@ -14,6 +14,7 @@
 static char THIS_FILE[] = __FILE__;
 #endif
 
+using namespace std;
 
 //auto CompareCanidate = [](const CandidateLink* lhs, const CandidateLink* rhs) {
 //	if (lhs->costHeuristic > rhs->costHeuristic) {
@@ -7169,7 +7170,7 @@ const int CRoutePlan::DoCourse(IN const RequestRouteInfo* pReqInfo, OUT vector<R
 
 
 #if defined(USE_TSP_MODULE)
-const int CRoutePlan::DoTabulate(IN const RequestRouteInfo* pReqInfo, IN vector<RouteLinkInfo>vtOriginLinkInfos, IN vector<RouteLinkInfo>vtDestinationLinkInfos, OUT RouteDistMatrix& RDM)
+const int CRoutePlan::DoWeightMatrix(IN const RequestRouteInfo* pReqInfo, IN vector<RouteLinkInfo>vtOriginLinkInfos, IN vector<RouteLinkInfo>vtDestinationLinkInfos, OUT RouteDistMatrix& RDM)
 {
 	int ret = ROUTE_RESULT_SUCCESS;
 

@@ -313,6 +313,10 @@ void log_print_head(const char* szKey, FILE* fpLog, const int lvl, const LOGTIME
 		if (fpLog) {
 			fprintf(fpLog, "[%02d:%02d:%02d:%03d]", logtime.hour, logtime.minute, logtime.second, logtime.millisecond);
 		} else {
+#if defined(WIN32) && defined(_DEBUG)
+			printf("[%02d:%02d:%02d:%03d]", logtime.hour, logtime.minute, logtime.second, logtime.millisecond);
+			DEBUG_OUT("[%02d:%02d:%02d:%03d]", logtime.hour, logtime.minute, logtime.second, logtime.millisecond);
+#else
 			if (szKey && strlen(szKey) > 0) {
 				printf("[%04d-%02d-%02d %02d:%02d:%02d:%03d][%s]", logtime.year, logtime.month, logtime.day, logtime.hour, logtime.minute, logtime.second, logtime.millisecond, szKey);
 				DEBUG_OUT("[%04d-%02d-%02d %02d:%02d:%02d:%03d][%s]", logtime.year, logtime.month, logtime.day, logtime.hour, logtime.minute, logtime.second, logtime.millisecond, szKey);
@@ -320,6 +324,7 @@ void log_print_head(const char* szKey, FILE* fpLog, const int lvl, const LOGTIME
 				printf("[%04d-%02d-%02d %02d:%02d:%02d:%03d]", logtime.year, logtime.month, logtime.day, logtime.hour, logtime.minute, logtime.second, logtime.millisecond);
 				DEBUG_OUT("[%04d-%02d-%02d %02d:%02d:%02d:%03d]", logtime.year, logtime.month, logtime.day, logtime.hour, logtime.minute, logtime.second, logtime.millisecond);
 			}
+#endif
 		}
 
 		// log id
@@ -913,10 +918,14 @@ bool checkDirectory(const char* szFileName, bool recursive)
 
 	std::string dirPath;
 	if (pTok != nullptr) {
-		// 마지막 구분자 앞까지 디렉토리 경로
-		dirPath.assign(szFileName, pTok - szFileName);
-		// 만약 입력이 /home/test/ 처럼 끝에 /가 있으면 dirPath=/home/test
-		// 입력이 /home/test/this_is_dir 이면 dirPath=/home/test
+		const char* lastToken = pTok + 1; // 마지막 구분자 뒤 문자열
+		if (strchr(lastToken, '.') != nullptr) {
+			// 마지막 토큰에 '.'이 있으면 파일로 간주 → 상위 디렉토리까지만
+			dirPath.assign(szFileName, pTok - szFileName);
+		} else {
+			// 마지막 토큰이 디렉토리 → 전체 경로 사용
+			dirPath = szFileName;
+		}
 	} else {
 		// 구분자가 없으면 전체를 디렉토리로 간주
 		dirPath = szFileName;
@@ -958,6 +967,8 @@ bool checkDirectory(const char* szFileName, bool recursive)
 			return false;
 		}
 		isCreate = true;
+	} else {		
+		isCreate = true; // 이미 존재하는 경우에도 true 반환
 	}
 #else
 	if (access(dirPath.c_str(), F_OK) != 0) {
@@ -965,6 +976,8 @@ bool checkDirectory(const char* szFileName, bool recursive)
 			return false;
 		}
 		isCreate = true;
+	} else {		
+		isCreate = true; // 이미 존재하는 경우에도 true 반환
 	}
 #endif
 

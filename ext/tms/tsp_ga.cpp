@@ -3,9 +3,11 @@
 #include "../utils/UserLog.h"
 #include <time.h>
 
+using namespace std;
+
 #define USE_PARALLEL
 
-int32_t g_valuType = TYPE_TSP_VALUE_DIST; // TYPE_TSP_VALUE_COST; // 0:cost, 1:dist, 2:time
+int32_t g_valuType = TYPE_TSP_VALUE_DIST; // TYPE_TSP_VALUE_TIME // TYPE_TSP_VALUE_COST; // 0:cost, 1:dist, 2:time
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // Chromosome

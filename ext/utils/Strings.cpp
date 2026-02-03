@@ -14,6 +14,7 @@
 
 #include "Strings.h"
 
+using namespace std;
 
 #if defined(_WIN32)
 int MultiByteToUnicode(const char* strMultibyte, wchar_t* strUnicode)

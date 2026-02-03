@@ -6,6 +6,7 @@
 //#include "UserLog.h"
 #include "Strings.h"
 
+using namespace std;
 
 // base64
 int32_t base64fromBinary(IN const char* srcBytes, IN const int numBytes, OUT char** szBase64)

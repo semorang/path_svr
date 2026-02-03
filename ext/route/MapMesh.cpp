@@ -13,6 +13,7 @@
 static char THIS_FILE[] = __FILE__;
 #endif
 
+using namespace std;
 
 #ifdef TEST_SPATIALINDEX
 class LinkVisitor : public SpatialIndex::IVisitor

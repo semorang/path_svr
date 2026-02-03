@@ -23,9 +23,9 @@ function createHeader(isSuccessful, code, message) {
 // ---------------- Distance Matrix ----------------
 exports.distancematrix = function (key, req) {
     // check user key
-    var user = auth.checkAuth(key);
+    const user = auth.checkAuth(key);
     if (user && user.length > 0) {
-        logout("client user:'" + user + "', mode=" + ((req.mode !== undefined) ? req.mode : "null") + ", cache=" + ((req.cache !== undefined) ? req.cache : "null") + ", cnt=" + ((req.origins !== undefined) ? req.origins.length : "null"));
+        logout("client user:'" + user + "', mode=" + ((req.mode !== undefined) ? req.mode : "null") + ", binary=" + ((req.binary !== undefined) ? req.binary : "null") + ", cnt=" + ((req.origins !== undefined) ? req.origins.length : "null"));
 
         const result = addon.getmatrix(JSON.stringify(req));
         const res = JSON.parse(result);
@@ -41,10 +41,13 @@ exports.distancematrix = function (key, req) {
             mode: req.mode ?? "driving",
             origins: req.origins ?? null,
             destinations: req.destinations ?? null,
-            rows: res.result_code === codes.ERROR_CODES.ROUTE_RESULT_SUCCESS ? res.rows : null,
+            rows: res.rows ?? null,
+            rdm: res.rdm ?? null,
+            rpm: res.rpm ?? null,
         };
     }
 
+    // failed
     const header = createHeader(
         false,
         codes.ERROR_CODES.RESULT_APPKEY_ERROR,
@@ -65,17 +68,57 @@ exports.distancematrix = function (key, req) {
 }
 
 
+// ---------------- Distance Matrix Path ----------------
+exports.distancematrix_path = function (key, req) {
+    // check user key
+    const user = auth.checkAuth(key);
+    if (user && user.length > 0) {
+        logout("client user:'" + user + "'");
+
+        const result = addon.getmatrixpath(JSON.stringify(req));
+        const res = JSON.parse(result);
+    
+        const header = createHeader(
+            res.result_code === codes.ERROR_CODES.ROUTE_RESULT_SUCCESS,
+            res.result_code,
+            codes.getErrMsg(res.result_code)
+        );
+
+        return {
+            header,
+            routes: res.result_code === codes.ERROR_CODES.ROUTE_RESULT_SUCCESS ? res.routes : null,
+        };
+    }
+
+    // failed
+    const header = createHeader(
+        false,
+        codes.ERROR_CODES.RESULT_APPKEY_ERROR,
+        codes.getErrMsg(codes.ERROR_CODES.RESULT_APPKEY_ERROR)
+    );
+
+    const ret = {
+        header,
+        routes: null,
+    };
+
+    logout("client req error : " + JSON.stringify(ret));
+
+    return ret;
+}
+
+
 // ---------------- Clustering ----------------
 exports.clustering = function (key, req) {
     // check user key
     const user = auth.checkAuth(key);
     if (user && user.length > 0) {
-        logout("client user:'" + user + "', mode=" + ((req.mode !== undefined) ? req.mode : "null") + ", cache=" + ((req.cache !== undefined) ? req.cache : "null") + ", cnt=" + ((req.origins !== undefined) ? req.origins.length : "null"));
+        logout("client user:'" + user + "', mode=" + ((req.mode !== undefined) ? req.mode : "null") + ", binary=" + ((req.binary !== undefined) ? req.binary : "null") + ", cnt=" + ((req.origins !== undefined) ? req.origins.length : "null"));
 
         if (!req.tsp) {
             req.tsp = {
                 seed: 10000,
-                algorithm: 0,
+                algorithm: 4,
                 compare_type: 1,
             };
         }
@@ -84,7 +127,7 @@ exports.clustering = function (key, req) {
         if (!req.clust) {
             req.clust = {
                 seed: 10006,
-                algorithm: 3,
+                algorithm: 4,
                 compare_type : 1,
             };
         }
@@ -94,7 +137,7 @@ exports.clustering = function (key, req) {
 
         if (req.target === 'geoyoung') {
             result = addon.getcluster_for_geoyoung(reqStr);
-        } else if (req.option.division_type === 3) {
+        } else if (req.option.division_type === 4) { // ROAD(link) 균등 분할
             result = addon.getgroup(reqStr);
         } else {
             result = addon.getcluster(reqStr);
@@ -117,6 +160,7 @@ exports.clustering = function (key, req) {
         };
     } 
 
+    // failed
     const header = createHeader(
         false,
         codes.ERROR_CODES.RESULT_APPKEY_ERROR,
@@ -139,9 +183,9 @@ exports.clustering = function (key, req) {
 // ---------------- Grouping ----------------
 exports.grouping = function (key, req) {
     // 사용자 키 확인
-    var user = auth.checkAuth(key);
+    const user = auth.checkAuth(key);
     if (user && user.length > 0) {
-        logout("client user:'" + user + "', mode=" + ((req.mode !== undefined) ? req.mode : "null") + ", cache=" + ((req.cache !== undefined) ? req.cache : "null") + ", cnt=" + ((req.origins !== undefined) ? req.origins.length : "null"));
+        logout("client user:'" + user + "', mode=" + ((req.mode !== undefined) ? req.mode : "null") + ", binary=" + ((req.binary !== undefined) ? req.binary : "null") + ", cnt=" + ((req.origins !== undefined) ? req.origins.length : "null"));
 
         // 그룹 결과 가져오기
         const result = addon.getgroup(JSON.stringify(req));
@@ -162,6 +206,7 @@ exports.grouping = function (key, req) {
         };
     } 
     
+    // failed
     const header = createHeader(
         false,
         codes.ERROR_CODES.RESULT_APPKEY_ERROR,
@@ -183,7 +228,7 @@ exports.grouping = function (key, req) {
 
 exports.boundary = function (key, mode, target, destinations) {
     // 사용자 키 확인
-    var user = auth.checkAuth(key);
+    const user = auth.checkAuth(key);
     if (user && user.length > 0) {
         logout("client user:'" + user + "', req boundary: " + JSON.stringify(destinations));
 
@@ -203,6 +248,7 @@ exports.boundary = function (key, mode, target, destinations) {
         };
     }
 
+    // failed
     const header = createHeader(
         false,
         codes.ERROR_CODES.RESULT_APPKEY_ERROR,
@@ -226,7 +272,7 @@ exports.bestwaypoints = function (key, req, callback) {
     // 사용자 키 확인
     const user = auth.checkAuth(key);
     if (user && user.length > 0) {
-        logout(`client user:'${user}', mode=${req.mode ?? 'null'}, cache=${req.cache ?? 'null'}, cnt=${Array.isArray(req.origins) ? req.origins.length : 'null'}`);
+        logout(`client user:'${user}', mode=${req.mode ?? 'null'}, binary=${req.binary ?? 'null'}, cnt=${Array.isArray(req.origins) ? req.origins.length : 'null'}`);
 
         // vrp 모드면 bestvrp로 분기
         if (req.mode === 'vrp') {
@@ -237,6 +283,7 @@ exports.bestwaypoints = function (key, req, callback) {
         return callback(ret);
     } 
     
+    // failed
     const ret = {
         header: createHeader(
             false,
@@ -418,7 +465,7 @@ exports.bestvrp = function (key, req, callback) {
     // 사용자 키 확인
     const user = auth.checkAuth(key);
     if (user != null && user.length > 0) {
-        logout(`client user:'${user}', mode=${req.mode ?? 'null'}, cache=${req.cache ?? 'null'}, cnt=${Array.isArray(req.origins) ? req.origins.length : 'null'}`);
+        logout(`client user:'${user}', mode=${req.mode ?? 'null'}, binary=${req.binary ?? 'null'}, cnt=${Array.isArray(req.origins) ? req.origins.length : 'null'}`);
 
         (async () => {
             let payload = { matrix: null, rdm: null };

@@ -1,5 +1,7 @@
 #include "CatmullRom.h"
 
+using namespace std;
+
 CatmullRom::CatmullRom()
 : _steps(100)
 {

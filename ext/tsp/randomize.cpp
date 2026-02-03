@@ -9,6 +9,8 @@
 #include "randomize.h"
 #endif
 
+using namespace std;
+
 TRandom* tRand = NULL;
 
 void InitURandom(){

@@ -22,6 +22,7 @@
 static char THIS_FILE[] = __FILE__;
 #endif
 
+using namespace std;
 
 static int32_t biggestMeshId = 0;
 static int32_t smallestMeshId = INT_MAX;

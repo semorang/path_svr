@@ -2,6 +2,8 @@
 #include "GnKmeansClassfy.h"
 #include <math.h>
 
+using namespace std;
+
 CGnKmeansClassfy::CGnKmeansClassfy() {
 	m_ppWeightMatrix = nullptr;
 }

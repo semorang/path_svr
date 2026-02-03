@@ -14,7 +14,6 @@
 #include <time.h>
 #include <vector>
 
-using namespace std;
 
 extern void InitURandom( int );
 extern void InitURandom( void );
@@ -26,8 +25,8 @@ public:
 	int Integer(int minNumber, int maxNumber);
 	double Double(double minNumber, double maxNumber);
 	double normalDistribution(double mu, double sigma);
-	void permutation(vector<int>& array, int numOfelement, int numOfSample); // generates random permutation of a given population
-	void shuffle(vector<int>& array, int numOfElement); // random shuffles individuals in a given population
+	void permutation(std::vector<int>& array, int numOfelement, int numOfSample); // generates random permutation of a given population
+	void shuffle(std::vector<int>& array, int numOfElement); // random shuffles individuals in a given population
 };
 
 extern TRandom* tRand;

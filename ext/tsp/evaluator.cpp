@@ -9,9 +9,10 @@
 #include "evaluator.h"
 #endif
 
+using namespace std;
+
 // #include <math.h>
 // #include <iostream>
-// using namespace std;
 
 TEvaluator::TEvaluator() {
 	Ncity = 0;
@@ -20,15 +21,15 @@ TEvaluator::TEvaluator() {
 
 TEvaluator::~TEvaluator() {}
 
-void TEvaluator::setInstance(const vector<stWaypoints>& vtCities, const vector<vector<stDistMatrix>>& vtDistMatrix, const int compareType) {
+void TEvaluator::setInstance(const vector<stWaypoint>& vtCities, const vector<vector<stDistMatrix>>& vtDistMatrix, const int compareType) {
 	Ncity = vtCities.size();
 	fNearNumMax = Ncity - 1;
 	x.resize(Ncity);
 	y.resize(Ncity);
 	vector<int> checkedN(Ncity);
 	for (int i = 0; i < Ncity; ++i) {
-		x[i] = vtCities[i].x * 1000;
-		y[i] = vtCities[i].y * 1000;
+		x[i] = vtCities[i].position.x * 1000;
+		y[i] = vtCities[i].position.y * 1000;
 	} //for
 
 	fEdgeDis.clear();

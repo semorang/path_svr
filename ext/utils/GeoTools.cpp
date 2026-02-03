@@ -14,6 +14,8 @@
 #define M_PI       3.14159265358979323846
 #endif
 
+using namespace std;
+
 // 시계방향. // CW
 bool isRightSide(IN const SPoint* P1, IN const SPoint* P2, IN const SPoint* P3) //const
 {

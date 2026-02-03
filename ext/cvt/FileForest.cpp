@@ -20,7 +20,7 @@
 static char THIS_FILE[] = __FILE__;
 #endif
 
-
+using namespace std;
 
 static int32_t maxFwTm = 0;
 static int32_t maxBwTm = 0;

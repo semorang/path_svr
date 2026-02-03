@@ -8,7 +8,7 @@
 struct stBuilding
 {
 	//uint32_t MeshID; // 메시 매칭 ID
-	string BldId; // 건물 매칭 ID
+	std::string BldId; // 건물 매칭 ID
 	//string CpxId; // 단지 매칭 ID
 	uint32_t Code : 6; // 건물 종별 코드 -> 63
 	uint32_t Height : 10; // 건물 높이 -> 1023
@@ -16,9 +16,9 @@ struct stBuilding
 	uint32_t NumType : 6; // 건물 동 번호 타입 0~7, 0:인덱스, 1:정수('101'동), 2:영어('A'동), 3:한글('가'동) -> 63
 	//uint32_t Name; // 명칭
 	SBox Box; 
-	vector<uint16_t> vtParts; // 파트 인덱스
-	vector<SPoint> vtVertex; // 버텍스
-	vector<stEntranceInfo> vtEntrance; // 입구점
+	std::vector<uint16_t> vtParts; // 파트 인덱스
+	std::vector<SPoint> vtVertex; // 버텍스
+	std::vector<stEntranceInfo> vtEntrance; // 입구점
 
 	KeyID keyBld;
 
@@ -41,7 +41,7 @@ public:
 
 protected:
 	uint32_t m_nBldIdx;
-	unordered_map<uint64_t, stBuilding> m_mapBuilding;
+	std::unordered_map<uint64_t, stBuilding> m_mapBuilding;
 
 private:
 	uint32_t getNameType(IN char* name, OUT uint32_t& type);
@@ -49,7 +49,7 @@ private:
 	bool SetData_Building(int idx, stBuilding &getNode_Dbf, char* colData);
 	//bool AddMeshDataByBuilding(IN const stMeshInfo * pInfo, IN const stPolygonInfo * pData);
 
-	unordered_map<string, KeyID>m_mapStringId;
+	std::unordered_map<std::string, KeyID>m_mapStringId;
 	CFileComplex* m_pFileCpx;
 
 public:

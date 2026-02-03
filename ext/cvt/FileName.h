@@ -15,7 +15,7 @@ protected:
 
 
 private:
-	unordered_map<string, uint32_t> m_mapDic;
+	std::unordered_map<std::string, uint32_t> m_mapDic;
 	uint32_t m_idxDic;
 
 public:

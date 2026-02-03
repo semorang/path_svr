@@ -1,4 +1,5 @@
 #if defined(_WIN32)
+#define NOMINMAX
 #include <windows.h>
 #include <wchar.h>
 #define _WINDOWS
@@ -48,6 +49,8 @@ CRouteManager m_pRouteMgr;
 CRoutePackage m_pRoutePkg;
 CTrafficManager m_pTrafficMgr;
 
+using namespace std;
+
 namespace open_route_api {
 
 using v8::FunctionCallbackInfo;
@@ -83,7 +86,7 @@ void LogOut(const FunctionCallbackInfo<Value>& args) {
       return;
    }
 
-   String::Utf8Value str(isolate, args[0]);
+   v8::String::Utf8Value str(isolate, args[0]);
    std::string strInput (*str);
    LOG_TRACE(LOG_DEBUG, strInput.c_str());
    // arg.GetReturnValue().Set()
@@ -105,15 +108,15 @@ void Init(const FunctionCallbackInfo<Value>& args) {
       LOG_SET_ID(nPid);
    }
    if (args.Length() > 1) {
-      String::Utf8Value str(isolate, args[1]);
+      v8::String::Utf8Value str(isolate, args[1]);
       strDataPath = *str;
    }
    if (args.Length() > 2) {
-      String::Utf8Value str(isolate, args[2]);
+      v8::String::Utf8Value str(isolate, args[2]);
       strFilePath = *str;
    }
    if (args.Length() > 3) {
-      String::Utf8Value str(isolate, args[3]);
+      v8::String::Utf8Value str(isolate, args[3]);
       strLogPath = *str;
    }
 
@@ -140,7 +143,7 @@ void Init(const FunctionCallbackInfo<Value>& args) {
       LOG_SET_FILEPATH(LOG_KEY_TRAFFIC, strLogPath.c_str(), "log_traffic");
    }
 
-   LOG_TRACE(LOG_DEBUG, "Engine version : %d.%d.%d.%d", 
+   LOG_TRACE(LOG_DEBUG, "Engine version : %d.%d.%d.%d",
    ENGINE_VERSION_MAJOR, ENGINE_VERSION_MINOR, ENGINE_VERSION_PATCH, ENGINE_VERSION_BUILD);
 
    if (strDataPath.empty()) {
@@ -161,7 +164,6 @@ void Init(const FunctionCallbackInfo<Value>& args) {
       strDataPath = "/home/ubuntu/trecking/data";
 #  endif
 #endif
-  
       LOG_TRACE(LOG_DEBUG, "User data path not defined, will set default : %s", strDataPath.c_str());
    } else {
       LOG_TRACE(LOG_DEBUG, "Init data path : %s", strDataPath.c_str());
@@ -204,54 +206,54 @@ void GetVersion(const FunctionCallbackInfo<Value>& args) {
    // get engine version
    const char* pVersion = m_pDataMgr.GetVersionString((uint32_t)-1);
    if (pVersion != nullptr && strlen(pVersion) > 0) {
-      version->Set(context, String::NewFromUtf8(isolate, "engine").ToLocalChecked(), String::NewFromUtf8(isolate, pVersion).ToLocalChecked());
+      version->Set(context, v8::String::NewFromUtf8(isolate, "engine").ToLocalChecked(), v8::String::NewFromUtf8(isolate, pVersion).ToLocalChecked());
    }
 
 
    // get datas version
    pVersion = m_pDataMgr.GetVersionString(TYPE_DATA_NAME);
    if (pVersion != nullptr && strlen(pVersion) > 0) {
-      version->Set(context, String::NewFromUtf8(isolate, "name").ToLocalChecked(), String::NewFromUtf8(isolate, pVersion).ToLocalChecked());
+      version->Set(context, v8::String::NewFromUtf8(isolate, "name").ToLocalChecked(), v8::String::NewFromUtf8(isolate, pVersion).ToLocalChecked());
       checked = true;
    }
    pVersion = m_pDataMgr.GetVersionString(TYPE_DATA_MESH);
    if (pVersion != nullptr && strlen(pVersion) > 0) {
-      version->Set(context, String::NewFromUtf8(isolate, "mesh").ToLocalChecked(), String::NewFromUtf8(isolate, pVersion).ToLocalChecked());
+      version->Set(context, v8::String::NewFromUtf8(isolate, "mesh").ToLocalChecked(), v8::String::NewFromUtf8(isolate, pVersion).ToLocalChecked());
       checked = true;
    }
    pVersion = m_pDataMgr.GetVersionString(TYPE_DATA_TREKKING);
    if (pVersion != nullptr && strlen(pVersion) > 0) {
-      version->Set(context, String::NewFromUtf8(isolate, "trekking").ToLocalChecked(), String::NewFromUtf8(isolate, pVersion).ToLocalChecked());
+      version->Set(context, v8::String::NewFromUtf8(isolate, "trekking").ToLocalChecked(), v8::String::NewFromUtf8(isolate, pVersion).ToLocalChecked());
       checked = true;
    }
    pVersion = m_pDataMgr.GetVersionString(TYPE_DATA_PEDESTRIAN);
    if (pVersion != nullptr && strlen(pVersion) > 0) {
-      version->Set(context, String::NewFromUtf8(isolate, "pedestrian").ToLocalChecked(), String::NewFromUtf8(isolate, pVersion).ToLocalChecked());
+      version->Set(context, v8::String::NewFromUtf8(isolate, "pedestrian").ToLocalChecked(), v8::String::NewFromUtf8(isolate, pVersion).ToLocalChecked());
       checked = true;
    }
    pVersion = m_pDataMgr.GetVersionString(TYPE_DATA_VEHICLE);
    if (pVersion != nullptr && strlen(pVersion) > 0) {
-      version->Set(context, String::NewFromUtf8(isolate, "vehicle").ToLocalChecked(), String::NewFromUtf8(isolate, pVersion).ToLocalChecked());
+      version->Set(context, v8::String::NewFromUtf8(isolate, "vehicle").ToLocalChecked(), v8::String::NewFromUtf8(isolate, pVersion).ToLocalChecked());
       checked = true;
    }
    pVersion = m_pDataMgr.GetVersionString(TYPE_DATA_BUILDING);
    if (pVersion != nullptr && strlen(pVersion) > 0) {
-      version->Set(context, String::NewFromUtf8(isolate, "building").ToLocalChecked(), String::NewFromUtf8(isolate, pVersion).ToLocalChecked());
+      version->Set(context, v8::String::NewFromUtf8(isolate, "building").ToLocalChecked(), v8::String::NewFromUtf8(isolate, pVersion).ToLocalChecked());
       checked = true;
    }
    pVersion = m_pDataMgr.GetVersionString(TYPE_DATA_COMPLEX);
    if (pVersion != nullptr && strlen(pVersion) > 0) {
-      version->Set(context, String::NewFromUtf8(isolate, "complex").ToLocalChecked(), String::NewFromUtf8(isolate, pVersion).ToLocalChecked());
+      version->Set(context, v8::String::NewFromUtf8(isolate, "complex").ToLocalChecked(), v8::String::NewFromUtf8(isolate, pVersion).ToLocalChecked());
       checked = true;
    }
 
 
    if (checked != true) {
-      mainobj->Set(context, String::NewFromUtf8(isolate, "result_code").ToLocalChecked(), Integer::New(isolate, 1));
-      mainobj->Set(context, String::NewFromUtf8(isolate, "msg").ToLocalChecked(), String::NewFromUtf8(isolate, "can't find datas").ToLocalChecked());
+      mainobj->Set(context, v8::String::NewFromUtf8(isolate, "result_code").ToLocalChecked(), v8::Integer::New(isolate, 1));
+      mainobj->Set(context, v8::String::NewFromUtf8(isolate, "msg").ToLocalChecked(), v8::String::NewFromUtf8(isolate, "can't find datas").ToLocalChecked());
    } else {
-      mainobj->Set(context, String::NewFromUtf8(isolate, "result_code").ToLocalChecked(), Integer::New(isolate, 0));
-      mainobj->Set(context, String::NewFromUtf8(isolate, "version").ToLocalChecked(), version);
+      mainobj->Set(context, v8::String::NewFromUtf8(isolate, "result_code").ToLocalChecked(), v8::Integer::New(isolate, 0));
+      mainobj->Set(context, v8::String::NewFromUtf8(isolate, "version").ToLocalChecked(), version);
    }
 
    args.GetReturnValue().Set(mainobj);
@@ -327,7 +329,7 @@ void SetWaypoint(const FunctionCallbackInfo<Value>& args) {
       bool useOptimalPoint = false;
       if (cnt >= 3) {
          useOptimalPoint = args[2].As<Boolean>()->Value();
-      }     
+      }
 
       int typeLinkMatch = TYPE_LINK_MATCH_NONE;
       if (cnt >= 4) {
@@ -377,7 +379,7 @@ void SetDestination(const FunctionCallbackInfo<Value>& args) {
       bool useOptimalPoint = false;
       if (cnt >= 3) {
          useOptimalPoint = args[2].As<Boolean>()->Value();
-      }     
+      }
 
       int typeLinkMatch = TYPE_LINK_MATCH_NONE;
       if (cnt >= 4) {
@@ -413,7 +415,7 @@ void SetDataCost(const FunctionCallbackInfo<Value>& args) {
    Local<Object> obj = Object::New(isolate);
    v8::MaybeLocal<v8::String> msg;
 
-   string strReq = "";
+   std::string strReq = "";
    int ret = -1;
    int cnt = args.Length();
 
@@ -421,29 +423,29 @@ void SetDataCost(const FunctionCallbackInfo<Value>& args) {
       auto msgText = string_format("SetDataCost, function call argument too short, cnt : %d", cnt);
 
       LOG_TRACE(LOG_DEBUG, msgText.c_str());
-      msg = String::NewFromUtf8(isolate, msgText.c_str()).ToLocalChecked();
+      msg = v8::String::NewFromUtf8(isolate, msgText.c_str()).ToLocalChecked();
    }
    else {
-      String::Utf8Value pRequest(isolate, args[0]);
+      v8::String::Utf8Value pRequest(isolate, args[0]);
       strReq = *pRequest;
 
       DataCost dataCost;
       int cntCost = m_pDataMgr.ParseRequestDataCost(strReq.c_str(), dataCost);
       if (cntCost >= 128) {
-         auto msgText = string_format("SetDataCost, count too big, cnt : %d", cntCost);       
+         auto msgText = string_format("SetDataCost, count too big, cnt : %d", cntCost);
 
          LOG_TRACE(LOG_DEBUG, msgText.c_str());
-         msg = String::NewFromUtf8(isolate, msgText.c_str()).ToLocalChecked();
+         msg = v8::String::NewFromUtf8(isolate, msgText.c_str()).ToLocalChecked();
       } else {
          m_pRouteMgr.SetRouteCost(&dataCost, cntCost);
 
          ret = ROUTE_RESULT_SUCCESS;
-         msg = String::NewFromUtf8(isolate, "SetDataCost, success");
+         msg = v8::String::NewFromUtf8(isolate, "SetDataCost, success");
       }
    }
 
-   obj->Set(context, String::NewFromUtf8(isolate, "result_code").ToLocalChecked(), Integer::New(isolate, ret));
-   obj->Set(context, String::NewFromUtf8(isolate, "result_message").ToLocalChecked(), msg.ToLocalChecked());
+   obj->Set(context, v8::String::NewFromUtf8(isolate, "result_code").ToLocalChecked(), v8::Integer::New(isolate, ret));
+   obj->Set(context, v8::String::NewFromUtf8(isolate, "result_message").ToLocalChecked(), msg.ToLocalChecked());
 
    args.GetReturnValue().Set(obj);
 }
@@ -465,7 +467,7 @@ void SetRouteOption(const FunctionCallbackInfo<Value>& args) {
       auto msgText = string_format("function call argument too short, cnt : %d", cnt);
 
       LOG_TRACE(LOG_DEBUG, msgText.c_str());
-      msg = String::NewFromUtf8(isolate, msgText.c_str()).ToLocalChecked();
+      msg = v8::String::NewFromUtf8(isolate, msgText.c_str()).ToLocalChecked();
    }
    else {
       // int opt = args[0].As<Number>()->Value();
@@ -476,10 +478,10 @@ void SetRouteOption(const FunctionCallbackInfo<Value>& args) {
 
       // m_pRouteMgr.SetRouteOption(opt, avoid, mobility);
 
-      vector<uint32_t>vtRouteOpt = { ROUTE_OPT_RECOMMENDED, ROUTE_OPT_SHORTEST, ROUTE_OPT_COMFORTABLE };
-	   vector<uint32_t>vtAvoidOpt = { ROUTE_AVOID_NONE, ROUTE_AVOID_NONE, ROUTE_AVOID_NONE };
+      std::vector<uint32_t>vtRouteOpt = { ROUTE_OPT_RECOMMENDED, ROUTE_OPT_SHORTEST, ROUTE_OPT_COMFORTABLE };
+	  std::vector<uint32_t>vtAvoidOpt = { ROUTE_AVOID_NONE, ROUTE_AVOID_NONE, ROUTE_AVOID_NONE };
 
-	   m_pRouteMgr.SetRouteOption(vtRouteOpt, vtAvoidOpt, mobility);
+	  m_pRouteMgr.SetRouteOption(vtRouteOpt, vtAvoidOpt, mobility);
    }
 }
 
@@ -500,7 +502,7 @@ void AddRouteOption(const FunctionCallbackInfo<Value>& args) {
       auto msgText = string_format("function call argument too short, cnt : %d", cnt);
 
       LOG_TRACE(LOG_DEBUG, msgText.c_str());
-      msg = String::NewFromUtf8(isolate, msgText.c_str()).ToLocalChecked();
+      msg = v8::String::NewFromUtf8(isolate, msgText.c_str()).ToLocalChecked();
    }
    else {
       int opt = args[0].As<Number>()->Value();
@@ -530,7 +532,7 @@ void SetRouteSubOption(const FunctionCallbackInfo<Value>& args) {
       auto msgText = string_format("function call argument too short, cnt : %d", cnt);
 
       LOG_TRACE(LOG_DEBUG, msgText.c_str());
-      msg = String::NewFromUtf8(isolate, msgText.c_str()).ToLocalChecked();
+      msg = v8::String::NewFromUtf8(isolate, msgText.c_str()).ToLocalChecked();
    }
    else {
       stRouteSubOption subOpt;
@@ -544,7 +546,7 @@ void SetRouteSubOption(const FunctionCallbackInfo<Value>& args) {
 
 
 void SetCandidateOption(const FunctionCallbackInfo<Value>& args) {
-#if defined(USE_P2P_DATA)	
+#if defined(USE_P2P_DATA)
    Isolate* isolate = args.GetIsolate();
    Local<Context> context = isolate->GetCurrentContext();
 
@@ -588,7 +590,7 @@ void DoRoute(const FunctionCallbackInfo<Value>& args) {
       auto msgText = string_format("function call argument too short, cnt : %d", cnt);
 
       LOG_TRACE(LOG_DEBUG, msgText.c_str());
-      msg = String::NewFromUtf8(isolate, msgText.c_str()).ToLocalChecked();
+      msg = v8::String::NewFromUtf8(isolate, msgText.c_str()).ToLocalChecked();
    }
    else {
       // int cnt = args.Length();
@@ -601,10 +603,10 @@ void DoRoute(const FunctionCallbackInfo<Value>& args) {
       // LOG_TRACE(LOG_DEBUG, "Route Opt:%d, Avoid:%d, Mobility:%d", opt, avoid, mobility);
 
       // m_pRouteMgr.SetRouteOption(opt, avoid, mobility);
-   
-      
+
+
       // set route cost
-		string strTarget;
+		std::string strTarget;
 #if defined(USE_FOREST_DATA)
 		strTarget = "forest";
 #elif defined(USE_PEDESTRIAN_DATA)
@@ -630,11 +632,11 @@ void DoRoute(const FunctionCallbackInfo<Value>& args) {
 
       if (ret == 0) {
          LOG_TRACE(LOG_DEBUG, "Success routing.");
-         msg = String::NewFromUtf8(isolate, "Success routing");
+         msg = v8::String::NewFromUtf8(isolate, "Success routing");
       }
       else {
          LOG_TRACE(LOG_DEBUG, "Failed routing.");
-         msg = String::NewFromUtf8(isolate, "Failed routing");
+         msg = v8::String::NewFromUtf8(isolate, "Failed routing");
       }
    }
 
@@ -643,8 +645,8 @@ void DoRoute(const FunctionCallbackInfo<Value>& args) {
    // Local<Value> retVal2 = Local<Value>::Cast(String::NewFromUtf8(isolate, "0").ToLocalChecked());
 
    // obj->Set(context, String::NewFromUtf8(isolate, "result"), ret);
-   obj->Set(context, String::NewFromUtf8(isolate, "result").ToLocalChecked(), Integer::New(isolate, ret));
-   obj->Set(context, String::NewFromUtf8(isolate, "msg").ToLocalChecked(), msg.ToLocalChecked());
+   obj->Set(context, v8::String::NewFromUtf8(isolate, "result").ToLocalChecked(), v8::Integer::New(isolate, ret));
+   obj->Set(context, v8::String::NewFromUtf8(isolate, "msg").ToLocalChecked(), msg.ToLocalChecked());
 
    args.GetReturnValue().Set(obj);
 }
@@ -667,7 +669,7 @@ void DoMultiRoute(const FunctionCallbackInfo<Value>& args) {
       auto msgText = string_format("function call argument too short, cnt : %d", cnt);
 
       LOG_TRACE(LOG_DEBUG, msgText.c_str());
-      msg = String::NewFromUtf8(isolate, msgText.c_str()).ToLocalChecked();
+      msg = v8::String::NewFromUtf8(isolate, msgText.c_str()).ToLocalChecked();
    }
    else {
       cntRoute = args[0].As<Number>()->Value();
@@ -679,7 +681,7 @@ void DoMultiRoute(const FunctionCallbackInfo<Value>& args) {
 
 
       // set route cost
-		string strTarget;
+		std::string strTarget;
 #if defined(USE_FOREST_DATA)
 		strTarget = "forest";
 #elif defined(USE_PEDESTRIAN_DATA)
@@ -709,11 +711,11 @@ void DoMultiRoute(const FunctionCallbackInfo<Value>& args) {
 
    if (ret == 0) {
       LOG_TRACE(LOG_DEBUG, "Success MultiRouting.");
-      msg = String::NewFromUtf8(isolate, "Success MultiRouting");
+      msg = v8::String::NewFromUtf8(isolate, "Success MultiRouting");
    }
    else {
       LOG_TRACE(LOG_DEBUG, "Failed MultiRouting.");
-      msg = String::NewFromUtf8(isolate, "Failed MultiRouting");
+      msg = v8::String::NewFromUtf8(isolate, "Failed MultiRouting");
    }
 
    // v8::MaybeLocal<v8::String> retVal = Number::New(isolate, ret);
@@ -721,16 +723,15 @@ void DoMultiRoute(const FunctionCallbackInfo<Value>& args) {
    // Local<Value> retVal2 = Local<Value>::Cast(String::NewFromUtf8(isolate, "0").ToLocalChecked());
 
    // obj->Set(context, String::NewFromUtf8(isolate, "result"), ret);
-   obj->Set(context, String::NewFromUtf8(isolate, "result").ToLocalChecked(), Integer::New(isolate, ret));
-   obj->Set(context, String::NewFromUtf8(isolate, "msg").ToLocalChecked(), msg.ToLocalChecked());
-
+   obj->Set(context, v8::String::NewFromUtf8(isolate, "result").ToLocalChecked(), v8::Integer::New(isolate, ret));
+   obj->Set(context, v8::String::NewFromUtf8(isolate, "msg").ToLocalChecked(), msg.ToLocalChecked());
    args.GetReturnValue().Set(obj);
 }
 
 
 void ReleaseRoute(const FunctionCallbackInfo<Value>& args) {
    LOG_TRACE(LOG_DEBUG, "Route release");
-   
+
    m_pRouteMgr.Release();
    m_pRouteMgr.Initialize();
 }
@@ -746,38 +747,38 @@ void GetRouteSummary(const FunctionCallbackInfo<Value>& args) {
 
    if (pResult == nullptr) {
       LOG_TRACE(LOG_ERROR, "Error, Route result pointer null");
-      mainobj->Set(context, String::NewFromUtf8(isolate, "msg").ToLocalChecked(), String::NewFromUtf8(isolate, "Error, Route result pointer null").ToLocalChecked());
+      mainobj->Set(context, v8::String::NewFromUtf8(isolate, "msg").ToLocalChecked(), v8::String::NewFromUtf8(isolate, "Error, Route result pointer null").ToLocalChecked());
    }
    else {
       // info
       Local<Object> routes = Object::New(isolate);
-      mainobj->Set(context, String::NewFromUtf8(isolate, "user_id").ToLocalChecked(), String::NewFromUtf8(isolate, pResult->reqInfo.RequestId.c_str()).ToLocalChecked());
-      mainobj->Set(context, String::NewFromUtf8(isolate, "result_code").ToLocalChecked(), Integer::New(isolate, pResult->ResultCode));
+      mainobj->Set(context, v8::String::NewFromUtf8(isolate, "user_id").ToLocalChecked(), v8::String::NewFromUtf8(isolate, pResult->reqInfo.RequestId.c_str()).ToLocalChecked());
+      mainobj->Set(context, v8::String::NewFromUtf8(isolate, "result_code").ToLocalChecked(), v8::Integer::New(isolate, pResult->ResultCode));
 
       // result
       Local<Object> start_coord = Object::New(isolate);
-      start_coord->Set(context, String::NewFromUtf8(isolate, "x").ToLocalChecked(), Number::New(isolate, pResult->StartResultLink.Coord.x));
-      start_coord->Set(context, String::NewFromUtf8(isolate, "y").ToLocalChecked(), Number::New(isolate, pResult->StartResultLink.Coord.y));
-      routes->Set(context, String::NewFromUtf8(isolate, "start").ToLocalChecked(), start_coord);
+      start_coord->Set(context, v8::String::NewFromUtf8(isolate, "x").ToLocalChecked(), v8::Number::New(isolate, pResult->StartResultLink.Coord.x));
+      start_coord->Set(context, v8::String::NewFromUtf8(isolate, "y").ToLocalChecked(), v8::Number::New(isolate, pResult->StartResultLink.Coord.y));
+      routes->Set(context, v8::String::NewFromUtf8(isolate, "start").ToLocalChecked(), start_coord);
       Local<Object> end_coord = Object::New(isolate);
-      end_coord->Set(context, String::NewFromUtf8(isolate, "x").ToLocalChecked(), Number::New(isolate, pResult->EndResultLink.Coord.x));
-      end_coord->Set(context, String::NewFromUtf8(isolate, "y").ToLocalChecked(), Number::New(isolate, pResult->EndResultLink.Coord.y));
-      routes->Set(context, String::NewFromUtf8(isolate, "end").ToLocalChecked(), end_coord);
-      routes->Set(context, String::NewFromUtf8(isolate, "option").ToLocalChecked(), Integer::New(isolate, pResult->reqInfo.RouteOption));
+      end_coord->Set(context, v8::String::NewFromUtf8(isolate, "x").ToLocalChecked(), v8::Number::New(isolate, pResult->EndResultLink.Coord.x));
+      end_coord->Set(context, v8::String::NewFromUtf8(isolate, "y").ToLocalChecked(), v8::Number::New(isolate, pResult->EndResultLink.Coord.y));
+      routes->Set(context, v8::String::NewFromUtf8(isolate, "end").ToLocalChecked(), end_coord);
+      routes->Set(context, v8::String::NewFromUtf8(isolate, "option").ToLocalChecked(), v8::Integer::New(isolate, pResult->reqInfo.RouteOption));
       // dist
-      routes->Set(context, String::NewFromUtf8(isolate, "distance").ToLocalChecked(), Integer::New(isolate, pResult->TotalLinkDist));
+      routes->Set(context, v8::String::NewFromUtf8(isolate, "distance").ToLocalChecked(), v8::Integer::New(isolate, pResult->TotalLinkDist));
       // time
-      routes->Set(context, String::NewFromUtf8(isolate, "time").ToLocalChecked(), Integer::New(isolate, pResult->TotalLinkTime));
+      routes->Set(context, v8::String::NewFromUtf8(isolate, "time").ToLocalChecked(), v8::Integer::New(isolate, pResult->TotalLinkTime));
       time_t timer = time(NULL);
       struct tm* tmNow = localtime(&timer);
-      string strVal = string_format("%04d-%02d-%02d %02d:%02d:%02d", tmNow->tm_year + 1900, tmNow->tm_mon + 1, tmNow->tm_mday, tmNow->tm_hour, tmNow->tm_min, tmNow->tm_sec);
-      routes->Set(context, String::NewFromUtf8(isolate, "now").ToLocalChecked(), String::NewFromUtf8(isolate, strVal.c_str()).ToLocalChecked());
+      std::string strVal = string_format("%04d-%02d-%02d %02d:%02d:%02d", tmNow->tm_year + 1900, tmNow->tm_mon + 1, tmNow->tm_mday, tmNow->tm_hour, tmNow->tm_min, tmNow->tm_sec);
+      routes->Set(context, v8::String::NewFromUtf8(isolate, "now").ToLocalChecked(), v8::String::NewFromUtf8(isolate, strVal.c_str()).ToLocalChecked());
       timer += pResult->TotalLinkTime;
       tmNow = localtime(&timer);
       strVal = string_format("%04d-%02d-%02d %02d:%02d:%02d", tmNow->tm_year + 1900, tmNow->tm_mon + 1, tmNow->tm_mday, tmNow->tm_hour, tmNow->tm_min, tmNow->tm_sec);
-      routes->Set(context, String::NewFromUtf8(isolate, "eta").ToLocalChecked(), String::NewFromUtf8(isolate, strVal.c_str()).ToLocalChecked());
+      routes->Set(context, v8::String::NewFromUtf8(isolate, "eta").ToLocalChecked(), v8::String::NewFromUtf8(isolate, strVal.c_str()).ToLocalChecked());
       // add
-      mainobj->Set(context, String::NewFromUtf8(isolate, "summary").ToLocalChecked(), routes);
+      mainobj->Set(context, v8::String::NewFromUtf8(isolate, "summary").ToLocalChecked(), routes);
    }
 
    args.GetReturnValue().Set(mainobj);
@@ -788,21 +789,21 @@ void GetRouteResult(const FunctionCallbackInfo<Value>& args) {
    Isolate* isolate = args.GetIsolate();
    Local<Context> context = isolate->GetCurrentContext();
 
-   string strJson;
+   std::string strJson;
    const RouteResultInfo* pResult = m_pRouteMgr.GetRouteResult();
-   bool isJunction = false;   
+   bool isJunction = false;
 
    if (args.Length() >= 1) {
       isJunction = args[0].As<Number>()->Value();
    }
-  
+
    if (pResult == nullptr) {
       m_pRoutePkg.GetErrorResult(ROUTE_RESULT_FAILED, strJson);
    } else {
       m_pRoutePkg.GetRouteResult(pResult, isJunction, strJson);
    }
 
-   args.GetReturnValue().Set(String::NewFromUtf8(isolate, strJson.c_str()).ToLocalChecked());
+   args.GetReturnValue().Set(v8::String::NewFromUtf8(isolate, strJson.c_str()).ToLocalChecked());
 }
 
 
@@ -810,7 +811,7 @@ void GetMultiRouteResult(const FunctionCallbackInfo<Value>& args) {
    Isolate* isolate = args.GetIsolate();
    Local<Context> context = isolate->GetCurrentContext();
 
-   string strJson;
+   std::string strJson;
    int cntRoutes = m_pRouteMgr.GetRouteResultsCount();
    bool isJunction = false;
 
@@ -822,7 +823,7 @@ void GetMultiRouteResult(const FunctionCallbackInfo<Value>& args) {
       m_pRoutePkg.GetErrorResult(ROUTE_RESULT_FAILED, strJson);
    } else {
 #if 1 // use result vector
-      const vector<RouteResultInfo>* pResults = m_pRouteMgr.GetMultiRouteResults();
+      const std::vector<RouteResultInfo>* pResults = m_pRouteMgr.GetMultiRouteResults();
       m_pRoutePkg.GetMultiRouteResult(*pResults, isJunction, strJson);
 #else
 
@@ -837,8 +838,8 @@ void GetMultiRouteResult(const FunctionCallbackInfo<Value>& args) {
    if (!strJson.empty()) {
       // mainobj->Set(context, String::NewFromUtf8(isolate, "route").ToLocalChecked(), String::NewFromUtf8(isolate, strJson.c_str()).ToLocalChecked());
    }
-   
-   args.GetReturnValue().Set(String::NewFromUtf8(isolate, strJson.c_str()).ToLocalChecked());
+
+   args.GetReturnValue().Set(v8::String::NewFromUtf8(isolate, strJson.c_str()).ToLocalChecked());
 }
 
 
@@ -846,7 +847,7 @@ void GetMapsRouteResult(const FunctionCallbackInfo<Value>& args) {
    Isolate* isolate = args.GetIsolate();
    Local<Context> context = isolate->GetCurrentContext();
 
-   string strJson;
+   std::string strJson;
    const RouteResultInfo* pResult = m_pRouteMgr.GetRouteResult();
 
    if (pResult == nullptr) {
@@ -863,7 +864,7 @@ void GetMapsMultiRouteResult(const FunctionCallbackInfo<Value>& args) {
    Isolate* isolate = args.GetIsolate();
    Local<Context> context = isolate->GetCurrentContext();
 
-   string strJson;
+   std::string strJson;
    int cntRoutes = m_pRouteMgr.GetRouteResultsCount();
 
    if (cntRoutes <= 0) {
@@ -872,7 +873,7 @@ void GetMapsMultiRouteResult(const FunctionCallbackInfo<Value>& args) {
       const RouteResultInfo* pResult = m_pRouteMgr.GetRouteResult();
       m_pRoutePkg.GetMapsRouteResult(pResult, strJson);
    } else {
-      const vector<RouteResultInfo>* pResults = m_pRouteMgr.GetMultiRouteResults();
+      const std::vector<RouteResultInfo>* pResults = m_pRouteMgr.GetMultiRouteResults();
       m_pRoutePkg.GetMapsMultiRouteResult(*pResults, strJson);
    }
 
@@ -884,7 +885,7 @@ void GetOptimalPosition(const FunctionCallbackInfo<Value>& args) {
    Isolate* isolate = args.GetIsolate();
    Local<Context> context = isolate->GetCurrentContext();
 
-   string strJson;
+   std::string strJson;
 
    int cnt = args.Length();
 
@@ -895,12 +896,12 @@ void GetOptimalPosition(const FunctionCallbackInfo<Value>& args) {
       // msg = String::NewFromUtf8(isolate, msgText.c_str()).ToLocalChecked();
 
       m_pRoutePkg.GetErrorResult(OPTIMAL_RESULT_FAILED_WRONG_PARAM, strJson);
-   } else {      
+   } else {
       stReqOptimal reqOpt;
 
       reqOpt.x = args[0].As<Number>()->Value();
       reqOpt.y = args[1].As<Number>()->Value();
-      
+
       // Ent Type
       if (cnt >= 3) {
          reqOpt.typeAll = args[2].As<Number>()->Value();
@@ -921,7 +922,7 @@ void GetOptimalPosition(const FunctionCallbackInfo<Value>& args) {
          reqOpt.subOption = args[5].As<Number>()->Value();
       }
 
-      LOG_TRACE(LOG_DEBUG, "Request, lng:%f, lat:%f, ent_type:%d, ret_cnt:%d, expand:%d, option:%d", 
+      LOG_TRACE(LOG_DEBUG, "Request, lng:%f, lat:%f, ent_type:%d, ret_cnt:%d, expand:%d, option:%d",
          reqOpt.x, reqOpt.y, reqOpt.typeAll, reqOpt.reqCount, reqOpt.isExpand, reqOpt.subOption);
 
       stOptimalPointInfo optInfo = {0, };
@@ -949,7 +950,7 @@ void GetMultiOptimalPosition(const FunctionCallbackInfo<Value>& args) {
    Local<Context> context = isolate->GetCurrentContext();
 
    int ret;
-   string strJson;
+   std::string strJson;
 
    int cnt = args.Length();
 
@@ -962,13 +963,13 @@ void GetMultiOptimalPosition(const FunctionCallbackInfo<Value>& args) {
       m_pRoutePkg.GetErrorResult(ROUTE_RESULT_FAILED_WRONG_PARAM, strJson);
    }
    else {
-      String::Utf8Value pRequest(isolate, args[0]);
-      string strRequest = *pRequest;
+      v8::String::Utf8Value pRequest(isolate, args[0]);
+      std::string strRequest = *pRequest;
 
       // request
       stReqOptimal reqOpt;
-      vector<SPoint> vtOrigins;
-      vector<stOptimalPointInfo> vtOptInfo;
+      std::vector<SPoint> vtOrigins;
+      std::vector<stOptimalPointInfo> vtOptInfo;
 
       ret = m_pDataMgr.ParsingRequestMultiOptimalPoints(strRequest.c_str(), vtOrigins, reqOpt);
 
@@ -992,7 +993,7 @@ void GetMatrix(const FunctionCallbackInfo<Value>& args) {
    Local<Context> context = isolate->GetCurrentContext();
 
    int ret;
-   string strJson;
+   std::string strJson;
 
    int cnt = args.Length();
 
@@ -1006,19 +1007,19 @@ void GetMatrix(const FunctionCallbackInfo<Value>& args) {
    }
    else {
       String::Utf8Value pRequest(isolate, args[0]);
-      string strRequest = *pRequest;
+      std::string strRequest = *pRequest;
 
       // request
-      
+
       // get table
       BaseOption option;
       RouteDistMatrix rdm;
 
       ret = m_pRouteMgr.ParsingWeightMatrix(strRequest.c_str(), rdm, option);
-      if (!rdm.vtOrigin.empty() && ret == ROUTE_RESULT_SUCCESS) {
+      if (!rdm.vtOrigin.empty() && rdm.vtDistMatrix.empty()) {
          ret = m_pRouteMgr.GetWeightMatrix(rdm, option);
       }
-            
+
       if (ret != ROUTE_RESULT_SUCCESS) {
          m_pRoutePkg.GetErrorResult(ret, strJson);
       } else {
@@ -1043,6 +1044,41 @@ void GetMatrix(const FunctionCallbackInfo<Value>& args) {
    UNKNOWN_ERROR indicates a Distance Matrix request could not be processed due to a server error. The request may succeed if you try again.
    */
 
+   args.GetReturnValue().Set(v8::String::NewFromUtf8(isolate, strJson.c_str()).ToLocalChecked());
+}
+
+
+void GetMatrixPath(const FunctionCallbackInfo<Value>& args) {
+   Isolate* isolate = args.GetIsolate();
+   Local<Context> context = isolate->GetCurrentContext();
+
+   int ret;
+   std::string strJson;
+
+   int cnt = args.Length();
+
+   if (cnt < 1) {
+      auto msgText = string_format("GetMatrixPath, function call argument too short, cnt : %d", cnt);
+
+      LOG_TRACE(LOG_DEBUG, msgText.c_str());
+
+      m_pRoutePkg.GetErrorResult(ROUTE_RESULT_FAILED_WRONG_PARAM, strJson);
+   }
+   else {
+      v8::String::Utf8Value pRequest(isolate, args[0]);
+      std::string strRequest = *pRequest;
+
+      // request
+      std::vector<WeightMatrixPath> vtPathMatrixData;
+      ret = m_pRouteMgr.ParsingWeightMatrixRoutePathData(strRequest.c_str(), vtPathMatrixData);
+
+      if (ret != ROUTE_RESULT_SUCCESS) {
+         m_pRoutePkg.GetErrorResult(ret, strJson);
+      } else {
+         m_pRoutePkg.GetWeightMatrixPathResult(vtPathMatrixData, strJson);
+      }
+   }
+
    args.GetReturnValue().Set(String::NewFromUtf8(isolate, strJson.c_str()).ToLocalChecked());
 }
 
@@ -1051,7 +1087,7 @@ void GetCluster_for_geoyoung(const FunctionCallbackInfo<Value>& args) {
    Isolate* isolate = args.GetIsolate();
 
    int ret;
-   string strJson;
+   std::string strJson;
 
    int cnt = args.Length();
 
@@ -1068,8 +1104,8 @@ void GetCluster_for_geoyoung(const FunctionCallbackInfo<Value>& args) {
       int result_code = ROUTE_RESULT_FAILED;
 
       // get cluster
-      vector<stDistrict> vtClusters;
-      vector<SPoint> EndPoint;
+      std::vector<stCluster> vtClusters;
+      std::vector<SPoint> EndPoint;
       ret = m_pRouteMgr.GetCluster_for_geoyoung(cntClusters, vtClusters);
       if (ret != ROUTE_RESULT_SUCCESS) {
          m_pRoutePkg.GetErrorResult(ret, strJson);
@@ -1077,19 +1113,19 @@ void GetCluster_for_geoyoung(const FunctionCallbackInfo<Value>& args) {
          RouteDistMatrix RDM;
          Cluster CLUST;
 
-         string strUsrDirectory;
+         std::string strUsrDirectory;
          strUsrDirectory.append(m_pDataMgr.GetDataPath());
          strUsrDirectory.append("/usr/rdm/");
          checkDirectory(strUsrDirectory.c_str());
 
-         m_pRoutePkg.GetClusteringResult(CLUST, RDM, strUsrDirectory.c_str(), strJson);
+         m_pRoutePkg.GetClusteringResult(CLUST, RDM, strJson);
       }
-      
+
       vtClusters.clear();
-      vector<stDistrict>().swap(vtClusters);
+      std::vector<stCluster>().swap(vtClusters);
    }
 
-   args.GetReturnValue().Set(String::NewFromUtf8(isolate, strJson.c_str()).ToLocalChecked());
+   args.GetReturnValue().Set(v8::String::NewFromUtf8(isolate, strJson.c_str()).ToLocalChecked());
 }
 
 
@@ -1097,7 +1133,7 @@ void GetCluster(const FunctionCallbackInfo<Value>& args) {
    Isolate* isolate = args.GetIsolate();
 
    int ret;
-   string strJson;
+   std::string strJson;
 
    int cnt = args.Length();
 
@@ -1110,8 +1146,8 @@ void GetCluster(const FunctionCallbackInfo<Value>& args) {
       m_pRoutePkg.GetErrorResult(ROUTE_RESULT_FAILED_WRONG_PARAM, strJson);
    }
    else {
-      String::Utf8Value pRequest(isolate, args[0]);
-      string strRequest = *pRequest;
+      v8::String::Utf8Value pRequest(isolate, args[0]);
+      std::string strRequest = *pRequest;
 
       // get cluster
       RouteDistMatrix rdm;
@@ -1121,16 +1157,16 @@ void GetCluster(const FunctionCallbackInfo<Value>& args) {
       if (ret != ROUTE_RESULT_SUCCESS) {
          m_pRoutePkg.GetErrorResult(ret, strJson);
       } else {
-         string strUsrDirectory;
+         std::string strUsrDirectory;
          strUsrDirectory.append(m_pDataMgr.GetDataPath());
          strUsrDirectory.append("/usr/rdm/");
          checkDirectory(strUsrDirectory.c_str());
 
-         m_pRoutePkg.GetClusteringResult(clust, rdm, strUsrDirectory.c_str(), strJson);
+         m_pRoutePkg.GetClusteringResult(clust, rdm, strJson);
       }
    }
 
-   args.GetReturnValue().Set(String::NewFromUtf8(isolate, strJson.c_str()).ToLocalChecked());
+   args.GetReturnValue().Set(v8::String::NewFromUtf8(isolate, strJson.c_str()).ToLocalChecked());
 }
 
 
@@ -1138,7 +1174,7 @@ void GetGroup(const FunctionCallbackInfo<Value>& args) {
    Isolate* isolate = args.GetIsolate();
 
    int ret;
-   string strJson;
+   std::string strJson;
 
    int cnt = args.Length();
 
@@ -1151,8 +1187,8 @@ void GetGroup(const FunctionCallbackInfo<Value>& args) {
       m_pRoutePkg.GetErrorResult(ROUTE_RESULT_FAILED_WRONG_PARAM, strJson);
    }
    else {
-      String::Utf8Value pRequest(isolate, args[0]);
-      string strRequest = *pRequest;
+      v8::String::Utf8Value pRequest(isolate, args[0]);
+      std::string strRequest = *pRequest;
 
       // get cluster
       Cluster clust;
@@ -1161,12 +1197,12 @@ void GetGroup(const FunctionCallbackInfo<Value>& args) {
 
       if (ret != ROUTE_RESULT_SUCCESS) {
          m_pRoutePkg.GetErrorResult(ret, strJson);
-      } else {         
+      } else {
          m_pRoutePkg.GetGroupingResult(clust, strJson);
       }
    }
 
-   args.GetReturnValue().Set(String::NewFromUtf8(isolate, strJson.c_str()).ToLocalChecked());
+   args.GetReturnValue().Set(v8::String::NewFromUtf8(isolate, strJson.c_str()).ToLocalChecked());
 }
 
 
@@ -1174,7 +1210,7 @@ void GetBoundary(const FunctionCallbackInfo<Value>& args) {
    Isolate* isolate = args.GetIsolate();
    Local<Context> context = isolate->GetCurrentContext();
 
-   string strJson;
+   std::string strJson;
 
    int cnt = args.Length();
 
@@ -1191,20 +1227,20 @@ void GetBoundary(const FunctionCallbackInfo<Value>& args) {
       Local<Array> arrPois = args[1].As<Array>();
 
       SPoint ptCenter;
-      vector<SPoint> vtBoundary;
-      vector<SPoint> vtPois;
+      std::vector<SPoint> vtBoundary;
+      std::vector<SPoint> vtPois;
       SPoint coord;
       for (int ii=0; ii<countPois; ii++) {
          Local<Value> poi = arrPois->Get(context, ii).ToLocalChecked();
-         String::Utf8Value strValue(isolate, poi);
-         string strCoord = *strValue;
+         v8::String::Utf8Value strValue(isolate, poi);
+         std::string strCoord = *strValue;
          size_t pos = strCoord.find(',');
          coord.x = atof(strCoord.substr(0, pos).c_str());
          coord.y = atof(strCoord.substr(pos + 1).c_str());
 
          vtPois.emplace_back(coord);
       }
-      
+
       int ret = m_pRouteMgr.GetBoundary(vtPois, vtBoundary, ptCenter);
       if (ret != ROUTE_RESULT_SUCCESS) {
          m_pRoutePkg.GetErrorResult(ret, strJson);
@@ -1212,10 +1248,10 @@ void GetBoundary(const FunctionCallbackInfo<Value>& args) {
          m_pRoutePkg.GetBoundaryResult(vtBoundary, strJson);
       }
       vtPois.clear();
-      vector<SPoint>().swap(vtPois);
+      std::vector<SPoint>().swap(vtPois);
    }
 
-   args.GetReturnValue().Set(String::NewFromUtf8(isolate, strJson.c_str()).ToLocalChecked());
+   args.GetReturnValue().Set(v8::String::NewFromUtf8(isolate, strJson.c_str()).ToLocalChecked());
 }
 
 
@@ -1224,7 +1260,7 @@ void GetBestWaypoints(const FunctionCallbackInfo<Value>& args) {
    Local<Context> context = isolate->GetCurrentContext();
 
    int ret;
-   string strJson;
+   std::string strJson;
 
    int cnt = args.Length();
 
@@ -1237,18 +1273,18 @@ void GetBestWaypoints(const FunctionCallbackInfo<Value>& args) {
       m_pRoutePkg.GetErrorResult(ROUTE_RESULT_FAILED_WRONG_PARAM, strJson);
    }
    else {
-      String::Utf8Value pRequest(isolate, args[0]);
-      string strRequest = *pRequest;
+      v8::String::Utf8Value pRequest(isolate, args[0]);
+      std::string strRequest = *pRequest;
 
       // get bestway
       RouteDistMatrix RDM;
       BestWaypoints TSP;
-      
+
       ret = m_pRouteMgr.GetBestway(strRequest.c_str(), RDM, TSP);
       if (ret != ROUTE_RESULT_SUCCESS) {
          m_pRoutePkg.GetErrorResult(ret, strJson);
       } else {
-         string strUsrDirectory;
+         std::string strUsrDirectory;
          strUsrDirectory.append(m_pDataMgr.GetDataPath());
          strUsrDirectory.append("/usr/rdm/");
          checkDirectory(strUsrDirectory.c_str());
@@ -1296,10 +1332,10 @@ void GetBestWaypoints(const FunctionCallbackInfo<Value>& args) {
       ////////////////////////////////////////////////////////////////////////////////
 
       // cJSON_AddStringToObject(root, "url", strURL.c_str());
-#endif 
+#endif
    }
 
-   args.GetReturnValue().Set(String::NewFromUtf8(isolate, strJson.c_str()).ToLocalChecked());
+   args.GetReturnValue().Set(v8::String::NewFromUtf8(isolate, strJson.c_str()).ToLocalChecked());
 }
 
 
@@ -1313,11 +1349,11 @@ void UpdateTraffic(const FunctionCallbackInfo<Value>& args) {
 
    if (cnt < 3) {
       LOG_TRACE(LOG_KEY_TRAFFIC, LOG_WARNING, "function call argument too short : %d", cnt);
-   } else {      
-      String::Utf8Value strName(isolate, args[0]);
-      String::Utf8Value strPath(isolate, args[1]);
-      string strFileName = *strName;
-      string strFilePath = *strPath;
+   } else {
+      v8::String::Utf8Value strName(isolate, args[0]);
+      v8::String::Utf8Value strPath(isolate, args[1]);
+      std::string strFileName = *strName;
+      std::string strFilePath = *strPath;
       uint32_t timeNow = args[2].As<Number>()->Value();;
       uint32_t update_imestamp = 0;
 
@@ -1335,7 +1371,7 @@ void UpdateTraffic(const FunctionCallbackInfo<Value>& args) {
 void init(Local<Object> exports) {
 
 #if defined(USE_MULTIPROCESS)
-   int numThreads = min(omp_get_num_procs() - 1, PROCESS_NUM);
+   int numThreads = std::min(omp_get_num_procs() - 1, PROCESS_NUM);
    omp_set_num_threads(numThreads);
    printf("OMP thread num %d", omp_get_num_threads());
    // if (omp_get_max_threads() > PROCESS_NUM) {
@@ -1370,8 +1406,9 @@ void init(Local<Object> exports) {
    NODE_SET_METHOD(exports, "getmapsroute", GetMapsRouteResult);
    NODE_SET_METHOD(exports, "getmapsmultiroute", GetMapsMultiRouteResult);
    NODE_SET_METHOD(exports, "getmatrix", GetMatrix);
+   NODE_SET_METHOD(exports, "getmatrixpath", GetMatrixPath);
    NODE_SET_METHOD(exports, "getcluster", GetCluster);
-   NODE_SET_METHOD(exports, "getcluster_for_geoyoung", GetCluster_for_geoyoung);   
+   NODE_SET_METHOD(exports, "getcluster_for_geoyoung", GetCluster_for_geoyoung);
    NODE_SET_METHOD(exports, "getgroup", GetGroup);
    NODE_SET_METHOD(exports, "getboundary", GetBoundary);
    NODE_SET_METHOD(exports, "getbestwaypoints", GetBestWaypoints);

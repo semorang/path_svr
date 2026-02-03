@@ -218,11 +218,11 @@ typedef struct _tagNameDicIndex {
 
 void boxMerge(IN OUT SBox& lhs, IN const SBox& rhs);
 #if defined(USE_P2P_DATA)
-int linkMerge(IN OUT vector<SPoint>& lhs, IN const vector<SPoint>& rhs, IN const bool isAllowDuplicates = true);
-int linkMerge(IN OUT vector<SPoint>& lhs, IN const SPoint * pData, IN const uint32_t cntData, IN const bool isAllowDuplicates = true);
+int linkMerge(IN OUT std::vector<SPoint>& lhs, IN const std::vector<SPoint>& rhs, IN const bool isAllowDuplicates = true);
+int linkMerge(IN OUT std::vector<SPoint>& lhs, IN const SPoint * pData, IN const uint32_t cntData, IN const bool isAllowDuplicates = true);
 #else
-int linkMerge(IN OUT vector<SPoint>& lhs, IN const vector<SPoint>& rhs, IN const bool isAllowDuplicates = false);
-int linkMerge(IN OUT vector<SPoint>& lhs, IN const SPoint * pData, IN const uint32_t cntData, IN const bool isAllowDuplicates = false);
+int linkMerge(IN OUT std::vector<SPoint>& lhs, IN const std::vector<SPoint>& rhs, IN const bool isAllowDuplicates = false);
+int linkMerge(IN OUT std::vector<SPoint>& lhs, IN const SPoint * pData, IN const uint32_t cntData, IN const bool isAllowDuplicates = false);
 #endif
 int32_t linkProjection(IN stLinkInfo* pData, IN const double& lng, IN const double& lat, IN const int32_t nMaxDist, OUT double& retLng, OUT double& retLat, OUT double& retDist, IN OUT double& retIr);
 
@@ -242,12 +242,12 @@ protected:
 	uint32_t m_nLinkIdx;
 	uint32_t m_nNodeIdx;
 
-	map<uint32_t, stMeshInfo*> m_mapMesh;
-	unordered_map<uint64_t, uint32_t> m_mapNodeIndex; // 실제 노드 ID에 대응하는 노드 IDX 관리
-	unordered_map<uint64_t, stNodeInfo*> m_mapNode;
-	unordered_map<uint64_t, stLinkInfo*> m_mapLink;
+	std::map<uint32_t, stMeshInfo*> m_mapMesh;
+	std::unordered_map<uint64_t, uint32_t> m_mapNodeIndex; // 실제 노드 ID에 대응하는 노드 IDX 관리
+	std::unordered_map<uint64_t, stNodeInfo*> m_mapNode;
+	std::unordered_map<uint64_t, stLinkInfo*> m_mapLink;
 
-	string m_strErrMsg;
+	std::string m_strErrMsg;
 
 	// 전체 지도 영역
 	SBox m_rtBox;
@@ -295,8 +295,8 @@ protected:
 	//stLinkIDX GetConnectedLinkByLink(stLinkIDX _Link);
 	//stLinkIDX* GetLinkInMesh(uint32_t meshID, uint32_t sNode, uint32_t eNode);
 
-	bool MergeEdgePoint(IN const int nLinkStartEnd, IN stLinkInfo* pLink, IN unordered_map<uint64_t, stLinkInfo*>* pMapLink, IN unordered_map<uint64_t, stNodeInfo*>* pMapNode);
-	void MergeLink(IN stLinkInfo* pLink, IN unordered_map<uint64_t, stLinkInfo*>* pMapLink, IN unordered_map<uint64_t, stNodeInfo*>* pMapNode);
+	bool MergeEdgePoint(IN const int nLinkStartEnd, IN stLinkInfo* pLink, IN std::unordered_map<uint64_t, stLinkInfo*>* pMapLink, IN std::unordered_map<uint64_t, stNodeInfo*>* pMapNode);
+	void MergeLink(IN stLinkInfo* pLink, IN std::unordered_map<uint64_t, stLinkInfo*>* pMapLink, IN std::unordered_map<uint64_t, stNodeInfo*>* pMapNode);
 	//bool FindStartEnd_INDEX(int netType, uint32_t meshID, int &sIndex, int &eIndex);
 	//stLinkIDX CalculateShortestDistance(std::vector<stLinkIDX> &vGetConnectedLinks);
 

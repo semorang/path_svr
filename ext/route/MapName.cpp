@@ -11,6 +11,9 @@
 static char THIS_FILE[] = __FILE__;
 #endif
 
+using namespace std;
+
+const char g_szNameNull[2] = {};
 
 MapName::MapName()
 {
@@ -86,5 +89,5 @@ const char* MapName::GetNameData(IN const uint32_t id) const
 		return it->second->name.c_str();
 	}
 
-	return nullptr;
+	return g_szNameNull;
 }

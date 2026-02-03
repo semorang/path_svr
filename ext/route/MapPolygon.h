@@ -20,7 +20,7 @@ public:
 	stPolygonInfo* GetPitInPolygon(IN const KeyID keyId, IN const double lng, IN const double lat, IN const int32_t nMaxDist = 0);
 
 private:
-	unordered_map<uint64_t, stPolygonInfo*> mapData;
+	std::unordered_map<uint64_t, stPolygonInfo*> mapData;
 
 };
 

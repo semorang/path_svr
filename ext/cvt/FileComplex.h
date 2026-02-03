@@ -9,13 +9,13 @@ struct stComplex
 	uint32_t GID; // GID
 	uint32_t MeshID; // 메시 매칭 ID
 	uint32_t Code; // 단지 종별 코드
-	string CpxId; // 단지 매칭 ID
-	string SdSggCode; // 시도/시군구 코드
+	std::string CpxId; // 단지 매칭 ID
+	std::string SdSggCode; // 시도/시군구 코드
 	SBox Box; 
-	vector<uint16_t> vtParts; // 파트 인덱스
-	vector<SPoint> vtVertex; // 버텍스
-	vector<stEntranceInfo> vtEntrance; // 입구점
-	vector<uint32_t> vtJoinedMesh; // 중첩 메쉬 ID
+	std::vector<uint16_t> vtParts; // 파트 인덱스
+	std::vector<SPoint> vtVertex; // 버텍스
+	std::vector<stEntranceInfo> vtEntrance; // 입구점
+	std::vector<uint32_t> vtJoinedMesh; // 중첩 메쉬 ID
 	KeyID keyCpx;
 
 	stComplex() {
@@ -45,15 +45,15 @@ public:
 
 protected:
 	uint32_t m_nCpxIdx;
-	unordered_map<uint64_t, stComplex> m_mapComplex;
+	std::unordered_map<uint64_t, stComplex> m_mapComplex;
 
 private:
 	uint32_t getComplexCode(IN const char* type);
 	bool SetData_Complex(int idx, stComplex &getCpx_Dbf, char* colData);
 	//bool AddMeshDataByComplex(IN const stMeshInfo * pInfo, IN const stPolygonInfo * pData);
-	uint32_t getLinksInComplex(IN const stComplex& complex, OUT vector<KeyID>& vtLinks); // 단지내 도로 정보 처리
+	uint32_t getLinksInComplex(IN const stComplex& complex, OUT std::vector<KeyID>& vtLinks); // 단지내 도로 정보 처리
 	
-	unordered_map<string, KeyID>m_mapStringId;
+	std::unordered_map<std::string, KeyID>m_mapStringId;
 	//unordered_map<uint32_t, stComplexShare>m_mapCpxShare;
 
 public:

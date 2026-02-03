@@ -11,38 +11,9 @@
 #include "MapBase.h"
 #endif
 
-#pragma pack (push, 1)
 
-#pragma pack (pop)
-
-// 데이터 정보 헤더
-typedef struct _tagFileHeaderRDM
-{
-	uint32_t crcData;	// crc 값
-	uint32_t cntItem;	// N x N matrix의 N 갯수
-	uint32_t offOption;	// 옵션 시작 offset
-	uint32_t offOrigin;	// 좌표 시작 offset
-	uint32_t offBody;	// 데이터 시작 offset
-}FileHeaderRDM;
-
-
-typedef struct _tagFileInfoRDM
-{
-	string name; // name
-	string type; // file, base64 ...
-	string format; // bin, zip, txt ...
-
-	size_t size; // data size
-	string data; // data
-}FILE_INFO_RDM;
-
-
-typedef enum {
-	CLUST_VALUE_TYPE_SPOT = TYPE_CLUSTER_DEVIDE_BY_COUNT, // 방문지
-	CLUST_VALUE_TYPE_DIST = TYPE_CLUSTER_DEVIDE_BY_DIST, // 거리
-	CLUST_VALUE_TYPE_TIME = TYPE_CLUSTER_DEVIDE_BY_TIME, // 시간
-	CLUST_VALUE_TYPE_CARGO, // 화물
-}CLUST_VALUE_TYPE;
+//#define EXPIRY_DURATION		60 * 60 * 24 * 31 // 최대 31일간 유효함
+#define EXPIRY_DURATION		60 * 60 * 24 * 365 // 최대 1년간 유효함
 
 
 struct stClustValue
@@ -204,34 +175,31 @@ public:
 	void SetLimitPointCount(IN const int32_t count = 0) { m_nMaxLimitCount = count; }
 	int32_t GetLimitPointCount(void) const { return m_nMaxLimitCount; }
 
-	int32_t GetBestway(IN const TspOption* pTspOpt, IN const vector<vector<stDistMatrix>>& vtDistMatrix, IN const vector<stWaypoints>& vtOrigin, OUT vector<int32_t>& vtBestWaypoints, OUT double& dist, OUT int32_t& time);
-	int32_t GetCluster(IN const ClusteringOption* pClustOpt, IN const vector<vector<stDistMatrix>>& vtDistMatrix, IN const vector<Origins>& vtOrigin, OUT vector<stDistrict>& vtDistrict, OUT vector<SPoint>& vtEndPoint);
-	int32_t GetGroup(IN const ClusteringOption* pClustOpt, IN const vector<Origins>& vtOrigin, OUT vector<stDistrict>& vtDistrict);
-	int32_t GetBoundary(IN vector<SPoint>& vtPois, OUT vector<SPoint>& vtBoundary, OUT SPoint& center);
+	int32_t GetBestway(IN const TspOption* pTspOpt, IN const std::vector<std::vector<stDistMatrix>>& vtDistMatrix, IN const std::vector<stWaypoint>& vtOrigin, OUT std::vector<int32_t>& vtBestWaypoints, OUT double& dist, OUT int32_t& time);
+	int32_t GetCluster(IN const ClusteringOption* pClustOpt, IN const std::vector<std::vector<stDistMatrix>>& vtDistMatrix, IN const std::vector<stWaypoint>& vtOrigin, OUT std::vector<stCluster>& vtDistrict, OUT std::vector<SPoint>& vtEndPoint);
+	int32_t GetGroup(IN const ClusteringOption* pClustOpt, IN const std::vector<stWaypoint>& vtOrigin, OUT std::vector<stCluster>& vtDistrict);
+	int32_t GetBoundary(IN std::vector<SPoint>& vtPois, OUT std::vector<SPoint>& vtBoundary, OUT SPoint& center);
 
 	int32_t ParsingRequestBaseOption(IN const char* szRequest, OUT BaseOption& option);
-	int32_t ParsingRequestRoute(IN const char* szRequest, OUT BaseOption& baseOpt, OUT vector<Origins>& vtOrigin);
-	int32_t ParsingRequestWeightMatrix(IN const char* szRequest, OUT BaseOption& baseOpt, OUT vector<Origins>& vtOrigin, OUT vector<Origins>& vtDestination, OUT vector<vector<stDistMatrix>>& vtDistanceMatrix, OUT int32_t& typeDistMatrix);
-	int32_t ParsingRequestWeightMatrixRoute(IN const char* szRequest, OUT BaseOption& baseOpt, OUT vector<Origins>& vtOrigin, OUT vector<Origins>& vtDestination, OUT vector<vector<stDistMatrix>>& vtDistanceMatrix/*, OUT int32_t& typeDistMatrix*/);
-	int32_t ParsingRequestWeightMatrixRouteLine(IN const char* szRequest, OUT string& fileName, OUT size_t& fileSize, OUT vector<vector<FileIndex>>& vtPathMatrixIndex);
-	int32_t ParsingRequestBestway(IN const char* szRequest, OUT TspOption& tspOpt, OUT vector<Origins>& vtOrigin);
-	int32_t ParsingRequestCluster(IN const char* szRequest, OUT ClusteringOption& clustOpt, OUT vector<Origins>& vtOrigin);
-	int32_t ParsingRequestGroup(IN const char* szRequest, OUT ClusteringOption& clustOpt, OUT vector<Origins>& vtOrigin);
-	//int32_t LoadWeightMatrix(IN const char* szFileName, IN const size_t sizeFile, OUT BaseOption& option, OUT vector<Origins>& vtOrigin, OUT vector<vector<stDistMatrix>>& vtDistMatrix);
+	int32_t ParsingRequestRoute(IN const char* szRequest, OUT BaseOption& baseOpt, OUT std::vector<stWaypoint>& vtOrigin);
+	int32_t ParsingRequestWeightMatrix(IN const char* szRequest, OUT BaseOption& baseOpt, OUT std::vector<stWaypoint>& vtOrigin, OUT std::vector<stWaypoint>& vtDestination, OUT std::vector<std::vector<stDistMatrix>>& vtDistanceMatrix, OUT int32_t& typeDistMatrix);
+	int32_t ParsingRequestWeightMatrixRoute(IN const char* szRequest, OUT BaseOption& baseOpt, OUT std::vector<stWaypoint>& vtOrigin, OUT std::vector<stWaypoint>& vtDestination, OUT std::vector<std::vector<stDistMatrix>>& vtDistanceMatrix/*, OUT int32_t& typeDistMatrix*/);
+	int32_t ParsingRequestWeightMatrixRoutePathIndex(IN const char* szRequest, OUT std::string& fileName, OUT size_t& fileSize, OUT std::vector<std::vector<FileIndex>>& vtPathMatrixIndex);
+	int32_t ParsingRequestWeightMatrixRoutePathData(IN const char* szRequest, OUT std::vector<WeightMatrixPath>& vtPathMatrixData);
+	int32_t ParsingRequestBestway(IN const char* szRequest, OUT TspOption& tspOpt, OUT std::vector<stWaypoint>& vtOrigin, OUT std::vector<std::vector<stDistMatrix>>& vtDistMatrix);
+	int32_t ParsingRequestCluster(IN const char* szRequest, OUT ClusteringOption& clustOpt, OUT std::vector<stWaypoint>& vtOrigin);
+	int32_t ParsingRequestGroup(IN const char* szRequest, OUT ClusteringOption& clustOpt, OUT std::vector<stWaypoint>& vtOrigin);
+	//int32_t LoadWeightMatrix(IN const char* szFileName, IN const size_t sizeFile, OUT BaseOption& option, OUT std::std::vector<Origins>& vtOrigin, OUT std::vector<std::vector<stDistMatrix>>& vtDistMatrix);
 	//int32_t LoadWeightMatrixRouteLine(IN const char* szFileName, IN const size_t sizeFile, OUT vector<vector<FileIndex>>& vtPathMatrixIndex);
-	int32_t SaveWeightMatrix(IN const char* szFileName, IN const BaseOption* pOption, IN const int cntItem, IN const int sizeItem, IN const uint32_t crc, IN const vector<Origins>& vtOrigin, IN const vector<vector<stDistMatrix>>& vtDistMatrix);
-	int32_t SaveWeightMatrixRouteLine(IN const char* szFileName, IN const vector<vector<stPathMatrix>>& vtPathMatrix);
+	int32_t SaveWeightMatrix(IN const char* szFileName, IN const BaseOption* pOption, IN const int cntItem, IN const int sizeItem, IN const uint32_t crc, IN const std::vector<stWaypoint>& vtOrigin, IN const std::vector<std::vector<stDistMatrix>>& vtDistMatrix);
+	int32_t SaveWeightMatrixRouteLine(IN const char* szFileName, IN const std::vector<std::vector<stPathMatrix>>& vtPathMatrix);
 
 private:
-	int32_t Clustering(IN const ClusteringOption* pClustOpt, IN const vector<vector<stDistMatrix>>& vtDistMatrix, IN const vector<stWaypoints>& vtWaypoints, IN const vector<int32_t>& vtBestway, IN const int32_t nBonusValue,  OUT vector<stDistrict>& vtClusters);
-
-	int32_t DevideClusterUsingTsp(IN const ClusteringOption* pClustOpt, IN const vector<vector<stDistMatrix>>& vtDistMatrix, IN const vector<stWaypoints>& vtWaypoints, IN const vector<int32_t>& vtBestways, IN const int32_t firstIdx, IN const int32_t lastIdx, IN OUT int32_t& bonusValue, OUT stDistrict& cluster, OUT vector<int32_t>& vtRemains);
-
-	int32_t DevideClusterUsingLink(IN const ClusteringOption* pClustOpt, IN const vector<Origins>& vtOrigin, OUT vector<stDistrict>& vtDistrict);
-
-	int32_t GetRecommendedDeviation(IN ClusteringOption* pClustOpt, IN const vector<vector<stDistMatrix>>& vtDistMatrix, IN vector<stWaypoints>& vtWaypoints, IN vector<int32_t>& vtBestway, OUT vector<stDistrict>& vtDistrict);
-
-	int32_t GetNewBestway(IN const TspOption* pTspOpt, IN const vector<vector<stDistMatrix>>& vtDistMatrix, IN const vector<stWaypoints>& vtWaypoints, OUT vector<stWaypoints>& vtNewWaypoints, OUT vector<int32_t>& vtNewBestways, OUT stClustValue& clustValue);
+	int32_t Clustering(IN const ClusteringOption* pClustOpt, IN const std::vector<std::vector<stDistMatrix>>& vtDistMatrix, IN const std::vector<stWaypoint>& vtWaypoints, IN const std::vector<int32_t>& vtBestway, IN const int32_t nBonusValue,  OUT std::vector<stCluster>& vtClusters);
+	int32_t DevideClusterUsingTsp(IN const ClusteringOption* pClustOpt, IN const std::vector<std::vector<stDistMatrix>>& vtDistMatrix, IN const std::vector<stWaypoint>& vtWaypoints, IN const std::vector<int32_t>& vtBestways, IN const int32_t firstIdx, IN const int32_t lastIdx, IN OUT int32_t& bonusValue, OUT stCluster& cluster, OUT std::vector<int32_t>& vtRemains);
+	int32_t DevideClusterUsingLink(IN const ClusteringOption* pClustOpt, IN const std::vector<stWaypoint>& vtOrigin, OUT std::vector<stCluster>& vtDistrict);
+	int32_t GetRecommendedDeviation(IN ClusteringOption* pClustOpt, IN const std::vector<std::vector<stDistMatrix>>& vtDistMatrix, IN std::vector<stWaypoint>& vtWaypoints, IN std::vector<int32_t>& vtBestway, OUT std::vector<stCluster>& vtDistrict);
+	int32_t GetNewBestway(IN const TspOption* pTspOpt, IN const std::vector<std::vector<stDistMatrix>>& vtDistMatrix, IN const std::vector<stWaypoint>& vtWaypoints, OUT std::vector<stWaypoint>& vtNewWaypoints, OUT std::vector<int32_t>& vtNewBestways, OUT stClustValue& clustValue);
 };
 
-int32_t GetMatrixPathVertex(IN const stPathMatrix* pMatrix, IN CDataManager* pDataMgr, OUT vector<SPoint>& vtLines);
+int32_t GetMatrixPathVertex(IN const stPathMatrix* pMatrix, IN CDataManager* pDataMgr, OUT std::vector<SPoint>& vtLines);

@@ -18,6 +18,6 @@ public:
 	const char* GetNameData(IN const uint32_t idx) const;
 
 private:
-	map<uint32_t, stNameInfo*> mapData;
+	std::map<uint32_t, stNameInfo*> mapData;
 };
 

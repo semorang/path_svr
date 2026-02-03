@@ -20,6 +20,6 @@ public:
 	stLinkInfo* GetLinkBySENode(IN const KeyID idx1, IN const KeyID idx2);
 	
 private:
-	unordered_map<uint64_t, stLinkInfo*> mapData;
+	std::unordered_map<uint64_t, stLinkInfo*> mapData;
 };
 

@@ -78,7 +78,7 @@ struct stForestLink
 	uint32_t ConnCourseCD[18]; // 중용코스 코드
 	uint8_t RoadInfo[6]; // 노면정보, 0:기타, 1:오솔길, 2:포장길, 3:계단, 4:교량, 5:암릉, 6:릿지, 7;사다리, 8:밧줄, 9:너덜길, 10:야자수매트, 11:데크로드, 12:철구조물
 	double LinkLen; // 링크 길이
-	vector<SPoint> LinkVertex;
+	std::vector<SPoint> LinkVertex;
 };
 
 

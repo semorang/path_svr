@@ -599,6 +599,18 @@ app.post('/api/distancematrix', function(req, res) {
 });
 
 
+app.post('/api/distancematrix-path', function(req, res) {
+    const startTime = logout("start distance matrix path request");
+
+    // distance matrix api 호출
+    const ret = tms.distancematrix_path(req.headers.authorization, req.body);
+
+    res.send(ret);
+
+    logout("end distance matrix path request", startTime);
+});
+
+
 // clustering api 호출
 app.get('/api/clustering/appkeys/:userkey', function(req, res) {
     const startTime = logout("start clustering request");
@@ -738,8 +750,8 @@ const trafficManagerRTM = new traffic();
 
 trafficManagerKS.initialize(ttl_svr_ip, ttl_svr_port, 'ks', trafficPath);
 trafficManagerTTL.initialize(ttl_svr_ip, ttl_svr_port, 'ttl', trafficPath);
-// trafficManagerKSR.initialize(ttl_svr_ip, ttl_svr_port, 'ksr', trafficPath);
-// trafficManagerRTM.initialize(ttl_svr_ip, ttl_svr_port, 'rtm', trafficPath);
+trafficManagerKSR.initialize(ttl_svr_ip, ttl_svr_port, 'ksr', trafficPath);
+trafficManagerRTM.initialize(ttl_svr_ip, ttl_svr_port, 'rtm', trafficPath);
 
 trafficManagerKS.on('newFile', ({ title, path, timestamp }) => {
     // logout(`traffic update from file: ${title}, ${path}, ${timestamp}`);

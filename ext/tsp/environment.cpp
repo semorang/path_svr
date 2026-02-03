@@ -13,7 +13,7 @@
 
 // #include <math.h>
 // #include <iostream>
-// using namespace std;
+ using namespace std;
 
 // void MakeRandSol(TEvaluator* eval, TIndi& indi);
 // void Make2optSol(TEvaluator* eval, TIndi& indi);
@@ -29,7 +29,7 @@ TEnvironment::~TEnvironment(){
 }
 
 
-void TEnvironment::define(const vector<stWaypoints>& vtCities, const vector<vector<stDistMatrix>>& vtDistMatrix, const int compareType) {
+void TEnvironment::define(const vector<stWaypoint>& vtCities, const vector<vector<stDistMatrix>>& vtDistMatrix, const int compareType) {
 	fEvaluator->setInstance(vtCities, vtDistMatrix, compareType);
 	int N = fEvaluator->Ncity;
 	fIndexForMating.resize(Npop + 1);

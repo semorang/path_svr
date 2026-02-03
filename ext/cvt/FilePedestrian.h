@@ -49,7 +49,7 @@ struct stWalkLink
 	uint32_t BicycleControl : 2; // 자전거도로 규제 코드, 0:양방향, 1:정방향, 2:역방향, 3:통행불가
 	uint32_t TypeReserved : 7; // reserved
 	double LinkLen; // 링크 길이
-	vector<SPoint> LinkVertex;
+	std::vector<SPoint> LinkVertex;
 };
 
 

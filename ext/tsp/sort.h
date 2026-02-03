@@ -15,23 +15,22 @@
 #include <algorithm>
 #include <vector>
 
-using namespace std;
 
 void InitSort();
 void swap(int &x, int &y);
-void selectionSort(vector<int>& Arg, int l, int r);
-int partition(vector<int>& Arg, int l, int r); // partition for quick sort
-void quickSort(vector<int>& Arg, int l, int r);
+void selectionSort(std::vector<int>& Arg, int l, int r);
+int partition(std::vector<int>& Arg, int l, int r); // partition for quick sort
+void quickSort(std::vector<int>& Arg, int l, int r);
 
 class TSort{
 public:
 	TSort();
 	~TSort();
-	void index(vector<double>& Arg, int numOfArg, vector<int>& indexOrderd, int numOfOrd);
-	void index(vector<int>& Arg, int numOfArg, vector<int>& indexOrderd, int numOfOrd);
-	void indexB(vector<double>& Arg, int numOfArg, vector<int>& indexOrderd, int numOfOrd);
-	void indexB(vector<int>& Arg, int numOfArg, vector<int>& indexOrderd, int numOfOrd);
-	void sort(vector<int>& Arg, int numOfArg);
+	void index(std::vector<double>& Arg, int numOfArg, std::vector<int>& indexOrderd, int numOfOrd);
+	void index(std::vector<int>& Arg, int numOfArg, std::vector<int>& indexOrderd, int numOfOrd);
+	void indexB(std::vector<double>& Arg, int numOfArg, std::vector<int>& indexOrderd, int numOfOrd);
+	void indexB(std::vector<int>& Arg, int numOfArg, std::vector<int>& indexOrderd, int numOfOrd);
+	void sort(std::vector<int>& Arg, int numOfArg);
 };
 
 extern TSort* tSort;

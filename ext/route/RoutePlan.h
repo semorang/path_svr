@@ -24,7 +24,7 @@ const int courseRange[MAX_SEARCH_RANGE] = { 50, 100, 300, 500, 1000 }; // 코스
 const int searchRange[MAX_SEARCH_RANGE] = {100, 500, 1000, 2000, 3000}; // 
 #else
 //const int searchRange[MAX_SEARCH_RANGE] = {100, 500, 1000, 2000, 5000}; // 
-const array<int32_t, MAX_SEARCH_RANGE> searchRange = { 100, 500, 1000, 2000, 5000 }; // 
+const std::array<int32_t, MAX_SEARCH_RANGE> searchRange = { 100, 500, 1000, 2000, 5000 }; // 
 #endif
 
 
@@ -129,11 +129,11 @@ typedef struct _tagMultimodalPointInfo
 	int32_t nGroupId; // 그룹 ID
 
 	// 경로별 다중 입구점 경로 정보
-	vector<double> vtCost;
-	vector<double> vtDist;
-	vector<double> vtTime;
-	vector<stEntryPointInfo> vtEntryPoint;
-	vector<CandidateLink*> vtRoutePathInfo;
+	std::vector<double> vtCost;
+	std::vector<double> vtDist;
+	std::vector<double> vtTime;
+	std::vector<stEntryPointInfo> vtEntryPoint;
+	std::vector<CandidateLink*> vtRoutePathInfo;
 
 	_tagMultimodalPointInfo()
 	{
@@ -261,8 +261,8 @@ typedef struct _tagRouteLinkInfo {
 	int32_t LinkDistToE; // e로의 거리
 	int32_t LinkDir; // 탐색 방향, 0:미정의, 1:정방향(S->E), 2:역방향(E->S)
 	int32_t LinkGuideType; // 링크 안내 타입, 0:일반, 1:출발지링크, 2:경유지링크, 3:도착지링크
-	vector<SPoint> LinkVtxToS; // 좌표점에서 s버텍스, 종료링크의 경우는 FromS로 이해할것
-	vector<SPoint> LinkVtxToE; // 좌표점에서 e버텍스, 종료링크의 경우는 FromE로 이해할것
+	std::vector<SPoint> LinkVtxToS; // 좌표점에서 s버텍스, 종료링크의 경우는 FromS로 이해할것
+	std::vector<SPoint> LinkVtxToE; // 좌표점에서 e버텍스, 종료링크의 경우는 FromE로 이해할것
 	stLinkSubInfo LinkSubInfo; // 목적지 매칭 링크 코스트가 높아 주변에서 빙빙돌며 확장만 많이 하는 현상 해소 목적, 2025-02-25
 	// 목적 지점 일정 반경(ex 100m)에서는 목적 지점 링크 속성과 동일한 링크는 가중치를 높이지 않는다.
 	
@@ -290,12 +290,12 @@ typedef struct _tagRouteLinkInfo {
 
 		if (!LinkVtxToS.empty()) {
 			LinkVtxToS.clear();
-			vector<SPoint>().swap(LinkVtxToS);
+			std::vector<SPoint>().swap(LinkVtxToS);
 		}
 
 		if (!LinkVtxToE.empty()) {
 			LinkVtxToE.clear();
-			vector<SPoint>().swap(LinkVtxToE);
+			std::vector<SPoint>().swap(LinkVtxToE);
 		}
 	}
 }RouteLinkInfo;
@@ -303,9 +303,9 @@ typedef struct _tagRouteLinkInfo {
 
 typedef struct _tagRequestRouteInfo
 {
-	string RequestId; // 요청 ID
-	string RouteMode; // 탐색 모드
-	string RouteCost; // 확장 코스트 타입
+	std::string RequestId; // 요청 ID
+	std::string RouteMode; // 탐색 모드
+	std::string RouteCost; // 확장 코스트 타입
 	uint32_t RequestMode; // 요청 모드, 0:일반(최초탐색, 정차 후 출발), 1:재탐색, 2:..., 100:대안경로
 	uint32_t RequestTime; // 요청 시각
 	uint32_t RequestTraffic; // 교통 정보, 0:미사용, 1:실시간(REAL), 2:통계(STATIC), 3:실시간-통계(REAL-STATIC)
@@ -323,15 +323,15 @@ typedef struct _tagRequestRouteInfo
 	int32_t WayDirIgnore; // 경유지 방향성 무시
 	int32_t EndDirIgnore; // 도착지 방향성 무시
 
-	vector<RouteLinkInfo> vtPointsInfo;
+	std::vector<RouteLinkInfo> vtPointsInfo;
 
 	// vtPointsInfo 로 모아야함..
-	vector<SPoint> vtPoints; // 요청 좌표
-	vector<int32_t> vtKeyType; //  요청 키 타입, 0:미지정, 1:노드, 2:링크
-	vector<int32_t> vtLinkDataType; // 0:미정의, 1:숲길, 2:보행자/자전거, 3:자동차
-	vector<KeyID> vtKeyId; // 요청 키 id
+	std::vector<SPoint> vtPoints; // 요청 좌표
+	std::vector<int32_t> vtKeyType; //  요청 키 타입, 0:미지정, 1:노드, 2:링크
+	std::vector<int32_t> vtLinkDataType; // 0:미정의, 1:숲길, 2:보행자/자전거, 3:자동차
+	std::vector<KeyID> vtKeyId; // 요청 키 id
 #if defined(USE_FOREST_DATA)
-	vector<unordered_set<uint32_t>> vtCourse; // 매칭 링크의 코스 정보
+	std::vector<unordered_set<uint32_t>> vtCourse; // 매칭 링크의 코스 정보
 #endif
 
 	_tagRequestRouteInfo()
@@ -359,32 +359,32 @@ typedef struct _tagRequestRouteInfo
 	{
 		if (vtPointsInfo.empty()) {
 			vtPointsInfo.clear();
-			vector<RouteLinkInfo>().swap(vtPointsInfo);
+			std::vector<RouteLinkInfo>().swap(vtPointsInfo);
 		}
 
 		if (!vtPoints.empty()) {
 			vtPoints.clear();
-			vector<SPoint>().swap(vtPoints);
+			std::vector<SPoint>().swap(vtPoints);
 		}
 
 		if (!vtKeyType.empty()) {
 			vtKeyType.clear();
-			vector<int32_t>().swap(vtKeyType);
+			std::vector<int32_t>().swap(vtKeyType);
 		}
 
 		if (!vtKeyId.empty()) {
 			vtKeyId.clear();
-			vector<KeyID>().swap(vtKeyId);
+			std::vector<KeyID>().swap(vtKeyId);
 		}
 
 		if (!vtLinkDataType.empty()) {
 			vtLinkDataType.clear();
-			vector<int32_t>().swap(vtLinkDataType);
+			std::vector<int32_t>().swap(vtLinkDataType);
 		}
 #if defined(USE_FOREST_DATA)
 		if (!vtCourse.empty()) {
 			vtCourse.clear();
-			vector<unordered_set<uint32_t>>().swap(vtCourse);
+			std::vector<unordered_set<uint32_t>>().swap(vtCourse);
 		}
 #endif
 	}
@@ -418,7 +418,7 @@ typedef struct _tagRouteInfo {
 #ifdef USE_REQUEST_ROUTEINFO
 	RequestRouteInfo reqInfo;
 #else
-	string RequestId; // 요청 ID
+	std::string RequestId; // 요청 ID
 	uint32_t RequestMode; // 요청 모드
 	uint32_t RequestTime; // 요청 시각
 	uint32_t RequestTraffic; // 교통 정보, 0:미사용, 1:실시간(REAL), 2:통계(STATIC), 3:실시간-통계(REAL-STATIC)
@@ -441,15 +441,15 @@ typedef struct _tagRouteInfo {
 	MultimodalPointInfo ComplexPointInfo;
 	MultimodalPointInfo ComplexPointReverseInfo;
 
-	vector<CandidateLink*> vtCandidateResult;
-	unordered_map<uint64_t, CandidateLink*> mRoutePass; // 정방향 탐색
-	unordered_map<uint64_t, CandidateLink*> mRouteReversePass; // 역방향 탐색
+	std::vector<CandidateLink*> vtCandidateResult;
+	std::unordered_map<uint64_t, CandidateLink*> mRoutePass; // 정방향 탐색
+	std::unordered_map<uint64_t, CandidateLink*> mRouteReversePass; // 역방향 탐색
 
 #if defined(USE_FOREST_DATA)
-	unordered_set<uint32_t> CandidateCourse;
+	std::unordered_set<uint32_t> CandidateCourse;
 #endif
 
-	priority_queue< CandidateLink*, vector<CandidateLink*>, CompareCanidate > pqDijkstra;
+	std::priority_queue< CandidateLink*, std::vector<CandidateLink*>, CompareCanidate > pqDijkstra;
 
 	_tagRouteInfo() {
 #ifdef USE_REQUEST_ROUTEINFO		
@@ -478,27 +478,27 @@ typedef struct _tagRouteInfo {
 
 		if (!vtCandidateResult.empty()) {
 			vtCandidateResult.clear();
-			vector<CandidateLink*>().swap(vtCandidateResult);
+			std::vector<CandidateLink*>().swap(vtCandidateResult);
 		}
 
 		if (!mRoutePass.empty()) {
-			for (unordered_map<uint64_t, CandidateLink*>::iterator it = mRoutePass.begin(); it != mRoutePass.end(); it++) {
+			for (std::unordered_map<uint64_t, CandidateLink*>::iterator it = mRoutePass.begin(); it != mRoutePass.end(); it++) {
 				if (it->second) {
 					SAFE_DELETE(it->second);
 				}
 			}
 			mRoutePass.clear();
-			unordered_map<uint64_t, CandidateLink*>().swap(mRoutePass);
+			std::unordered_map<uint64_t, CandidateLink*>().swap(mRoutePass);
 		}
 
 		if (!mRouteReversePass.empty()) {
-			for (unordered_map<uint64_t, CandidateLink*>::iterator it = mRouteReversePass.begin(); it != mRouteReversePass.end(); it++) {
+			for (std::unordered_map<uint64_t, CandidateLink*>::iterator it = mRouteReversePass.begin(); it != mRouteReversePass.end(); it++) {
 				if (it->second) {
 					SAFE_DELETE(it->second);
 				}
 			}
 			mRouteReversePass.clear();
-			unordered_map<uint64_t, CandidateLink*>().swap(mRouteReversePass);
+			std::unordered_map<uint64_t, CandidateLink*>().swap(mRouteReversePass);
 		}
 	}
 }RouteInfo;
@@ -544,13 +544,13 @@ typedef struct _tagRouteResultLinkMatchInfo
 	int32_t LinkDataType; // 0:미정의, 1:숲길, 2:보행자/자전거, 3:자동차 // 안씀 --> 0:미정의, 1:명칭사전, 2:메쉬, 3:숲길, 4:보행자/자전거, 5:자동차, 6:건물, 7:단지, 8:입구점, 9:교통정보, 10:산바운더리, 11:코스정보
 	int32_t LinkSplitIdx; // 링크와 직교 접점 좌표의 링크 버텍스 idx
 	int32_t LinkDist; // 직교 접점에서 노드까지의 거리
-	vector<SPoint> LinkVtx; // 좌표점에서 s버텍스
+	std::vector<SPoint> LinkVtx; // 좌표점에서 s버텍스
 
 	~_tagRouteResultLinkMatchInfo()
 	{
 		if (!LinkVtx.empty()) {
 			LinkVtx.clear();
-			vector<SPoint>().swap(LinkVtx);
+			std::vector<SPoint>().swap(LinkVtx);
 		}
 	}
 
@@ -565,7 +565,7 @@ typedef struct _tagRouteResultLinkMatchInfo
 
 		if (!LinkVtx.empty()) {
 			LinkVtx.clear();
-			vector<SPoint>().swap(LinkVtx);
+			std::vector<SPoint>().swap(LinkVtx);
 		}
 	}
 
@@ -614,9 +614,9 @@ typedef struct _tagRouteResultInfo
 
 	// 경로선
 	SBox RouteBox; // 경로선 영역	
-	vector<RouteSummary> RouteSummarys; // 다중 탐색 결과의 개별 경로 요약 정보
-	vector<RouteResultLinkEx> LinkInfo; // 링크 정보
-	vector<SPoint> LinkVertex; // 경로선
+	std::vector<RouteSummary> RouteSummarys; // 다중 탐색 결과의 개별 경로 요약 정보
+	std::vector<RouteResultLinkEx> LinkInfo; // 링크 정보
+	std::vector<SPoint> LinkVertex; // 경로선
 
 	void Init()
 	{
@@ -641,15 +641,15 @@ typedef struct _tagRouteResultInfo
 
 		if (!RouteSummarys.empty()) {
 			RouteSummarys.clear();
-			vector<RouteSummary>().swap(RouteSummarys);
+			std::vector<RouteSummary>().swap(RouteSummarys);
 		}
 		if (!LinkInfo.empty()) {
 			LinkInfo.clear();
-			vector<RouteResultLinkEx>().swap(LinkInfo);
+			std::vector<RouteResultLinkEx>().swap(LinkInfo);
 		}
 		if (!LinkVertex.empty()) {
 			LinkVertex.clear();
-			vector<SPoint>().swap(LinkVertex);
+			std::vector<SPoint>().swap(LinkVertex);
 		}
 	}// Init()
 
@@ -683,9 +683,9 @@ typedef struct _tagRouteTable {
 
 typedef struct _tagTableBaseInfo {
 	RouteLinkInfo					routeLinkInfo;
-	vector<CandidateLink*>			vtCandidateLink;
+	std::vector<CandidateLink*>			vtCandidateLink;
 
-	unordered_map<uint64_t, CandidateLink*> mRoutePass;
+	std::unordered_map<uint64_t, CandidateLink*> mRoutePass;
 
 #ifdef USE_REQUEST_ROUTEINFO
 	RequestRouteInfo				reqInfo;
@@ -704,7 +704,7 @@ typedef struct _tagTableBaseInfo {
 #endif
 
 
-	priority_queue< CandidateLink*, vector<CandidateLink*>, CompareCanidate > pqDijkstra;
+	std::priority_queue< CandidateLink*, std::vector<CandidateLink*>, CompareCanidate > pqDijkstra;
 
 
 	_tagTableBaseInfo() {
@@ -739,13 +739,13 @@ typedef struct _tagTableBaseInfo {
 			pqDijkstra.pop();
 		}
 		
-		for (unordered_map<uint64_t, CandidateLink*>::iterator it = mRoutePass.begin(); it != mRoutePass.end(); it++) {
+		for (std::unordered_map<uint64_t, CandidateLink*>::iterator it = mRoutePass.begin(); it != mRoutePass.end(); it++) {
 			if (it->second) {
 				SAFE_DELETE(it->second);
 			}
 		}
 		mRoutePass.clear();
-		unordered_map<uint64_t, CandidateLink*>().swap(mRoutePass);
+		std::unordered_map<uint64_t, CandidateLink*>().swap(mRoutePass);
 	}
 
 	void release()
@@ -754,7 +754,7 @@ typedef struct _tagTableBaseInfo {
 
 		if (!vtCandidateLink.empty()) {
 			vtCandidateLink.clear();
-			vector<CandidateLink*>().swap(vtCandidateLink);
+			std::vector<CandidateLink*>().swap(vtCandidateLink);
 		}
 	}
 }TableBaseInfo;
@@ -776,19 +776,22 @@ typedef struct _tagstPathMatrix
 {
 	RouteLinkInfo startLinkInfo;
 	RouteLinkInfo endLinkInfo;
-	vector<stRoutePath> vtRoutePath;
+	std::vector<stRoutePath> vtRoutePath;
 }stPathMatrix;
 
 
 typedef struct _tagRouteDistMatrix
 {
 	int32_t typeCreate; // 생성 타입, 0:엔진생성 데이터, 1:서버 파일 데이터, 2:사용자 데이터
-	string strUser;
+	std::string strUser;
 	time_t tmCreate;
-	vector<Origins> vtOrigin;
-	vector<Origins> vtDestination;
-	vector<vector<stDistMatrix>> vtDistMatrix;
-	vector<vector<stPathMatrix>> vtPathMatrix;
+	std::vector<stWaypoint> vtOrigin;
+	std::vector<stWaypoint> vtDestination;
+	std::vector<std::vector<stDistMatrix>> vtDistMatrix;
+	std::vector<std::vector<stPathMatrix>> vtPathMatrix;
+
+	FileInfoRDM infoRouteMatrix; // rdm
+	FileInfoRDM infoPathMatrix; // rpm
 
 	_tagRouteDistMatrix() {
 		strUser.clear();
@@ -798,28 +801,28 @@ typedef struct _tagRouteDistMatrix
 }RouteDistMatrix;
 
 
-typedef struct _tagRouteDistMatrixLine
+typedef struct _tagRoutePathMatrixIndex
 {
-	string strFileName;
+	std::string strFileName;
 	size_t sizeFile;
-	vector<vector<FileIndex>> vtPathFileIndex;
+	std::vector<std::vector<FileIndex>> vtPathFileIndex;
 
-	_tagRouteDistMatrixLine() {
+	_tagRoutePathMatrixIndex() {
 		strFileName.clear();
 		sizeFile = 0;
 	}
-}RouteDistMatrixLine;
+}RoutePathMatrixIndex;
 
 
 typedef struct _tagBestWaypoint
 {
-	string strUser;
+	std::string strUser;
 	time_t tmCreate;
 	TspOption option;
-	vector<stWaypoints> vtWaypoints;
-	vector<int32_t> vtBestWays;
-	vector<int32_t> vtBestDist;
-	vector<int32_t> vtBestTime;
+	std::vector<stWaypoint> vtWaypoints;
+	std::vector<int32_t> vtBestWays;
+	std::vector<int32_t> vtBestDist;
+	std::vector<int32_t> vtBestTime;
 	double totalDist;
 	int totalTime;
 	int totalSpot;
@@ -838,12 +841,12 @@ typedef struct _tagBestWaypoint
 
 typedef struct _tagCluster
 {
-	string strUser;
+	std::string strUser;
 	time_t tmCreate;
 	ClusteringOption option;
-	vector<Origins> vtOrigins;
-	vector<stDistrict> vtDistrict;
-	vector<SPoint> vtEndPoint;
+	std::vector<stWaypoint> vtDistrict;
+	std::vector<stCluster> vtCluster;
+	std::vector<SPoint> vtEndPoint;
 
 	_tagCluster() 
 	{
@@ -870,25 +873,25 @@ public:
 
 	const int Planning(IN const RequestRouteInfo* pReqInfo, OUT RouteResultInfo* pRouteResult);
 
-	const int DoRoute(IN const string& reqId, IN const SPoint ptStart, IN const SPoint ptEnd, IN const KeyID sLink, IN const KeyID eLink, IN const uint32_t routeOpt, IN const uint32_t avoidOpt, IN const uint32_t mobilityOpt, IN const stRouteSubOption subOpt, IN const bool ignoreStartDir, IN const bool ignoreEndDir , OUT RouteResultInfo* pRouteResult);
-	const int DoRoutes(IN const RequestRouteInfo* pReqInfo, OUT vector<RouteInfo>* pRouteInfos, OUT vector<RouteResultInfo>* pRouteResults);
-	const int DoComplexRoutes(IN const RequestRouteInfo* pReqInfo, OUT vector<RouteInfo>* pRouteInfos, OUT vector<RouteResultInfo>* pRouteResults);
-	const int DoComplexRoutesEx(IN const RequestRouteInfo* pReqInfo/*, IN OUT vector<ComplexPointInfo>& vtCpxRouteInfo*/, OUT vector<RouteInfo>* pRouteInfos, OUT vector<RouteResultInfo>* pRouteResults);
-	const int DoCourse(IN const RequestRouteInfo* pReqInfo, OUT vector<RouteInfo>* pRouteInfos, OUT vector<RouteResultInfo>* pRouteResults);
+	const int DoRoute(IN const std::string& reqId, IN const SPoint ptStart, IN const SPoint ptEnd, IN const KeyID sLink, IN const KeyID eLink, IN const uint32_t routeOpt, IN const uint32_t avoidOpt, IN const uint32_t mobilityOpt, IN const stRouteSubOption subOpt, IN const bool ignoreStartDir, IN const bool ignoreEndDir , OUT RouteResultInfo* pRouteResult);
+	const int DoRoutes(IN const RequestRouteInfo* pReqInfo, OUT std::vector<RouteInfo>* pRouteInfos, OUT std::vector<RouteResultInfo>* pRouteResults);
+	const int DoComplexRoutes(IN const RequestRouteInfo* pReqInfo, OUT std::vector<RouteInfo>* pRouteInfos, OUT std::vector<RouteResultInfo>* pRouteResults);
+	const int DoComplexRoutesEx(IN const RequestRouteInfo* pReqInfo/*, IN OUT vector<ComplexPointInfo>& vtCpxRouteInfo*/, OUT std::vector<RouteInfo>* pRouteInfos, OUT std::vector<RouteResultInfo>* pRouteResults);
+	const int DoCourse(IN const RequestRouteInfo* pReqInfo, OUT std::vector<RouteInfo>* pRouteInfos, OUT std::vector<RouteResultInfo>* pRouteResults);
 #if defined(USE_TSP_MODULE)
-	const int DoTabulate(IN const RequestRouteInfo* pReqInfo, IN vector<RouteLinkInfo>vtOriginLinkInfos, IN vector<RouteLinkInfo>vtDestinationLinkInfos, OUT RouteDistMatrix& RDM);
+	const int DoWeightMatrix(IN const RequestRouteInfo* pReqInfo, IN std::vector<RouteLinkInfo>vtOriginLinkInfos, IN std::vector<RouteLinkInfo>vtDestinationLinkInfos, OUT RouteDistMatrix& RDM);
 #endif
 	// 미확인된 필요 노드 정보 획득 위해, 탐색 가능한 만큼 확장 후 필요한 노드 정보 확인 (입구점 등)
-	const int DoEdgeRoute(IN const RequestRouteInfo* pReqInfo, OUT vector<RouteInfo>& vtRouteInfos/*, OUT vector<ComplexPointInfo>& vtComplexPointInfo*/);
+	const int DoEdgeRoute(IN const RequestRouteInfo* pReqInfo, OUT std::vector<RouteInfo>& vtRouteInfos/*, OUT vector<ComplexPointInfo>& vtComplexPointInfo*/);
 	// 확인된 모든 노드까지 경로 확장 (입구점 등)
 	//const int DoEntryPointRoute(IN RouteInfo* pRouteInfo, IN const int32_t idx, IN const bool isFromPed, IN OUT vector<ComplexPointInfo>& vtComplexPointInfo);
 	const int DoEntryPointRoute(IN RouteInfo* pRouteInfo, IN const bool isFromPed, IN const MultimodalPointInfo* pCpxPointInfoTrk, OUT MultimodalPointInfo& cpxPointInfoPed);
 
-	const int GetMostProbableLink(IN const RouteResultInfo* pResult, OUT vector<RouteLinkInfo>& vtMPP);
+	const int GetMostProbableLink(IN const RouteResultInfo* pResult, OUT std::vector<RouteLinkInfo>& vtMPP);
 	const bool GetRouteTravelSpeed(IN OUT RouteResultInfo* pResult);
 	
 #if defined(USE_SHOW_ROUTE_SATATUS)
-	void SetRouteStatusFunc(IN const void* fpHost, IN void(*drawRouting)(const void*, const unordered_map<uint64_t, CandidateLink*>*));
+	void SetRouteStatusFunc(IN const void* fpHost, IN void(*drawRouting)(const void*, const std::unordered_map<uint64_t, CandidateLink*>*));
 #endif
 
 private:
@@ -900,18 +903,18 @@ private:
 	const int AddNextLinks(IN RouteInfo* pRouteInfo, IN const CandidateLink* pCurInfo, IN const SBox* pBoxExpandedArea = nullptr);
 	const int AddPrevLinks(IN RouteInfo* pRouteInfo, IN const CandidateLink* pCurInfo);
 	const int AddPrevLinksEx(IN RouteInfo* pRouteInfo, IN const CandidateLink* pCurInfo);
-	const int AddNextCourse(IN RouteInfo* pRouteInfo, IN const CandidateLink* pCurInfo, IN const set<uint64_t>* psetCourseLinks);
+	const int AddNextCourse(IN RouteInfo* pRouteInfo, IN const CandidateLink* pCurInfo, IN const std::set<uint64_t>* psetCourseLinks);
 
-	const int Propagation(IN RouteInfo* pRouteInfo, IN const CandidateLink* pCurInfo, IN const int dir, IN const SBox& boxExpandArea, IN const vector<SPoint>& vtOrigins, IN const int32_t currIdx, IN const int32_t nextIdx, IN const uint32_t timestamp); // 단순 확장
-	const int EdgePropagation(IN const int32_t idx, IN const bool isReverse, IN const vector<stOptimalPointInfo>& vtOptInfo, IN OUT RouteInfo* pRouteInfo, IN const vector<CandidateLink*> vtCandidateInfo/*, OUT vector<ComplexPointInfo>&vtComplexPointInfo*/); // 입구점 확장
+	const int Propagation(IN RouteInfo* pRouteInfo, IN const CandidateLink* pCurInfo, IN const int dir, IN const SBox& boxExpandArea, IN const std::vector<SPoint>& vtOrigins, IN const int32_t currIdx, IN const int32_t nextIdx, IN const uint32_t timestamp); // 단순 확장
+	const int EdgePropagation(IN const int32_t idx, IN const bool isReverse, IN const std::vector<stOptimalPointInfo>& vtOptInfo, IN OUT RouteInfo* pRouteInfo, IN const std::vector<CandidateLink*> vtCandidateInfo/*, OUT vector<ComplexPointInfo>&vtComplexPointInfo*/); // 입구점 확장
 	const int LevelPropagation(IN TableBaseInfo* pRouteInfo, IN const CandidateLink* pCurInfo, IN const int dir, IN const SBox& boxExpandArea, IN const int32_t nLimtLevel, IN OUT int32_t& enableStartLevelIgnore); // 모든 레벨 확장, // enableStartLevelIgnore: 시작 링크가 제한 링크보다 낮은 링크일때 제한 링크까지 허용할 지 여부
 	const int ExitPropagation(IN RouteInfo* pRouteInfo, IN const RouteLinkInfo* pLinkInfo, IN const SBox& boxExpandArea); // 특정 구역 탈출 확장
 
 	const int MakeRoute(IN const int idx, IN RouteInfo* pRouteInfo, OUT RouteResultInfo* pRouteResult);
 	const int MakeCourse(IN const int idx, IN RouteInfo* pRouteInfo, OUT RouteResultInfo* pRouteResult);
 #if defined(USE_TSP_MODULE)
-	const int MakeTabulate(IN const RequestRouteInfo* pReqInfo, IN const vector<RouteLinkInfo>& vtOriginLinkInfos, IN const vector<RouteLinkInfo>vtDestinationLinkInfos, OUT RouteDistMatrix& RDM);
-	const int MakeTabulateEx(IN const RequestRouteInfo* pReqInfo, IN const vector<RouteLinkInfo>& vtOriginLinkInfos, IN const vector<RouteLinkInfo>vtDestinationLinkInfos, OUT RouteDistMatrix& RDM); // reverse expand route from destination
+	const int MakeTabulate(IN const RequestRouteInfo* pReqInfo, IN const std::vector<RouteLinkInfo>& vtOriginLinkInfos, IN const std::vector<RouteLinkInfo>vtDestinationLinkInfos, OUT RouteDistMatrix& RDM);
+	const int MakeTabulateEx(IN const RequestRouteInfo* pReqInfo, IN const std::vector<RouteLinkInfo>& vtOriginLinkInfos, IN const std::vector<RouteLinkInfo>vtDestinationLinkInfos, OUT RouteDistMatrix& RDM); // reverse expand route from destination
 #endif
 	const int MakeRouteResult(IN RouteInfo* pRouteInfo, OUT RouteResultInfo* pRouteResult);
 	//const int MakeRouteResultEx(IN const RouteInfo* pRouteInfo/*, IN const vector<ComplexPointInfo>* vtComplexPointInfo*/, IN const int32_t idx, IN const int32_t bestIdx, OUT RouteResultInfo* pRouteResult);
@@ -928,8 +931,8 @@ private:
 	const double GetCourseCost(IN const RouteInfo* pRouteInfo, IN const stLinkInfo* pLink, IN const double cost);
 	//const uint32_t CheckStartDirectionMaching(IN const stLinkInfo* pLink, IN const RouteLinkInfo* pRoutLinkInfo, IN const int32_t routeOpt, IN const int32_t mobilityOpt, IN const uint32_t timestampOpt, OUT vector<CandidateLink*>& vtCandidateInfo);
 	//const uint32_t CheckEndDirectionMaching(IN const stLinkInfo* pLink, IN const RouteLinkInfo* pRoutLinkInfo, IN const int32_t routeOpt, IN const int32_t mobilityOpt, IN const uint32_t timestampOpt, OUT vector<CandidateLink*>& vtCandidateInfo);	const uint32_t CheckStartDirectionMaching(IN const stLinkInfo* pLink, IN const RouteLinkInfo* pRoutLinkInfo, IN const int32_t routeOpt, IN const int32_t mobilityOpt, IN const uint32_t timestampOpt, OUT vector<CandidateLink*>& vtCandidateInfo);
-	const uint32_t CheckStartDirectionMaching(IN const RequestRouteInfo* pReqInfo, IN const stLinkInfo* pLink, IN const RouteLinkInfo* pRoutLinkInfo, OUT vector<CandidateLink*>& vtCandidateInfo);
-	const uint32_t CheckEndDirectionMaching(IN const RequestRouteInfo* pReqInfo, IN const stLinkInfo* pLink, IN const RouteLinkInfo* pRoutLinkInfo, OUT vector<CandidateLink*>& vtCandidateInfo);
+	const uint32_t CheckStartDirectionMaching(IN const RequestRouteInfo* pReqInfo, IN const stLinkInfo* pLink, IN const RouteLinkInfo* pRoutLinkInfo, OUT std::vector<CandidateLink*>& vtCandidateInfo);
+	const uint32_t CheckEndDirectionMaching(IN const RequestRouteInfo* pReqInfo, IN const stLinkInfo* pLink, IN const RouteLinkInfo* pRoutLinkInfo, OUT std::vector<CandidateLink*>& vtCandidateInfo);
 	const stNodeInfo* GetNextNode(IN const CandidateLink* pCurInfo); // 다음 노드 정보 가져오기
 	const stNodeInfo* GetPrevNode(IN const CandidateLink* pCurInfo); // 이전 노드 정보 가져오기
 
@@ -951,7 +954,7 @@ private:
 	// 현재 경로 탐색 상태 Function Call
 #if defined(USE_SHOW_ROUTE_SATATUS)
 	void* m_pHost;
-	void(*m_fpRoutingStatus)(const void* pHost, const unordered_map<uint64_t, CandidateLink*>*);
+	void(*m_fpRoutingStatus)(const void* pHost, const std::unordered_map<uint64_t, CandidateLink*>*);
 #endif
 
 	DataCost m_rpCost;

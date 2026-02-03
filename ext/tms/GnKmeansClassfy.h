@@ -8,8 +8,6 @@
 #include <vector>
 #include <algorithm>
 
-using namespace std;
-
 typedef struct {
 	int idx;
 	double x, y; 
@@ -27,8 +25,8 @@ public:
 	void SetWeightMatrix(double** ppWeightMatrix);
 	void AddData(int idx, double dx, double dy);
 	bool Run(int n_cluster); //result => m_vtResult
-	vector<TFPoint> m_vtInput;
-	vector<TFPoint> m_vtResult;
+	std::vector<TFPoint> m_vtInput;
+	std::vector<TFPoint> m_vtResult;
 private:
 	double randf(double m);
 	inline double dist2(TFPoint* a, TFPoint* b);

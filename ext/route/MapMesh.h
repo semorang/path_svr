@@ -50,17 +50,17 @@ public:
 
 
 #ifdef TEST_SPATIALINDEX
-	int32_t	CreateSpatialindex(IN const int32_t nType, IN stMeshInfo* pMesh, vector<SpatialIndex::Region>& regions, vector<id_type>& ids);
-	int32_t CreateSpatialindexByStream(IN const int32_t nType, IN stMeshInfo* pMesh, vector<SpatialIndex::Region>& regions, vector<id_type>& ids); // bulk 구조로 insert
+	int32_t	CreateSpatialindex(IN const int32_t nType, IN stMeshInfo* pMesh, std::vector<SpatialIndex::Region>& regions, std::vector<id_type>& ids);
+	int32_t CreateSpatialindexByStream(IN const int32_t nType, IN stMeshInfo* pMesh, std::vector<SpatialIndex::Region>& regions, std::vector<id_type>& ids); // bulk 구조로 insert
 	int32_t	DeleteSpatialindex(IN stMeshInfo* pMesh);
-	int32_t GetNearLinksfromSpatialindex(IN stMeshInfo* pMesh, IN const double lng, IN const double lat, IN const int nMaxBuff, OUT vector<KeyID>& vtLinkId);
-	int32_t GetPitinPolygonfromSpatialindex(IN stMeshInfo* pMesh, IN const double lng, IN const double lat, IN const int type, OUT vector<KeyID>& vtPolygonId);
+	int32_t GetNearLinksfromSpatialindex(IN stMeshInfo* pMesh, IN const double lng, IN const double lat, IN const int nMaxBuff, OUT std::vector<KeyID>& vtLinkId);
+	int32_t GetPitinPolygonfromSpatialindex(IN stMeshInfo* pMesh, IN const double lng, IN const double lat, IN const int type, OUT std::vector<KeyID>& vtPolygonId);
 #endif
 
 
 private:
-	map<uint64_t, stMeshInfo*> m_mapData;
-	vector<uint64_t> m_vtKeyData; // 단순 순차 접근을 위해 존재
+	std::map<uint64_t, stMeshInfo*> m_mapData;
+	std::vector<uint64_t> m_vtKeyData; // 단순 순차 접근을 위해 존재
 
 	SBox m_rtBox;
 };

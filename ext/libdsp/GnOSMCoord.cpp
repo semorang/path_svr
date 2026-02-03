@@ -269,7 +269,7 @@ bool CGnOSMCoord::WorldToScreen(const PointF& _WorldPoint, PointN& _ScrPoint, in
 	return WorldToScreen(_WorldPoint.x, _WorldPoint.y, (int&)_ScrPoint.x, (int&)_ScrPoint.y, nZoomLevel);
 }
 
-bool CGnOSMCoord::WorldToScreen(const int nPoint, PointF* _pWorldPoints, PointN* _pScrPoints, int nZoomLevel)
+bool CGnOSMCoord::WorldToScreen(const int nPoint, const PointF* _pWorldPoints, PointN* _pScrPoints, int nZoomLevel)
 {
 	for (int i=0; i<nPoint; ++i) {
 		WorldToScreen(_pWorldPoints->x, _pWorldPoints->y, (int&)_pScrPoints->x, (int&)_pScrPoints->y, nZoomLevel);
@@ -279,7 +279,7 @@ bool CGnOSMCoord::WorldToScreen(const int nPoint, PointF* _pWorldPoints, PointN*
 	return true;
 }
 
-bool CGnOSMCoord::WorldToScreen(double inX, double inY, int& outX, int& outY, int nZoomLevel) //It was named to PositionToClient in OSM
+bool CGnOSMCoord::WorldToScreen(IN const double inX, IN const double inY, OUT int& outX, OUT int& outY, IN int nZoomLevel) //It was named to PositionToClient in OSM
 {
 	if (nZoomLevel < 0) nZoomLevel = m_nOSM_ZoomLevel;
 	//What will be the return value from this function (assume the worst)

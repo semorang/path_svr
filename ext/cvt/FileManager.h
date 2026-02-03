@@ -28,7 +28,7 @@ public:
 	virtual ~CFileManager();
 
 protected:
-	string m_strErrMsg;
+	std::string m_strErrMsg;
 
 	// 전체 지도 영역
 	SBox m_rtBox;
