@@ -94,6 +94,8 @@
             if (result_mode === "path") {
                 route_mode = RouteMode_Path;
                 document.title = "P2P PATH 경로탐색";
+
+                setOption(4); // 기본 큰길 옵션 적용 -> HD 도로 우선
             }
             
             let isSuccess = result_obj.header.isSuccessful;
